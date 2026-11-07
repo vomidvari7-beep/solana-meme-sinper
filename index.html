@@ -71,6 +71,14 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           </select>
         </label>
         <label class="block">
+          <span class="text-xs text-slate-400">Min age (hours) <span class="text-slate-600">(optional)</span></span>
+          <input id="minAgeH" type="number" min="0" step="any" placeholder="preset" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+        </label>
+        <label class="block">
+          <span class="text-xs text-slate-400">Max age (days) <span class="text-slate-600">(optional)</span></span>
+          <input id="maxAgeD" type="number" min="0" step="any" placeholder="preset" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+        </label>
+        <label class="block">
           <span class="text-xs text-slate-400">Screener Source</span>
           <select id="source" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
             <option>DexScreener</option><option>Birdeye</option><option>GeckoTerminal</option><option>Other</option>
@@ -130,8 +138,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           </label>
           <div class="grid grid-cols-2 gap-2">
             <label class="block"><span class="text-slate-400">Slippage % <span class="text-slate-600">(max 15)</span></span><input id="setSlip" type="number" min="0.1" max="15" step="0.1" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
-            <label class="block"><span class="text-slate-400">Max SOL / trade</span><input id="setMaxTrade" type="number" min="0.001" step="0.01" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
-            <label class="block"><span class="text-slate-400">Daily max spend (SOL)</span><input id="setDaily" type="number" min="0.001" step="0.01" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">Max SOL / trade</span><input id="setMaxTrade" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">Daily max spend (SOL)</span><input id="setDaily" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
             <label class="block"><span class="text-slate-400">SOL reserve for fees</span><input id="setReserve" type="number" min="0.002" step="0.001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
             <label class="block"><span class="text-slate-400">Priority fee level</span><select id="setPrioLevel" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5"><option value="medium">Medium</option><option value="high">High</option><option value="veryHigh">Very high</option></select></label>
             <label class="block"><span class="text-slate-400">Max priority fee (SOL)</span><input id="setPrioMax" type="number" min="0" max="0.01" step="0.0001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
@@ -142,7 +150,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
               <option value="https://api.jup.ag/swap/v1">api.jup.ag/swap/v1 (optional API key)</option>
             </select></label>
           <label class="block"><span class="text-slate-400">Jupiter API key <span class="text-slate-600">(optional, stored only in this browser)</span></span><input id="setJupKey" type="password" autocomplete="off" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
-          <div class="flex items-center justify-between rounded-lg bg-ink-800 px-2.5 py-2"><span class="text-slate-400">Max open positions <span class="text-slate-600">(from Risk Tolerance)</span></span><b id="setMaxPos" class="font-mono text-slate-200">2</b></div>
+          <div class="flex items-center justify-between rounded-lg bg-ink-800 px-2.5 py-2"><span class="text-slate-400">Max open positions <span class="text-slate-600">(hard cap)</span></span><b id="setMaxPos" class="font-mono text-slate-200">2</b></div>
           <label class="flex items-center gap-2 rounded-lg bg-ink-800 px-2.5 py-2"><input type="checkbox" checked disabled class="accent-emerald-500 w-4 h-4" /><span class="text-slate-300">Confirm every trade <span class="text-slate-500">(always on, can't be disabled)</span></span></label>
           <div class="flex gap-2"><button id="btnSaveSettings" class="flex-1 rounded-lg py-2 font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save settings</button><button id="btnResetSettings" class="rounded-lg px-3 py-2 bg-ink-700 hover:bg-ink-600 border border-white/10">Defaults</button></div>
         </div>
@@ -219,6 +227,22 @@ const FOCUS_NOTES = {
   'Organic':    'Strict on volume quality (vol/liq, avg trade size, holder spread); punishes wash-like volume.',
   'Momentum':   'Weights buy pressure & trend; prefers established upward structure.'
 };
+function configuredMaxPos() {
+  try {
+    const s = JSON.parse(localStorage.getItem('sms:settings') || 'null');
+    const n = Math.round(+s?.maxOpenPositions);
+    if (n >= 1 && n <= 20) return n;
+  } catch { /* default */ }
+  return 2;
+}
+function effectiveProfile(risk, inputs) {
+  const prof = { ...(PROFILES[risk] || PROFILES.Balanced) };
+  const minH = inputs?.minAgeH, maxD = inputs?.maxAgeD;
+  if (minH !== '' && minH != null && isFinite(+minH) && +minH >= 0) prof.minAgeH = +minH;
+  if (maxD !== '' && maxD != null && isFinite(+maxD) && +maxD >= 0) prof.maxAgeH = +maxD * 24;
+  prof.maxPos = configuredMaxPos();
+  return prof;
+}
 
 /* ============================ HELPERS ============================ */
 const $ = (id) => document.getElementById(id);
@@ -566,15 +590,16 @@ function analyzeToken(t, rug, prof, focus, regime) {
 /* ============================ MAIN FLOW ============================ */
 let busy = false; let lastResult = null;
 const VORDER = { Candidate: 0, Watchlist: 1, Rejected: 2 };
-function collectInputs() { return { risk: $('risk').value, focus: $('focus').value, source: $('source').value, pasted: $('pasted').value, notes: $('notes').value, account: $('account').value, useRug: $('useRug').checked }; }
+function collectInputs() { return { risk: $('risk').value, focus: $('focus').value, source: $('source').value, pasted: $('pasted').value, notes: $('notes').value, account: $('account').value, useRug: $('useRug').checked, minAgeH: $('minAgeH').value, maxAgeD: $('maxAgeD').value }; }
 function applyInputs(i) { if (!i) return; $('risk').value = i.risk || 'Balanced'; $('focus').value = i.focus || 'Organic'; $('source').value = i.source || 'DexScreener';
-  $('pasted').value = i.pasted || ''; $('notes').value = i.notes || ''; $('account').value = i.account || ''; $('useRug').checked = i.useRug !== false; updateHints(); }
+  $('pasted').value = i.pasted || ''; $('notes').value = i.notes || ''; $('account').value = i.account || ''; $('useRug').checked = i.useRug !== false;
+  $('minAgeH').value = (i.minAgeH ?? '') === '' ? '' : i.minAgeH; $('maxAgeD').value = (i.maxAgeD ?? '') === '' ? '' : i.maxAgeD; updateHints(); }
 function setBusy(b, label) { busy = b; $('btnAnalyze').disabled = b; $('btnBoosted').disabled = b;
   $('analyzeLabel').innerHTML = b ? `<span class="spinner"></span> ${esc(label || 'Analyzing…')}` : '⚡ Analyze'; if (!b) setProgress(null); }
 
 async function runAnalysis({ boosted = false } = {}) {
   if (busy) return;
-  const inputs = collectInputs(); const prof = PROFILES[inputs.risk] || PROFILES.Balanced;
+  const inputs = collectInputs(); const prof = effectiveProfile(inputs.risk, inputs);
   let { mints, pairs } = parseInput(inputs.pasted);
   if (!boosted && !mints.length && !pairs.length) {
     toast('No Solana addresses or pair URLs found. Paste tokens, load Demo data, or use "Scan latest boosted".', 'warn', 6000);
@@ -666,7 +691,7 @@ function stat(label, value, cls = '') { return `<div class="rounded-lg bg-ink-90
 
 function render(R) {
   $('emptyState').classList.add('hidden'); const el = $('results'); el.classList.remove('hidden');
-  const prof = PROFILES[R.inputs.risk] || PROFILES.Balanced; const { sol, regime } = R; const toks = R.tokens;
+  const prof = effectiveProfile(R.inputs.risk, R.inputs); const { sol, regime } = R; const toks = R.tokens;
   const acct = parseFloat(R.inputs.account); const hasAcct = isNum(acct) && acct > 0;
   const cands = toks.filter(t => t.verdict === 'Candidate'), watch = toks.filter(t => t.verdict === 'Watchlist'), rej = toks.filter(t => t.verdict === 'Rejected');
   const top = toks.filter(t => t.verdict !== 'Rejected').slice(0, 6);
@@ -813,7 +838,7 @@ function render(R) {
 'use strict';
 /* ============================ MARKDOWN & PROMPT ============================ */
 function toMarkdown(R) {
-  const L = []; const prof = PROFILES[R.inputs.risk] || PROFILES.Balanced; const toks = R.tokens;
+  const L = []; const prof = effectiveProfile(R.inputs.risk, R.inputs); const toks = R.tokens;
   const top = toks.filter(t => t.verdict !== 'Rejected').slice(0, 6); const list = top.length ? top : toks.slice(0, 3);
   const cnt = v => toks.filter(t => t.verdict === v).length;
   L.push('# SolanaMemeSniper Report', `_${fmtTime(R.ts)} · Risk: ${R.inputs.risk} · Focus: ${R.inputs.focus} · Source: ${R.inputs.source}${R.boosted ? ' (latest boosted)' : ''}_`, '');
@@ -916,7 +941,7 @@ function loadLast(silent) {
   } catch (e) { if (!silent) toast('Could not load saved analysis: ' + e.message, 'err'); return false; }
 }
 function updateHints() {
-  const p = PROFILES[$('risk').value] || PROFILES.Balanced;
+  const p = effectiveProfile($('risk').value, collectInputs());
   $('riskHint').textContent = `${$('risk').value}: liq ≥ ${usd(p.minLiq)} · mcap ${usd(p.minMcap)}–${fmtMax(p.maxMcap, usd)} · age ≥ ${age(p.minAgeH)}${p.maxAgeH < INF ? '–' + age(p.maxAgeH) : ''} · vol24 ≥ ${usd(p.minVol)} · max ${p.maxPos} positions`;
   const { mints, pairs } = parseInput($('pasted').value);
   $('parseCount').textContent = (mints.length || pairs.length) ? `${mints.length} address${mints.length === 1 ? '' : 'es'}${pairs.length ? ' · ' + pairs.length + ' pair URL' + (pairs.length === 1 ? '' : 's') : ''} detected` : '';
@@ -943,7 +968,7 @@ $('btnPrompt').addEventListener('click', async () => {
   toast(ok ? 'AI prompt copied — paste it into your chatbot' : 'Copy failed — browser blocked clipboard', ok ? 'ok' : 'err');
 });
 $('btnLoadLast').addEventListener('click', () => loadLast(false));
-['risk', 'focus', 'source', 'notes', 'account', 'useRug'].forEach(id => $(id).addEventListener('change', () => { updateHints(); saveInputsDraft(); }));
+['risk', 'focus', 'source', 'notes', 'account', 'useRug', 'minAgeH', 'maxAgeD'].forEach(id => $(id).addEventListener('change', () => { updateHints(); saveInputsDraft(); }));
 $('pasted').addEventListener('input', () => { updateHints(); saveInputsDraft(); });
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAnalysis(); } });
 
@@ -968,10 +993,10 @@ const QR_URL = 'https://esm.sh/qrcode@1.5.4';
 const WSOL = 'So11111111111111111111111111111111111111112';
 const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'];
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
-const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, reserveSol: 0.01,
+const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10 };
-const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts' };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10 };
+const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol' };
 
 let web3 = null;
 async function loadWeb3() { if (!web3) { try { web3 = await import(WEB3_URL); } catch (e) { throw new Error('Could not load @solana/web3.js from esm.sh (' + e.message + ')'); } } return web3; }
@@ -981,23 +1006,26 @@ const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || '
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Storage failed: ' + e.message, 'err'); } };
 let S = { ...DEFAULTS, ...load(LS.settings, {}) };
 let A = { ...AUTO_DEFAULTS, ...load(LS.auto, {}), on: false }; // auto is ALWAYS off after reload
+const posNum = (v, d) => { const n = +v; return Number.isFinite(n) && n > 0 ? n : d; };
 function sanitizeSettings() {
   S.slippagePct = Math.min(15, Math.max(0.1, +S.slippagePct || 3));
-  S.maxSolPerTrade = Math.max(0.001, +S.maxSolPerTrade || DEFAULTS.maxSolPerTrade);
-  S.dailyMaxSol = Math.max(0.001, +S.dailyMaxSol || DEFAULTS.dailyMaxSol);
+  S.maxSolPerTrade = posNum(S.maxSolPerTrade, DEFAULTS.maxSolPerTrade);
+  S.dailyMaxSol = posNum(S.dailyMaxSol, DEFAULTS.dailyMaxSol);
+  { const n = Math.round(+S.maxOpenPositions); S.maxOpenPositions = Number.isFinite(n) ? Math.min(20, Math.max(1, n)) : DEFAULTS.maxOpenPositions; }
   S.reserveSol = Math.max(0.002, +S.reserveSol || DEFAULTS.reserveSol);
   S.prioMaxSol = Math.min(0.01, Math.max(0, isFinite(+S.prioMaxSol) ? +S.prioMaxSol : DEFAULTS.prioMaxSol));
   if (!/^https?:\/\//.test(S.rpc || '')) S.rpc = DEFAULTS.rpc;
   if (!JUP_BASES.includes(S.jupBase)) S.jupBase = JUP_BASES[0];
   A.maxSolPerTrade = Math.min(S.maxSolPerTrade, Math.max(0.001, +A.maxSolPerTrade || AUTO_DEFAULTS.maxSolPerTrade));
   A.dailyCap = Math.max(0.001, +A.dailyCap || AUTO_DEFAULTS.dailyCap);
+  { const n = Math.round(+A.balancePct); A.balancePct = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : AUTO_DEFAULTS.balancePct; }
   A.minConviction = Math.min(100, Math.max(50, +A.minConviction || 65));
   A.maxImpact = Math.min(5, Math.max(0.1, +A.maxImpact || 5));
   A.slipCap = Math.min(15, Math.max(0.1, +A.slipCap || 3));
   A.scanMin = Math.max(5, +A.scanMin || 10);
 }
 sanitizeSettings();
-const maxPos = () => (PROFILES[$('risk').value] || PROFILES.Balanced).maxPos;
+const maxPos = () => { const n = Math.round(+S.maxOpenPositions); return (n >= 1 && n <= 20) ? n : 2; };
 
 /* ---------------- small utils ---------------- */
 const b64ToBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
@@ -1146,8 +1174,12 @@ const impactPct = (q) => (+q.priceImpactPct || 0) * 100;
 /* ---------------- wallets ---------------- */
 const WALLETS = {
   phantom: { key: 'phantom', label: 'Phantom', pubkey: null, sol: null, tokens: new Map(), provider: null, err: null },
-  burner:  { key: 'burner',  label: 'Burner',  pubkey: (load(LS.burner, null) || {}).pub || null, sol: null, tokens: new Map(), kp: null, err: null }
+  burner:  { key: 'burner',  label: 'Burner',  pubkey: (load(LS.burner, null) || {}).pub || null, sol: null, lastSol: null, tokens: new Map(), kp: null, err: null }
 };
+function storedBurnerSol(pub) { const v = load(LS.lastBal, null); return v && pub && v.pub === pub && isNum(+v.sol) ? +v.sol : null; }
+function rememberBurnerSol(sol) { const w = WALLETS.burner; w.sol = sol; if (isNum(sol) && w.pubkey) { w.lastSol = sol; save(LS.lastBal, { pub: w.pubkey, sol }); } }
+function forgetBurnerSol() { WALLETS.burner.lastSol = null; try { localStorage.removeItem(LS.lastBal); } catch { } }
+WALLETS.burner.lastSol = storedBurnerSol(WALLETS.burner.pubkey);
 let activeKey = load('sms:activeWallet', 'phantom'); if (!WALLETS[activeKey]) activeKey = 'phantom';
 const active = () => WALLETS[activeKey];
 function getProvider() { const p = window.phantom?.solana; if (p?.isPhantom) return p; if (window.solana?.isPhantom) return window.solana; return null; }
@@ -1177,7 +1209,7 @@ function setActive(k) { if (!WALLETS[k]) return; activeKey = k; save('sms:active
 async function refreshBalances(which) {
   const keys = which ? [which] : Object.keys(WALLETS);
   await Promise.all(keys.map(async k => { const w = WALLETS[k]; if (!w.pubkey) return;
-    try { const b = await getBalances(w.pubkey); w.sol = b.sol; w.tokens = b.tokens; w.err = null; }
+    try { const b = await getBalances(w.pubkey); w.sol = b.sol; w.tokens = b.tokens; w.err = null; if (k === 'burner') rememberBurnerSol(b.sol); }
     catch (e) { w.err = e.message; } }));
   renderWallet(); hydrate(); renderPortfolio(); renderBurner();
 }
@@ -1230,6 +1262,10 @@ function tokenInfo(mint) {
   return { mint, symbol: p?.symbol || r?.symbol || short(mint), name: '', priceUsd: livePrices.get(mint) ?? null, flags: [], fails: [], verdict: 'Unknown', conviction: null, checklist: null, entry: null, exit: null };
 }
 function planOf(t) { if (!t?.entry) return null; return { stop: t.entry.stop, zoneLo: t.entry.zoneLo, zoneHi: t.entry.zoneHi, tp1: t.exit?.tp1, tp2: t.exit?.tp2, tp3: t.exit?.tp3, trail: t.exit?.trail, timeStopH: t.exit?.timeStopH, strat: t.entry.strat, conviction: t.conviction }; }
+function positionTargets(p) {
+  const entry = p?.avgUsd; const pl = p?.plan || {};
+  return { stop: pl.stop, trail: pl.trail, timeStopH: pl.timeStopH, tp3: pl.tp3, tp1: isNum(entry) && entry > 0 ? entry * 1.5 : null, tp2: isNum(entry) && entry > 0 ? entry * 2 : null };
+}
 function riskIssues(t) {
   const out = [];
   if (!t || t.verdict === 'Unknown') { out.push('Token not in the current analysis — no checklist available'); return out; }
@@ -1274,6 +1310,18 @@ $('tmConfirm').addEventListener('click', async () => {
 function resetModalButtons() { $('tmConfirm').classList.remove('hidden'); $('tmCancel').textContent = 'Cancel'; }
 
 /* ---------------- guards ---------------- */
+function burnerTradeCap() {
+  const w = WALLETS.burner;
+  const sol = isNum(w.sol) ? w.sol : (isNum(w.lastSol) ? w.lastSol : null);
+  if (!isNum(sol)) return { ok: false, err: 'Burner SOL balance unknown (RPC error, no last known balance) — buy blocked' };
+  return { ok: true, sol, stale: !isNum(w.sol), byPct: sol * A.balancePct / 100 };
+}
+function clampAutoBuy(requested) {
+  const bc = burnerTradeCap();
+  if (!bc.ok) return { sol: 0, err: bc.err, clamped: false };
+  const sol = Math.min(+requested || 0, A.maxSolPerTrade, S.maxSolPerTrade, bc.byPct);
+  return { sol, err: null, clamped: (+requested || 0) > sol + 1e-9, byPct: bc.byPct, stale: bc.stale, bal: bc.sol };
+}
 function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
   const errs = []; const w = WALLETS[walletKey];
   if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
@@ -1281,10 +1329,15 @@ function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
   if (!(sol > 0)) errs.push('Amount must be > 0');
   const cap = auto ? Math.min(S.maxSolPerTrade, A.maxSolPerTrade) : S.maxSolPerTrade;
   if (sol > cap + 1e-9) errs.push(`Exceeds max ${cap} SOL per ${auto ? 'auto ' : ''}trade (Settings)`);
+  if (walletKey === 'burner') {
+    const bc = burnerTradeCap();
+    if (!bc.ok) errs.push(bc.err);
+    else if (!auto && sol > bc.byPct + 1e-9) errs.push(`Exceeds max ${A.balancePct}% of burner balance: ${sol} > ${bc.byPct.toFixed(4)} SOL (${bc.sol.toFixed(4)} SOL${bc.stale ? ' last known' : ''} × ${A.balancePct}%)`);
+  }
   const spent = spentToday(); if (spent + sol > S.dailyMaxSol + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${S.dailyMaxSol} SOL`);
   if (auto) { const as = spentToday(r => r.auto); if (as + sol > A.dailyCap + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${A.dailyCap} SOL`); }
   const open = openPositions(); const held = open.some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
-  if (!held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()} for ${$('risk').value})`);
+  if (!held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
   if (isNum(w.sol) && sol + S.reserveSol > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${S.reserveSol} reserve`);
   return errs;
 }
@@ -1462,12 +1515,12 @@ async function refreshPrices() {
   checkAlerts(); renderPortfolio();
 }
 function levelState(p) {
-  const lp = livePrices.get(p.mint)?.price; const pl = p.plan || {};
+  const lp = livePrices.get(p.mint)?.price; const pl = positionTargets(p);
   if (!isNum(lp)) return { cls: 'text-slate-500', label: 'no price' };
   if (isNum(pl.stop) && lp <= pl.stop) return { cls: 'text-rose-300 font-bold', label: '⛔ STOP HIT', lvl: 'stop' };
   if (isNum(pl.tp3) && lp >= pl.tp3) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP3 (5x) hit', lvl: 'tp3' };
-  if (isNum(pl.tp2) && lp >= pl.tp2) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP2 (3x) hit', lvl: 'tp2' };
-  if (isNum(pl.tp1) && lp >= pl.tp1) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP1 (2x) hit', lvl: 'tp1' };
+  if (isNum(pl.tp2) && lp >= pl.tp2) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP2 (+100%) hit', lvl: 'tp2' };
+  if (isNum(pl.tp1) && lp >= pl.tp1) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP1 (+50%) hit', lvl: 'tp1' };
   if (isNum(pl.stop) && lp <= pl.stop * 1.1) return { cls: 'text-amber-300', label: 'near stop' };
   return { cls: 'text-slate-400', label: 'in range' };
 }
@@ -1481,7 +1534,7 @@ function renderPortfolio() {
   const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
   if (!LOG.length && !anyW && !AUTOLOG.length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = p.plan || {};
+  const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = positionTargets(p);
     const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
     return `<tr class="border-t border-white/5 align-top ${s.lvl === 'stop' ? 'bg-rose-500/10' : s.lvl ? 'bg-emerald-500/10' : ''}">
       <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}</div></td>
@@ -1498,7 +1551,7 @@ function renderPortfolio() {
   el.innerHTML = `<section id="sec-portfolio" class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
       <div class="flex gap-2 text-[11px]"><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
-    <div class="text-[11px] text-slate-500 mb-2">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop/targets come from the analysis at buy time · <b>alerts only</b> unless burner auto-exit is ON</div>
+    <div class="text-[11px] text-slate-500 mb-2">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop from the analysis at buy time · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
     ${open.length ? `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Qty</th><th>Avg entry</th><th>Price</th><th>PnL</th><th>Stop</th><th>TP1/TP2</th><th>Status</th><th>Sell</th></tr></thead><tbody>${posRows}</tbody></table></div>` : '<p class="text-xs text-slate-500">No open positions.</p>'}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
@@ -1552,7 +1605,7 @@ function createBurner() {
       const w = await loadWeb3(); const kp = w.Keypair.generate();
       const e = await encryptSecret(kp.secretKey, $('bpPass').value);
       save(LS.burner, { v: 1, pub: kp.publicKey.toBase58(), kdf: 'PBKDF2-SHA256-310000/AES-GCM-256', created: Date.now(), ...e });
-      Object.assign(WALLETS.burner, { pubkey: kp.publicKey.toBase58(), kp, sol: null, tokens: new Map() });
+      Object.assign(WALLETS.burner, { pubkey: kp.publicKey.toBase58(), kp, sol: null, tokens: new Map() }); forgetBurnerSol();
       setActive('burner'); renderBurner(); refreshBalances('burner'); toast('Burner wallet created & unlocked: ' + short(kp.publicKey.toBase58()), 'ok');
       modalStatus(`✔ Created <span class="font-mono">${kp.publicKey.toBase58()}</span>. Fund it with a small amount of SOL.`, 'text-emerald-300'); return true;
     } });
@@ -1594,7 +1647,7 @@ function importBurner() {
       const e = await encryptSecret(kp.secretKey, $('biPass').value);
       killSwitch('import');
       save(LS.burner, { v: 1, pub: derived, kdf: 'PBKDF2-SHA256-310000/AES-GCM-256', created: Date.now(), imported: true, ...e });
-      Object.assign(WALLETS.burner, { pubkey: derived, kp, sol: null, tokens: new Map() });
+      Object.assign(WALLETS.burner, { pubkey: derived, kp, sol: null, tokens: new Map() }); forgetBurnerSol();
       const addr = derived; wipe(); ['biPass', 'biPass2'].forEach(id => { if ($(id)) $(id).value = ''; });
       setActive('burner'); renderBurner(); refreshBalances('burner'); toast('Key imported & unlocked: ' + short(addr), 'ok');
       modalStatus(`✔ Imported <span class="font-mono">${esc(addr)}</span> — stored encrypted in this browser.`, 'text-emerald-300'); return true;
@@ -1662,7 +1715,7 @@ function deleteBurner() {
   const b = WALLETS.burner;
   if (!confirm(`Delete the burner wallet ${short(b.pubkey)} from this browser?\n\nIf it still holds SOL or tokens and you have NOT exported the key, those funds are lost forever.`)) return;
   if (prompt('Type DELETE to confirm') !== 'DELETE') return;
-  killSwitch('deleted'); localStorage.removeItem(LS.burner); Object.assign(WALLETS.burner, { pubkey: null, kp: null, sol: null, tokens: new Map() });
+  killSwitch('deleted'); localStorage.removeItem(LS.burner); Object.assign(WALLETS.burner, { pubkey: null, kp: null, sol: null, tokens: new Map() }); forgetBurnerSol();
   if (activeKey === 'burner') setActive(WALLETS.phantom.pubkey ? 'phantom' : 'phantom'); renderBurner(); renderWallet(); toast('Burner deleted', 'info');
 }
 async function renderQR(pub) { try { const QR = (await import(QR_URL)).default; const url = await QR.toDataURL('solana:' + pub, { margin: 1, width: 168, color: { dark: '#07090f', light: '#ffffff' } }); const img = $('burnerQR'); if (img) { img.src = url; img.classList.remove('hidden'); } } catch (e) { console.warn('QR', e); } }
@@ -1690,10 +1743,14 @@ function renderBurner() {
         <button id="bExport" class="rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">🔑 Export key</button>
         <button id="bDelete" class="rounded-lg py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20">🗑 Delete</button>
         <button id="bImport" class="col-span-2 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">📥 Import existing key (replaces this burner)</button>
-      </div>
+      </div>`}
       <div class="border-t border-white/5 pt-2.5">
         <div class="font-semibold text-slate-200 mb-1.5">🤖 Auto-trade hard caps</div>
         <div class="grid grid-cols-2 gap-2">
+          ${num('gDaily', S.dailyMaxSol, 'any', 'Global daily max (SOL, manual+auto)', 'min="0"')}
+          ${num('gMaxTrade', S.maxSolPerTrade, 'any', 'Global max SOL per trade', 'min="0"')}
+          ${num('aMaxPos', maxPos(), '1', 'Max open positions', 'min="1" max="20"')}
+          ${num('aBalPct', A.balancePct, '1', 'Max % of balance per trade', 'min="1" max="100"')}
           ${num('aMaxTrade', A.maxSolPerTrade, '0.01', 'Max SOL / auto trade', 'min="0.001"')}
           ${num('aDaily', A.dailyCap, '0.01', 'Auto daily cap (SOL)', 'min="0.001"')}
           ${num('aMinConv', A.minConviction, '1', 'Min conviction', 'min="50" max="100"')}
@@ -1701,13 +1758,13 @@ function renderBurner() {
           ${num('aSlip', A.slipCap, '0.1', 'Slippage cap % (≤15)', 'min="0.1" max="15"')}
           ${num('aScanMin', A.scanMin, '1', 'Scan interval (min ≥5)', 'min="5"')}
         </div>
-        <label class="mt-2 flex items-center gap-2"><input id="aExit" type="checkbox" ${A.autoExit ? 'checked' : ''} class="accent-violet-500" /> Auto-exit: sell at stop, scale out 40% at TP1/TP2, trail rest</label>
+        <label class="mt-2 flex items-center gap-2"><input id="aExit" type="checkbox" ${A.autoExit ? 'checked' : ''} class="accent-violet-500" /> Auto-exit: sell at stop, sell 50% at +50%, 50% of rest at +100%, trail rest</label>
         <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan "latest boosted" every interval</label>
-        <p class="text-[10px] text-slate-500 mt-1">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, global max ${S.maxSolPerTrade} SOL/trade &amp; ${S.dailyMaxSol} SOL/day.</p>
+        <p class="text-[10px] text-slate-500 mt-1">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${S.maxSolPerTrade} SOL/trade &amp; ${S.dailyMaxSol} SOL/day.</p>
         <div class="flex gap-2 mt-2"><button id="aSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save caps</button>
           ${A.on ? `<button id="aKill" class="flex-[2] rounded-lg py-2 font-extrabold bg-rose-600 hover:bg-rose-500 text-white">⛔ KILL SWITCH</button>` : `<button id="aOn" class="flex-[2] rounded-lg py-2 font-bold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-40" ${b.kp ? '' : 'disabled title="Unlock burner first"'}>Auto-trade ON</button>`}</div>
         <div id="autoStatus" class="mt-1.5 text-[10px] text-slate-500">${esc(autoStatusText())}</div>
-      </div>`}
+      </div>
     </div></details>`;
   $('burnerDetails').addEventListener('toggle', (e) => { burnerOpen = e.target.open; });
   const on = (id, f) => $(id)?.addEventListener('click', f);
@@ -1720,9 +1777,13 @@ function renderBurner() {
 }
 function readAutoInputs() {
   const g = (id) => $(id) ? +$(id).value : undefined;
-  Object.assign(A, { maxSolPerTrade: g('aMaxTrade') ?? A.maxSolPerTrade, dailyCap: g('aDaily') ?? A.dailyCap, minConviction: g('aMinConv') ?? A.minConviction, maxImpact: g('aImpact') ?? A.maxImpact, slipCap: g('aSlip') ?? A.slipCap, scanMin: g('aScanMin') ?? A.scanMin,
+  if ($('gMaxTrade')) S.maxSolPerTrade = g('gMaxTrade');
+  if ($('gDaily')) S.dailyMaxSol = g('gDaily');
+  if ($('aMaxPos')) S.maxOpenPositions = g('aMaxPos');
+  Object.assign(A, { maxSolPerTrade: g('aMaxTrade') ?? A.maxSolPerTrade, dailyCap: g('aDaily') ?? A.dailyCap, balancePct: g('aBalPct') ?? A.balancePct, minConviction: g('aMinConv') ?? A.minConviction, maxImpact: g('aImpact') ?? A.maxImpact, slipCap: g('aSlip') ?? A.slipCap, scanMin: g('aScanMin') ?? A.scanMin,
     autoExit: $('aExit') ? $('aExit').checked : A.autoExit, autoScan: $('aScan') ? $('aScan').checked : A.autoScan });
-  sanitizeSettings(); const { on, ...persist } = A; save(LS.auto, persist);
+  sanitizeSettings(); const { on, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio();
+  if (lastResult) render(lastResult);
   if (A.on) startTimers();
 }
 
@@ -1761,15 +1822,15 @@ async function autoTick() {
     await refreshPrices(); await refreshBalances('burner');
     // ---- exits
     if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner')) {
-      if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const pl = p.plan || {}; if (!isNum(lp)) continue;
+      if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const pl = positionTargets(p); if (!isNum(lp)) continue;
       if ((sellFails[p.key] || 0) >= 3) continue;
       autoHigh[p.key] = Math.max(autoHigh[p.key] || 0, lp); save('sms:autohigh', autoHigh);
       const pnl = p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const ageH = (Date.now() - p.firstTs) / 3.6e6;
       let pctSell = 0, tag = null;
       if (isNum(pl.stop) && lp <= pl.stop) { pctSell = 100; tag = 'stop'; }
       else if (p.tp1Done && isNum(pl.trail) && lp <= autoHigh[p.key] * (1 - pl.trail / 100)) { pctSell = 100; tag = 'trail'; }
-      else if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) { pctSell = 40; tag = 'tp2'; }
-      else if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) { pctSell = 40; tag = 'tp1'; }
+      else if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) { pctSell = 50; tag = 'tp2'; }
+      else if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) { pctSell = 50; tag = 'tp1'; }
       else if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) { pctSell = 100; tag = 'time'; }
       if (!pctSell) continue;
       await autoSell(p, pctSell, tag, lp);
@@ -1782,7 +1843,10 @@ async function autoTick() {
       if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) continue;
       const px = livePrices.get(t.mint)?.price;
       if (!inZone(t, px)) continue;
-      const s = suggestedBuySol(t); const sol = Math.min(s.sol, A.maxSolPerTrade, S.maxSolPerTrade);
+      const s = suggestedBuySol(t); const sized = clampAutoBuy(s.sol);
+      if (sized.err) { autoLog(`${t.symbol}: buy blocked — ${sized.err}`, 'warn'); break; }
+      const sol = sized.sol;
+      if (sized.clamped) autoLog(`${t.symbol}: size clamped to ${sol.toFixed(4)} SOL (min of auto cap, global ${S.maxSolPerTrade} SOL, ${A.balancePct}% of ${sized.bal.toFixed(4)} SOL${sized.stale ? ' last known' : ''})`, 'info');
       if (!(sol >= 0.001)) { autoLog(`${t.symbol}: in zone but size ${sol} SOL too small — skipped`, 'warn'); continue; }
       const errs = buyGuards('burner', t.mint, sol, { auto: true }); if (errs.length) { autoLog(`${t.symbol}: buy blocked — ${errs[0]}`, 'warn'); break; }
       autoLog(`${t.symbol}: price ${price(px)} in entry zone (${t.entry.strat}) → quoting ${sol} SOL`, 'info');
@@ -1822,7 +1886,7 @@ function enableAuto() {
   readAutoInputs(); const b = WALLETS.burner; if (!b.kp) return toast('Unlock the burner first', 'warn'); resetModalButtons();
   openModal({ title: '🤖 Turn auto-trading ON', confirmLabel: 'Start auto-trading', danger: true,
     html: `<p class="text-xs text-slate-300">The burner wallet <span class="font-mono">${esc(short(b.pubkey))}</span> (${isNum(b.sol) ? b.sol.toFixed(4) : '?'} SOL) will <b>sign and send swaps automatically, without asking</b>, while this tab stays open.</p>
-      <ul class="text-[11px] text-slate-300 list-disc pl-4 mt-2 space-y-0.5"><li>Max ${A.maxSolPerTrade} SOL per trade · ${A.dailyCap} SOL per day (auto) · ${maxPos()} open positions</li><li>Only Candidates with conviction ≥ ${A.minConviction}, verified checklist, no red flags, price impact ≤ ${A.maxImpact}%, slippage ≤ ${A.slipCap}%</li><li>Buys only when live price enters the analysis entry zone; one buy per token</li><li>Auto-exit: ${A.autoExit ? 'ON (stop / TP1 / TP2 / trailing / time stop)' : 'OFF (alerts only)'} · Auto-scan: ${A.autoScan ? 'every ' + A.scanMin + ' min' : 'OFF'}</li></ul>
+      <ul class="text-[11px] text-slate-300 list-disc pl-4 mt-2 space-y-0.5"><li>Max ${A.maxSolPerTrade} SOL per auto trade · global ${S.maxSolPerTrade} SOL/trade and ${S.dailyMaxSol} SOL/day · ${A.balancePct}% of burner balance · ${A.dailyCap} SOL per day (auto) · ${maxPos()} open positions</li><li>Only Candidates with conviction ≥ ${A.minConviction}, verified checklist, no red flags, price impact ≤ ${A.maxImpact}%, slippage ≤ ${A.slipCap}%</li><li>Buys only when live price enters the analysis entry zone; one buy per token</li><li>Auto-exit: ${A.autoExit ? 'ON (stop, 50% at +50%, 50% of rest at +100%, trail rest, time stop)' : 'OFF (alerts only)'} · Auto-scan: ${A.autoScan ? 'every ' + A.scanMin + ' min' : 'OFF'}</li></ul>
       <div class="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-[11px] text-rose-200">Heuristic scores can be wrong; meme coins can rug or go to zero in seconds; bugs, RPC or API failures can cause losses. Background tabs may be throttled. Use the KILL SWITCH any time.</div>
       <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="aoAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand and accept that trades will execute without per-trade confirmation within these caps.</label>`,
     validate: () => $('aoAck')?.checked,
@@ -1854,7 +1918,7 @@ $('btnSaveSettings').addEventListener('click', () => {
     prioLevel: $('setPrioLevel').value, prioMaxSol: +$('setPrioMax').value, jupBase: $('setJup').value, jupKey: $('setJupKey').value.trim() });
   sanitizeSettings(); save(LS.settings, S); fillSettings(); renderWallet(); hydrate(); renderBurner(); toast('Settings saved', 'ok'); refreshBalances();
 });
-$('btnResetSettings').addEventListener('click', () => { S = { ...DEFAULTS }; save(LS.settings, S); fillSettings(); toast('Defaults restored (not yet affecting caps until saved)', 'info'); });
+$('btnResetSettings').addEventListener('click', () => { S = { ...DEFAULTS }; sanitizeSettings(); save(LS.settings, S); fillSettings(); renderBurner(); renderWallet(); updateHints(); toast('Settings defaults restored', 'info'); });
 $('risk').addEventListener('change', () => { $('setMaxPos').textContent = maxPos(); renderWallet(); renderBurner(); });
 $('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('tradeCard').scrollIntoView({ behavior: 'smooth' }); else connectPhantom(false); });
 
@@ -1865,7 +1929,7 @@ if (WALLETS.burner.pubkey) refreshBalances('burner');
 setInterval(() => { if (openPositions().length && !A.on) refreshPrices(); }, 60000);
 if (openPositions().length) setTimeout(refreshPrices, 1500);
 
-return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards,
+return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap };
 })();
 window.SMS_TRADE = T;

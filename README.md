@@ -35,15 +35,17 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
 - **Phantom:** connect/disconnect, address, SOL balance, and token balances for the analysed tokens. Every trade opens a confirmation window (amount in/out, minimum received, price impact, slippage, route, priority fee, quote age) and then **you sign it in Phantom**. The page then shows the Solscan link and polls until the trade is confirmed.
 - **Per card:** Buy (SOL amount pre-filled from the position size: risk % ÷ stop distance, first tranche 40%, capped) and Sell 25 / 50 / 100%.
 - **Safety guards:**
-  - max SOL per trade (0.1) and max SOL per day (0.3);
-  - max open positions (set by Risk Tolerance);
+  - global max SOL per trade (default 0.1) and global daily max (default 0.3 SOL, manual + auto), both editable under Auto-trade hard caps with no upper limit;
+  - the separate auto daily cap is not clamped to 0.3;
+  - max open positions (default 2, integer 1–20) overrides the Risk Tolerance preset for guards and displayed limits;
+  - burner buys are also capped at a percentage of the burner SOL balance (default 20%);
   - a SOL reserve kept back for fees;
   - slippage ≤ 15% (default 3%);
   - price impact above 5% is blocked unless you tick an override;
   - tokens with red flags or failed checklist items need an extra confirmation;
   - "Confirm every trade" is always on.
 - **Trade log (localStorage) + positions:**
-  - shows average entry (the on-chain fill when available), live PnL, and the stop and targets from the analysis;
+  - shows average entry (the on-chain fill when available), live PnL, the stop from the analysis, and TP1/TP2 at +50% / +100% of that entry;
   - highlights STOP HIT / TP hit as **alerts only**;
   - exports to CSV.
 
@@ -53,13 +55,15 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
 - Deposit address with QR code and copy, balance, Unlock/Lock, **Export key** (needs your passphrase + a warning), **Withdraw all SOL**, Delete.
 - **Auto-trade is OFF by default** and is always OFF again after a page reload.
 - Hard caps (defaults):
-  - 0.05 SOL per trade, 0.2 SOL per day;
+  - 0.05 SOL per auto trade, 0.2 SOL per auto day, plus the global 0.1 / 0.3 SOL caps;
+  - at most 20% of the burner's SOL balance per buy (uses the last known balance if RPC fails);
   - conviction ≥ 65, price impact ≤ 5%, slippage cap 3%;
-  - max open positions;
+  - max open positions (default 2);
   - only Candidates with LP, mint/freeze and top-10 verified, no medium/high flags, not on the bonding curve;
   - the price must be inside the entry zone and the analysis less than 60 minutes old;
   - one buy per token.
-- Optional **auto-exit** (stop / 40% at TP1 / 40% at TP2 / trailing stop / time stop) and **auto-scan** (Scan latest boosted every N minutes, at least 5).
+- Optional **auto-exit** (sell at the stop, sell 50% at +50% from the stored average entry, sell 50% of the rest at +100%, then trail the rest / time stop) and **auto-scan** (Scan latest boosted every N minutes, at least 5). Existing positions use the new targets from their stored entry.
+- Optional token age overrides on Inputs: **Min age (hours)** and **Max age (days)**. Leave them blank to keep the risk preset (Balanced is 1.0h–7.0d).
 - A **KILL SWITCH** is in the panel, and a floating button appears while auto mode is on. Every automatic action goes to the auto-trade log.
 - **It only works while the tab is open.** Browsers slow down background tabs. **Only fund small amounts.**
 
