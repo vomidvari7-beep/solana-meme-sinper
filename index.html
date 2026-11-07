@@ -123,6 +123,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       </div>
       <div id="walletInfo" class="text-xs text-slate-400"></div>
       <div id="burnerBox" class="mt-3"></div>
+      <div id="whaleBox" class="mt-3"></div>
       <details id="settingsBox" class="mt-3 rounded-xl bg-ink-850 border border-white/5">
         <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white">⚙️ Safety guards &amp; settings</summary>
         <div class="px-3 pb-3 space-y-2.5 text-xs">
@@ -996,7 +997,7 @@ const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
 const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10 };
-const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol' };
+const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
 async function loadWeb3() { if (!web3) { try { web3 = await import(WEB3_URL); } catch (e) { throw new Error('Could not load @solana/web3.js from esm.sh (' + e.message + ')'); } } return web3; }
@@ -1026,6 +1027,60 @@ function sanitizeSettings() {
 }
 sanitizeSettings();
 const maxPos = () => { const n = Math.round(+S.maxOpenPositions); return (n >= 1 && n <= 20) ? n : 2; };
+const WHALE_SEED = [
+  { label: 'rasmr', wallet: '9CNyLECt2j8tnDhqxtjYk5HUhZ2b8Nwnyb7sfYN7vND2', tier: 'core' },
+  { label: 'bystevenr', wallet: 'AH75Bn6QHSt5K2Ad4p1otns3JTwpSJWZTwiwKWNhmnKx', tier: 'core' },
+  { label: 'OmakaseOnly', wallet: 'F5MYbjEATQFD6rxwdS2zXzEHBGuUhSGvJkUhLFAcr4hv', tier: 'core' },
+  { label: 'tjr', wallet: '9fnyojTv8GYHWr4Vaj4tvVL82scPPYYkW1CAXAbfUsdj', tier: 'confirm' },
+  { label: '0xAvast', wallet: '8xL8S7P4QLdTGRquHas8NP5EVjp2qUGbmSgrkh97mvmq', tier: 'confirm' },
+  { label: '0xdetweiler', wallet: 'EC2f5DnHzuNRit1ExqghSifDbp1wgrzktsRRZCtU92MJ', tier: 'confirm' },
+  { label: 'MoneyLord', wallet: '6VAN619AsUhnsoAjnZTfYo8Whrrn92dfLFYK1rDxfZtn', tier: 'confirm' },
+  { label: 'ocrxa', wallet: '', tier: 'confirm' },
+  { label: 'ogle', wallet: 'jrbGz3zoBJfptXF967xp6h5TBRV55ArvGeWxTQVs5Ux', tier: 'confirm' },
+  { label: 'ether_monk', wallet: '2xUbYAVq1oJGj45d6JjnaYHAke3NQecUcqWvvVbwmYw8', tier: 'confirm' },
+  { label: 'Aurelius0121', wallet: '9BMzTpSo4URse1oN666pmexhdjpU1vA5p7LtroCFQdLU', tier: 'confirm' },
+  { label: 'unipcs', wallet: '2heJbC32Tpfcb3nbUb5ER61K11FGZVfVGtVnDm6LDogF', tier: 'confirm' },
+  { label: 'PoorGoat_', wallet: 'HDixbrzwwLXczhDBk1JVrurPQsuLE8FUKnW2pucSXN3o', tier: 'confirm' }
+];
+const GROUP_DEFAULTS = { core: { min: 500, max: '' }, confirm: { min: 20000, max: '' } };
+const COPY_DEFAULTS = { clusterN: 2, clusterH: 6, maxChasePct: 30, tranche2Min: 15, minLiqUsd: 10000, customRpc: '', pollSec: 25, cursors: {}, recent: [], groups: JSON.parse(JSON.stringify(GROUP_DEFAULTS)) };
+function blankLimit(v, fallback) {
+  if (v === '') return '';
+  if (v == null) return fallback;
+  const n = +v; return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+function normWhale(w) {
+  if (!w || typeof w !== 'object') return null;
+  const label = String(w.label || '').trim().slice(0, 48);
+  const wallet = String(w.wallet || '').trim();
+  if (!label && !wallet) return null;
+  return { label: label || short(wallet), wallet, tier: w.tier === 'core' ? 'core' : 'confirm', min: blankLimit(w.min, ''), max: blankLimit(w.max, '') };
+}
+function freshWhales() { const saved = load(LS.whales, null); const src = Array.isArray(saved) ? saved : WHALE_SEED; return src.map(normWhale).filter(Boolean); }
+let WHALES = freshWhales();
+let COPY = { ...COPY_DEFAULTS, ...load(LS.copy, {}), on: false };
+function sanitizeCopy() {
+  COPY.clusterN = Math.min(10, Math.max(2, Math.round(+COPY.clusterN || COPY_DEFAULTS.clusterN)));
+  COPY.clusterH = Math.min(48, Math.max(0.25, +COPY.clusterH || COPY_DEFAULTS.clusterH));
+  COPY.maxChasePct = Math.min(500, Math.max(0, isFinite(+COPY.maxChasePct) ? +COPY.maxChasePct : COPY_DEFAULTS.maxChasePct));
+  COPY.tranche2Min = Math.min(240, Math.max(1, +COPY.tranche2Min || COPY_DEFAULTS.tranche2Min));
+  COPY.minLiqUsd = Math.max(0, isFinite(+COPY.minLiqUsd) ? +COPY.minLiqUsd : COPY_DEFAULTS.minLiqUsd);
+  COPY.tranche1Sol = blankLimit(COPY.tranche1Sol, '');
+  COPY.tranche2Sol = blankLimit(COPY.tranche2Sol, '');
+  COPY.pollSec = Math.min(30, Math.max(20, +COPY.pollSec || 25));
+  COPY.customRpc = String(COPY.customRpc || '').trim();
+  if (COPY.customRpc && !/^https?:\/\//i.test(COPY.customRpc)) COPY.customRpc = '';
+  if (!COPY.cursors || typeof COPY.cursors !== 'object') COPY.cursors = {};
+  if (!Array.isArray(COPY.recent)) COPY.recent = [];
+  COPY.recent = COPY.recent.slice(-400);
+  const g = COPY.groups && typeof COPY.groups === 'object' ? COPY.groups : {};
+  COPY.groups = {
+    core: { min: blankLimit(g.core?.min, GROUP_DEFAULTS.core.min), max: blankLimit(g.core?.max, GROUP_DEFAULTS.core.max) },
+    confirm: { min: blankLimit(g.confirm?.min, GROUP_DEFAULTS.confirm.min), max: blankLimit(g.confirm?.max, GROUP_DEFAULTS.confirm.max) }
+  };
+}
+sanitizeCopy();
+function activeRpc() { const c = String(COPY.customRpc || '').trim(); return /^https?:\/\//i.test(c) ? c : S.rpc; }
 
 /* ---------------- small utils ---------------- */
 const b64ToBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
@@ -1047,8 +1102,9 @@ const T_state = { solPrice: null };
 async function rpc(method, params, timeout = 15000) {
   const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), timeout);
   try {
-    const r = await fetch(S.rpc, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }) });
+    const r = await fetch(activeRpc(), { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }) });
     const j = await r.json().catch(() => null);
+    if (r.status === 429) throw new Error('RPC 429 rate limit');
     if (!r.ok || !j) throw new Error(`RPC HTTP ${r.status}${j?.error?.message ? ': ' + j.error.message : ''}`);
     if (j.error) throw new Error('RPC: ' + (j.error.message || JSON.stringify(j.error)));
     return j.result;
@@ -1072,7 +1128,7 @@ function relevantMints() {
 }
 async function getBalances(owner) {
   const lamports = (await rpc('getBalance', [owner, { commitment: 'confirmed' }])).value;
-  const tokens = new Map(); let indexedOk = !indexedBlocked.has(S.rpc);
+  const tokens = new Map(); let indexedOk = !indexedBlocked.has(activeRpc());
   if (indexedOk) for (const prog of TOKEN_PROGRAMS) {
     try {
       const res = await rpc('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
@@ -1083,7 +1139,7 @@ async function getBalances(owner) {
         tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
         mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
       }
-    } catch (e) { indexedOk = false; indexedBlocked.add(S.rpc); console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message); break; }
+    } catch (e) { indexedOk = false; indexedBlocked.add(activeRpc()); console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message); break; }
   }
   if (!indexedOk) {
     // Fallback for RPCs that block indexed calls (e.g. PublicNode free): derive the associated token accounts of the mints we care about
@@ -1238,9 +1294,9 @@ function positions() {
   for (const r of LOG) {
     if (r.status !== 'confirmed') continue;
     const k = r.wallet + ':' + r.mint; let p = by.get(k);
-    if (!p) { p = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false }; by.set(k, p); }
-    if (r.side === 'buy') { p.bought += r.tokenAmount || 0; p.costUsd += (r.tokenAmount || 0) * (r.priceUsd || 0); p.costSol += r.solAmount || 0; if (r.plan) p.plan = r.plan; if (r.auto) p.auto = true; }
-    else { p.sold += r.tokenAmount || 0; if (r.exitTag === 'tp1') p.tp1Done = true; if (r.exitTag === 'tp2') p.tp2Done = true; }
+    if (!p) { p = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false, copy: false, copyState: null }; by.set(k, p); }
+    if (r.side === 'buy') { p.bought += r.tokenAmount || 0; p.costUsd += (r.tokenAmount || 0) * (r.priceUsd || 0); p.costSol += r.solAmount || 0; if (r.plan) p.plan = r.plan; if (r.auto) p.auto = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
+    else { p.sold += r.tokenAmount || 0; if (r.exitTag === 'tp1') p.tp1Done = true; if (r.exitTag === 'tp2') p.tp2Done = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
     p.symbol = r.symbol || p.symbol;
   }
   const out = [];
@@ -1343,7 +1399,7 @@ function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
 }
 
 /* ---------------- execution (shared by manual + auto) ---------------- */
-async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, exitTag = null, onStatus = () => {} }) {
+async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, exitTag = null, onStatus = () => {}, extra = null }) {
   const w = WALLETS[walletKey]; const q = quoteObj.quote;
   onStatus('Building transaction with Jupiter…');
   const swap = await buildSwap(quoteObj, w.pubkey);
@@ -1359,7 +1415,7 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   const rec = logTrade({ id: 'tr' + Date.now() + Math.random().toString(36).slice(2, 6), ts: Date.now(), wallet: walletKey, auto, side, mint, symbol: t?.symbol || short(mint),
     solAmount, tokenAmount, priceSol: tokenAmount ? solAmount / tokenAmount : null, priceUsd: tokenAmount && sp ? solAmount * sp / tokenAmount : null, solUsd: sp,
     impactPct: impactPct(q), slippageBps: q.slippageBps, route: routeLabel(q), prioFeeLamports: swap.prioritizationFeeLamports ?? null,
-    signature: sig, status: 'pending', fill: 'quote', plan: isBuy ? planOf(t) : null, exitTag });
+    signature: sig, status: 'pending', fill: 'quote', plan: isBuy ? (extra?.plan || planOf(t)) : null, exitTag, ...(extra || {}) });
   onStatus(`Sent ✓ <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} on Solscan ↗</a> · waiting for confirmation…`);
   const conf = await waitForConfirmation(sig, (st) => onStatus(`Sent ✓ <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} ↗</a> · ${esc(st)}…`));
   if (!conf.ok) { updateTrade(rec.id, { status: /not confirmed/.test(conf.err) ? 'unknown' : 'failed', error: conf.err }); throw new Error('Transaction ' + (conf.err || 'failed') + ` — ${sig}`); }
@@ -1537,14 +1593,14 @@ function renderPortfolio() {
   const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = positionTargets(p);
     const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
     return `<tr class="border-t border-white/5 align-top ${s.lvl === 'stop' ? 'bg-rose-500/10' : s.lvl ? 'bg-emerald-500/10' : ''}">
-      <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}</div></td>
+      <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}${p.copy ? ' · copy' : ''}</div></td>
       <td class="pr-2 font-mono">${fmtTok(p.qty)}</td><td class="pr-2 font-mono">${price(p.avgUsd)}</td><td class="pr-2 font-mono">${price(lp)}</td>
       <td class="pr-2 font-mono ${pctCls(pnl)}">${pct(pnl)}<div class="text-[10px]">${isNum(pnlUsd) ? (pnlUsd >= 0 ? '+' : '') + usd(pnlUsd, 2) : ''}</div></td>
       <td class="pr-2 font-mono text-rose-300">${price(pl.stop)}</td><td class="pr-2 font-mono text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
       <td class="whitespace-nowrap">${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}</td></tr>`; }).join('');
   const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
-      <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
+      <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
       <td class="pr-2 font-mono">${fmtSol(r.solAmount)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
       <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
       <td class="font-mono"><a class="text-violet-300 hover:underline" target="_blank" rel="noopener" href="${solscanTx(r.signature)}">${esc(short(r.signature))} ↗</a></td></tr>`).join('');
@@ -1814,6 +1870,18 @@ function armedEntries() {
 function inZone(t, px) { const e = t.entry; if (!isNum(px)) return false;
   if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= e.zoneHi * 1.03;
   return px <= e.zoneHi && px > e.stop; }
+function priceExit(p, lp) {
+  const pl = positionTargets(p); if (!isNum(lp)) return null;
+  if ((sellFails[p.key] || 0) >= 3) return null;
+  autoHigh[p.key] = Math.max(autoHigh[p.key] || 0, lp); save('sms:autohigh', autoHigh);
+  const pnl = p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const ageH = (Date.now() - p.firstTs) / 3.6e6;
+  if (isNum(pl.stop) && lp <= pl.stop) return { pctSell: 100, tag: 'stop' };
+  if (p.tp1Done && isNum(pl.trail) && lp <= autoHigh[p.key] * (1 - pl.trail / 100)) return { pctSell: 100, tag: 'trail' };
+  if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) return { pctSell: 50, tag: 'tp2' };
+  if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) return { pctSell: 50, tag: 'tp1' };
+  if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) return { pctSell: 100, tag: 'time' };
+  return null;
+}
 async function autoTick() {
   if (!A.on || autoBusy) return; const b = WALLETS.burner;
   if (!b.kp) { killSwitch('burner locked'); return; }
@@ -1822,18 +1890,8 @@ async function autoTick() {
     await refreshPrices(); await refreshBalances('burner');
     // ---- exits
     if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner')) {
-      if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const pl = positionTargets(p); if (!isNum(lp)) continue;
-      if ((sellFails[p.key] || 0) >= 3) continue;
-      autoHigh[p.key] = Math.max(autoHigh[p.key] || 0, lp); save('sms:autohigh', autoHigh);
-      const pnl = p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const ageH = (Date.now() - p.firstTs) / 3.6e6;
-      let pctSell = 0, tag = null;
-      if (isNum(pl.stop) && lp <= pl.stop) { pctSell = 100; tag = 'stop'; }
-      else if (p.tp1Done && isNum(pl.trail) && lp <= autoHigh[p.key] * (1 - pl.trail / 100)) { pctSell = 100; tag = 'trail'; }
-      else if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) { pctSell = 50; tag = 'tp2'; }
-      else if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) { pctSell = 50; tag = 'tp1'; }
-      else if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) { pctSell = 100; tag = 'time'; }
-      if (!pctSell) continue;
-      await autoSell(p, pctSell, tag, lp);
+      if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const ex = priceExit(p, lp); if (!ex) continue;
+      await autoSell(p, ex.pctSell, ex.tag, lp);
     }
     // ---- entries (max one buy per tick)
     if (!A.on) return;
@@ -1862,14 +1920,14 @@ async function autoTick() {
   } catch (e) { autoLog('Tick error: ' + e.message, 'err'); }
   finally { autoBusy = false; const st = $('autoStatus'); if (st) st.textContent = autoStatusText(); }
 }
-async function autoSell(p, pctSell, tag, lp) {
+async function autoSell(p, pctSell, tag, lp, extra) {
   const b = WALLETS.burner; const h = b.tokens.get(p.mint); if (!h || h.raw === 0n) return;
   const raw = pctSell >= 100 ? h.raw : (h.raw * BigInt(pctSell)) / 100n; if (raw === 0n) return;
   autoLog(`${p.symbol}: ${tag.toUpperCase()} trigger at ${price(lp)} → selling ${pctSell}%`, 'warn');
   try {
     const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.max(A.slipCap, tag === 'stop' ? Math.min(15, A.slipCap * 2) : A.slipCap) * 100) });
     const imp = impactPct(qo.quote); if (imp > 15) throw new Error(`price impact ${imp.toFixed(1)}% > 15% — not selling automatically`);
-    const r = await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: tokenInfo(p.mint), auto: true, exitTag: tag });
+    const r = await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: tokenInfo(p.mint), auto: true, exitTag: tag, extra: extra || null });
     autoLog(`SELL ${pctSell}% ${p.symbol} (${tag}) → ${fmtSol(r.rec.solAmount)}`, 'ok', { sig: r.sig }); toast(`🤖 Auto-sold ${pctSell}% ${p.symbol} (${tag})`, tag === 'stop' ? 'warn' : 'ok', 8000);
     delete sellFails[p.key];
   } catch (e) { sellFails[p.key] = (sellFails[p.key] || 0) + 1; autoLog(`${p.symbol}: auto-sell failed (${sellFails[p.key]}/3) — ${e.message}`, 'err'); }
@@ -1896,16 +1954,445 @@ function enableAuto() {
 }
 function killSwitch(reason = 'manual') {
   const was = A.on; A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null;
+  const wasC = !!(typeof COPY !== 'undefined' && COPY.on);
+  if (wasC) stopCopy(reason, { quiet: true });
   if (was) { autoLog(`⛔ KILL SWITCH (${reason}) — auto-trading stopped`, 'err'); toast('⛔ Auto-trading stopped', 'err'); }
-  renderBurner(); renderPortfolio();
+  else if (wasC) toast('⛔ Copy mode stopped', 'err');
+  renderBurner(); if (typeof renderWhale === 'function') renderWhale(); renderPortfolio();
 }
 function renderKillFab() {
   let f = $('killFab');
-  if (!A.on) { f?.remove(); return; }
+  const copyOn = typeof COPY !== 'undefined' && COPY.on;
+  if (!A.on && !copyOn) { f?.remove(); return; }
   if (!f) { f = document.createElement('button'); f.id = 'killFab'; f.className = 'fixed bottom-4 left-4 z-50 rounded-full px-4 py-3 font-extrabold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-2xl animate-pulse'; f.addEventListener('click', () => killSwitch('fab')); document.body.appendChild(f); }
-  f.textContent = '🤖 AUTO ON · ⛔ KILL';
+  f.textContent = (A.on ? '🤖 AUTO ON' : '🐋 COPY ON') + ' · ⛔ KILL';
 }
-window.addEventListener('beforeunload', (e) => { if (A.on) { e.preventDefault(); e.returnValue = 'Auto-trading is ON — closing the tab stops it.'; } });
+window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on)) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
+
+
+/* ---------------- whale copy-trade ---------------- */
+const QUOTE_MINTS = new Set([WSOL, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB']);
+let WHALELOG = load(LS.whalelog, []); if (!Array.isArray(WHALELOG)) WHALELOG = [];
+let copyBooks = new Map();
+let copyTimer = null, copyBusy = false, rpcGap = 450;
+function loadCopyBooks() {
+  copyBooks = new Map();
+  for (const r of LOG) if (r && r.copy && r.copyState && r.mint) copyBooks.set(r.mint, r.copyState);
+}
+function whaleBounds(w) {
+  const tier = w?.tier === 'core' ? 'core' : 'confirm';
+  const g = COPY.groups?.[tier] || GROUP_DEFAULTS[tier];
+  const min = w && w.min !== '' && w.min != null ? +w.min : (g.min === '' || g.min == null ? null : +g.min);
+  const max = w && w.max !== '' && w.max != null ? +w.max : (g.max === '' || g.max == null ? null : +g.max);
+  return { min: Number.isFinite(min) ? min : null, max: Number.isFinite(max) ? max : null };
+}
+function sizeDecision(usd, w) {
+  const b = whaleBounds(w);
+  const n = +usd;
+  if (b.min != null && !(n >= b.min)) return { ok: false, decision: 'ignored: size', detail: '$' + Math.round(n || 0) + ' < min $' + b.min };
+  if (b.max != null && n > b.max) return { ok: false, decision: 'ignored: size', detail: '$' + Math.round(n) + ' > max $' + b.max };
+  return { ok: true, decision: '', detail: '' };
+}
+function planTranches({ cap, globalMax, reduced, tranche1, tranche2 }) {
+  const set1 = tranche1 !== '' && tranche1 != null && Number.isFinite(+tranche1);
+  const set2 = tranche2 !== '' && tranche2 != null && Number.isFinite(+tranche2);
+  const g = Math.max(0, +globalMax || 0);
+  const room = Math.max(0, +cap || 0);
+  let t1, t2;
+  if (!set1 && !set2) {
+    const f = reduced ? 0.3 : 0.5;
+    t1 = room * f; t2 = Math.max(0, room - t1);
+  } else {
+    t1 = set1 ? +tranche1 * (reduced ? 0.6 : 1) : null;
+    t2 = set2 ? +tranche2 : null;
+    if (t1 == null) t1 = room * (reduced ? 0.3 : 0.5);
+    if (t2 == null) t2 = Math.max(0, room - t1);
+  }
+  const raw = t1 + t2;
+  t1 = Math.min(Math.max(0, t1), g || t1);
+  t2 = Math.min(Math.max(0, t2), g || t2);
+  if (t1 + t2 > room + 1e-12) {
+    const cut = t1 + t2 - room;
+    const c2 = Math.min(t2, cut); t2 -= c2;
+    t1 = Math.min(t1, Math.max(0, room - t2));
+  }
+  t1 = +t1.toFixed(6); t2 = +t2.toFixed(6);
+  return { t1, t2, full: +(t1 + t2).toFixed(6), clamped: raw > room + 1e-6 };
+}
+function chaseBlocked(whalePx, nowPx, maxPct) {
+  if (!(whalePx > 0) || !(nowPx > 0)) return { blocked: false, pct: null };
+  const pct = (nowPx / whalePx - 1) * 100;
+  return { blocked: pct > maxPct + 1e-9, pct };
+}
+function buyTrigger(ev) {
+  const win = COPY.clusterH * 3600e3;
+  const rows = COPY.recent.filter(r => r.mint === ev.mint && ev.ts - r.ts <= win && r.ts <= ev.ts);
+  const wallets = [...new Set(rows.map(r => r.wallet))];
+  if (!wallets.includes(ev.wallet)) wallets.push(ev.wallet);
+  const others = wallets.filter(w => w !== ev.wallet).length;
+  let id = ev.tier === 'core' ? 'A' : ev.tier === 'confirm' ? 'B' : null;
+  if (others >= 1 && wallets.length >= COPY.clusterN) id = 'C';
+  else if (!id && wallets.length >= COPY.clusterN) id = 'C';
+  return id ? { id, wallets } : null;
+}
+function mirrorSellPct(state, ev) {
+  const whale = state?.whales?.find(w => w.wallet === ev.wallet);
+  if (!whale || whale.fullyExited) return null;
+  const multi = state.whales.length >= 2;
+  const full = (ev.sellPct || 0) >= 95;
+  const prior = state.whales.filter(w => w.fullyExited).length;
+  if (multi && prior >= 1) return { pct: 100, rule: 'second whale sold — exit fully', mark: true };
+  if (multi && full) return { pct: 50, rule: 'one whale sold fully — sell 50%', mark: true };
+  return { pct: Math.min(100, Math.max(0, +ev.sellPct || 0)), rule: 'mirror ' + Math.round(+ev.sellPct || 0) + '%', mark: full };
+}
+function classifyRug(s) {
+  const hard = [], soft = [];
+  if (s.mintRevoked === false) hard.push('mint authority not revoked');
+  if (s.freezeRevoked === false) hard.push('freeze authority not revoked');
+  if (s.onCurve) hard.push('LP not locked/burned (bonding curve)');
+  else if (!s.graduated) {
+    if (s.rugAvailable && s.lpLockedPct != null && isFinite(+s.lpLockedPct) && +s.lpLockedPct >= 50) { /* locked */ }
+    else if (s.rugAvailable && s.lpLockedPct != null && isFinite(+s.lpLockedPct) && +s.lpLockedPct < 50) hard.push('LP not locked/burned');
+    else soft.push('RugCheck Unknown');
+  }
+  if (s.honeypot) hard.push('honeypot/unsellable (Jupiter sell quote failed)');
+  if (!(+s.liq >= +s.minLiq)) hard.push('liquidity ' + (s.liq == null || !isFinite(+s.liq) ? 'unknown' : Math.round(+s.liq)) + ' < $' + Math.round(+s.minLiq || 0));
+  if (s.ageH == null || !(+s.ageH >= 1) || (s.minAgeH > 0 && +s.ageH < +s.minAgeH)) soft.push('young age');
+  if (!s.hasSocials) soft.push('no website/socials');
+  if (!s.rugAvailable && !soft.includes('RugCheck Unknown')) soft.push('RugCheck Unknown');
+  if (s.top10 != null && isFinite(+s.top10)) {
+    if (+s.top10 > 40) soft.push('top-10 ' + (+s.top10).toFixed(1) + '% (>40%)');
+    else if (s.maxTop10 != null && +s.top10 > +s.maxTop10) soft.push('top-10 ' + (+s.top10).toFixed(1) + '%');
+  }
+  if (!(+s.vol >= +s.minVol)) soft.push('low volume');
+  if (s.conviction != null && s.qualify != null && +s.conviction < +s.qualify) soft.push('conviction ' + s.conviction + ' < ' + s.qualify);
+  const decision = hard.length ? 'rejected' : soft.length ? 'reduced' : 'bought';
+  return { hard, soft, decision };
+}
+function parseWhaleFill(owner, tx) {
+  if (!tx?.meta || tx.meta.err) return null;
+  const pre = tx.meta.preTokenBalances || [], post = tx.meta.postTokenBalances || [];
+  const keys = (tx.transaction?.message?.accountKeys || []).map(k => k.pubkey || k);
+  const idx = keys.indexOf(owner);
+  const solDelta = idx >= 0 ? ((tx.meta.postBalances?.[idx] || 0) - (tx.meta.preBalances?.[idx] || 0)) / 1e9 : 0;
+  const map = new Map();
+  const take = (rows, which) => rows.forEach(b => {
+    if (!b || b.owner !== owner) return;
+    const ui = +(b.uiTokenAmount?.uiAmountString ?? b.uiTokenAmount?.uiAmount ?? 0);
+    const cur = map.get(b.mint) || { pre: 0, post: 0 };
+    cur[which] = ui; map.set(b.mint, cur);
+  });
+  take(pre, 'pre'); take(post, 'post');
+  let meme = null, quoteDelta = 0;
+  for (const [mint, v] of map) {
+    const delta = v.post - v.pre;
+    if (QUOTE_MINTS.has(mint)) quoteDelta += delta;
+    else if (!meme || Math.abs(delta) > Math.abs(meme.delta)) meme = { mint, delta, pre: v.pre, post: v.post };
+  }
+  if (!meme || Math.abs(meme.delta) < 1e-12) return null;
+  const buy = meme.delta > 0 && (solDelta < -1e-6 || quoteDelta < -1e-9);
+  const sell = meme.delta < 0 && (solDelta > 1e-6 || quoteDelta > 1e-9);
+  if (!buy && !sell) return null;
+  const sellPct = sell && meme.pre > 0 ? Math.min(100, (meme.pre - meme.post) / meme.pre * 100) : 0;
+  return { side: buy ? 'buy' : 'sell', mint: meme.mint, tokenDelta: meme.delta, tokenBefore: meme.pre, tokenAfter: meme.post, solDelta, quoteDelta, sellPct };
+}
+function tehran(ts) { try { return new Date(ts).toLocaleString('en-GB', { timeZone: 'Asia/Tehran', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }); } catch { return new Date(ts).toISOString(); } }
+function feedHtml() {
+  const rows = [...WHALELOG].reverse().slice(0, 40);
+  if (!rows.length) return '<li class="text-slate-500">No whale activity yet.</li>';
+  return rows.map(r => `<li><span class="text-slate-500">${esc(tehran(r.ts))}</span> · <b class="text-slate-200">${esc(r.whale)}</b> · ${esc(r.token)} · ${esc(r.side)} · ${r.usd == null || !isFinite(+r.usd) ? '—' : '$' + Math.round(+r.usd).toLocaleString()} · <span class="${r.decision === 'rejected' || String(r.decision).startsWith('ignored') ? 'text-rose-300' : r.decision === 'reduced' ? 'text-amber-200' : 'text-emerald-300'}">${esc(r.decision)}</span>${r.detail ? ' — ' + esc(r.detail) : ''}</li>`).join('');
+}
+function whaleLog(row) {
+  WHALELOG.push({ ts: Date.now(), whale: '—', token: '—', side: '—', usd: null, decision: '', detail: '', ...row });
+  WHALELOG = WHALELOG.slice(-200); save(LS.whalelog, WHALELOG);
+  const el = $('whaleFeed'); if (el) el.innerHTML = feedHtml();
+}
+function positionCapSol() {
+  const bc = burnerTradeCap();
+  if (!bc.ok) return { err: bc.err, cap: 0, bal: null };
+  return { err: null, cap: Math.min(S.maxSolPerTrade, bc.byPct), bal: bc.sol, stale: bc.stale };
+}
+function copyPlan(px) {
+  const prof = effectiveProfile($('risk').value, collectInputs());
+  const entry = px > 0 ? px : null;
+  return entry ? { stop: entry * (1 - prof.stopPct / 100), trail: prof.trail, timeStopH: prof.timeStopH, tp3: entry * 5, strat: 'Whale copy' } : null;
+}
+async function sendSwap(opts) {
+  if (typeof window.__smsSend === 'function') return window.__smsSend(opts);
+  return executeSwap(opts);
+}
+async function screenMint(mint) {
+  let t = null;
+  try {
+    const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mint);
+    const pairs = (arr || []).filter(p => (!p.chainId || p.chainId === 'solana') && p.baseToken?.address === mint);
+    if (!pairs.length) return { decision: 'rejected', hard: ['no DexScreener pair'], soft: [], price: null, symbol: short(mint) };
+    pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+    t = normalizePair(pairs[0]);
+  } catch (e) { return { decision: 'rejected', hard: ['DexScreener failed: ' + e.message], soft: [], price: null, symbol: short(mint) }; }
+  const dex = (t.dexId || '').toLowerCase();
+  const onCurve = /^(pumpfun|moonshot|launchlab|boop|believe)$/.test(dex) || (dex.includes('pump') && !dex.includes('pumpswap'));
+  const graduated = dex.includes('pumpswap') || (!onCurve && /pump$/i.test(mint));
+  let rug = digestRug({ ok: false, error: 'not checked' });
+  try { rug = digestRug(await fetchRugReport(mint), t.pairAddress); } catch { /* unknown */ }
+  const prof = effectiveProfile($('risk').value, collectInputs());
+  let conviction = null;
+  try { conviction = analyzeToken(t, rug, prof, $('focus').value || 'Organic', { bad: false }).conviction; } catch { /* skip */ }
+  let honeypot = false;
+  try {
+    let dec = 6; try { dec = await getDecimals(mint); } catch { dec = 6; }
+    await getQuote({ inputMint: mint, outputMint: WSOL, amountRaw: BigInt(Math.max(1, Math.round(10 ** Math.min(6, dec || 6)))), slippageBps: 1000 });
+  } catch { honeypot = true; }
+  const cls = classifyRug({
+    mintRevoked: rug.mintRevoked, freezeRevoked: rug.freezeRevoked, lpLockedPct: rug.lpLockedPct,
+    onCurve, graduated, liq: t.liq, minLiq: COPY.minLiqUsd, rugAvailable: !!rug.available,
+    top10: rug.top10, maxTop10: prof.maxTop10, ageH: t.ageH, minAgeH: prof.minAgeH,
+    hasSocials: !!(t.twitter || t.telegram || t.website || t.discord), vol: t.vol?.h24, minVol: prof.minVol,
+    conviction, qualify: prof.qualify, honeypot
+  });
+  return { ...cls, price: t.priceUsd, symbol: t.symbol || short(mint) };
+}
+function snapshotBook(book, patch) { const next = { ...book, whales: book.whales.map(w => ({ ...w })), ...patch }; copyBooks.set(book.mint, next); return next; }
+async function placeCopyBuy(ev, sol, book, trancheLabel) {
+  const errs = buyGuards('burner', ev.mint, sol);
+  if (errs.length) { whaleLog({ whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: errs[0] }); return false; }
+  try {
+    if (typeof window.__smsSend === 'function') {
+      await window.__smsSend({ walletKey: 'burner', side: 'buy', mint: ev.mint, sol, extra: { copy: true, copyState: book } });
+      copyBooks.set(ev.mint, book);
+      whaleLog({ whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: trancheLabel, detail: (book.trigger ? 'trigger ' + book.trigger + ' · ' : '') + sol.toFixed(4) + ' SOL' + (book.soft?.length ? ' · ' + book.soft.join('; ') : '') + (book.clamped ? ' · clamped to position cap' : '') });
+      return true;
+    }
+    const qo = await getQuote({ inputMint: WSOL, outputMint: ev.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
+    const sent = await sendSwap({ walletKey: 'burner', side: 'buy', mint: ev.mint, quoteObj: qo, t: { symbol: ev.symbol || short(ev.mint), mint: ev.mint }, auto: false, extra: { copy: true, copyState: book, plan: copyPlan(ev.price || ev.nowPx) } });
+    if (sent === false) return false;
+    copyBooks.set(ev.mint, book);
+    whaleLog({ whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: trancheLabel, detail: (book.trigger ? 'trigger ' + book.trigger + ' · ' : '') + sol.toFixed(4) + ' SOL' + (book.soft?.length ? ' · ' + book.soft.join('; ') : '') + (book.clamped ? ' · clamped to position cap' : '') });
+    return true;
+  } catch (e) {
+    whaleLog({ whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: e.message });
+    return false;
+  }
+}
+async function placeCopySell(p, pct, tag, detail, book) {
+  const b = WALLETS.burner; const h = b.tokens?.get(p.mint);
+  try {
+    if (typeof window.__smsSend === 'function') {
+      await window.__smsSend({ walletKey: 'burner', side: 'sell', mint: p.mint, pct, tag, extra: { copy: true, copyState: book } });
+    } else {
+      if (!h || h.raw === 0n) return false;
+      const raw = pct >= 100 ? h.raw : (h.raw * BigInt(Math.round(pct))) / 100n;
+      if (raw === 0n) return false;
+      const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.min(15, Math.max(A.slipCap, S.slippagePct)) * 100) });
+      await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: tokenInfo(p.mint), auto: false, exitTag: tag, extra: { copy: true, copyState: book } });
+    }
+    if (book) copyBooks.set(p.mint, book);
+    whaleLog({ whale: p.symbol, token: p.symbol, side: 'sell', usd: null, decision: tag === 'mirror' ? 'mirror' : tag, detail: Math.round(pct) + '% · ' + detail });
+    return true;
+  } catch (e) { whaleLog({ whale: p.symbol, token: p.symbol, side: 'sell', usd: null, decision: 'rejected', detail: e.message }); return false; }
+}
+async function handleWhaleEvent(ev) {
+  const whale = ev.whale || WHALES.find(w => w.wallet === ev.wallet) || { label: ev.label || short(ev.wallet), wallet: ev.wallet, tier: ev.tier || 'confirm', min: '', max: '' };
+  ev.label = whale.label; ev.tier = whale.tier; ev.whale = whale;
+  if (ev.side === 'sell') {
+    const book = copyBooks.get(ev.mint);
+    if (!book) { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'sell', usd: ev.usd, decision: 'sell', detail: 'no copy position' }); return; }
+    const m = mirrorSellPct(book, ev);
+    if (!m || !(m.pct > 0)) { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'sell', usd: ev.usd, decision: 'sell', detail: 'not counted' }); return; }
+    const pos = openPositions().find(p => p.mint === ev.mint && p.copy) || { mint: ev.mint, symbol: ev.symbol || short(ev.mint), key: 'burner:' + ev.mint, wallet: 'burner', copy: true, plan: copyPlan(ev.price), avgUsd: ev.price, firstTs: book.t1Ts || Date.now(), tp1Done: false, tp2Done: false };
+    const lp = ev.nowPx || livePrices.get(ev.mint)?.price;
+    const ex = priceExit(pos, lp);
+    let pct = m.pct, tag = 'mirror', detail = m.rule;
+    if (ex && ex.pctSell >= pct) { pct = ex.pctSell; tag = ex.tag; detail = ex.tag; }
+    if (m.mark) book.whales.forEach(w => { if (w.wallet === ev.wallet) w.fullyExited = true; });
+    await placeCopySell(pos, pct, tag, detail, book);
+    return;
+  }
+  const sized = sizeDecision(ev.usd, whale);
+  if (!sized.ok) { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: sized.decision, detail: sized.detail }); return; }
+  COPY.recent.push({ mint: ev.mint, wallet: ev.wallet, ts: ev.ts || Date.now(), usd: ev.usd });
+  COPY.recent = COPY.recent.slice(-400);
+  const existing = copyBooks.get(ev.mint);
+  if (existing && !existing.tranche2Done && !existing.whales.some(w => w.wallet === ev.wallet)) {
+    existing.whales.push({ wallet: ev.wallet, label: whale.label, fullyExited: false });
+    await runTranche2(existing, ev, 'another whale');
+    return;
+  }
+  if (existing || openPositions().some(p => p.open && p.mint === ev.mint)) {
+    whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'skipped', detail: 'one copy position per token' });
+    return;
+  }
+  const trig = buyTrigger({ ...ev, ts: ev.ts || Date.now() });
+  if (!trig) { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'skipped', detail: 'no trigger' }); return; }
+  const screen = ev.screen || await screenMint(ev.mint);
+  ev.symbol = ev.symbol || screen.symbol;
+  const whalePx = ev.price || (ev.usd > 0 && ev.tokenDelta ? ev.usd / Math.abs(ev.tokenDelta) : null);
+  const nowPx = ev.nowPx || screen.price;
+  const chase = chaseBlocked(whalePx, nowPx, COPY.maxChasePct);
+  if (chase.blocked) { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: 'price +' + chase.pct.toFixed(0) + '% above whale buy (max chase ' + COPY.maxChasePct + '%)' }); return; }
+  if (screen.decision === 'rejected') { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: (screen.hard || []).join('; ') }); return; }
+  const cap = positionCapSol();
+  if (cap.err) { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: cap.err }); return; }
+  const reduced = screen.decision === 'reduced';
+  const plan = planTranches({ cap: cap.cap, globalMax: S.maxSolPerTrade, reduced, tranche1: COPY.tranche1Sol, tranche2: COPY.tranche2Sol });
+  if (!(plan.t1 >= 0.001)) { whaleLog({ whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: 'tranche 1 below 0.001 SOL' }); return; }
+  const book = { mint: ev.mint, symbol: ev.symbol || short(ev.mint), whales: trig.wallets.map(w => ({ wallet: w, label: (WHALES.find(x => x.wallet === w) || whale).label, fullyExited: false })), fullSol: plan.full, t1Sol: plan.t1, t2Sol: plan.t2, t1Px: nowPx || whalePx, t1Ts: Date.now(), tranche2Done: false, trigger: trig.id, soft: screen.soft || [], clamped: plan.clamped, reduced };
+  if (!book.whales.some(w => w.wallet === ev.wallet)) book.whales.push({ wallet: ev.wallet, label: whale.label, fullyExited: false });
+  const ok = await placeCopyBuy({ ...ev, price: nowPx || whalePx }, plan.t1, book, reduced ? 'reduced' : 'bought');
+  if (ok) copyBooks.set(ev.mint, book);
+}
+async function runTranche2(book, ev, why) {
+  if (book.tranche2Done || book.pending2) return;
+  const cap = positionCapSol();
+  if (cap.err) { whaleLog({ whale: ev?.label || '—', token: book.symbol, side: 'buy', usd: ev?.usd ?? null, decision: 'rejected', detail: 'tranche 2: ' + cap.err }); return; }
+  const room = Math.max(0, Math.min(book.fullSol, cap.cap) - (book.t1Sol || 0));
+  const sol = Math.min(book.t2Sol || 0, room);
+  if (!(sol >= 0.001)) { book.tranche2Done = true; whaleLog({ whale: ev?.label || '—', token: book.symbol, side: 'buy', usd: null, decision: 'skipped', detail: 'tranche 2 below 0.001 SOL' }); return; }
+  book.pending2 = true;
+  const fake = { mint: book.mint, symbol: book.symbol, label: ev?.label || 'tranche 2', usd: ev?.usd ?? null, price: book.t1Px };
+  const ok = await placeCopyBuy(fake, sol, { ...book, tranche2Done: true, pending2: false, trigger: why }, 'tranche 2');
+  book.pending2 = false;
+  if (ok) { book.tranche2Done = true; book.t2Sol = sol; copyBooks.set(book.mint, book); }
+}
+async function checkTrancheHolds() {
+  const wait = COPY.tranche2Min * 60e3;
+  for (const book of copyBooks.values()) {
+    if (book.tranche2Done || book.pending2) continue;
+    if (Date.now() - (book.t1Ts || 0) < wait) continue;
+    let px = livePrices.get(book.mint)?.price;
+    if (!isNum(px)) { try { const s = await screenMint(book.mint); px = s.price; } catch { px = null; } }
+    if (isNum(px) && isNum(book.t1Px) && px + 1e-12 >= book.t1Px) await runTranche2(book, { label: 'price hold', mint: book.mint }, 'price held ' + COPY.tranche2Min + ' min');
+  }
+}
+async function pollCopyOnce() {
+  if (!COPY.on || copyBusy) return { skipped: true };
+  if (!WALLETS.burner.kp) { stopCopy('burner locked'); return { stopped: true }; }
+  copyBusy = true;
+  try {
+    const list = WHALES.filter(w => isAddr(w.wallet));
+    for (const w of list) {
+      if (!COPY.on) break;
+      let sigs;
+      try { sigs = await rpc('getSignaturesForAddress', [w.wallet, { limit: 8, commitment: 'confirmed' }]); rpcGap = Math.max(400, rpcGap * 0.85); }
+      catch (e) {
+        if (/429|rate/i.test(e.message)) { rpcGap = Math.min(15000, rpcGap * 2); whaleLog({ whale: w.label, decision: 'rejected', detail: 'RPC backoff ' + Math.round(rpcGap / 1000) + 's' }); break; }
+        whaleLog({ whale: w.label, decision: 'rejected', detail: e.message }); continue;
+      }
+      const rows = sigs || [];
+      if (!COPY.cursors[w.wallet] || COPY.armBaseline) { COPY.cursors[w.wallet] = rows[0]?.signature || 'none'; continue; }
+      const fresh = [];
+      for (const s of rows) { if (s.signature === COPY.cursors[w.wallet]) break; if (!s.err) fresh.push(s); }
+      if (rows[0]?.signature) COPY.cursors[w.wallet] = rows[0].signature;
+      for (const s of fresh.slice(0, 3).reverse()) {
+        if (!COPY.on) break;
+        await sleep(Math.min(rpcGap, 500));
+        let tx; try { tx = await rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]); }
+        catch (e) { if (/429|rate/i.test(e.message)) { rpcGap = Math.min(15000, rpcGap * 2); break; } continue; }
+        const fill = parseWhaleFill(w.wallet, tx);
+        if (!fill) continue;
+        const ts = (s.blockTime ? s.blockTime * 1000 : Date.now());
+        let usd = 0, px = null;
+        if (fill.solDelta && solUsd()) usd = Math.abs(fill.solDelta) * solUsd();
+        else if (Math.abs(fill.quoteDelta) > 1e-9) usd = Math.abs(fill.quoteDelta);
+        const sizeKnown = usd > 0 && sizeDecision(usd, w).ok === false && fill.side === 'buy';
+        if (!sizeKnown && (fill.side === 'buy' || !(usd > 0))) {
+          try { const info = await screenMint(fill.mint); px = info.price; if (!(usd > 0) && px) usd = Math.abs(fill.tokenDelta) * px; fill._screen = info; } catch { /* priced later */ }
+        }
+        await handleWhaleEvent({ wallet: w.wallet, whale: w, label: w.label, tier: w.tier, mint: fill.mint, side: fill.side, usd, price: usd && fill.tokenDelta ? usd / Math.abs(fill.tokenDelta) : px, nowPx: px, tokenDelta: fill.tokenDelta, sellPct: fill.sellPct, ts, screen: fill.side === 'buy' ? fill._screen : undefined, symbol: fill._screen?.symbol });
+      }
+      await sleep(rpcGap);
+    }
+    COPY.armBaseline = false;
+    if (COPY.on) await checkTrancheHolds();
+    const { on, armBaseline, ...rest } = COPY; save(LS.copy, rest);
+  } finally { copyBusy = false; const st = $('copyStatus'); if (st) st.textContent = copyStatusText(); }
+}
+function copyStatusText() { return COPY.on ? 'Copy ON · poll ' + COPY.pollSec + 's' : 'Copy mode is OFF. Nothing is copied after a reload until you turn it on.'; }
+function readWhaleForm() {
+  if (!$('whaleList')) return;
+  const next = [];
+  document.querySelectorAll('[data-wi]').forEach(row => {
+    const w = normWhale({ label: row.querySelector('.w-label').value, wallet: row.querySelector('.w-wallet').value, tier: row.querySelector('.w-tier').value, min: row.querySelector('.w-min').value.trim(), max: row.querySelector('.w-max').value.trim() });
+    if (w) next.push(w);
+  });
+  WHALES = next;
+  const lim = (id) => { const el = $(id); if (!el) return ''; const v = el.value.trim(); if (v === '') return ''; const n = +v; return Number.isFinite(n) && n >= 0 ? n : ''; };
+  COPY.groups = { core: { min: lim('wgMin-core'), max: lim('wgMax-core') }, confirm: { min: lim('wgMin-confirm'), max: lim('wgMax-confirm') } };
+  if ($('cCluster')) COPY.clusterN = +$('cCluster').value;
+  if ($('cWindow')) COPY.clusterH = +$('cWindow').value;
+  if ($('cChase')) COPY.maxChasePct = +$('cChase').value;
+  if ($('cT2min')) COPY.tranche2Min = +$('cT2min').value;
+  if ($('cMinLiq')) COPY.minLiqUsd = +$('cMinLiq').value;
+  if ($('cRpc')) COPY.customRpc = $('cRpc').value.trim();
+  if ($('cTr1')) COPY.tranche1Sol = $('cTr1').value.trim();
+  if ($('cTr2')) COPY.tranche2Sol = $('cTr2').value.trim();
+  const was = COPY.on; sanitizeCopy(); COPY.on = was;
+}
+function persistWhaleCfg() { readWhaleForm(); const { on, armBaseline, ...rest } = COPY; save(LS.copy, rest); save(LS.whales, WHALES); }
+function limField(id, val, label) {
+  const v = val === '' || val == null ? '' : val;
+  return `<label class="block"><span class="text-slate-400">${label}</span><input id="${id}" type="number" min="0" step="1" placeholder="no limit" value="${v}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>`;
+}
+function whaleRow(w, i) {
+  return `<div data-wi="${i}" class="grid grid-cols-2 sm:grid-cols-6 gap-1.5 items-end border-t border-white/5 pt-1.5">
+    <label class="block sm:col-span-1"><span class="text-slate-500">Label</span><input class="w-label mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1" value="${esc(w.label)}" /></label>
+    <label class="block sm:col-span-2"><span class="text-slate-500">Wallet</span><input class="w-wallet mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" value="${esc(w.wallet)}" placeholder="trading wallet" /></label>
+    <label class="block"><span class="text-slate-500">Tier</span><select class="w-tier mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1"><option value="core" ${w.tier === 'core' ? 'selected' : ''}>core</option><option value="confirm" ${w.tier === 'confirm' ? 'selected' : ''}>confirm</option></select></label>
+    <label class="block"><span class="text-slate-500">Min USD</span><input class="w-min mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1" type="number" min="0" step="1" placeholder="group" value="${w.min === '' || w.min == null ? '' : w.min}" /></label>
+    <label class="block"><span class="text-slate-500">Max USD</span><input class="w-max mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1" type="number" min="0" step="1" placeholder="group" value="${w.max === '' || w.max == null ? '' : w.max}" /></label>
+    <button type="button" data-rm="${i}" class="sm:col-span-6 text-left text-rose-300 hover:underline">Remove</button>
+  </div>`;
+}
+function renderWhale() {
+  const box = $('whaleBox'); if (!box) return;
+  const open = $('whaleDetails')?.open || COPY.on;
+  const g = COPY.groups || GROUP_DEFAULTS;
+  const num = (id, v, step, label, extra = '') => `<label class="block"><span class="text-slate-400">${label}</span><input id="${id}" type="number" step="${step}" value="${v === '' || v == null ? '' : v}" ${extra} class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>`;
+  const group = (tier, title) => `<div class="mt-2"><div class="font-semibold text-slate-200 mb-1">${title}</div><div class="grid grid-cols-2 gap-2 mb-1">${limField('wgMin-' + tier, g[tier].min, 'Min whale buy USD')}${limField('wgMax-' + tier, g[tier].max, 'Max whale buy USD')}</div>${WHALES.map((w, i) => w.tier === tier ? whaleRow(w, i) : '').join('') || '<p class="text-slate-500">No ' + tier + ' whales.</p>'}</div>`;
+  box.innerHTML = `<details id="whaleDetails" class="rounded-xl bg-ink-850 border ${COPY.on ? 'border-orange-500/50' : 'border-white/5'}" ${open ? 'open' : ''}>
+    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-between"><span>🐋 Whale copy-trade</span>${COPY.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-orange-500 text-white">COPY ON</span>' : '<span class="text-[10px] text-slate-500">copy off</span>'}</summary>
+    <div class="px-3 pb-3 text-xs space-y-2">
+      <p class="text-[11px] text-slate-400">Copies fomo.family traders with the burner wallet through Jupiter, inside the global caps. A buy outside that whale's min/max (its own, or the group default) is <b>ignored: size</b>. Empty tranche fields use 50/50 of the capped size, or 30% then the rest when soft flags fire. A filled tranche 1 is scaled by 0.6 on soft flags.</p>
+      <div class="grid grid-cols-2 gap-2">
+        ${num('cCluster', COPY.clusterN, '1', 'Whales for cluster', 'min="2" max="10"')}
+        ${num('cWindow', COPY.clusterH, '0.5', 'Cluster window (hours)', 'min="0.25"')}
+        ${num('cChase', COPY.maxChasePct, '1', 'Max chase %', 'min="0"')}
+        ${num('cT2min', COPY.tranche2Min, '1', 'Tranche 2 after (min)', 'min="1"')}
+        ${num('cMinLiq', COPY.minLiqUsd, '1000', 'Min liquidity (USD)', 'min="0"')}
+        ${num('cTr1', COPY.tranche1Sol, '0.01', 'Copy tranche 1 (SOL)', 'min="0" placeholder="percent"')}
+        ${num('cTr2', COPY.tranche2Sol, '0.01', 'Copy tranche 2 (SOL)', 'min="0" placeholder="percent"')}
+      </div>
+      <label class="block"><span class="text-slate-400">Custom RPC URL <span class="text-slate-600">(optional, used for every RPC call when set)</span></span><input id="cRpc" type="url" value="${esc(COPY.customRpc || '')}" placeholder="https://mainnet.helius-rpc.com/?api-key=…" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" /></label>
+      <div id="whaleList">${group('core', 'Core')}${group('confirm', 'Confirm')}</div>
+      <div class="flex gap-2"><button id="cAdd" type="button" class="rounded-lg px-2 py-1.5 bg-ink-700 border border-white/10">Add whale</button><button id="cSave" type="button" class="rounded-lg px-2 py-1.5 bg-ink-700 border border-white/10">Save copy settings</button>${COPY.on ? '<button id="cOff" type="button" class="flex-1 rounded-lg py-1.5 font-bold bg-rose-600 text-white">Copy mode OFF</button>' : '<button id="cOn" type="button" class="flex-1 rounded-lg py-1.5 font-bold bg-orange-600 text-white">Copy mode ON</button>'}</div>
+      <p id="copyStatus" class="text-[10px] text-slate-500">${esc(copyStatusText())}</p>
+      <div class="text-[11px] text-slate-400">Activity <span class="text-slate-500">(time Tehran)</span></div>
+      <ul id="whaleFeed" class="space-y-0.5 max-h-48 overflow-y-auto scroll-thin font-mono text-[11px]">${feedHtml()}</ul>
+    </div></details>`;
+  $('cSave').addEventListener('click', () => { persistWhaleCfg(); toast('Copy settings saved', 'ok'); renderWhale(); });
+  $('cAdd').addEventListener('click', () => { readWhaleForm(); WHALES.push({ label: '', wallet: '', tier: 'confirm', min: '', max: '' }); renderWhale(); });
+  box.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { readWhaleForm(); WHALES.splice(+b.dataset.rm, 1); persistWhaleCfg(); renderWhale(); }));
+  $('cOn')?.addEventListener('click', enableCopy);
+  $('cOff')?.addEventListener('click', () => stopCopy('manual', { quiet: false }));
+}
+function startCopyTimer() { clearInterval(copyTimer); copyTimer = setInterval(pollCopyOnce, COPY.pollSec * 1000); }
+function enableCopy() {
+  persistWhaleCfg();
+  if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+  resetModalButtons();
+  openModal({ title: '🐋 Turn copy mode ON', confirmLabel: 'Start copying', danger: true,
+    html: `<p class="text-xs text-slate-300">The burner will copy new whale buys and mirror their sells while this tab is open. Existing global caps still apply. Copy mode turns off on reload.</p><label class="mt-3 flex gap-2 items-start text-xs"><input id="cAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand copies execute without asking.</label>`,
+    validate: () => $('cAck')?.checked,
+    onConfirm: async () => { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); renderWhale(); renderKillFab(); toast('🐋 Copy mode ON — only new trades are copied', 'warn', 6000); setTimeout(pollCopyOnce, 400); } });
+}
+function stopCopy(reason, opts) {
+  const was = COPY.on; COPY.on = false; COPY.armBaseline = false; clearInterval(copyTimer); copyTimer = null;
+  if (was) whaleLog({ decision: 'stopped', detail: 'copy mode off (' + reason + ')' });
+  if (was && !opts?.quiet) toast('⛔ Copy mode stopped', 'err');
+  renderKillFab();
+  if (!opts?.quiet) renderWhale();
+}
+loadCopyBooks();
 
 /* ---------------- settings wiring ---------------- */
 function fillSettings() {
@@ -1923,14 +2410,16 @@ $('risk').addEventListener('change', () => { $('setMaxPos').textContent = maxPos
 $('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('tradeCard').scrollIntoView({ behavior: 'smooth' }); else connectPhantom(false); });
 
 /* ---------------- init ---------------- */
-fillSettings(); renderWallet(); renderBurner(); renderPortfolio(); hydrate();
+fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderPortfolio(); hydrate();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
 if (WALLETS.burner.pubkey) refreshBalances('burner');
 setInterval(() => { if (openPositions().length && !A.on) refreshPrices(); }, 60000);
 if (openPositions().length) setTimeout(refreshPrices, 1500);
 
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
-  encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap };
+  encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
+  classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale,
+  get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
 </script>

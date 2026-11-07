@@ -64,6 +64,15 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
   - one buy per token.
 - Optional **auto-exit** (sell at the stop, sell 50% at +50% from the stored average entry, sell 50% of the rest at +100%, then trail the rest / time stop) and **auto-scan** (Scan latest boosted every N minutes, at least 5). Existing positions use the new targets from their stored entry.
 - Optional token age overrides on Inputs: **Min age (hours)** and **Max age (days)**. Leave them blank to keep the risk preset (Balanced is 1.0h–7.0d).
+
+## Whale copy-trade
+- Section **Whale copy-trade**. List is stored in `sms:whales` (`label`, `wallet`, `tier` `core` or `confirm`, optional per-whale `min` / `max` USD). Other copy settings are in `sms:copycfg`.
+- Group limits at the top of each list: **Min whale buy USD** and **Max whale buy USD**. Empty means no limit. Defaults: core min 500, confirm min 20000 (this replaces a single big-buy threshold), both max empty. A whale's own min/max overrides its group. Buys outside the range are logged as `ignored: size` and do not trigger.
+- Triggers: in-range core buy (A), in-range confirm buy (B), or at least 2 distinct in-range whales on the same token within the cluster window (C, default 6h).
+- Rug check: hard blocks (mint or freeze still active, LP not locked/burned unless the pool is pump.fun-graduated or PumpSwap, Jupiter sell quote fails, liquidity under the minimum default $10k) never buy. Soft flags (young age, no socials, RugCheck unknown, top-10 up to 40%, low volume or conviction) still buy, but tranche 1 is 30% of the capped size instead of 50%.
+- **Copy tranche 1 (SOL)** and **Copy tranche 2 (SOL)**: when filled, those amounts replace the 50/50 split. A soft flag uses tranche 1 × 0.6. When empty, sizing falls back to the percentages. The whole position is still clamped by the global per-trade max and the burner balance percent; daily max and max open positions still block.
+- Copy mode is off after every reload, needs the burner unlocked, and the kill switch stops it. The feed uses Tehran time. Copied trades are tagged `copy`.
+- Optional **Custom RPC URL** in that section is used for every RPC call when set. Polls about every 25s, only signatures that arrive after copy mode is armed.
 - A **KILL SWITCH** is in the panel, and a floating button appears while auto mode is on. Every automatic action goes to the auto-trade log.
 - **It only works while the tab is open.** Browsers slow down background tabs. **Only fund small amounts.**
 
