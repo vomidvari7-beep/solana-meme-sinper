@@ -45,7 +45,7 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
   - tokens with red flags or failed checklist items need an extra confirmation;
   - "Confirm every trade" is always on.
 - **Trade log (localStorage) + positions:**
-  - shows average entry (the on-chain fill when available), live PnL, the stop from the analysis, and TP1/TP2 at +50% / +100% of that entry;
+  - shows average entry (the on-chain fill when available), live PnL, the effective stop and why it is there (initial, break-even, early trail, or trail), and TP1/TP2 at +50% / +100% of that entry;
   - highlights STOP HIT / TP hit as **alerts only**;
   - exports to CSV.
 
@@ -62,7 +62,7 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
   - only Candidates with LP, mint/freeze and top-10 verified, no medium/high flags, not on the bonding curve;
   - the price must be inside the entry zone and the analysis less than 60 minutes old;
   - one buy per token.
-- Optional **auto-exit** (sell at the stop, sell 50% at +50% from the stored average entry, sell 50% of the rest at +100%, then trail the rest / time stop) and **auto-scan** (Scan latest boosted every N minutes, at least 5). Existing positions use the new targets from their stored entry.
+- Optional **auto-exit** (sell at the stop, sell 50% at +50% from the stored average entry, sell 50% of the rest at +100%, then trail the rest / time stop) and **auto-scan** (Scan latest boosted every N minutes, at least 5). Before TP1 the stop only moves up: break-even at +% (default 25) lifts it to entry +1%, and early trail at +% (default 40) trails Early trail % (default 18) under the high. After TP1 the stop is the tighter of that trail and the profile trail. The same stop is used for scanner buys, whale copies, and alerts. Existing positions use the new targets from their stored entry.
 - Optional token age overrides on Inputs: **Min age (hours)** and **Max age (days)**. Leave them blank to keep the risk preset (Balanced is 1.0h–7.0d).
 
 ## Whale copy-trade

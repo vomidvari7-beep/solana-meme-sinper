@@ -956,7 +956,7 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
   const avgEntry = isNum(zoneLo) ? (zoneLo + zoneHi) / 2 : null;
   const stopDist = isNum(avgEntry) && isNum(stop) ? (avgEntry - stop) / avgEntry : stopPctBase / 100;
   const notionalPct = riskPct ? riskPct / stopDist : 0;
-  const exit = { tp1: isNum(avgEntry) ? avgEntry * 2 : null, tp2: isNum(avgEntry) ? avgEntry * 3 : null, tp3: isNum(avgEntry) ? avgEntry * 5 : null, trail: prof.trail, timeStopH: prof.timeStopH };
+  const exit = { tp1: isNum(avgEntry) ? avgEntry * 1.5 : null, tp2: isNum(avgEntry) ? avgEntry * 2 : null, tp3: isNum(avgEntry) ? avgEntry * 5 : null, trail: prof.trail, timeStopH: prof.timeStopH };
 
   return { ...t, onCurve, rug, flags, fails, volLiq, liqMcap, bsr1, bsr24, accel, ta: ta || null,
     sub: { onchain, social, momentum, risk: riskS, parts: { liqS, lmS, vlS, safety, safetyNote, holdersS, bsrS, trendS, accS, penalty, caps } },
@@ -1072,6 +1072,16 @@ function badge(score) { return `<div class="shrink-0 w-14 h-14 rounded-2xl grid 
 function icon(status) { return { ok: '<span class="text-emerald-400">✔</span>', bad: '<span class="text-rose-400">✖</span>', warn: '<span class="text-amber-400">▲</span>', unknown: '<span class="text-slate-500">?</span>' }[status]; }
 function section(id, title, num, body, sub = '') {
   return `<section id="${id}" class="glass rounded-2xl p-4 sm:p-5"><div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">${num}</span>${title}</h2>${sub ? `<span class="text-[11px] text-slate-500">${sub}</span>` : ''}</div>${body}</section>`;
+}
+function exitProtect() {
+  let be = 25, early = 40, trail = 18;
+  try {
+    const a = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {};
+    if (Number.isFinite(+a.beAtPct)) be = +a.beAtPct;
+    if (Number.isFinite(+a.earlyAtPct)) early = +a.earlyAtPct;
+    if (Number.isFinite(+a.earlyTrailPct)) trail = +a.earlyTrailPct;
+  } catch { /* defaults */ }
+  return { be, early, trail };
 }
 function bar(label, val, weight, contrib, color) {
   return `<div><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-400">${label} <span class="text-slate-600">· ${weight}</span></span><span class="font-mono text-slate-300">${Math.round(val)} → <b>${contrib.toFixed(1)}</b> pts</span></div>
@@ -1201,12 +1211,13 @@ function render(R) {
   `, `Max ${prof.maxPos} positions · scale in`);
 
   // Exit
+  const prot = exitProtect();
   html += section('sec-exit', 'Exit Plan', '08', `
-    <div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[560px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>TP1 · 2x (sell 30–40%)</th><th>TP2 · 3x (sell 25%)</th><th>Runner · 5x</th><th>Trailing</th><th>Time stop</th></tr></thead>
-    <tbody>${list.map(t => `<tr class="border-t border-white/5"><td class="py-1.5 font-semibold">${esc(t.symbol)}</td><td class="font-mono text-emerald-300">${price(t.exit.tp1)}</td><td class="font-mono text-emerald-300">${price(t.exit.tp2)}</td><td class="font-mono text-emerald-200">${price(t.exit.tp3)}</td><td>${t.exit.trail}% from high</td><td>${t.exit.timeStopH}h</td></tr>`).join('')}</tbody></table></div>
+    <div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[560px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>TP1 · +50% (sell 50%)</th><th>TP2 · +100% (sell 50% of rest)</th><th>Trail rest</th><th>Time stop</th></tr></thead>
+    <tbody>${list.map(t => `<tr class="border-t border-white/5"><td class="py-1.5 font-semibold">${esc(t.symbol)}</td><td class="font-mono text-emerald-300">${price(t.exit.tp1)}</td><td class="font-mono text-emerald-300">${price(t.exit.tp2)}</td><td>${t.exit.trail}% from high</td><td>${t.exit.timeStopH}h</td></tr>`).join('')}</tbody></table></div>
     <ul class="text-xs text-slate-400 mt-3 space-y-1 list-disc pl-4">
-      <li>Targets are multiples of the <b>average planned entry</b>, not the current price. At TP1 take out at least your initial capital.</li>
-      <li>After TP1 move the stop to break-even; trail the rest ${prof.trail}% below the highest close.</li>
+      <li>Targets are from the <b>average planned entry</b>. TP1 is entry +50% and sells 50%. TP2 is entry +100% and sells 50% of what remains. The rest trails ${prof.trail}% below the high.</li>
+      <li>Before TP1 the stop only moves up: at +${prot.be}% the stop becomes entry +1% (break-even); at +${prot.early}% it trails ${prot.trail}% under the high. After TP1 the stop is the tighter of that early trail and the ${prof.trail}% trail.</li>
       <li>Time stop: if there is no +30% within ${prof.timeStopH}h of entry, exit — capital is better used elsewhere.</li>
       <li>Hard exit immediately on: liquidity drop &gt; 30%, LP unlock/removal, dev/insider wallets dumping, mint/freeze re-enabled, or a sharp SOL breakdown.</li>
     </ul>
@@ -1264,7 +1275,8 @@ function toMarkdown(R) {
   L.push('', '## Entry Strategy');
   list.forEach(t => { const e = t.entry; L.push(`- **${t.symbol}** — ${e.strat}: ${e.reason} Zone ${price(e.zoneLo)}–${price(e.zoneHi)}, stop ${price(e.stop)} (≈−${e.stopPct.toFixed(0)}%), risk ${e.riskPct ? e.riskPct.toFixed(2) + '% of account (size ≈ ' + e.notionalPct.toFixed(1) + '% of account)' : '0 — no trade'}. ${e.trigger} Scale in 40/30/30.`); });
   L.push('', '## Exit Plan');
-  list.forEach(t => L.push(`- **${t.symbol}** — TP1 2x ${price(t.exit.tp1)} (sell 30–40%), TP2 3x ${price(t.exit.tp2)} (sell 25%), runner 5x ${price(t.exit.tp3)}; trail ${t.exit.trail}% from high; time stop ${t.exit.timeStopH}h.`));
+  const prot = exitProtect();
+  list.forEach(t => L.push(`- **${t.symbol}** — TP1 +50% ${price(t.exit.tp1)} (sell 50%), TP2 +100% ${price(t.exit.tp2)} (sell 50% of the rest), trail the rest ${t.exit.trail}% from the high; before TP1, break-even at +${prot.be}% (stop to entry +1%) and early trail at +${prot.early}% (${prot.trail}% under the high). Stops only move up. Time stop ${t.exit.timeStopH}h.`));
   L.push('- Hard exit on liquidity drop >30%, LP unlock, dev/insider dumping, or SOL breakdown.', '', '## Risk Warnings');
   list.forEach(t => t.flags.forEach(f => L.push(`- [${f.sev.toUpperCase()}] ${t.symbol}: ${f.text}`)));
   L.push(`- Max ${prof.maxPos} simultaneous positions, 0.5–${prof.riskCap}% risk per token, always scale in.`, '', '_Analysis only — not financial advice._');
@@ -1393,7 +1405,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -1429,6 +1441,10 @@ function sanitizeSettings() {
   A.solPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.solPauseBelow) ? +A.solPauseBelow : 25));
   A.dexPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.dexPauseBelow) ? +A.dexPauseBelow : 25));
   A.breakoutOnly = !!A.breakoutOnly;
+  const pctOr = (v, d, lo, hi) => { const n = +v; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  A.beAtPct = pctOr(A.beAtPct, 25, 0, 500);
+  A.earlyAtPct = pctOr(A.earlyAtPct, 40, 0, 500);
+  A.earlyTrailPct = pctOr(A.earlyTrailPct, 18, 1, 90);
 }
 sanitizeSettings();
 const maxPos = () => { const n = Math.round(+S.maxOpenPositions); return (n >= 1 && n <= 20) ? n : 2; };
@@ -1976,14 +1992,14 @@ async function refreshPrices() {
   checkAlerts(); renderPortfolio();
 }
 function levelState(p) {
-  const lp = livePrices.get(p.mint)?.price; const pl = positionTargets(p);
-  if (!isNum(lp)) return { cls: 'text-slate-500', label: 'no price' };
-  if (isNum(pl.stop) && lp <= pl.stop) return { cls: 'text-rose-300 font-bold', label: '⛔ STOP HIT', lvl: 'stop' };
-  if (isNum(pl.tp3) && lp >= pl.tp3) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP3 (5x) hit', lvl: 'tp3' };
-  if (isNum(pl.tp2) && lp >= pl.tp2) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP2 (+100%) hit', lvl: 'tp2' };
-  if (isNum(pl.tp1) && lp >= pl.tp1) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP1 (+50%) hit', lvl: 'tp1' };
-  if (isNum(pl.stop) && lp <= pl.stop * 1.1) return { cls: 'text-amber-300', label: 'near stop' };
-  return { cls: 'text-slate-400', label: 'in range' };
+  const lp = livePrices.get(p.mint)?.price; const eff = effectiveStop(p, lp);
+  if (!isNum(lp)) return { cls: 'text-slate-500', label: 'no price', eff };
+  if (isNum(eff.stop) && lp <= eff.stop) return { cls: 'text-rose-300 font-bold', label: '⛔ STOP HIT · ' + eff.reason, lvl: 'stop', eff };
+  if (isNum(eff.tp3) && lp >= eff.tp3) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP3 (5x) hit', lvl: 'tp3', eff };
+  if (isNum(eff.tp2) && lp >= eff.tp2) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP2 (+100%) hit', lvl: 'tp2', eff };
+  if (isNum(eff.tp1) && lp >= eff.tp1) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP1 (+50%) hit', lvl: 'tp1', eff };
+  if (isNum(eff.stop) && lp <= eff.stop * 1.1) return { cls: 'text-amber-300', label: 'near stop', eff };
+  return { cls: 'text-slate-400', label: 'in range', eff };
 }
 function checkAlerts() {
   for (const p of openPositions()) { const s = levelState(p); if (!s.lvl) continue; const k = p.key + ':' + s.lvl;
@@ -1995,13 +2011,13 @@ function renderPortfolio() {
   const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
   if (!LOG.length && !anyW && !AUTOLOG.length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = positionTargets(p);
+  const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = s.eff || effectiveStop(p, lp);
     const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
     return `<tr class="border-t border-white/5 align-top ${s.lvl === 'stop' ? 'bg-rose-500/10' : s.lvl ? 'bg-emerald-500/10' : ''}">
       <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}${p.copy ? ' · copy' : ''}</div></td>
       <td class="pr-2 font-mono">${fmtTok(p.qty)}</td><td class="pr-2 font-mono">${price(p.avgUsd)}</td><td class="pr-2 font-mono">${price(lp)}</td>
       <td class="pr-2 font-mono ${pctCls(pnl)}">${pct(pnl)}<div class="text-[10px]">${isNum(pnlUsd) ? (pnlUsd >= 0 ? '+' : '') + usd(pnlUsd, 2) : ''}</div></td>
-      <td class="pr-2 font-mono text-rose-300">${price(pl.stop)}</td><td class="pr-2 font-mono text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
+      <td class="pr-2 font-mono text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
       <td class="whitespace-nowrap">${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}</td></tr>`; }).join('');
   const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
@@ -2012,7 +2028,7 @@ function renderPortfolio() {
   el.innerHTML = `<section id="sec-portfolio" class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
       <div class="flex gap-2 text-[11px]"><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
-    <div class="text-[11px] text-slate-500 mb-2">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop from the analysis at buy time · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
+    <div class="text-[11px] text-slate-500 mb-2">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
     ${open.length ? `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Qty</th><th>Avg entry</th><th>Price</th><th>PnL</th><th>Stop</th><th>TP1/TP2</th><th>Status</th><th>Sell</th></tr></thead><tbody>${posRows}</tbody></table></div>` : '<p class="text-xs text-slate-500">No open positions.</p>'}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
@@ -2218,6 +2234,9 @@ function renderBurner() {
           ${num('aImpact', A.maxImpact, '0.1', 'Max price impact % (≤5)', 'min="0.1" max="5"')}
           ${num('aSlip', A.slipCap, '0.1', 'Slippage cap % (≤15)', 'min="0.1" max="15"')}
           ${num('aScanMin', A.scanMin, '1', 'Scan interval (min ≥5)', 'min="5"')}
+          ${num('aBeAt', A.beAtPct, '1', 'Break-even at +%', 'min="0" max="500"')}
+          ${num('aEarlyAt', A.earlyAtPct, '1', 'Early trail at +%', 'min="0" max="500"')}
+          ${num('aEarlyTr', A.earlyTrailPct, '1', 'Early trail %', 'min="1" max="90"')}
         </div>
         <div class="mt-2 rounded-lg border border-white/10 p-2 space-y-2">
           <label class="flex items-center gap-2"><input id="aSolOn" type="checkbox" ${A.solFilter ? 'checked' : ''} class="accent-violet-500" /> Pause auto-buys on mood</label>
@@ -2266,7 +2285,8 @@ function readAutoInputs() {
   Object.assign(A, { maxSolPerTrade: g('aMaxTrade') ?? A.maxSolPerTrade, dailyCap: g('aDaily') ?? A.dailyCap, balancePct: g('aBalPct') ?? A.balancePct, minConviction: g('aMinConv') ?? A.minConviction, maxImpact: g('aImpact') ?? A.maxImpact, slipCap: g('aSlip') ?? A.slipCap, scanMin: g('aScanMin') ?? A.scanMin,
     autoExit: $('aExit') ? $('aExit').checked : A.autoExit, autoScan: $('aScan') ? $('aScan').checked : A.autoScan, breakoutOnly: $('aBrk') ? $('aBrk').checked : !!A.breakoutOnly,
     solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, solMode: $('aSolMode')?.value || A.solMode,
-    moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow });
+    moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow,
+    beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
   if (A.on) startTimers();
@@ -2381,7 +2401,25 @@ window.__smsSolBadge = updateSolFilterBadge;
 
 /* ---------------- auto-trading engine (burner only) ---------------- */
 let tickTimer = null, scanTimer = null, autoBusy = false, lastTick = null, lastScan = null;
-const sellFails = {}; let autoHigh = load('sms:autohigh', {});
+const sellFails = {}; let autoHigh = load('sms:autohigh', {}); let autoStop = load('sms:autostop', {});
+function effectiveStop(p, lp) {
+  const pl = positionTargets(p);
+  let high = isNum(autoHigh[p.key]) ? autoHigh[p.key] : 0;
+  if (isNum(lp) && lp > high) { high = lp; autoHigh[p.key] = high; save('sms:autohigh', autoHigh); }
+  const entry = p?.avgUsd;
+  let stop = isNum(pl.stop) ? pl.stop : null;
+  let reason = 'initial';
+  const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
+  if (isNum(entry) && entry > 0 && high > 0) {
+    if (high >= entry * (1 + A.beAtPct / 100)) raise(entry * 1.01, 'break-even');
+    if (high >= entry * (1 + A.earlyAtPct / 100)) raise(high * (1 - A.earlyTrailPct / 100), 'early trail');
+  }
+  if (p?.tp1Done && isNum(pl.trail) && high > 0) raise(high * (1 - pl.trail / 100), 'trail');
+  const prev = autoStop[p.key];
+  if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
+  else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
+  return { ...pl, stop, reason, high };
+}
 function autoStatusText() {
   if (!A.on) return 'Auto-trade is OFF. Nothing will be signed automatically.';
   return `ON · tick every 30s${lastTick ? ' · last ' + new Date(lastTick).toLocaleTimeString() : ''}${A.autoScan ? ` · scan every ${A.scanMin} min${lastScan ? ' (last ' + new Date(lastScan).toLocaleTimeString() + ')' : ''}` : ' · no auto-scan'} · exits ${A.autoExit ? 'ON' : 'off'} · armed ${armedEntries().length}`;
@@ -2409,12 +2447,11 @@ function inZone(t, px) { const e = t.entry; if (!isNum(px)) return false;
   if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= e.zoneHi * 1.03;
   return px <= e.zoneHi && px > e.stop; }
 function priceExit(p, lp) {
-  const pl = positionTargets(p); if (!isNum(lp)) return null;
+  if (!isNum(lp)) return null;
   if ((sellFails[p.key] || 0) >= 3) return null;
-  autoHigh[p.key] = Math.max(autoHigh[p.key] || 0, lp); save('sms:autohigh', autoHigh);
+  const eff = effectiveStop(p, lp); const pl = eff;
   const pnl = p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const ageH = (Date.now() - p.firstTs) / 3.6e6;
-  if (isNum(pl.stop) && lp <= pl.stop) return { pctSell: 100, tag: 'stop' };
-  if (p.tp1Done && isNum(pl.trail) && lp <= autoHigh[p.key] * (1 - pl.trail / 100)) return { pctSell: 100, tag: 'trail' };
+  if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: (eff.reason === 'trail' || eff.reason === 'early trail') ? 'trail' : 'stop' };
   if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) return { pctSell: 50, tag: 'tp2' };
   if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) return { pctSell: 50, tag: 'tp1' };
   if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) return { pctSell: 100, tag: 'time' };
@@ -2487,7 +2524,7 @@ function enableAuto() {
   readAutoInputs(); const b = WALLETS.burner; if (!b.kp) return toast('Unlock the burner first', 'warn'); resetModalButtons();
   openModal({ title: '🤖 Turn auto-trading ON', confirmLabel: 'Start auto-trading', danger: true,
     html: `<p class="text-xs text-slate-300">The burner wallet <span class="font-mono">${esc(short(b.pubkey))}</span> (${isNum(b.sol) ? b.sol.toFixed(4) : '?'} SOL) will <b>sign and send swaps automatically, without asking</b>, while this tab stays open.</p>
-      <ul class="text-[11px] text-slate-300 list-disc pl-4 mt-2 space-y-0.5"><li>Max ${A.maxSolPerTrade} SOL per auto trade · global ${S.maxSolPerTrade} SOL/trade and ${S.dailyMaxSol} SOL/day · ${A.balancePct}% of burner balance · ${A.dailyCap} SOL per day (auto) · ${maxPos()} open positions</li><li>Only Candidates with conviction ≥ ${A.minConviction}, verified checklist, no red flags, price impact ≤ ${A.maxImpact}%, slippage ≤ ${A.slipCap}%</li><li>Buys only when live price enters the analysis entry zone; one buy per token</li><li>Auto-exit: ${A.autoExit ? 'ON (stop, 50% at +50%, 50% of rest at +100%, trail rest, time stop)' : 'OFF (alerts only)'} · Auto-scan: ${A.autoScan ? 'every ' + A.scanMin + ' min' : 'OFF'}</li></ul>
+      <ul class="text-[11px] text-slate-300 list-disc pl-4 mt-2 space-y-0.5"><li>Max ${A.maxSolPerTrade} SOL per auto trade · global ${S.maxSolPerTrade} SOL/trade and ${S.dailyMaxSol} SOL/day · ${A.balancePct}% of burner balance · ${A.dailyCap} SOL per day (auto) · ${maxPos()} open positions</li><li>Only Candidates with conviction ≥ ${A.minConviction}, verified checklist, no red flags, price impact ≤ ${A.maxImpact}%, slippage ≤ ${A.slipCap}%</li><li>Buys only when live price enters the analysis entry zone; one buy per token</li><li>Auto-exit: ${A.autoExit ? `ON (stop, break-even at +${A.beAtPct}%, early trail ${A.earlyTrailPct}% from +${A.earlyAtPct}%, 50% at +50%, 50% of rest at +100%, trail rest, time stop)` : 'OFF (alerts only)'} · Auto-scan: ${A.autoScan ? 'every ' + A.scanMin + ' min' : 'OFF'}</li></ul>
       <div class="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-[11px] text-rose-200">Heuristic scores can be wrong; meme coins can rug or go to zero in seconds; bugs, RPC or API failures can cause losses. Background tabs may be throttled. Use the KILL SWITCH any time.</div>
       <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="aoAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand and accept that trades will execute without per-trade confirmation within these caps.</label>`,
     validate: () => $('aoAck')?.checked,
@@ -2974,7 +3011,7 @@ if (openPositions().length) setTimeout(refreshPrices, 1500);
 
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
-  classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge,
+  classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
