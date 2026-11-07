@@ -1,0 +1,1875 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SolanaMemeSniper — Panel</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { darkMode: 'class', theme: { extend: {
+  fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'], mono: ['JetBrains Mono','ui-monospace','monospace'] },
+  colors: { ink: { 950:'#07090f', 900:'#0b0f19', 850:'#0f1422', 800:'#141a2b', 700:'#1d2540', 600:'#2a3456' } }
+}}};
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  body { background: radial-gradient(1200px 600px at 10% -10%, rgba(153,69,255,.18), transparent 60%), radial-gradient(900px 500px at 110% 0%, rgba(20,241,149,.12), transparent 60%), #07090f; }
+  .glass { background: rgba(15,20,34,.78); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.06); }
+  .fa { font-family: 'Vazirmatn', sans-serif; direction: rtl; }
+  .grad-text { background: linear-gradient(90deg,#9945FF,#14F195); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .btn-primary { background: linear-gradient(90deg,#9945FF,#14F195); color:#07090f; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  select, input, textarea { color-scheme: dark; }
+  .scroll-thin::-webkit-scrollbar { height: 6px; width: 6px; } .scroll-thin::-webkit-scrollbar-thumb { background:#2a3456; border-radius: 6px; }
+  .spinner { width:18px;height:18px;border:2px solid rgba(7,9,15,.3);border-top-color:#07090f;border-radius:50%;animation:spin .8s linear infinite; display:inline-block; }
+  .spinner-light { border-color: rgba(255,255,255,.2); border-top-color:#14F195; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast-enter { animation: tin .25s ease-out; } @keyframes tin { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+  section[id^="sec-"], #results { scroll-margin-top: 12px; } @media (min-width:640px){ section[id^="sec-"], #results { scroll-margin-top: 84px; } }
+  details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+</style>
+</head>
+<body class="text-slate-200 font-sans min-h-screen antialiased">
+
+<header class="sm:sticky top-0 z-30 border-b border-white/5 bg-ink-950/80 backdrop-blur">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl btn-primary grid place-items-center font-extrabold text-lg">◎</div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-extrabold tracking-tight"><span class="grad-text">SolanaMemeSniper</span> <span class="text-slate-400 font-medium text-sm">Panel</span></h1>
+        <p class="text-[11px] text-slate-500 -mt-0.5">Rug-avoidance first · Live DexScreener + RugCheck</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <div id="solTicker" class="flex items-center gap-2 text-sm glass rounded-xl px-3 py-1.5">
+        <span class="text-slate-400">SOL</span><span id="solPrice" class="font-mono font-semibold">—</span><span id="solChg" class="font-mono text-xs text-slate-500">loading…</span>
+      </div>
+      <button id="btnWallet" class="rounded-xl px-3 py-1.5 text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition flex items-center gap-2"><span>👻</span><span id="btnWalletLabel">Connect Phantom</span></button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+  <section class="lg:col-span-4 space-y-4">
+    <div class="glass rounded-2xl p-4 sm:p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-bold text-base">Inputs</h2>
+        <span id="lastIndicator" class="hidden text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"></span>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block">
+          <span class="text-xs text-slate-400">Risk Tolerance</span>
+          <select id="risk" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            <option>Aggressive</option><option selected>Balanced</option><option>Conservative</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-slate-400">Focus</span>
+          <select id="focus" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            <option>Early Pump</option><option>Narrative</option><option selected>Organic</option><option>Momentum</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-slate-400">Screener Source</span>
+          <select id="source" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            <option>DexScreener</option><option>Birdeye</option><option>GeckoTerminal</option><option>Other</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-xs text-slate-400">Account size $ <span class="text-slate-600">(optional)</span></span>
+          <input id="account" type="number" min="0" step="any" placeholder="e.g. 5000" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+        </label>
+      </div>
+      <p id="riskHint" class="mt-2 text-[11px] text-slate-500"></p>
+      <label class="block mt-3">
+        <span class="text-xs text-slate-400 flex justify-between"><span>Pasted screener data / token list</span><span id="parseCount" class="text-emerald-400/80"></span></span>
+        <textarea id="pasted" rows="8" spellcheck="false" placeholder="Paste mint addresses, DexScreener / Birdeye / GeckoTerminal URLs, or copied screener rows. Anything that looks like a Solana address is detected automatically." class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500 scroll-thin"></textarea>
+        <span class="fa block text-[11px] text-slate-500 mt-1">آدرس توکن‌ها یا لینک‌های DexScreener را اینجا پیست کن؛ اگر خالی است «Scan latest boosted» را بزن.</span>
+      </label>
+      <label class="block mt-3">
+        <span class="text-xs text-slate-400">Additional notes <span class="text-slate-600">(optional)</span></span>
+        <textarea id="notes" rows="2" placeholder="e.g. avoid AI narrative, already holding X…" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
+      </label>
+      <label class="mt-3 flex items-center gap-2 text-xs text-slate-400 select-none">
+        <input id="useRug" type="checkbox" checked class="accent-violet-500 w-4 h-4" /> Verify with RugCheck (top 10 tokens, slower)
+      </label>
+      <div class="mt-4 grid grid-cols-2 gap-2">
+        <button id="btnAnalyze" class="col-span-2 btn-primary rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 transition disabled:opacity-60"><span id="analyzeLabel">⚡ Analyze</span></button>
+        <button id="btnBoosted" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition disabled:opacity-50">🚀 Scan latest boosted</button>
+        <button id="btnDemo" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">🧪 Demo data</button>
+        <button id="btnCopy" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">📋 Copy Results</button>
+        <button id="btnPrompt" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">🤖 Copy as AI prompt</button>
+        <button id="btnLoadLast" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">↺ Load last</button>
+        <button id="btnClear" class="rounded-xl py-2 text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 transition">✕ Clear</button>
+      </div>
+      <p class="text-[10px] text-slate-600 mt-2">Tip: Ctrl/⌘ + Enter = Analyze</p>
+      <div id="progress" class="hidden mt-3 text-xs text-slate-400 flex items-center gap-2"><span class="spinner spinner-light"></span><span id="progressText">Working…</span></div>
+    </div>
+
+    <!-- WALLET & TRADING -->
+    <div id="tradeCard" class="glass rounded-2xl p-4 sm:p-5">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-bold text-base">Wallet &amp; Trading</h2>
+        <span id="walletStatus" class="text-[11px] px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">Not connected</span>
+      </div>
+      <div id="walletInfo" class="text-xs text-slate-400"></div>
+      <div id="burnerBox" class="mt-3"></div>
+      <details id="settingsBox" class="mt-3 rounded-xl bg-ink-850 border border-white/5">
+        <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white">⚙️ Safety guards &amp; settings</summary>
+        <div class="px-3 pb-3 space-y-2.5 text-xs">
+          <label class="block"><span class="text-slate-400">RPC URL <span class="text-slate-600">(reads balances &amp; confirmations)</span></span>
+            <input id="setRpc" type="url" spellcheck="false" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            <select id="setRpcPreset" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 text-[11px]">
+              <option value="">— presets —</option>
+              <option value="https://solana-rpc.publicnode.com">PublicNode (free, browser-friendly)</option>
+              <option value="https://api.mainnet-beta.solana.com">Solana mainnet-beta (often 403 from browsers)</option>
+              <option value="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY">Helius (paste your key)</option>
+            </select>
+            <span class="block text-[10px] text-slate-500 mt-1">Public RPCs rate-limit and some block browsers (CORS/403). For reliability use your own free Helius / QuickNode URL.</span>
+          </label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block"><span class="text-slate-400">Slippage % <span class="text-slate-600">(max 15)</span></span><input id="setSlip" type="number" min="0.1" max="15" step="0.1" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">Max SOL / trade</span><input id="setMaxTrade" type="number" min="0.001" step="0.01" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">Daily max spend (SOL)</span><input id="setDaily" type="number" min="0.001" step="0.01" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">SOL reserve for fees</span><input id="setReserve" type="number" min="0.002" step="0.001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">Priority fee level</span><select id="setPrioLevel" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5"><option value="medium">Medium</option><option value="high">High</option><option value="veryHigh">Very high</option></select></label>
+            <label class="block"><span class="text-slate-400">Max priority fee (SOL)</span><input id="setPrioMax" type="number" min="0" max="0.01" step="0.0001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+          </div>
+          <label class="block"><span class="text-slate-400">Jupiter endpoint</span>
+            <select id="setJup" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 text-[11px]">
+              <option value="https://lite-api.jup.ag/swap/v1">lite-api.jup.ag/swap/v1 (keyless)</option>
+              <option value="https://api.jup.ag/swap/v1">api.jup.ag/swap/v1 (optional API key)</option>
+            </select></label>
+          <label class="block"><span class="text-slate-400">Jupiter API key <span class="text-slate-600">(optional, stored only in this browser)</span></span><input id="setJupKey" type="password" autocomplete="off" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+          <div class="flex items-center justify-between rounded-lg bg-ink-800 px-2.5 py-2"><span class="text-slate-400">Max open positions <span class="text-slate-600">(from Risk Tolerance)</span></span><b id="setMaxPos" class="font-mono text-slate-200">2</b></div>
+          <label class="flex items-center gap-2 rounded-lg bg-ink-800 px-2.5 py-2"><input type="checkbox" checked disabled class="accent-emerald-500 w-4 h-4" /><span class="text-slate-300">Confirm every trade <span class="text-slate-500">(always on, can't be disabled)</span></span></label>
+          <div class="flex gap-2"><button id="btnSaveSettings" class="flex-1 rounded-lg py-2 font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save settings</button><button id="btnResetSettings" class="rounded-lg px-3 py-2 bg-ink-700 hover:bg-ink-600 border border-white/10">Defaults</button></div>
+        </div>
+      </details>
+      <p class="mt-3 text-[10px] leading-relaxed text-rose-200/70">🔐 No private keys, no auto-trading. Every trade is shown in a confirmation window and must be signed by you in Phantom. Swaps are routed by Jupiter. Meme coins can go to zero within minutes.
+        <span class="fa block mt-1">هیچ کلید خصوصی‌ای گرفته نمی‌شود و هیچ معامله‌ای خودکار نیست؛ هر معامله را خودت در Phantom امضا می‌کنی.</span></p>
+    </div>
+  </section>
+
+  <section class="lg:col-span-8 space-y-5" id="output">
+    <div id="portfolio" class="hidden"></div>
+    <div id="emptyState" class="glass rounded-2xl p-8 text-center">
+      <div class="text-4xl mb-3">🎯</div>
+      <h3 class="font-bold text-lg">No analysis yet</h3>
+      <p class="text-sm text-slate-400 mt-1">Paste tokens and hit <b>Analyze</b>, load <b>Demo data</b>, or <b>Scan latest boosted</b> Solana tokens.</p>
+      <p class="fa text-xs text-slate-500 mt-2">برای شروع، «Demo data» یا «Scan latest boosted» را بزن.</p>
+      <div class="mt-5 grid sm:grid-cols-3 gap-3 text-left text-xs">
+        <div class="rounded-xl bg-ink-800 p-3 border border-white/5"><div class="text-emerald-300 font-semibold">1 · Filter</div><div class="text-slate-400 mt-1">Risk-based filters + red-flag scan kill rugs first.</div></div>
+        <div class="rounded-xl bg-ink-800 p-3 border border-white/5"><div class="text-violet-300 font-semibold">2 · Verify</div><div class="text-slate-400 mt-1">LP lock, mint/freeze, top-10, volume quality, socials.</div></div>
+        <div class="rounded-xl bg-ink-800 p-3 border border-white/5"><div class="text-amber-300 font-semibold">3 · Plan</div><div class="text-slate-400 mt-1">Conviction 0–100, entry method, sizing, exits.</div></div>
+      </div>
+    </div>
+    <div id="results" class="hidden space-y-5"></div>
+  </section>
+</main>
+
+<footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
+  <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] text-amber-200/80 leading-relaxed">
+    ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
+    <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
+    <span class="fa block mt-1">فقط تحلیل است، توصیه‌ی مالی نیست. قبل از هر ورود دوباره چک کن.</span>
+  </div>
+</footer>
+
+<!-- TRADE CONFIRMATION MODAL -->
+<div id="tradeModal" class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm overflow-y-auto">
+  <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full sm:max-w-lg bg-ink-900 border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
+        <h3 id="tmTitle" class="font-bold">Confirm trade</h3>
+        <button id="tmClose" class="text-slate-400 hover:text-white text-xl leading-none px-2" aria-label="Close">×</button>
+      </div>
+      <div id="tmBody" class="px-5 py-4 text-sm"></div>
+      <div class="px-5 pb-5 flex gap-2">
+        <button id="tmCancel" class="flex-1 rounded-xl py-3 text-sm font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10">Cancel</button>
+        <button id="tmConfirm" class="flex-[2] rounded-xl py-3 text-sm font-bold btn-primary disabled:opacity-40 disabled:cursor-not-allowed">Confirm &amp; sign in Phantom</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="fixed top-3 sm:top-auto sm:bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end pointer-events-none"></div>
+<script>
+'use strict';
+/* ============================ CONFIG ============================ */
+const DEMO_MINTS = [
+  'ejrz94zR4A2ScS8LdvRaQih2xUxaE2ydreqUNKmpump',
+  'BWJfBNeXpapG7uoqByp5KSwWgCQba8QcDmA2DQiEpump',
+  'SCGBBnSwnekytGFHgyeHHxPMiN7xDxsWFGg9JgFSTNK',
+  'DKtofLM6bhb54GQy5YFSWQjQmGiZqAkjzkQJ1LTopump'
+];
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
+const IGNORE = new Set([SOL_MINT, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb', '11111111111111111111111111111111']);
+const INF = 1e15;
+const PROFILES = {
+  Aggressive:   { minLiq: 10000, minMcap: 20000,  maxMcap: INF,  minAgeH: 10/60, maxAgeH: INF, minVol: 20000,  maxTop10: 40, minLpLock: 50, qualify: 55, maxPos: 3, stopPct: 25, riskCap: 1.5,  timeStopH: 6,  trail: 30 },
+  Balanced:     { minLiq: 30000, minMcap: 100000, maxMcap: 10e6, minAgeH: 1,     maxAgeH: 168, minVol: 100000, maxTop10: 30, minLpLock: 90, qualify: 60, maxPos: 2, stopPct: 20, riskCap: 1.25, timeStopH: 24, trail: 25 },
+  Conservative: { minLiq: 75000, minMcap: 250000, maxMcap: 50e6, minAgeH: 24,    maxAgeH: INF, minVol: 250000, maxTop10: 20, minLpLock: 95, qualify: 65, maxPos: 2, stopPct: 18, riskCap: 1.0,  timeStopH: 48, trail: 22 }
+};
+const FOCUS_NOTES = {
+  'Early Pump': 'Favors young tokens (<6h) with accelerating volume; tolerates more volatility.',
+  'Narrative':  'Weights social/narrative presence higher; penalizes tokens with no socials.',
+  'Organic':    'Strict on volume quality (vol/liq, avg trade size, holder spread); punishes wash-like volume.',
+  'Momentum':   'Weights buy pressure & trend; prefers established upward structure.'
+};
+
+/* ============================ HELPERS ============================ */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl = (u) => /^https?:\/\//i.test(String(u || '')) ? esc(u) : '#';
+const clamp = (x, a = 0, b = 100) => Math.max(a, Math.min(b, x));
+const isNum = (x) => typeof x === 'number' && isFinite(x);
+const lerp = (x, x0, x1, y0, y1) => { if (x <= x0) return y0; if (x >= x1) return y1; return y0 + (y1 - y0) * (x - x0) / (x1 - x0); };
+const fmtMax = (v, f) => v >= INF ? '∞' : f(v);
+function usd(n, d) { if (!isNum(n)) return '—'; const a = Math.abs(n);
+  if (a >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B'; if (a >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return '$' + (n/1e3).toFixed(1) + 'k'; return '$' + n.toFixed(d ?? 0); }
+function price(p) { if (!isNum(p)) return '—'; if (p >= 1) return '$' + p.toFixed(4); if (p >= 0.01) return '$' + p.toFixed(5);
+  const dec = Math.min(14, -Math.floor(Math.log10(p)) + 2); return '$' + p.toFixed(dec); }
+function pct(n, d = 1) { if (!isNum(n)) return '—'; return (n > 0 ? '+' : '') + n.toFixed(d) + '%'; }
+function pctCls(n) { if (!isNum(n)) return 'text-slate-500'; return n >= 0 ? 'text-emerald-400' : 'text-rose-400'; }
+function age(h) { if (!isNum(h)) return '—'; if (h < 1) return Math.round(h*60) + 'm'; if (h < 48) return h.toFixed(1) + 'h'; return (h/24).toFixed(1) + 'd'; }
+function short(a) { return a ? a.slice(0,4) + '…' + a.slice(-4) : ''; }
+function scoreCls(s) { return s >= 65 ? 'emerald' : s >= 45 ? 'amber' : 'rose'; }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+function fmtTime(ts) { try { return new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' }); } catch { return new Date(ts).toString(); } }
+
+function toast(msg, type = 'info', ms = 4200) {
+  const colors = { info: 'border-violet-500/30 bg-ink-800', ok: 'border-emerald-500/30 bg-emerald-950/90', err: 'border-rose-500/40 bg-rose-950/90', warn: 'border-amber-500/40 bg-amber-950/90' };
+  const el = document.createElement('div');
+  el.className = `toast-enter max-w-sm w-full sm:w-auto rounded-xl border px-4 py-2.5 text-sm shadow-2xl ${colors[type] || colors.info}`;
+  el.textContent = msg; $('toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, ms);
+}
+async function fetchJSON(url, { timeout = 12000 } = {}) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
+  try { const r = await fetch(url, { signal: ctl.signal, headers: { Accept: 'application/json' } });
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; } return await r.json(); }
+  catch (e) { if (e.name === 'AbortError') { const x = new Error('timeout'); x.status = 0; throw x; } throw e; }
+  finally { clearTimeout(t); }
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch {} ta.remove(); return ok; }
+}
+function setProgress(text) { if (text) { $('progress').classList.remove('hidden'); $('progressText').textContent = text; } else $('progress').classList.add('hidden'); }
+
+/* ============================ PARSING ============================ */
+const B58 = '1-9A-HJ-NP-Za-km-z';
+function parseInput(text) {
+  text = String(text || '');
+  const pairs = new Set(), mints = new Set();
+  // Screener URLs (DexScreener URLs are often lower-cased, so accept any alphanumerics there)
+  const urlRe = /(?:https?:\/\/)?(?:www\.)?(dexscreener\.com|geckoterminal\.com|birdeye\.so|gmgn\.ai|photon-sol\.tinyastro\.io|pump\.fun|solscan\.io)\/[^\s"'<>]*?([A-Za-z0-9]{32,44})(?![A-Za-z0-9])[^\s"'<>]*/gi;
+  const rest = text.replace(urlRe, (full, host, addr) => {
+    host = host.toLowerCase();
+    if (/dexscreener|geckoterminal|photon/.test(host)) pairs.add(addr);   // pair / pool address (may also be a token — handled later)
+    else mints.add(addr);                                                  // birdeye, gmgn, pump.fun, solscan use the mint
+    return ' ';
+  });
+  const addrRe = new RegExp(`(?<![${B58}])[${B58}]{32,44}(?![${B58}])`, 'g');
+  let m; while ((m = addrRe.exec(rest))) { const a = m[0]; if (IGNORE.has(a) || /^\d+$/.test(a) || !/\d/.test(a) && !/[A-Z]/.test(a)) continue; mints.add(a); }
+  return { mints: [...mints].filter(a => !IGNORE.has(a)), pairs: [...pairs].filter(a => !IGNORE.has(a)) };
+}
+
+/* ============================ DATA FETCH ============================ */
+async function fetchSolContext() {
+  const ctx = { price: null, h1: null, h6: null, h24: null, source: null, error: null };
+  try {
+    const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + SOL_MINT);
+    const usdc = (arr || []).filter(p => p.baseToken?.address === SOL_MINT && /^(USDC|USDT)$/.test(p.quoteToken?.symbol || ''))
+      .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    if (usdc) Object.assign(ctx, { price: +usdc.priceUsd, h1: usdc.priceChange?.h1 ?? null, h6: usdc.priceChange?.h6 ?? null, h24: usdc.priceChange?.h24 ?? null, source: `DexScreener ${usdc.dexId} SOL/${usdc.quoteToken.symbol}` });
+  } catch (e) { ctx.error = 'DexScreener SOL: ' + e.message; }
+  if (!isNum(ctx.price) || !isNum(ctx.h24)) {
+    try { const j = await fetchJSON('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true');
+      if (j?.solana) Object.assign(ctx, { price: j.solana.usd, h24: j.solana.usd_24h_change, source: 'CoinGecko' }); }
+    catch (e) { ctx.error = (ctx.error ? ctx.error + '; ' : '') + 'CoinGecko: ' + e.message; }
+  }
+  return ctx;
+}
+function renderTicker(ctx) {
+  if (!ctx || !isNum(ctx.price)) { $('solPrice').textContent = '—'; $('solChg').textContent = 'unavailable'; return; }
+  $('solPrice').textContent = '$' + ctx.price.toFixed(2);
+  $('solChg').className = 'font-mono text-xs ' + pctCls(ctx.h24); $('solChg').textContent = pct(ctx.h24) + ' 24h';
+}
+async function fetchTokenPairs(mints) {
+  const out = [];
+  for (let i = 0; i < mints.length; i += 30) {
+    const chunk = mints.slice(i, i + 30);
+    setProgress(`Fetching DexScreener tokens ${i + 1}–${i + chunk.length} of ${mints.length}…`);
+    const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + chunk.join(','));
+    if (Array.isArray(arr)) out.push(...arr);
+  }
+  return out;
+}
+async function fetchPairs(pairAddrs) {
+  const out = [];
+  for (let i = 0; i < pairAddrs.length; i += 30) {
+    const chunk = pairAddrs.slice(i, i + 30);
+    setProgress(`Fetching DexScreener pairs ${i + 1}–${i + chunk.length}…`);
+    try { const j = await fetchJSON('https://api.dexscreener.com/latest/dex/pairs/solana/' + chunk.join(','));
+      out.push(...(j?.pairs || (j?.pair ? [j.pair] : [])).filter(Boolean)); }
+    catch (e) { console.warn('pairs fetch', e); }
+  }
+  return out;
+}
+async function fetchBoostedMints() {
+  const lists = await Promise.allSettled([
+    fetchJSON('https://api.dexscreener.com/token-boosts/latest/v1'),
+    fetchJSON('https://api.dexscreener.com/token-boosts/top/v1'),
+    fetchJSON('https://api.dexscreener.com/token-profiles/latest/v1')
+  ]);
+  const seen = new Set();
+  for (const l of lists) if (l.status === 'fulfilled' && Array.isArray(l.value))
+    for (const t of l.value) if (t.chainId === 'solana' && t.tokenAddress && !IGNORE.has(t.tokenAddress)) seen.add(t.tokenAddress);
+  if (!seen.size) throw new Error('No Solana boosted tokens returned by DexScreener');
+  return [...seen].slice(0, 60);
+}
+async function fetchRugReport(mint) {
+  try { return { ok: true, data: await fetchJSON(`https://api.rugcheck.xyz/v1/tokens/${mint}/report`, { timeout: 15000 }) }; }
+  catch (e) {
+    try { return { ok: true, summaryOnly: true, data: await fetchJSON(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { timeout: 10000 }) }; }
+    catch (e2) { return { ok: false, error: (e.status === 429 || e2.status === 429) ? 'rate-limited' : (/fetch|network/i.test(e2.message) ? 'blocked (CORS/network)' : e2.message) }; }
+  }
+}
+function digestRug(rr, pairAddress) {
+  const d = { available: false, error: null, mintRevoked: null, freezeRevoked: null, lpLockedPct: null, top10: null, holders: null, insiders: null, rugged: null, score: null, risks: [], launchpad: null, summaryOnly: false };
+  if (!rr || !rr.ok) { d.error = rr?.error || 'not checked'; return d; }
+  const r = rr.data || {}; d.available = true; d.summaryOnly = !!rr.summaryOnly;
+  d.risks = (r.risks || []).map(x => ({ name: x.name || '', level: x.level || '', desc: x.description || '', value: x.value || '' }));
+  d.score = r.score_normalised ?? r.score ?? null;
+  if (rr.summaryOnly) {
+    d.lpLockedPct = isNum(r.lpLockedPct) ? r.lpLockedPct : null;
+    const names = d.risks.map(x => x.name.toLowerCase()).join('|');
+    if (/mint authority/.test(names)) d.mintRevoked = false;
+    if (/freeze authority/.test(names)) d.freezeRevoked = false;
+    return d;
+  }
+  d.mintRevoked = r.mintAuthority == null; d.freezeRevoked = r.freezeAuthority == null;
+  d.rugged = !!r.rugged; d.holders = r.totalHolders ?? null; d.launchpad = r.launchpad?.name || null;
+  const known = r.knownAccounts || {};
+  const marketKeys = new Set((r.markets || []).flatMap(m => [m.pubkey, m.liquidityAAccount, m.liquidityBAccount]).filter(Boolean));
+  const isPool = h => known[h.owner]?.type === 'AMM' || known[h.address]?.type === 'AMM' || known[h.owner]?.type === 'LOCKER' || marketKeys.has(h.owner) || marketKeys.has(h.address);
+  const holders = (r.topHolders || []).filter(h => !isPool(h));
+  if (holders.length) d.top10 = holders.slice(0, 10).reduce((s, h) => s + (h.pct || 0), 0);
+  d.insiders = (r.insiderNetworks || []).reduce((s, n) => s + (n.activeAccounts || n.size || 0), 0);
+  const mkts = r.markets || [];
+  const mk = mkts.find(m => (m.pubkey || '').toLowerCase() === (pairAddress || '').toLowerCase()) || mkts.slice().sort((a, b) => ((b.lp?.quoteUSD||0)+(b.lp?.baseUSD||0)) - ((a.lp?.quoteUSD||0)+(a.lp?.baseUSD||0)))[0];
+  if (mk?.lp && isNum(mk.lp.lpLockedPct)) d.lpLockedPct = mk.lp.lpLockedPct;
+  return d;
+}
+</script>
+<script>
+'use strict';
+/* ============================ ANALYSIS ============================ */
+function normalizePair(p) {
+  const tx = p.txns || {}; const v = p.volume || {}; const pc = p.priceChange || {};
+  const t24 = (tx.h24?.buys || 0) + (tx.h24?.sells || 0);
+  const info = p.info || {}; const socials = (info.socials || []).map(s => (s.type || s.platform || '').toLowerCase());
+  return {
+    mint: p.baseToken?.address, name: p.baseToken?.name || '?', symbol: p.baseToken?.symbol || '?',
+    pairAddress: p.pairAddress, dexId: p.dexId || '?', url: p.url || `https://dexscreener.com/solana/${p.pairAddress}`,
+    quote: p.quoteToken?.symbol, priceUsd: p.priceUsd != null ? +p.priceUsd : null,
+    liq: p.liquidity?.usd ?? null, mcap: p.marketCap ?? p.fdv ?? null,
+    vol: { m5: v.m5 ?? null, h1: v.h1 ?? null, h6: v.h6 ?? null, h24: v.h24 ?? null },
+    chg: { m5: pc.m5 ?? null, h1: pc.h1 ?? null, h6: pc.h6 ?? null, h24: pc.h24 ?? null },
+    txns: tx, txCount24: t24, avgTrade: t24 ? (v.h24 || 0) / t24 : null,
+    ageH: p.pairCreatedAt ? (Date.now() - p.pairCreatedAt) / 3.6e6 : null,
+    image: info.imageUrl || null, hasProfile: !!(info.imageUrl || info.header),
+    twitter: socials.includes('twitter') || socials.includes('x'), telegram: socials.includes('telegram'),
+    discord: socials.includes('discord'), website: (info.websites || []).length > 0,
+    socialLinks: [...(info.websites || []).map(w => ({ label: w.label || 'Website', url: w.url })), ...(info.socials || []).map(s => ({ label: s.type || s.platform || 'link', url: s.url }))],
+    boosts: p.boosts?.active || 0
+  };
+}
+function bestPairsByToken(pairs, wantedMints) {
+  const by = new Map();
+  for (const p of pairs) {
+    if (p.chainId && p.chainId !== 'solana') continue;
+    const mint = p.baseToken?.address; if (!mint || IGNORE.has(mint)) continue;
+    if (wantedMints && !wantedMints.has(mint) && !p.__fromPair) continue;
+    const cur = by.get(mint);
+    // prefer the explicitly pasted pair, otherwise the most liquid pair
+    if (!cur || (p.__fromPair && !cur.__fromPair) || ((p.__fromPair === cur.__fromPair) && (p.liquidity?.usd || 0) > (cur.liquidity?.usd || 0))) by.set(mint, p);
+  }
+  return [...by.values()];
+}
+
+function analyzeToken(t, rug, prof, focus, regime) {
+  const flags = []; const add = (sev, text) => flags.push({ sev, text });
+  const fails = [];
+  const liq = t.liq, mcap = t.mcap, v24 = t.vol.h24, ageH = t.ageH;
+  const dex = (t.dexId || '').toLowerCase();
+  const onCurve = /^(pumpfun|moonshot|launchlab|boop|believe)$/.test(dex) || (dex.includes('pump') && !dex.includes('pumpswap'));
+  const minLiq = prof.minLiq * (regime.bad ? 1.5 : 1);
+
+  // ---- 1. Quick filter (risk-tolerance dependent)
+  if (!isNum(liq) || liq < minLiq) fails.push(`Liquidity ${usd(liq)} < ${usd(minLiq)}`);
+  if (!isNum(mcap) || mcap < prof.minMcap) fails.push(`MCap ${usd(mcap)} < ${usd(prof.minMcap)}`);
+  if (isNum(mcap) && mcap > prof.maxMcap) fails.push(`MCap ${usd(mcap)} > ${usd(prof.maxMcap)}`);
+  if (!isNum(ageH) || ageH < prof.minAgeH) fails.push(`Age ${age(ageH)} < ${age(prof.minAgeH)}`);
+  if (isNum(ageH) && ageH > prof.maxAgeH) fails.push(`Age ${age(ageH)} > ${age(prof.maxAgeH)}`);
+  if (!isNum(v24) || v24 < prof.minVol) fails.push(`Vol24h ${usd(v24)} < ${usd(prof.minVol)}`);
+
+  // ---- Red flags from screener data
+  const volLiq = isNum(v24) && liq ? v24 / liq : null;
+  const liqMcap = isNum(liq) && mcap ? liq / mcap : null;
+  const b1 = t.txns.h1?.buys || 0, s1 = t.txns.h1?.sells || 0, b24 = t.txns.h24?.buys || 0, s24 = t.txns.h24?.sells || 0;
+  const bsr1 = s1 ? b1 / s1 : (b1 ? 3 : null), bsr24 = s24 ? b24 / s24 : (b24 ? 3 : null);
+  if (isNum(liq) && liq < 10000) add('high', `Very low liquidity (${usd(liq)}) — easy to manipulate / exit-liquidity risk`);
+  if (isNum(volLiq) && volLiq > 15) add('high', `Vol/Liq ${volLiq.toFixed(1)}x > 15x — likely wash-trading / bot volume`);
+  else if (isNum(volLiq) && volLiq > 8) add('med', `Vol/Liq ${volLiq.toFixed(1)}x > 8x — wash-trading / bot volume risk`);
+  if (isNum(bsr1) && isNum(bsr24) && bsr1 < 1 && bsr24 < 1) add('med', `Sell-dominant txns (buy/sell 1h ${bsr1.toFixed(2)}, 24h ${bsr24.toFixed(2)})`);
+  else if (isNum(bsr1) && bsr1 < 0.8) add('low', `Sellers dominating last hour (buy/sell ${bsr1.toFixed(2)})`);
+  if (isNum(t.chg.h6) && t.chg.h6 > 100) add('med', `Parabolic ${pct(t.chg.h6, 0)} in 6h — chasing risk, wait for pullback`);
+  if (isNum(ageH) && ageH < 10/60) add('high', `Brand-new pair (${age(ageH)}) — highest rug window`);
+  else if (isNum(ageH) && ageH < 1) add('med', `Very new pair (${age(ageH)})`);
+  if (isNum(t.chg.h24) && t.chg.h24 < -50) add('high', `Dumped ${pct(t.chg.h24, 0)} in 24h`);
+  else if (isNum(t.chg.h24) && t.chg.h24 < -30) add('med', `Downtrend ${pct(t.chg.h24, 0)} in 24h — structure broken`);
+  if (isNum(t.avgTrade) && t.avgTrade < 15 && t.txCount24 > 20000) add('med', `Avg trade ${usd(t.avgTrade, 2)} over ${t.txCount24.toLocaleString()} txns — bot / micro-wash pattern`);
+  if (isNum(liqMcap) && liqMcap < 0.03) add('med', `Thin liquidity vs mcap (${(liqMcap*100).toFixed(1)}%)`);
+  if (!t.twitter && !t.telegram && !t.website) add('low', 'No socials or website listed');
+  if (onCurve) add('low', `Still on bonding curve (${t.dexId}) — not graduated`);
+
+  // ---- Red flags from RugCheck
+  if (rug.available) {
+    if (rug.rugged) add('critical', 'RugCheck marks token as RUGGED');
+    if (rug.mintRevoked === false) add('high', 'Mint authority ACTIVE — supply can be inflated');
+    if (rug.freezeRevoked === false) add('high', 'Freeze authority ACTIVE — wallets can be frozen');
+    if (!onCurve && isNum(rug.lpLockedPct) && rug.lpLockedPct < prof.minLpLock) add(rug.lpLockedPct < 50 ? 'high' : 'med', `LP only ${rug.lpLockedPct.toFixed(0)}% locked/burned (need ≥${prof.minLpLock}%)`);
+    if (isNum(rug.top10) && rug.top10 > prof.maxTop10) add(rug.top10 > 50 ? 'high' : 'med', `Top-10 holders ${rug.top10.toFixed(1)}% (> ${prof.maxTop10}%)`);
+    if (isNum(rug.insiders) && rug.insiders >= 25) add('high', `Large insider network (${rug.insiders} linked wallets) — coordinated dump risk`);
+    else if (isNum(rug.insiders) && rug.insiders >= 10) add('med', `Insider network detected (${rug.insiders} linked wallets)`);
+    else if (isNum(rug.insiders) && rug.insiders > 0) add('low', `Small insider network (${rug.insiders} wallets)`);
+    for (const r of rug.risks) if (r.level.toLowerCase() === 'danger' && !/mint authority|freeze authority|top 10|lp unlocked|amount of lp/i.test(r.name)) add('med', `RugCheck: ${r.name}${r.value ? ' (' + r.value + ')' : ''}`);
+  }
+
+  // ---- 2. On-chain sub-score
+  const liqS = isNum(liq) ? clamp(Math.log10(Math.max(liq, 1) / 5000) / Math.log10(250000 / 5000) * 100) : 0;
+  const lmS = isNum(liqMcap) ? (liqMcap >= 0.1 ? 100 : liqMcap >= 0.05 ? lerp(liqMcap, .05, .1, 70, 100) : liqMcap >= 0.02 ? lerp(liqMcap, .02, .05, 35, 70) : lerp(liqMcap, 0, .02, 5, 35)) : 30;
+  let vlS = 30; if (isNum(volLiq)) vlS = volLiq < 0.3 ? 25 : volLiq < 1 ? lerp(volLiq, .3, 1, 40, 80) : volLiq <= 6 ? 100 : volLiq <= 10 ? lerp(volLiq, 6, 10, 75, 40) : lerp(volLiq, 10, 30, 35, 10);
+  if (focus === 'Organic') { if (isNum(volLiq) && volLiq > 8) vlS *= 0.6; if (isNum(t.avgTrade) && t.avgTrade < 25) vlS *= 0.75; }
+  let safety = 50, safetyNote = 'RugCheck unavailable → neutral 50';
+  if (rug.available) {
+    safety = 100;
+    if (rug.mintRevoked === false) safety -= 40; if (rug.freezeRevoked === false) safety -= 40;
+    if (!onCurve && isNum(rug.lpLockedPct)) safety -= rug.lpLockedPct < 50 ? 45 : rug.lpLockedPct < 90 ? 25 : 0;
+    if (isNum(rug.top10)) safety -= rug.top10 > 50 ? 40 : rug.top10 > 30 ? 25 : rug.top10 > 20 ? 10 : 0;
+    if (isNum(rug.insiders)) safety -= rug.insiders >= 25 ? 20 : rug.insiders >= 10 ? 12 : rug.insiders > 0 ? 4 : 0;
+    if (rug.rugged) safety = 0;
+    if (rug.summaryOnly) { safety = Math.min(safety, 75); safetyNote = 'RugCheck summary only (no holder data)'; } else safetyNote = 'RugCheck full report';
+    safety = clamp(safety);
+  }
+  const holdersS = rug.available && isNum(rug.holders) ? clamp(lerp(rug.holders, 200, 5000, 0, 100)) : null;
+  const onchain = clamp(0.25 * liqS + 0.15 * lmS + 0.2 * vlS + 0.3 * safety + 0.1 * (holdersS ?? 50));
+
+  // ---- 3. Social / narrative sub-score (presence only — authenticity can't be verified by API)
+  let social = (t.twitter ? 35 : 0) + (t.telegram ? 20 : 0) + (t.website ? 20 : 0) + (t.discord ? 5 : 0) + (t.hasProfile ? 15 : 0) + (t.boosts ? 5 : 0);
+  if (isNum(ageH) && ageH > 24 && isNum(v24) && v24 > 200000) social += 10; // sustained-interest proxy
+  social = clamp(social, 0, 85); // presence only — max 85 because authenticity is unverified
+  if (focus === 'Narrative') social = clamp(social * 1.1 - (!t.twitter && !t.telegram ? 20 : 0));
+
+  // ---- 4. Momentum sub-score
+  const bsrS = isNum(bsr1) ? lerp(bsr1, 0.7, 1.5, 0, 100) : 40;
+  const h6 = t.chg.h6, h24c = t.chg.h24; let t6 = 40, t24 = 40;
+  if (isNum(h6)) t6 = h6 < -30 ? 10 : h6 < 0 ? lerp(h6, -30, 0, 15, 45) : h6 <= 50 ? lerp(h6, 0, 50, 60, 90) : h6 <= 100 ? 100 : h6 <= 300 ? 70 : 45;
+  if (isNum(h24c)) t24 = h24c < -50 ? 0 : h24c < 0 ? lerp(h24c, -50, 0, 5, 45) : h24c <= 150 ? lerp(h24c, 0, 150, 60, 100) : h24c <= 500 ? 75 : 50;
+  const trendS = 0.6 * t6 + 0.4 * t24;
+  const accel = isNum(t.vol.h1) && t.vol.h24 ? (t.vol.h1 * 24) / t.vol.h24 : null;
+  const accS = isNum(accel) ? lerp(accel, 0.3, 2, 15, 100) : 40;
+  let momentum = 0.4 * bsrS + 0.35 * trendS + 0.25 * accS;
+  if (focus === 'Momentum') momentum = 0.5 * bsrS + 0.35 * trendS + 0.15 * accS + (isNum(bsr24) && bsr24 > 1.2 ? 8 : 0);
+  if (focus === 'Early Pump') momentum += (isNum(ageH) && ageH < 6 ? 10 : 0) + (isNum(accel) && accel > 1.5 ? 5 : 0) - (isNum(ageH) && ageH > 72 ? 10 : 0);
+  if (focus === 'Organic' && isNum(volLiq) && volLiq > 8) momentum *= 0.85;
+  momentum = clamp(momentum);
+
+  // ---- Risk-flag component (negative)
+  const sevPts = { critical: 100, high: 35, med: 20, low: 5 };
+  const penalty = flags.reduce((s, f) => s + sevPts[f.sev], 0);
+  const riskS = clamp(100 - penalty);
+
+  // ---- 6. Conviction
+  const contrib = { onchain: 0.40 * onchain, social: 0.25 * social, momentum: 0.20 * momentum, risk: 0.15 * riskS };
+  let conviction = contrib.onchain + contrib.social + contrib.momentum + contrib.risk; const caps = [];
+  if (flags.some(f => f.sev === 'critical')) { conviction = Math.min(conviction, 10); caps.push('critical flag → max 10'); }
+  const highFlags = flags.filter(f => f.sev === 'high').length;
+  if (highFlags >= 2) { if (conviction > 40) caps.push('2+ high flags → max 40'); conviction = Math.min(conviction, 40); }
+  else if (highFlags === 1) { if (conviction > 55) caps.push('1 high flag → max 55'); conviction = Math.min(conviction, 55); }
+  if (fails.length) { if (conviction > 50) caps.push('failed filters → max 50'); conviction = Math.min(conviction, 50); }
+  conviction = Math.round(clamp(conviction));
+
+  const qualify = prof.qualify + (regime.bad ? 10 : 0);
+  let verdict = 'Rejected';
+  if (!fails.length && !flags.some(f => f.sev === 'critical' || f.sev === 'high') && conviction >= qualify) verdict = 'Candidate';
+  else if (!fails.length && conviction >= 45 && !flags.some(f => f.sev === 'critical')) verdict = 'Watchlist';
+
+  // ---- 5. Verification checklist
+  const ck = (status, text) => ({ status, text });
+  const U = 'Unknown — verify manually' + (rug.error ? ` (RugCheck ${rug.error})` : '');
+  const mintTxt = rug.mintRevoked == null && rug.freezeRevoked == null ? null : `Mint ${rug.mintRevoked == null ? '?' : rug.mintRevoked ? 'revoked' : 'ACTIVE'} · Freeze ${rug.freezeRevoked == null ? '?' : rug.freezeRevoked ? 'revoked' : 'ACTIVE'}`;
+  const volBad = (isNum(volLiq) && volLiq > 8) || (isNum(t.avgTrade) && t.avgTrade < 15 && t.txCount24 > 20000);
+  const volTxt = `Vol/Liq ${isNum(volLiq) ? volLiq.toFixed(1) + 'x' : '—'} · avg trade ${usd(t.avgTrade)} · ${t.txCount24.toLocaleString()} tx/24h`;
+  const socList = [t.twitter && 'X', t.telegram && 'Telegram', t.website && 'Website', t.discord && 'Discord'].filter(Boolean);
+  const isPumpLaunch = /pump$/.test(t.mint || '') || /pump/i.test(rug.launchpad || '');
+  const checklist = {
+    lp: onCurve ? ck('warn', 'On bonding curve — no LP yet (N/A until graduation)')
+        : !rug.available || !isNum(rug.lpLockedPct) ? ck('unknown', U)
+        : ck(rug.lpLockedPct >= prof.minLpLock ? 'ok' : 'bad', `${rug.lpLockedPct.toFixed(1)}% locked/burned on main pool`),
+    mint: !rug.available || !mintTxt ? ck('unknown', U)
+        : ck(rug.mintRevoked === false || rug.freezeRevoked === false ? 'bad' : (rug.mintRevoked && rug.freezeRevoked ? 'ok' : 'unknown'), mintTxt),
+    top10: !rug.available || !isNum(rug.top10) ? ck('unknown', U)
+        : ck(rug.top10 <= prof.maxTop10 ? 'ok' : 'bad', `${rug.top10.toFixed(1)}% (pools excluded)${isNum(rug.holders) ? ' · ' + rug.holders.toLocaleString() + ' holders' : ''}${isNum(rug.insiders) && rug.insiders ? ' · ' + rug.insiders + ' insider wallets' : ''}`),
+    volume: ck(volBad ? 'bad' : (isNum(volLiq) && volLiq < 0.3 ? 'warn' : 'ok'), volTxt + (isNum(volLiq) && volLiq < 0.3 ? ' (low activity)' : '')),
+    social: socList.length ? ck('warn', `${socList.join(' · ')} listed — authenticity NOT verifiable via API; check followers/engagement manually`) : ck('bad', 'No socials listed'),
+    pumpfun: onCurve ? ck('warn', `On bonding curve (${t.dexId}) — wait for graduation`)
+        : isPumpLaunch || dex === 'pumpswap' ? ck('ok', `Pump.fun launch — graduated, trading on ${t.dexId}`) : ck('ok', `N/A — not a Pump.fun launch (${t.dexId}${rug.launchpad ? ', ' + rug.launchpad : ''})`),
+    flags: flags.length ? ck(flags.some(f => f.sev === 'critical' || f.sev === 'high') ? 'bad' : 'warn', `${flags.length}: ` + flags.map(f => f.text.split(' — ')[0]).join('; ')) : ck('ok', 'None detected')
+  };
+
+  // ---- 7. Entry strategy
+  const p = t.priceUsd; let strat, reason, zone, trigger;
+  const cleanCk = ['lp', 'mint', 'top10', 'volume'].every(k => checklist[k].status === 'ok');
+  if (onCurve) { strat = 'Post-Pump.fun Migration Entry'; reason = 'Still on the bonding curve: wait for graduation, then the first healthy pullback with clean LP & holders.'; zone = [0.75, 0.85]; trigger = 'Zone shown is relative to current price; re-anchor to the post-migration high and buy a 15–25% pullback.'; }
+  else if ((isNum(t.chg.h6) && t.chg.h6 > 100) || (isNum(t.chg.h1) && t.chg.h1 > 30)) { strat = 'Pullback + Volume Confirmation'; reason = 'Move is extended/parabolic — chasing is poor R:R. Wait for a pullback where buyers keep stepping in.'; zone = isNum(t.chg.h6) && t.chg.h6 > 200 ? [0.65, 0.75] : [0.75, 0.85]; trigger = 'Fill only if buy/sell ratio stays > 1.2 and volume holds on the dip.'; }
+  else if (isNum(t.chg.h24) && t.chg.h24 < -20 && isNum(bsr1) && bsr1 >= 1.3) { strat = 'Break of Short-Term Structure'; reason = 'Downtrend with buyers returning; only a clean reclaim of a recent small high confirms the turn. Use smaller initial size.'; zone = [1.05, 1.10]; trigger = 'Enter on a 5m/15m close above the latest swing high (≈ +5–10% from now — confirm on chart) with rising volume.'; }
+  else if (isNum(t.chg.h24) && t.chg.h24 < -20) { strat = 'Liquidity / Support Zone Reaction'; reason = 'Bleeding with no clear buyer return; act only at a clear support / high-volume node with visible absorption.'; zone = [0.80, 0.90]; trigger = 'Wait for wicks into support with buys absorbing sells (5m buy/sell > 1.2).'; }
+  else if (cleanCk && isNum(t.chg.h24) && t.chg.h24 > 0 && isNum(t.chg.h6) && t.chg.h6 >= 0 && isNum(bsr24) && bsr24 > 1.2 && conviction >= 65) { strat = 'Controlled Dip Buy'; reason = 'Strong trend + clean checklist: buy a measured 10–25% dip while higher structure holds.'; zone = [0.75, 0.90]; trigger = 'Only while higher-low structure holds and volume does not collapse.'; }
+  else { strat = 'Pullback + Volume Confirmation'; reason = 'Default method: enter on a small pullback after the initial move if volume and buyers stay healthy.'; zone = [0.85, 0.92]; trigger = 'Confirm buy/sell ratio > 1.2 on the bounce.'; }
+  const zoneLo = isNum(p) ? p * zone[0] : null, zoneHi = isNum(p) ? p * zone[1] : null;
+  const stopPctBase = prof.stopPct + (isNum(t.chg.h6) && Math.abs(t.chg.h6) > 100 ? 5 : 0);
+  const stop = isNum(zoneLo) ? zoneLo * (1 - stopPctBase / 100) : null;
+  let riskPct = conviction >= 75 ? 1.5 : conviction >= 65 ? 1.0 : conviction >= 55 ? 0.75 : 0.5;
+  riskPct = Math.min(riskPct, prof.riskCap); if (regime.bad) riskPct = Math.max(0.5, riskPct / 2);
+  if (verdict !== 'Candidate') riskPct = 0;
+  const avgEntry = isNum(zoneLo) ? (zoneLo + zoneHi) / 2 : null;
+  const stopDist = isNum(avgEntry) && isNum(stop) ? (avgEntry - stop) / avgEntry : stopPctBase / 100;
+  const notionalPct = riskPct ? riskPct / stopDist : 0;
+  const exit = { tp1: isNum(avgEntry) ? avgEntry * 2 : null, tp2: isNum(avgEntry) ? avgEntry * 3 : null, tp3: isNum(avgEntry) ? avgEntry * 5 : null, trail: prof.trail, timeStopH: prof.timeStopH };
+
+  return { ...t, onCurve, rug, flags, fails, volLiq, liqMcap, bsr1, bsr24, accel,
+    sub: { onchain, social, momentum, risk: riskS, parts: { liqS, lmS, vlS, safety, safetyNote, holdersS, bsrS, trendS, accS, penalty, caps } },
+    contrib, conviction, verdict, checklist,
+    entry: { strat, reason, trigger, zoneLo, zoneHi, stop, stopPct: stopDist * 100, riskPct, notionalPct }, exit };
+}
+</script>
+<script>
+'use strict';
+/* ============================ MAIN FLOW ============================ */
+let busy = false; let lastResult = null;
+const VORDER = { Candidate: 0, Watchlist: 1, Rejected: 2 };
+function collectInputs() { return { risk: $('risk').value, focus: $('focus').value, source: $('source').value, pasted: $('pasted').value, notes: $('notes').value, account: $('account').value, useRug: $('useRug').checked }; }
+function applyInputs(i) { if (!i) return; $('risk').value = i.risk || 'Balanced'; $('focus').value = i.focus || 'Organic'; $('source').value = i.source || 'DexScreener';
+  $('pasted').value = i.pasted || ''; $('notes').value = i.notes || ''; $('account').value = i.account || ''; $('useRug').checked = i.useRug !== false; updateHints(); }
+function setBusy(b, label) { busy = b; $('btnAnalyze').disabled = b; $('btnBoosted').disabled = b;
+  $('analyzeLabel').innerHTML = b ? `<span class="spinner"></span> ${esc(label || 'Analyzing…')}` : '⚡ Analyze'; if (!b) setProgress(null); }
+
+async function runAnalysis({ boosted = false } = {}) {
+  if (busy) return;
+  const inputs = collectInputs(); const prof = PROFILES[inputs.risk] || PROFILES.Balanced;
+  let { mints, pairs } = parseInput(inputs.pasted);
+  if (!boosted && !mints.length && !pairs.length) {
+    toast('No Solana addresses or pair URLs found. Paste tokens, load Demo data, or use "Scan latest boosted".', 'warn', 6000);
+    $('btnBoosted').classList.add('ring-2', 'ring-violet-400'); setTimeout(() => $('btnBoosted').classList.remove('ring-2', 'ring-violet-400'), 2500); return;
+  }
+  setBusy(true, boosted ? 'Scanning boosted…' : 'Analyzing…');
+  const warnings = [];
+  try {
+    setProgress('Fetching SOL market context…');
+    const solP = fetchSolContext();
+    if (boosted) { setProgress('Fetching latest boosted Solana tokens…'); mints = await fetchBoostedMints(); pairs = []; }
+    const tokP = mints.length ? fetchTokenPairs(mints).catch(e => { warnings.push('DexScreener tokens API failed: ' + e.message); return []; }) : Promise.resolve([]);
+    const [sol, tokPairs] = await Promise.all([solP, tokP]);
+    renderTicker(sol); if (!isNum(sol.price)) warnings.push('SOL market context unavailable' + (sol.error ? ': ' + sol.error : '') + ' — regime treated as Unknown.');
+    // Unresolved "mints" may actually be pair addresses; unresolved "pairs" (from URLs) may be token pages
+    const found = new Set(tokPairs.map(p => p.baseToken?.address));
+    const retryAsPair = boosted ? [] : mints.filter(m => !found.has(m));
+    const pairList = [...new Set([...pairs, ...retryAsPair])];
+    const pairRes = pairList.length ? await fetchPairs(pairList) : [];
+    pairRes.forEach(p => p.__fromPair = true);
+    const gotPair = new Set(pairRes.map(p => (p.pairAddress || '').toLowerCase()));
+    const pairAsToken = pairs.filter(a => !gotPair.has(a.toLowerCase()) && /[A-Z]/.test(a));
+    let extra = [];
+    if (pairAsToken.length) { try { extra = await fetchTokenPairs(pairAsToken); } catch {} pairAsToken.forEach(a => mints.push(a)); }
+    const allPairs = [...tokPairs, ...pairRes, ...extra];
+    const resolvedMints = new Set(allPairs.map(p => p.baseToken?.address));
+    const unresolved = [...retryAsPair.filter(a => !gotPair.has(a.toLowerCase())), ...pairs.filter(a => !gotPair.has(a.toLowerCase()) && !resolvedMints.has(a))];
+    if (unresolved.length) warnings.push(`${unresolved.length} address(es) returned no Solana DEX data (not a token/pair, or no pool yet): ${unresolved.map(short).join(', ')}`);
+    const best = bestPairsByToken(allPairs, new Set(mints));
+    if (!best.length) throw new Error('No live DEX data found for the provided input.');
+    const toks = best.map(normalizePair);
+
+    // Market regime
+    const vols = toks.map(t => t.vol.h24 || 0).sort((a, b) => a - b); const medVol = vols[Math.floor(vols.length / 2)] || 0;
+    const sharpDown = isNum(sol.h24) && (sol.h24 <= -7 || (isNum(sol.h6) && sol.h6 <= -5));
+    const lowMemeVol = toks.length >= 5 && medVol < 50000;
+    const regime = { bad: sharpDown || lowMemeVol, sharpDown, lowMemeVol, medVol, sample: toks.length,
+      label: !isNum(sol.h24) ? 'Unknown (no SOL data)' : sharpDown ? 'Risk-off: SOL sharp downtrend' : lowMemeVol ? 'Weak: low meme volume' : sol.h24 < -2 ? 'Neutral-to-weak' : sol.h24 > 3 ? 'Risk-on' : 'Neutral' };
+
+    // Pre-rank without RugCheck to choose which tokens to verify
+    const pre = toks.map(t => analyzeToken(t, digestRug(null), prof, inputs.focus, regime)).sort((a, b) => (a.fails.length - b.fails.length) || (b.conviction - a.conviction));
+    const rugMap = new Map();
+    if (inputs.useRug) {
+      const targets = pre.slice(0, 10); let blocked = 0, partial = 0;
+      for (let i = 0; i < targets.length; i++) {
+        setProgress(`RugCheck ${i + 1}/${targets.length}: ${targets[i].symbol}…`);
+        const rr = await fetchRugReport(targets[i].mint); if (!rr.ok) blocked++; else if (rr.summaryOnly) partial++;
+        rugMap.set(targets[i].mint, digestRug(rr, targets[i].pairAddress));
+        if (i < targets.length - 1) await sleep(350);
+      }
+      if (blocked) warnings.push(`RugCheck unavailable for ${blocked}/${targets.length} token(s) (CORS, network or rate-limit) — those checklist items show "Unknown — verify manually".`);
+      if (partial) warnings.push(`RugCheck returned summary only for ${partial} token(s) — top-10 holders unknown for those.`);
+      if (pre.length > 10) warnings.push(`RugCheck run on the top 10 of ${pre.length} tokens only (rate limits). Others show "Unknown".`);
+    } else warnings.push('RugCheck verification disabled — LP / mint / holder checks are Unknown.');
+    setProgress('Scoring…');
+    const analyzed = toks.map(t => analyzeToken(t, rugMap.get(t.mint) || digestRug({ ok: false, error: inputs.useRug ? 'not checked (outside top 10)' : 'disabled' }), prof, inputs.focus, regime))
+      .sort((a, b) => (VORDER[a.verdict] - VORDER[b.verdict]) || (b.conviction - a.conviction));
+    let n = 0; for (const a of analyzed) if (a.verdict === 'Candidate' && ++n > prof.maxPos) {
+      a.verdict = 'Watchlist'; a.flags.push({ sev: 'low', text: `Exceeds max ${prof.maxPos} simultaneous positions — kept on watchlist` }); a.entry.riskPct = 0; a.entry.notionalPct = 0; }
+
+    lastResult = { ts: Date.now(), inputs, sol, regime, tokens: analyzed, warnings, boosted };
+    render(lastResult);
+    try { localStorage.setItem('sms:last', JSON.stringify(lastResult)); } catch (e) { toast('Could not save locally: ' + e.message, 'warn'); }
+    updateLastIndicator();
+    const cands = analyzed.filter(a => a.verdict === 'Candidate').length;
+    toast(`Analyzed ${analyzed.length} token(s): ${cands} candidate(s)${cands ? '' : ' — stay flat or watch'}.`, cands ? 'ok' : 'info');
+    if (warnings.length) setTimeout(() => toast(warnings[0], 'warn', 7000), 400);
+    if (window.innerWidth < 1024) $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    console.error(e); toast('Analysis failed: ' + e.message, 'err', 7000);
+  } finally { setBusy(false); }
+}
+
+/* ============================ RENDER ============================ */
+const sevStyle = { critical: 'bg-rose-600/30 text-rose-200 border-rose-500/50', high: 'bg-rose-500/15 text-rose-300 border-rose-500/30', med: 'bg-amber-500/15 text-amber-300 border-amber-500/30', low: 'bg-slate-500/15 text-slate-300 border-slate-500/30' };
+const verdictStyle = { Candidate: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', Watchlist: 'bg-amber-500/15 text-amber-300 border-amber-500/30', Rejected: 'bg-rose-500/15 text-rose-300 border-rose-500/30' };
+const BADGE = { emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300', amber: 'border-amber-500/40 bg-amber-500/10 text-amber-300', rose: 'border-rose-500/40 bg-rose-500/10 text-rose-300' };
+const REG = { emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300', amber: 'border-amber-500/30 bg-amber-500/10 text-amber-300', rose: 'border-rose-500/30 bg-rose-500/10 text-rose-300', slate: 'border-slate-500/30 bg-slate-500/10 text-slate-300' };
+function badge(score) { return `<div class="shrink-0 w-14 h-14 rounded-2xl grid place-items-center border ${BADGE[scoreCls(score)]}"><div class="text-center leading-none"><div class="text-xl font-extrabold">${score}</div><div class="text-[9px] opacity-70 mt-0.5">/100</div></div></div>`; }
+function icon(status) { return { ok: '<span class="text-emerald-400">✔</span>', bad: '<span class="text-rose-400">✖</span>', warn: '<span class="text-amber-400">▲</span>', unknown: '<span class="text-slate-500">?</span>' }[status]; }
+function section(id, title, num, body, sub = '') {
+  return `<section id="${id}" class="glass rounded-2xl p-4 sm:p-5"><div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">${num}</span>${title}</h2>${sub ? `<span class="text-[11px] text-slate-500">${sub}</span>` : ''}</div>${body}</section>`;
+}
+function bar(label, val, weight, contrib, color) {
+  return `<div><div class="flex justify-between text-[11px] mb-1"><span class="text-slate-400">${label} <span class="text-slate-600">· ${weight}</span></span><span class="font-mono text-slate-300">${Math.round(val)} → <b>${contrib.toFixed(1)}</b> pts</span></div>
+  <div class="h-2 rounded-full bg-white/5 overflow-hidden"><div class="h-full rounded-full ${color}" style="width:${clamp(val)}%"></div></div></div>`;
+}
+function stat(label, value, cls = '') { return `<div class="rounded-lg bg-ink-900/60 px-2.5 py-1.5 min-w-0"><div class="text-[10px] uppercase tracking-wide text-slate-500">${label}</div><div class="font-mono text-sm truncate ${cls}">${value}</div></div>`; }
+
+function render(R) {
+  $('emptyState').classList.add('hidden'); const el = $('results'); el.classList.remove('hidden');
+  const prof = PROFILES[R.inputs.risk] || PROFILES.Balanced; const { sol, regime } = R; const toks = R.tokens;
+  const acct = parseFloat(R.inputs.account); const hasAcct = isNum(acct) && acct > 0;
+  const cands = toks.filter(t => t.verdict === 'Candidate'), watch = toks.filter(t => t.verdict === 'Watchlist'), rej = toks.filter(t => t.verdict === 'Rejected');
+  const top = toks.filter(t => t.verdict !== 'Rejected').slice(0, 6);
+  const list = top.length ? top : toks.slice(0, 3);
+
+  let html = `<div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+    <span class="px-2 py-1 rounded-lg bg-white/5">🕒 ${esc(fmtTime(R.ts))}</span>
+    <span class="px-2 py-1 rounded-lg bg-white/5">Risk: <b class="text-slate-200">${esc(R.inputs.risk)}</b></span>
+    <span class="px-2 py-1 rounded-lg bg-white/5">Focus: <b class="text-slate-200">${esc(R.inputs.focus)}</b></span>
+    <span class="px-2 py-1 rounded-lg bg-white/5">Source: ${esc(R.inputs.source)}${R.boosted ? ' · latest boosted' : ''}</span>
+    <span class="px-2 py-1 rounded-lg bg-white/5">${toks.length} analyzed · <span class="text-emerald-300">${cands.length} candidate</span> · <span class="text-amber-300">${watch.length} watch</span> · <span class="text-rose-300">${rej.length} rejected</span></span>
+  </div>`;
+
+  // Market Context
+  const rc = !isNum(sol.h24) ? 'slate' : regime.bad ? 'rose' : /weak/i.test(regime.label) ? 'amber' : 'emerald';
+  html += section('sec-market', 'Market Context', '00', `
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      ${stat('SOL price', isNum(sol.price) ? '$' + sol.price.toFixed(2) : 'Unknown')}
+      ${stat('SOL 1h / 6h', `<span class="${pctCls(sol.h1)}">${pct(sol.h1)}</span> / <span class="${pctCls(sol.h6)}">${pct(sol.h6)}</span>`)}
+      ${stat('SOL 24h', pct(sol.h24), pctCls(sol.h24))}
+      ${stat('Median vol24 (sample)', usd(regime.medVol))}
+    </div>
+    <div class="mt-3 rounded-xl border p-3 text-sm ${REG[rc]}">
+      <b>Regime: ${esc(regime.label)}</b>
+      <div class="text-slate-300 text-xs mt-1">${regime.bad ? `Standards raised: liquidity minimum ×1.5, qualifying conviction +10, position risk halved. <b>Staying flat is a valid choice.</b>` : `Standard ${esc(R.inputs.risk)} filters applied. Max ${prof.maxPos} simultaneous meme positions, 0.5–${prof.riskCap}% risk per token, always scale in.`}</div>
+      <div class="text-[11px] text-slate-500 mt-1">SOL data: ${esc(sol.source || 'unavailable')}. Meme-volume read = median 24h volume of this sample (${regime.sample} tokens), a proxy${regime.sample < 5 ? ' — sample too small to judge sector volume' : ''}.</div>
+    </div>
+    <div class="mt-3 text-xs text-slate-400 leading-relaxed"><b class="text-slate-300">Active filters (${esc(R.inputs.risk)}):</b> liq ≥ ${usd(prof.minLiq * (regime.bad ? 1.5 : 1))} · mcap ${usd(prof.minMcap)}–${fmtMax(prof.maxMcap, usd)} · age ${age(prof.minAgeH)}–${fmtMax(prof.maxAgeH, age)} · vol24 ≥ ${usd(prof.minVol)} · top10 ≤ ${prof.maxTop10}% · LP lock ≥ ${prof.minLpLock}% · qualify ≥ ${prof.qualify + (regime.bad ? 10 : 0)}<br><b class="text-slate-300">Focus — ${esc(R.inputs.focus)}:</b> ${esc(FOCUS_NOTES[R.inputs.focus] || '')}</div>
+    ${R.inputs.notes ? `<div class="mt-2 text-xs text-slate-400"><b class="text-slate-300">Your notes:</b> ${esc(R.inputs.notes)}</div>` : ''}
+    ${R.warnings.length ? `<ul class="mt-3 space-y-1">${R.warnings.map(w => `<li class="text-[11px] text-amber-300/90">⚠ ${esc(w)}</li>`).join('')}</ul>` : ''}
+  `);
+
+  // Candidate ranking
+  const card = (t, i) => `<article class="rounded-2xl bg-ink-850 border border-white/5 hover:border-white/15 transition p-4 min-w-0">
+      <div class="flex items-start gap-3">
+        ${t.image ? `<img src="${safeUrl(t.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs shrink-0">${esc(t.symbol.slice(0,3))}</div>`}
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span></div>
+          <div class="text-xs text-slate-400 truncate">${esc(t.name)} · ${esc(t.dexId)}</div>
+          <button class="copy-addr mt-0.5 text-[11px] font-mono text-slate-500 hover:text-violet-300" data-addr="${esc(t.mint)}" title="Copy mint address">${esc(short(t.mint))} ⧉</button>
+        </div>
+        ${badge(t.conviction)}
+      </div>
+      <div class="grid grid-cols-3 gap-1.5 mt-3">
+        ${stat('Price', price(t.priceUsd))}${stat('MCap', usd(t.mcap))}${stat('Liq', usd(t.liq))}
+        ${stat('Vol 24h', usd(t.vol.h24))}${stat('Age', age(t.ageH))}${stat('Buy/Sell 1h', isNum(t.bsr1) ? t.bsr1.toFixed(2) : '—', isNum(t.bsr1) ? (t.bsr1 >= 1.2 ? 'text-emerald-400' : t.bsr1 < 1 ? 'text-rose-400' : '') : '')}
+      </div>
+      <div class="flex justify-between text-[11px] font-mono mt-2 px-1">
+        ${['m5','h1','h6','h24'].map(k => `<span><span class="text-slate-500">${k}</span> <span class="${pctCls(t.chg[k])}">${pct(t.chg[k], 0)}</span></span>`).join('')}
+      </div>
+      ${t.flags.length ? `<div class="flex flex-wrap gap-1 mt-3">${t.flags.slice(0, 4).map(f => `<span class="text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}" title="${esc(f.text)}">${esc(f.text.split(' — ')[0])}</span>`).join('')}${t.flags.length > 4 ? `<span class="text-[10px] text-slate-500 self-center">+${t.flags.length - 4} more</span>` : ''}</div>` : '<div class="text-[11px] text-emerald-300 mt-3">✔ No red flags detected</div>'}
+      ${t.fails.length ? `<div class="text-[10px] text-rose-300/80 mt-2">Filter fail: ${esc(t.fails.join(' · '))}</div>` : ''}
+      <div class="trade-row mt-3" data-mint="${esc(t.mint)}"></div>
+      <div class="flex gap-3 mt-3 text-xs flex-wrap">
+        <a href="${safeUrl(t.url)}" target="_blank" rel="noopener" class="text-violet-300 hover:underline">DexScreener ↗</a>
+        <a href="https://rugcheck.xyz/tokens/${esc(t.mint)}" target="_blank" rel="noopener" class="text-violet-300 hover:underline">RugCheck ↗</a>
+        <a href="https://birdeye.so/token/${esc(t.mint)}?chain=solana" target="_blank" rel="noopener" class="text-violet-300 hover:underline">Birdeye ↗</a>
+        ${t.socialLinks.slice(0, 3).map(s => `<a href="${safeUrl(s.url)}" target="_blank" rel="noopener" class="text-slate-400 hover:underline">${esc(s.label)} ↗</a>`).join('')}
+      </div>
+    </article>`;
+  const rejRows = rej.map(t => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><a class="text-slate-300 hover:underline" href="${safeUrl(t.url)}" target="_blank" rel="noopener">${esc(t.symbol)}</a></td><td class="pr-2 font-mono text-rose-300">${t.conviction}</td><td class="pr-2 font-mono">${usd(t.liq)}</td><td class="pr-2 font-mono ${pctCls(t.chg.h24)}">${pct(t.chg.h24, 0)}</td><td class="text-slate-400 py-1.5">${esc([...t.fails, ...t.flags.filter(f => f.sev !== 'low').map(f => f.text.split(' — ')[0])].slice(0, 3).join(' · ') || 'Low conviction')}</td></tr>`).join('');
+  html += section('sec-rank', 'Candidate Ranking', '01–04', `
+    ${top.length ? `<div class="grid sm:grid-cols-2 gap-3">${top.map(card).join('')}</div>` : `<div class="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">No token passed the ${esc(R.inputs.risk)} filters with acceptable conviction. <b>Recommendation: stay flat.</b> Closest tokens are shown below for reference.</div>`}
+    ${rej.length ? `<details class="mt-4" ${top.length ? '' : 'open'}><summary class="cursor-pointer text-xs text-slate-400 hover:text-slate-200">▸ ${rej.length} rejected token(s) — why</summary>
+      <div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[480px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Score</th><th>Liq</th><th>24h</th><th>Reason</th></tr></thead><tbody>${rejRows}</tbody></table></div></details>` : ''}
+  `, 'Quick filter · on-chain · social · momentum');
+
+  // Verification checklist
+  const ckKeys = [['lp', 'LP locked/burned'], ['mint', 'Mint & Freeze revoked'], ['top10', 'Top 10 holders %'], ['volume', 'Volume quality'], ['social', 'Social authenticity'], ['pumpfun', 'Pump.fun bonding / graduation'], ['flags', 'Remaining red flags']];
+  html += section('sec-check', 'Verification Checklist', '05', `
+    <div class="space-y-3">${list.map(t => `
+      <div class="rounded-xl bg-ink-850 border border-white/5 overflow-hidden">
+        <div class="flex flex-wrap gap-1 items-center justify-between px-3 py-2 bg-white/[.02]"><b class="text-sm">${esc(t.symbol)} <span class="font-normal text-[11px] text-slate-500 font-mono">${esc(short(t.mint))}</span></b><span class="text-[10px] text-slate-500">${t.rug.available ? (t.rug.summaryOnly ? 'RugCheck summary' : 'RugCheck full report') + (isNum(t.rug.score) ? ' · RugCheck risk score ' + t.rug.score + ' (lower = safer)' : '') : 'RugCheck: ' + esc(t.rug.error || 'n/a')}</span></div>
+        <div class="text-xs">${ckKeys.map(([k, l]) => `<div class="border-t border-white/5 grid grid-cols-[1.5rem_1fr] sm:grid-cols-[1.5rem_12.5rem_1fr] gap-x-1 px-3 py-1.5"><div>${icon(t.checklist[k].status)}</div><div class="text-slate-400">${l}</div><div class="col-start-2 sm:col-start-3 break-words ${t.checklist[k].status === 'unknown' ? 'text-slate-500 italic' : t.checklist[k].status === 'bad' ? 'text-rose-300' : 'text-slate-200'}">${esc(t.checklist[k].text)}</div></div>`).join('')}</div>
+      </div>`).join('')}</div>
+    <p class="text-[11px] text-slate-500 mt-2">✔ pass · ✖ fail · ▲ caution · ? unknown — verify manually on RugCheck / Solscan before entering.</p>
+  `);
+
+  // Conviction
+  html += section('sec-score', 'Conviction Score', '06', `
+    <div class="grid md:grid-cols-2 gap-3">${list.map(t => `
+      <div class="rounded-xl bg-ink-850 border border-white/5 p-3">
+        <div class="flex items-center gap-3 mb-3">${badge(t.conviction)}<div><b>${esc(t.symbol)}</b><div class="text-[11px] text-slate-500">${t.verdict} · ${t.flags.length} flag(s)${t.sub.parts.caps.length ? ' · capped' : ''}</div></div></div>
+        <div class="space-y-2">
+          ${bar('On-chain', t.sub.onchain, '40%', t.contrib.onchain, 'bg-violet-500')}
+          ${bar('Social / Narrative', t.sub.social, '25%', t.contrib.social, 'bg-sky-500')}
+          ${bar('Momentum', t.sub.momentum, '20%', t.contrib.momentum, 'bg-emerald-500')}
+          ${bar('Risk flags (100 = clean)', t.sub.risk, '15%', t.contrib.risk, t.sub.risk >= 70 ? 'bg-emerald-500' : t.sub.risk >= 40 ? 'bg-amber-500' : 'bg-rose-500')}
+        </div>
+        <details class="mt-2"><summary class="cursor-pointer text-[11px] text-slate-500 hover:text-slate-300">▸ How this was computed</summary>
+          <div class="text-[11px] text-slate-400 font-mono mt-1 leading-relaxed break-words">On-chain = 25% liq(${Math.round(t.sub.parts.liqS)}) + 15% liq/mcap(${Math.round(t.sub.parts.lmS)}; ${isNum(t.liqMcap) ? (t.liqMcap*100).toFixed(1) + '%' : '—'}) + 20% vol/liq(${Math.round(t.sub.parts.vlS)}; ${isNum(t.volLiq) ? t.volLiq.toFixed(1) + 'x' : '—'}) + 30% safety(${Math.round(t.sub.parts.safety)}; ${esc(t.sub.parts.safetyNote)}) + 10% holders(${t.sub.parts.holdersS == null ? 'n/a→50' : Math.round(t.sub.parts.holdersS)})<br>
+          Social = presence of X/TG/web/profile/boost (authenticity unverified)<br>
+          Momentum = buy/sell 1h(${Math.round(t.sub.parts.bsrS)}) · trend 6h/24h(${Math.round(t.sub.parts.trendS)}) · vol accel(${Math.round(t.sub.parts.accS)}; ${isNum(t.accel) ? t.accel.toFixed(2) + 'x' : '—'})<br>
+          Risk = 100 − penalty ${t.sub.parts.penalty} (critical 100 · high 35 · med 20 · low 5)${t.sub.parts.caps.length ? '<br>Caps: ' + esc(t.sub.parts.caps.join('; ')) : ''}</div></details>
+      </div>`).join('')}</div>
+  `, '40% on-chain · 25% social · 20% momentum · 15% risk');
+
+  // Entry
+  html += section('sec-entry', 'Entry Strategy', '07', `
+    <div class="space-y-3">${list.map(t => { const e = t.entry; return `<div class="rounded-xl bg-ink-850 border border-white/5 p-3">
+        <div class="flex flex-wrap items-center gap-2"><b>${esc(t.symbol)}</b><span class="text-[11px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-200 border border-violet-500/30">${esc(e.strat)}</span>${t.verdict === 'Rejected' ? '<span class="text-[11px] text-rose-300">✖ Do not enter</span>' : t.verdict === 'Watchlist' ? '<span class="text-[11px] text-amber-300">Watch only — no position until it qualifies</span>' : '<span class="text-[11px] text-emerald-300">✔ Tradeable setup</span>'}</div>
+        <p class="text-xs text-slate-400 mt-1">${esc(e.reason)}</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-2">
+          ${stat(e.strat.startsWith('Break') ? 'Trigger zone' : 'Entry zone', `${price(e.zoneLo)} – ${price(e.zoneHi)}`)}
+          ${stat('Invalidation stop', `${price(e.stop)} <span class="text-[10px] text-slate-500">(−${e.stopPct.toFixed(0)}%)</span>`, 'text-rose-300')}
+          ${stat('Risk / token', e.riskPct ? e.riskPct.toFixed(2) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.riskPct / 100)}</span>` : '') : '0 — no trade')}
+          ${stat('Position size', e.notionalPct ? e.notionalPct.toFixed(1) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.notionalPct / 100)}</span>` : '') : '—')}
+        </div>
+        <p class="text-[11px] text-slate-400 mt-2">🎯 ${esc(e.trigger)} Scale in 40% → 30% → 30% across the zone; never full size at once.</p>
+      </div>`; }).join('')}</div>
+    <p class="text-[11px] text-slate-500 mt-2">Position size = risk % ÷ stop distance (of account). ${hasAcct ? '' : 'Enter an account size to see $ amounts.'}</p>
+  `, `Max ${prof.maxPos} positions · scale in`);
+
+  // Exit
+  html += section('sec-exit', 'Exit Plan', '08', `
+    <div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[560px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>TP1 · 2x (sell 30–40%)</th><th>TP2 · 3x (sell 25%)</th><th>Runner · 5x</th><th>Trailing</th><th>Time stop</th></tr></thead>
+    <tbody>${list.map(t => `<tr class="border-t border-white/5"><td class="py-1.5 font-semibold">${esc(t.symbol)}</td><td class="font-mono text-emerald-300">${price(t.exit.tp1)}</td><td class="font-mono text-emerald-300">${price(t.exit.tp2)}</td><td class="font-mono text-emerald-200">${price(t.exit.tp3)}</td><td>${t.exit.trail}% from high</td><td>${t.exit.timeStopH}h</td></tr>`).join('')}</tbody></table></div>
+    <ul class="text-xs text-slate-400 mt-3 space-y-1 list-disc pl-4">
+      <li>Targets are multiples of the <b>average planned entry</b>, not the current price. At TP1 take out at least your initial capital.</li>
+      <li>After TP1 move the stop to break-even; trail the rest ${prof.trail}% below the highest close.</li>
+      <li>Time stop: if there is no +30% within ${prof.timeStopH}h of entry, exit — capital is better used elsewhere.</li>
+      <li>Hard exit immediately on: liquidity drop &gt; 30%, LP unlock/removal, dev/insider wallets dumping, mint/freeze re-enabled, or a sharp SOL breakdown.</li>
+    </ul>
+  `);
+
+  // Risk warnings
+  const allFlags = list.flatMap(t => t.flags.filter(f => f.sev !== 'low').map(f => ({ ...f, sym: t.symbol })));
+  html += section('sec-risk', 'Risk Warnings', '!!', `
+    ${allFlags.length ? `<ul class="space-y-1.5">${allFlags.map(f => `<li class="text-xs flex gap-2"><span class="shrink-0 h-fit text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}">${f.sev.toUpperCase()}</span><span><b>${esc(f.sym)}</b>: ${esc(f.text)}</span></li>`).join('')}</ul>` : '<p class="text-xs text-emerald-300">No medium/high red flags on the shortlisted tokens.</p>'}
+    <ul class="text-xs text-slate-400 mt-3 space-y-1 list-disc pl-4">
+      <li>Max risk per token 0.5–1.5% of account; max 2–3 simultaneous meme positions; keep total meme risk low.</li>
+      <li>Data is a snapshot from ${esc(fmtTime(R.ts))}; meme metrics change within minutes — re-run Analyze right before entering.</li>
+      <li>Social authenticity, dev-wallet behaviour and bundled launches cannot be fully verified via public APIs — check X/Telegram and the holder map manually.</li>
+      ${regime.bad ? '<li class="text-rose-300">Market regime is weak — consider staying flat.</li>' : ''}
+    </ul>
+  `);
+
+  el.innerHTML = html;
+  el.querySelectorAll('.copy-addr').forEach(b => b.addEventListener('click', async () => { if (await copyText(b.dataset.addr)) toast('Mint address copied', 'ok', 1800); }));
+  if (window.SMS_TRADE) window.SMS_TRADE.hydrate();
+}
+</script>
+<script>
+'use strict';
+/* ============================ MARKDOWN & PROMPT ============================ */
+function toMarkdown(R) {
+  const L = []; const prof = PROFILES[R.inputs.risk] || PROFILES.Balanced; const toks = R.tokens;
+  const top = toks.filter(t => t.verdict !== 'Rejected').slice(0, 6); const list = top.length ? top : toks.slice(0, 3);
+  const cnt = v => toks.filter(t => t.verdict === v).length;
+  L.push('# SolanaMemeSniper Report', `_${fmtTime(R.ts)} · Risk: ${R.inputs.risk} · Focus: ${R.inputs.focus} · Source: ${R.inputs.source}${R.boosted ? ' (latest boosted)' : ''}_`, '');
+  L.push('## Market Context', `- SOL: ${isNum(R.sol.price) ? '$' + R.sol.price.toFixed(2) : 'Unknown'} (1h ${pct(R.sol.h1)}, 6h ${pct(R.sol.h6)}, 24h ${pct(R.sol.h24)}) — ${R.sol.source || 'n/a'}`,
+    `- Regime: **${R.regime.label}**${R.regime.bad ? ' → standards raised, consider staying flat' : ''}`, `- Sample median vol24: ${usd(R.regime.medVol)} (${R.regime.sample} tokens)`,
+    `- ${toks.length} analyzed: ${cnt('Candidate')} candidate, ${cnt('Watchlist')} watchlist, ${cnt('Rejected')} rejected`);
+  if (R.inputs.notes) L.push(`- Notes: ${R.inputs.notes}`);
+  R.warnings.forEach(w => L.push(`- ⚠ ${w}`)); L.push('');
+  L.push('## Candidate Ranking');
+  if (!top.length) L.push('**No token passed filters — stay flat.** Closest tokens:');
+  list.forEach((t, i) => {
+    L.push(`### ${i + 1}. ${t.symbol} (${t.name}) — ${t.conviction}/100 · ${t.verdict}`, `- Mint: \`${t.mint}\` · [DexScreener](${t.url}) · [RugCheck](https://rugcheck.xyz/tokens/${t.mint})`,
+      `- Price ${price(t.priceUsd)} · MCap ${usd(t.mcap)} · Liq ${usd(t.liq)} · Vol24 ${usd(t.vol.h24)} · Age ${age(t.ageH)} · ${t.dexId}`,
+      `- Change: 5m ${pct(t.chg.m5, 0)} · 1h ${pct(t.chg.h1, 0)} · 6h ${pct(t.chg.h6, 0)} · 24h ${pct(t.chg.h24, 0)} · Buy/Sell 1h ${isNum(t.bsr1) ? t.bsr1.toFixed(2) : '—'}`);
+    if (t.fails.length) L.push(`- Filter fails: ${t.fails.join('; ')}`);
+  });
+  const rej = toks.filter(t => t.verdict === 'Rejected');
+  if (rej.length && top.length) L.push('', `**Rejected (${rej.length}):** ` + rej.map(t => `${t.symbol} (${t.conviction}: ${[...t.fails, ...t.flags.filter(f => f.sev !== 'low').map(f => f.text.split(' — ')[0])].slice(0, 2).join(', ') || 'low conviction'})`).join('; '));
+  L.push('', '## Verification Checklist');
+  const ck = [['lp', 'LP locked/burned'], ['mint', 'Mint & Freeze'], ['top10', 'Top 10 holders'], ['volume', 'Volume quality'], ['social', 'Social authenticity'], ['pumpfun', 'Pump.fun status'], ['flags', 'Remaining red flags']];
+  const sym = { ok: '✅', bad: '❌', warn: '⚠️', unknown: '❔' };
+  list.forEach(t => { L.push(`**${t.symbol}**`); ck.forEach(([k, l]) => L.push(`- ${sym[t.checklist[k].status]} ${l}: ${t.checklist[k].text}`)); L.push(''); });
+  L.push('## Conviction Score (40/25/20/15)');
+  list.forEach(t => L.push(`- **${t.symbol}: ${t.conviction}/100** — on-chain ${Math.round(t.sub.onchain)} (${t.contrib.onchain.toFixed(1)} pts) · social ${Math.round(t.sub.social)} (${t.contrib.social.toFixed(1)}) · momentum ${Math.round(t.sub.momentum)} (${t.contrib.momentum.toFixed(1)}) · risk ${Math.round(t.sub.risk)} (${t.contrib.risk.toFixed(1)})${t.sub.parts.caps.length ? ' · caps: ' + t.sub.parts.caps.join('; ') : ''}`));
+  L.push('', '## Entry Strategy');
+  list.forEach(t => { const e = t.entry; L.push(`- **${t.symbol}** — ${e.strat}: ${e.reason} Zone ${price(e.zoneLo)}–${price(e.zoneHi)}, stop ${price(e.stop)} (≈−${e.stopPct.toFixed(0)}%), risk ${e.riskPct ? e.riskPct.toFixed(2) + '% of account (size ≈ ' + e.notionalPct.toFixed(1) + '% of account)' : '0 — no trade'}. ${e.trigger} Scale in 40/30/30.`); });
+  L.push('', '## Exit Plan');
+  list.forEach(t => L.push(`- **${t.symbol}** — TP1 2x ${price(t.exit.tp1)} (sell 30–40%), TP2 3x ${price(t.exit.tp2)} (sell 25%), runner 5x ${price(t.exit.tp3)}; trail ${t.exit.trail}% from high; time stop ${t.exit.timeStopH}h.`));
+  L.push('- Hard exit on liquidity drop >30%, LP unlock, dev/insider dumping, or SOL breakdown.', '', '## Risk Warnings');
+  list.forEach(t => t.flags.forEach(f => L.push(`- [${f.sev.toUpperCase()}] ${t.symbol}: ${f.text}`)));
+  L.push(`- Max ${prof.maxPos} simultaneous positions, 0.5–${prof.riskCap}% risk per token, always scale in.`, '', '_Analysis only — not financial advice._');
+  return L.join('\n');
+}
+function buildPrompt(inputs, R) {
+  const snap = R ? `\nLIVE SNAPSHOT FROM PANEL (${fmtTime(R.ts)}):\n- SOL ${isNum(R.sol.price) ? '$' + R.sol.price.toFixed(2) : 'n/a'} (24h ${pct(R.sol.h24)}), regime: ${R.regime.label}\n` + R.tokens.slice(0, 12).map(t =>
+    `- ${t.symbol} ${t.mint}: price ${price(t.priceUsd)}, mcap ${usd(t.mcap)}, liq ${usd(t.liq)}, vol24 ${usd(t.vol.h24)}, age ${age(t.ageH)}, chg 1h ${pct(t.chg.h1,0)} / 6h ${pct(t.chg.h6,0)} / 24h ${pct(t.chg.h24,0)}, buy/sell 1h ${isNum(t.bsr1) ? t.bsr1.toFixed(2) : '—'}, LP locked ${isNum(t.rug.lpLockedPct) ? t.rug.lpLockedPct.toFixed(0) + '%' : 'unknown'}, mint/freeze ${t.rug.mintRevoked == null ? 'unknown' : (t.rug.mintRevoked && t.rug.freezeRevoked ? 'revoked' : 'ACTIVE')}, top10 ${isNum(t.rug.top10) ? t.rug.top10.toFixed(1) + '%' : 'unknown'}, panel heuristic score ${t.conviction}`).join('\n') + '\n' : '';
+  return `You are SolanaMemeSniper, an elite on-chain analyst and professional meme coin hunter specializing exclusively in Solana DEX markets (Raydium, Pump.fun, Orca, Meteora, etc.). Your only job is to scan and evaluate early-stage meme coins using DexScreener, Birdeye, or similar screener data to identify high-probability asymmetric opportunities while aggressively filtering out rugs, low-quality pumps, and obvious scams.
+
+PRIMARY OBJECTIVE:
+Analyze the provided data and produce a ranked, high-conviction shortlist. Capital preservation and rug avoidance come first.
+
+INPUT DATA:
+- Screener Source: ${inputs.source}
+- Risk Tolerance: ${inputs.risk}
+- Focus: ${inputs.focus}
+- Specific tokens or pasted results:
+${(inputs.pasted || '(none — scan the current market)').trim()}
+- Additional data: ${inputs.notes || '(none)'}${inputs.account ? `\n- Account size: $${inputs.account}` : ''}
+${snap}
+ADVANCED FILTERS & MARKET CONDITIONS:
+Use appropriate DexScreener filters based on risk tolerance (Balanced / Aggressive / Anti-Rug).
+If SOL is in a sharp downtrend or meme sector volume is very low, raise standards or recommend staying flat.
+
+RISK & POSITION SIZING:
+- Max risk per token: 0.5–1.5% of account
+- Max 2–3 simultaneous meme positions
+- Always scale in; never full size at once
+
+ANALYSIS FRAMEWORK:
+## 1. Quick Filter & Red Flag Scan
+## 2. On-Chain & Screener Metrics
+## 3. Narrative & Social Quality
+## 4. Technical & Momentum
+## 5. Final Verification Checklist (Mandatory)
+Report status of:
+- Liquidity locked/burned
+- Mint & Freeze revoked
+- Top 10 holders %
+- Volume quality
+- Social authenticity
+- Pump.fun bonding curve & graduation status
+- Remaining red flags
+## 6. Conviction Score (0–100)
+40% On-chain | 25% Social/Narrative | 20% Momentum | 15% Risk flags (negative)
+## 7. Entry Strategies (Choose the most suitable and explain why)
+For each candidate, recommend one primary entry method:
+1. Pullback + Volume Confirmation (Preferred Default) — enter on a small pullback after the initial move, only if volume and buyers remain healthy.
+2. Break of Short-Term Structure — enter on a clean break of a recent small high with increasing volume. Use smaller initial size.
+3. Liquidity / Support Zone Reaction — enter when price returns to a clear short-term support or high-volume node and shows absorption.
+4. Post-Pump.fun Migration Entry — wait for graduation to Raydium/PumpSwap, then enter on the first healthy pullback if liquidity and holders stay clean.
+5. Controlled Dip Buy (only in strong trend + clean checklist) — buy a 10–25% dip only if higher structure remains intact and volume doesn't collapse.
+
+OUTPUT FORMAT:
+Market Context → Candidate Ranking → Verification Checklist → Conviction Score (with breakdown) → Entry Strategy (zone, invalidation, size) → Exit Plan (scale-out targets, trailing stop, time stop) → Risk Warnings.
+Never invent data; mark anything you cannot verify as "Unknown — verify manually". Analysis only, not financial advice.`;
+}
+
+/* ============================ STORAGE / UI WIRING ============================ */
+function updateLastIndicator() {
+  const ind = $('lastIndicator'); let r = null;
+  try { r = JSON.parse(localStorage.getItem('sms:last') || 'null'); } catch { }
+  if (!r) { ind.classList.add('hidden'); $('btnLoadLast').disabled = true; $('btnLoadLast').classList.add('opacity-40'); return; }
+  ind.textContent = '💾 Last: ' + new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); ind.title = 'Last analysis saved locally — use "Load last" to restore';
+  ind.classList.remove('hidden'); $('btnLoadLast').disabled = false; $('btnLoadLast').classList.remove('opacity-40');
+}
+function loadLast(silent) {
+  try { const r = JSON.parse(localStorage.getItem('sms:last') || 'null'); if (!r) { if (!silent) toast('No saved analysis yet', 'warn'); return false; }
+    lastResult = r; applyInputs(r.inputs); render(r); renderTicker(r.sol);
+    if (!silent) toast('Loaded last analysis from ' + fmtTime(r.ts), 'ok'); return true;
+  } catch (e) { if (!silent) toast('Could not load saved analysis: ' + e.message, 'err'); return false; }
+}
+function updateHints() {
+  const p = PROFILES[$('risk').value] || PROFILES.Balanced;
+  $('riskHint').textContent = `${$('risk').value}: liq ≥ ${usd(p.minLiq)} · mcap ${usd(p.minMcap)}–${fmtMax(p.maxMcap, usd)} · age ≥ ${age(p.minAgeH)}${p.maxAgeH < INF ? '–' + age(p.maxAgeH) : ''} · vol24 ≥ ${usd(p.minVol)} · max ${p.maxPos} positions`;
+  const { mints, pairs } = parseInput($('pasted').value);
+  $('parseCount').textContent = (mints.length || pairs.length) ? `${mints.length} address${mints.length === 1 ? '' : 'es'}${pairs.length ? ' · ' + pairs.length + ' pair URL' + (pairs.length === 1 ? '' : 's') : ''} detected` : '';
+}
+function saveInputsDraft() { try { localStorage.setItem('sms:inputs', JSON.stringify(collectInputs())); } catch { } }
+
+$('btnAnalyze').addEventListener('click', () => runAnalysis());
+$('btnBoosted').addEventListener('click', () => runAnalysis({ boosted: true }));
+$('btnDemo').addEventListener('click', () => {
+  $('pasted').value = `# DEMO DATA — sample Solana mints from an earlier scan (live data is fetched on Analyze)\n${DEMO_MINTS.join('\n')}`;
+  if (!$('notes').value) $('notes').value = 'Demo run — sample tokens';
+  updateHints(); saveInputsDraft(); toast('Demo tokens loaded — press Analyze', 'info');
+});
+$('btnClear').addEventListener('click', () => {
+  $('pasted').value = ''; $('notes').value = ''; $('results').innerHTML = ''; $('results').classList.add('hidden'); $('emptyState').classList.remove('hidden');
+  lastResult = null; updateHints(); saveInputsDraft(); toast('Cleared. Saved last analysis is kept — use "Load last".', 'info');
+});
+$('btnCopy').addEventListener('click', async () => {
+  if (!lastResult) return toast('Run an analysis first', 'warn');
+  const ok = await copyText(toMarkdown(lastResult)); toast(ok ? 'Markdown report copied' : 'Copy failed — browser blocked clipboard', ok ? 'ok' : 'err');
+});
+$('btnPrompt').addEventListener('click', async () => {
+  const ok = await copyText(buildPrompt(collectInputs(), lastResult));
+  toast(ok ? 'AI prompt copied — paste it into your chatbot' : 'Copy failed — browser blocked clipboard', ok ? 'ok' : 'err');
+});
+$('btnLoadLast').addEventListener('click', () => loadLast(false));
+['risk', 'focus', 'source', 'notes', 'account', 'useRug'].forEach(id => $(id).addEventListener('change', () => { updateHints(); saveInputsDraft(); }));
+$('pasted').addEventListener('input', () => { updateHints(); saveInputsDraft(); });
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAnalysis(); } });
+
+(function init() {
+  const restored = loadLast(true);
+  try { const d = JSON.parse(localStorage.getItem('sms:inputs') || 'null'); if (d) applyInputs(d); } catch { }
+  updateHints(); updateLastIndicator();
+  if (restored) toast('Restored your last analysis (' + fmtTime(lastResult.ts) + ')', 'info', 3000);
+  fetchSolContext().then(c => { if (isNum(c.price)) renderTicker(c); else if (!restored) renderTicker(null); }).catch(() => {});
+})();
+window.__SMS = { parseInput, toMarkdown, buildPrompt, get last() { return lastResult; } };
+</script>
+<script>
+'use strict';
+/* =====================================================================
+   TRADING MODULE — Phantom (user-signed) + optional Burner (auto) wallet
+   Jupiter Swap API v1 · no private keys leave the browser
+   ===================================================================== */
+const T = (() => {
+const WEB3_URL = 'https://esm.sh/@solana/web3.js@1.98.0?bundle';
+const QR_URL = 'https://esm.sh/qrcode@1.5.4';
+const WSOL = 'So11111111111111111111111111111111111111112';
+const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'];
+const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
+const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, reserveSol: 0.01,
+  prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10 };
+const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts' };
+
+let web3 = null;
+async function loadWeb3() { if (!web3) { try { web3 = await import(WEB3_URL); } catch (e) { throw new Error('Could not load @solana/web3.js from esm.sh (' + e.message + ')'); } } return web3; }
+
+/* ---------------- settings ---------------- */
+const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v ?? d; } catch { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Storage failed: ' + e.message, 'err'); } };
+let S = { ...DEFAULTS, ...load(LS.settings, {}) };
+let A = { ...AUTO_DEFAULTS, ...load(LS.auto, {}), on: false }; // auto is ALWAYS off after reload
+function sanitizeSettings() {
+  S.slippagePct = Math.min(15, Math.max(0.1, +S.slippagePct || 3));
+  S.maxSolPerTrade = Math.max(0.001, +S.maxSolPerTrade || DEFAULTS.maxSolPerTrade);
+  S.dailyMaxSol = Math.max(0.001, +S.dailyMaxSol || DEFAULTS.dailyMaxSol);
+  S.reserveSol = Math.max(0.002, +S.reserveSol || DEFAULTS.reserveSol);
+  S.prioMaxSol = Math.min(0.01, Math.max(0, isFinite(+S.prioMaxSol) ? +S.prioMaxSol : DEFAULTS.prioMaxSol));
+  if (!/^https?:\/\//.test(S.rpc || '')) S.rpc = DEFAULTS.rpc;
+  if (!JUP_BASES.includes(S.jupBase)) S.jupBase = JUP_BASES[0];
+  A.maxSolPerTrade = Math.min(S.maxSolPerTrade, Math.max(0.001, +A.maxSolPerTrade || AUTO_DEFAULTS.maxSolPerTrade));
+  A.dailyCap = Math.max(0.001, +A.dailyCap || AUTO_DEFAULTS.dailyCap);
+  A.minConviction = Math.min(100, Math.max(50, +A.minConviction || 65));
+  A.maxImpact = Math.min(5, Math.max(0.1, +A.maxImpact || 5));
+  A.slipCap = Math.min(15, Math.max(0.1, +A.slipCap || 3));
+  A.scanMin = Math.max(5, +A.scanMin || 10);
+}
+sanitizeSettings();
+const maxPos = () => (PROFILES[$('risk').value] || PROFILES.Balanced).maxPos;
+
+/* ---------------- small utils ---------------- */
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+const bytesToB64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const B58A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function b58decode(str) { let n = 0n; for (const c of str) { const i = B58A.indexOf(c); if (i < 0) throw new Error('Invalid base58 character'); n = n * 58n + BigInt(i); }
+  const out = []; while (n > 0n) { out.unshift(Number(n % 256n)); n /= 256n; } for (const c of str) { if (c === '1') out.unshift(0); else break; } return Uint8Array.from(out); }
+function b58encode(bytes) { let n = 0n; for (const b of bytes) n = n * 256n + BigInt(b); let out = ''; while (n > 0n) { out = B58A[Number(n % 58n)] + out; n /= 58n; } for (const b of bytes) { if (b === 0) out = '1' + out; else break; } return out; }
+const isAddr = (a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(String(a || '').trim());
+function fmtTok(n) { if (!isNum(n)) return '—'; const a = Math.abs(n); if (a >= 1e9) return (n/1e9).toFixed(2) + 'B'; if (a >= 1e6) return (n/1e6).toFixed(2) + 'M'; if (a >= 1e3) return (n/1e3).toFixed(1) + 'k'; return a >= 1 ? n.toFixed(2) : n.toPrecision(3); }
+const fmtSol = (n, d = 4) => isNum(n) ? (+n).toFixed(d).replace(/\.?0+$/, '') + ' SOL' : '—';
+const solscanTx = (sig) => `https://solscan.io/tx/${sig}`;
+const solscanAcc = (a) => `https://solscan.io/account/${a}`;
+const todayKey = () => new Date().toDateString();
+const solUsd = () => (lastResult?.sol?.price) || T_state.solPrice || null;
+const T_state = { solPrice: null };
+
+/* ---------------- RPC ---------------- */
+async function rpc(method, params, timeout = 15000) {
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), timeout);
+  try {
+    const r = await fetch(S.rpc, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j) throw new Error(`RPC HTTP ${r.status}${j?.error?.message ? ': ' + j.error.message : ''}`);
+    if (j.error) throw new Error('RPC: ' + (j.error.message || JSON.stringify(j.error)));
+    return j.result;
+  } catch (e) { if (e.name === 'AbortError') throw new Error('RPC timeout'); if (/fetch/i.test(e.message)) throw new Error('RPC blocked (CORS/network) — set your own RPC in Settings'); throw e; }
+  finally { clearTimeout(tm); }
+}
+const ATA_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
+const mintInfo = new Map(); // mint -> { decimals, program }
+const indexedBlocked = new Set();
+async function getMintInfos(mints) {
+  const need = mints.filter(m => !mintInfo.has(m) && m !== WSOL);
+  for (let i = 0; i < need.length; i += 100) {
+    const chunk = need.slice(i, i + 100);
+    const r = await rpc('getMultipleAccounts', [chunk, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+    (r.value || []).forEach((acc, j) => { const d = acc?.data?.parsed?.info?.decimals; if (acc && d != null) mintInfo.set(chunk[j], { decimals: d, program: acc.owner }); });
+  }
+  return mints.map(m => mintInfo.get(m));
+}
+function relevantMints() {
+  return [...new Set([...(lastResult?.tokens || []).map(t => t.mint), ...LOG.map(r => r.mint)])].filter(m => m && m !== WSOL);
+}
+async function getBalances(owner) {
+  const lamports = (await rpc('getBalance', [owner, { commitment: 'confirmed' }])).value;
+  const tokens = new Map(); let indexedOk = !indexedBlocked.has(S.rpc);
+  if (indexedOk) for (const prog of TOKEN_PROGRAMS) {
+    try {
+      const res = await rpc('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+      for (const acc of res.value || []) {
+        const info = acc.account?.data?.parsed?.info; if (!info) continue;
+        const ta = info.tokenAmount; const cur = tokens.get(info.mint);
+        const raw = BigInt(ta.amount || '0') + (cur ? cur.raw : 0n);
+        tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
+        mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
+      }
+    } catch (e) { indexedOk = false; indexedBlocked.add(S.rpc); console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message); break; }
+  }
+  if (!indexedOk) {
+    // Fallback for RPCs that block indexed calls (e.g. PublicNode free): derive the associated token accounts of the mints we care about
+    tokens.clear(); const mints = relevantMints();
+    if (mints.length) {
+      const w = await loadWeb3(); const infos = await getMintInfos(mints); const ownerPk = new w.PublicKey(owner);
+      const atas = [], meta = [];
+      mints.forEach((m, i) => { const inf = infos[i]; if (!inf) return;
+        const [ata] = w.PublicKey.findProgramAddressSync([ownerPk.toBuffer(), new w.PublicKey(inf.program).toBuffer(), new w.PublicKey(m).toBuffer()], new w.PublicKey(ATA_PROGRAM));
+        atas.push(ata.toBase58()); meta.push({ mint: m, ...inf }); });
+      for (let i = 0; i < atas.length; i += 100) {
+        const r = await rpc('getMultipleAccounts', [atas.slice(i, i + 100), { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+        (r.value || []).forEach((acc, j) => { const mm = meta[i + j]; const ta = acc?.data?.parsed?.info?.tokenAmount; if (!ta) return;
+          const raw = BigInt(ta.amount || '0'); tokens.set(mm.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: mm.program }); });
+      }
+    }
+  }
+  return { sol: lamports / 1e9, lamports, tokens, mode: indexedOk ? 'indexed' : 'ata' };
+}
+const decCache = { get: (m) => m === WSOL ? 9 : mintInfo.get(m)?.decimals };
+async function getDecimals(mint) {
+  if (mint === WSOL) return 9; if (mintInfo.has(mint)) return mintInfo.get(mint).decimals;
+  const [inf] = await getMintInfos([mint]); if (!inf) throw new Error('mint not found'); return inf.decimals;
+}
+async function waitForConfirmation(sig, onUpdate, maxMs = 90000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxMs) {
+    await sleep(2000);
+    try {
+      const r = await rpc('getSignatureStatuses', [[sig], { searchTransactionHistory: true }]);
+      const st = r.value?.[0];
+      if (st) {
+        if (st.err) return { ok: false, err: JSON.stringify(st.err) };
+        onUpdate?.(st.confirmationStatus || 'processed');
+        if (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized') return { ok: true, status: st.confirmationStatus };
+      }
+    } catch (e) { onUpdate?.('polling… (' + e.message + ')'); }
+  }
+  return { ok: false, err: 'not confirmed within ' + Math.round(maxMs / 1000) + 's — check Solscan' };
+}
+async function getFill(sig, owner, mint) {
+  try {
+    const tx = await rpc('getTransaction', [sig, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]);
+    if (!tx?.meta) return null;
+    const sum = (arr) => (arr || []).filter(b => b.owner === owner && b.mint === mint).reduce((s, b) => s + (+b.uiTokenAmount.uiAmountString || 0), 0);
+    const tokDelta = sum(tx.meta.postTokenBalances) - sum(tx.meta.preTokenBalances);
+    const keys = tx.transaction.message.accountKeys.map(k => k.pubkey || k);
+    const i = keys.indexOf(owner);
+    const solDelta = i >= 0 ? (tx.meta.postBalances[i] - tx.meta.preBalances[i]) / 1e9 : null;
+    return { tokDelta, solDelta, fee: tx.meta.fee / 1e9 };
+  } catch (e) { console.warn('fill', e); return null; }
+}
+
+/* ---------------- Jupiter ---------------- */
+async function jup(path, opts = {}, preferBase) {
+  const order = [preferBase || S.jupBase, ...JUP_BASES.filter(b => b !== (preferBase || S.jupBase))];
+  let last;
+  for (const base of order) {
+    try {
+      const headers = { Accept: 'application/json', ...(opts.headers || {}) };
+      if (S.jupKey && base.startsWith('https://api.jup.ag')) headers['x-api-key'] = S.jupKey;
+      const r = await fetch(base + path, { ...opts, headers });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((j && (j.error || j.message || j.errorCode)) || ('HTTP ' + r.status));
+      return { data: j, base };
+    } catch (e) { last = e; console.warn('jupiter', base, e.message); }
+  }
+  throw new Error('Jupiter: ' + (last?.message || 'failed'));
+}
+async function getQuote({ inputMint, outputMint, amountRaw, slippageBps }) {
+  const q = new URLSearchParams({ inputMint, outputMint, amount: String(amountRaw), slippageBps: String(slippageBps), restrictIntermediateTokens: 'true' });
+  const { data, base } = await jup('/quote?' + q.toString());
+  if (!data?.outAmount) throw new Error('No route / empty quote');
+  return { quote: data, base, at: Date.now() };
+}
+async function buildSwap(quoteObj, userPublicKey) {
+  const body = { quoteResponse: quoteObj.quote, userPublicKey, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true,
+    prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: Math.round(S.prioMaxSol * 1e9), priorityLevel: S.prioLevel } } };
+  const { data } = await jup('/swap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, quoteObj.base);
+  if (!data?.swapTransaction) throw new Error('Jupiter returned no transaction');
+  if (data.simulationError) throw new Error('Simulation failed: ' + (data.simulationError.error || JSON.stringify(data.simulationError)));
+  return data;
+}
+async function deserializeTx(b64) { const w = await loadWeb3(); return w.VersionedTransaction.deserialize(b64ToBytes(b64)); }
+const routeLabel = (q) => (q.routePlan || []).map(r => r.swapInfo?.label || '?').join(' → ') || '—';
+const impactPct = (q) => (+q.priceImpactPct || 0) * 100;
+
+/* ---------------- wallets ---------------- */
+const WALLETS = {
+  phantom: { key: 'phantom', label: 'Phantom', pubkey: null, sol: null, tokens: new Map(), provider: null, err: null },
+  burner:  { key: 'burner',  label: 'Burner',  pubkey: (load(LS.burner, null) || {}).pub || null, sol: null, tokens: new Map(), kp: null, err: null }
+};
+let activeKey = load('sms:activeWallet', 'phantom'); if (!WALLETS[activeKey]) activeKey = 'phantom';
+const active = () => WALLETS[activeKey];
+function getProvider() { const p = window.phantom?.solana; if (p?.isPhantom) return p; if (window.solana?.isPhantom) return window.solana; return null; }
+function phantomDeepLink() { const u = encodeURIComponent(location.href); return `https://phantom.app/ul/browse/${u}?ref=${encodeURIComponent(location.origin)}`; }
+
+async function connectPhantom(silent) {
+  const p = getProvider();
+  if (!p) { if (!silent) { toast('Phantom not detected. Install the extension or open this page in the Phantom app browser.', 'warn', 7000); renderWallet(); } return false; }
+  try {
+    const res = await p.connect(silent ? { onlyIfTrusted: true } : undefined);
+    const pk = (res?.publicKey || p.publicKey); if (!pk) throw new Error('No public key returned');
+    WALLETS.phantom.provider = p; WALLETS.phantom.pubkey = pk.toString();
+    if (!p.__smsHooked && p.on) { p.__smsHooked = true;
+      p.on('accountChanged', (npk) => { if (npk) { WALLETS.phantom.pubkey = npk.toString(); refreshBalances('phantom'); toast('Phantom account changed', 'info'); } else disconnectPhantom(true); });
+      p.on('disconnect', () => disconnectPhantom(true)); }
+    if (!silent) toast('Phantom connected: ' + short(WALLETS.phantom.pubkey), 'ok');
+    if (activeKey !== 'burner' || !WALLETS.burner.pubkey) setActive('phantom');
+    renderWallet(); await refreshBalances('phantom'); return true;
+  } catch (e) { if (!silent) toast('Phantom connect failed: ' + (e.message || e), 'err'); return false; }
+}
+async function disconnectPhantom(fromEvent) {
+  const p = WALLETS.phantom.provider; if (!fromEvent) { try { await p?.disconnect?.(); } catch { } }
+  Object.assign(WALLETS.phantom, { pubkey: null, sol: null, tokens: new Map(), provider: null });
+  renderWallet(); hydrate(); renderPortfolio(); if (!fromEvent) toast('Phantom disconnected', 'info');
+}
+function setActive(k) { if (!WALLETS[k]) return; activeKey = k; save('sms:activeWallet', k); renderWallet(); hydrate(); }
+async function refreshBalances(which) {
+  const keys = which ? [which] : Object.keys(WALLETS);
+  await Promise.all(keys.map(async k => { const w = WALLETS[k]; if (!w.pubkey) return;
+    try { const b = await getBalances(w.pubkey); w.sol = b.sol; w.tokens = b.tokens; w.err = null; }
+    catch (e) { w.err = e.message; } }));
+  renderWallet(); hydrate(); renderPortfolio(); renderBurner();
+}
+async function signAndSend(walletKey, tx) {
+  const w = WALLETS[walletKey];
+  if (walletKey === 'phantom') {
+    if (!w.provider || !w.pubkey) throw new Error('Phantom not connected');
+    const res = await w.provider.signAndSendTransaction(tx);
+    const sig = res?.signature || res; if (!sig) throw new Error('Phantom returned no signature'); return typeof sig === 'string' ? sig : b58encode(sig);
+  }
+  if (!w.kp) throw new Error('Burner wallet is locked');
+  tx.sign([w.kp]);
+  return await rpc('sendTransaction', [bytesToB64(tx.serialize()), { encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 3 }], 30000);
+}
+
+/* ---------------- trade log & positions ---------------- */
+let LOG = load(LS.log, []);
+const saveLog = () => { LOG = LOG.slice(-500); save(LS.log, LOG); };
+function logTrade(rec) { LOG.push(rec); saveLog(); renderPortfolio(); return rec; }
+function updateTrade(id, patch) { const r = LOG.find(x => x.id === id); if (r) { Object.assign(r, patch); saveLog(); renderPortfolio(); } return r; }
+let AUTOLOG = load(LS.autolog, []);
+function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
+
+function positions() {
+  const by = new Map();
+  for (const r of LOG) {
+    if (r.status !== 'confirmed') continue;
+    const k = r.wallet + ':' + r.mint; let p = by.get(k);
+    if (!p) { p = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false }; by.set(k, p); }
+    if (r.side === 'buy') { p.bought += r.tokenAmount || 0; p.costUsd += (r.tokenAmount || 0) * (r.priceUsd || 0); p.costSol += r.solAmount || 0; if (r.plan) p.plan = r.plan; if (r.auto) p.auto = true; }
+    else { p.sold += r.tokenAmount || 0; if (r.exitTag === 'tp1') p.tp1Done = true; if (r.exitTag === 'tp2') p.tp2Done = true; }
+    p.symbol = r.symbol || p.symbol;
+  }
+  const out = [];
+  for (const p of by.values()) {
+    p.avgUsd = p.bought ? p.costUsd / p.bought : null;
+    p.onchain = WALLETS[p.wallet]?.tokens?.get(p.mint)?.ui ?? null;
+    p.qty = p.onchain != null ? p.onchain : Math.max(0, p.bought - p.sold);
+    p.open = p.qty > 0 && (p.bought === 0 || p.qty > p.bought * 0.001);
+    out.push(p);
+  }
+  return out;
+}
+const openPositions = () => positions().filter(p => p.open);
+function spentToday(filter = () => true) { const d = todayKey(); return LOG.filter(r => r.side === 'buy' && ['pending', 'confirmed'].includes(r.status) && new Date(r.ts).toDateString() === d && filter(r)).reduce((s, r) => s + (r.solAmount || 0), 0); }
+function tokenInfo(mint) {
+  const t = lastResult?.tokens?.find(x => x.mint === mint);
+  if (t) return t;
+  const p = positions().find(x => x.mint === mint); const r = [...LOG].reverse().find(x => x.mint === mint);
+  return { mint, symbol: p?.symbol || r?.symbol || short(mint), name: '', priceUsd: livePrices.get(mint) ?? null, flags: [], fails: [], verdict: 'Unknown', conviction: null, checklist: null, entry: null, exit: null };
+}
+function planOf(t) { if (!t?.entry) return null; return { stop: t.entry.stop, zoneLo: t.entry.zoneLo, zoneHi: t.entry.zoneHi, tp1: t.exit?.tp1, tp2: t.exit?.tp2, tp3: t.exit?.tp3, trail: t.exit?.trail, timeStopH: t.exit?.timeStopH, strat: t.entry.strat, conviction: t.conviction }; }
+function riskIssues(t) {
+  const out = [];
+  if (!t || t.verdict === 'Unknown') { out.push('Token not in the current analysis — no checklist available'); return out; }
+  if (t.verdict !== 'Candidate') out.push(`Verdict is ${t.verdict} (not a Candidate)`);
+  (t.fails || []).forEach(f => out.push('Filter fail: ' + f));
+  (t.flags || []).filter(f => f.sev === 'critical' || f.sev === 'high' || f.sev === 'med').forEach(f => out.push(`[${f.sev}] ${f.text}`));
+  if (t.checklist) Object.entries(t.checklist).forEach(([k, c]) => { if (c.status === 'bad' && k !== 'flags') out.push('Checklist ✖ ' + k + ': ' + c.text); });
+  return out;
+}
+function suggestedBuySol(t) {
+  const sp = solUsd(); if (!t?.entry?.notionalPct || !sp) return { sol: 0, note: t?.verdict && t.verdict !== 'Candidate' ? 'No size: not a Candidate' : 'No sizing available' };
+  const acctIn = parseFloat($('account').value);
+  const w = active(); const acctUsd = isNum(acctIn) && acctIn > 0 ? acctIn : (isNum(w.sol) ? w.sol * sp : null);
+  if (!acctUsd) return { sol: 0, note: 'Set account size or connect a wallet for sizing' };
+  const fullUsd = acctUsd * t.entry.notionalPct / 100, trancheUsd = fullUsd * 0.4;
+  const raw = trancheUsd / sp; const cap = activeKey === 'burner' && A.on ? Math.min(S.maxSolPerTrade, A.maxSolPerTrade) : S.maxSolPerTrade;
+  const sol = Math.max(0, Math.min(raw, cap));
+  return { sol: +sol.toFixed(4), note: `Tranche 1/3 (40%) of ${t.entry.notionalPct.toFixed(1)}% size on ${usd(acctUsd)}${raw > cap ? ` · capped at ${cap} SOL` : ''}` };
+}
+
+/* ---------------- modal manager ---------------- */
+const M = { onConfirm: null, validate: null, busy: false, onClose: null, timer: null };
+function openModal({ title, html, confirmLabel = 'Confirm', onConfirm, validate, onClose, danger }) {
+  $('tmTitle').textContent = title; $('tmBody').innerHTML = html; $('tmConfirm').textContent = confirmLabel;
+  $('tmConfirm').className = 'flex-[2] rounded-xl py-3 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed ' + (danger ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'btn-primary');
+  Object.assign(M, { onConfirm, validate, onClose, busy: false });
+  $('tradeModal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; revalidate();
+  $('tmBody').querySelectorAll('input,select').forEach(i => i.addEventListener('input', revalidate));
+  $('tmBody').querySelectorAll('input[type=checkbox]').forEach(i => i.addEventListener('change', revalidate));
+}
+function revalidate() { $('tmConfirm').disabled = M.busy || (M.validate ? !M.validate() : false); }
+function closeModal() { if (M.busy) return; clearInterval(M.timer); $('tradeModal').classList.add('hidden'); document.body.style.overflow = ''; const f = M.onClose; Object.assign(M, { onConfirm: null, validate: null, onClose: null }); f?.(); }
+function modalStatus(html, cls = 'text-slate-300') { let el = $('tmStatus'); if (!el) { el = document.createElement('div'); el.id = 'tmStatus'; el.className = 'mt-3 rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-xs'; $('tmBody').appendChild(el); } el.innerHTML = `<div class="${cls}">${html}</div>`; }
+$('tmClose').addEventListener('click', closeModal); $('tmCancel').addEventListener('click', closeModal);
+$('tradeModal').addEventListener('click', (e) => { if (e.target === $('tradeModal') || e.target === $('tradeModal').firstElementChild) closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('tradeModal').classList.contains('hidden')) closeModal(); });
+$('tmConfirm').addEventListener('click', async () => {
+  if (!M.onConfirm || M.busy) return; M.busy = true; revalidate(); $('tmCancel').disabled = true;
+  try { const keepOpen = await M.onConfirm(); M.busy = false; $('tmCancel').disabled = false; if (!keepOpen) closeModal(); else { $('tmConfirm').classList.add('hidden'); $('tmCancel').textContent = 'Close'; } }
+  catch (e) { M.busy = false; $('tmCancel').disabled = false; revalidate(); modalStatus('✖ ' + esc(e.message || String(e)), 'text-rose-300'); }
+});
+function resetModalButtons() { $('tmConfirm').classList.remove('hidden'); $('tmCancel').textContent = 'Cancel'; }
+
+/* ---------------- guards ---------------- */
+function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
+  const errs = []; const w = WALLETS[walletKey];
+  if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
+  if (walletKey === 'burner' && !w.kp) errs.push('Burner wallet is locked — unlock it first');
+  if (!(sol > 0)) errs.push('Amount must be > 0');
+  const cap = auto ? Math.min(S.maxSolPerTrade, A.maxSolPerTrade) : S.maxSolPerTrade;
+  if (sol > cap + 1e-9) errs.push(`Exceeds max ${cap} SOL per ${auto ? 'auto ' : ''}trade (Settings)`);
+  const spent = spentToday(); if (spent + sol > S.dailyMaxSol + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${S.dailyMaxSol} SOL`);
+  if (auto) { const as = spentToday(r => r.auto); if (as + sol > A.dailyCap + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${A.dailyCap} SOL`); }
+  const open = openPositions(); const held = open.some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
+  if (!held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()} for ${$('risk').value})`);
+  if (isNum(w.sol) && sol + S.reserveSol > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${S.reserveSol} reserve`);
+  return errs;
+}
+
+/* ---------------- execution (shared by manual + auto) ---------------- */
+async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, exitTag = null, onStatus = () => {} }) {
+  const w = WALLETS[walletKey]; const q = quoteObj.quote;
+  onStatus('Building transaction with Jupiter…');
+  const swap = await buildSwap(quoteObj, w.pubkey);
+  const tx = await deserializeTx(swap.swapTransaction);
+  onStatus(walletKey === 'phantom' ? '👻 Waiting for your signature in Phantom…' : '🔑 Signing locally with burner key and sending via RPC…');
+  const dec = await getDecimals(mint).catch(() => null);
+  const isBuy = side === 'buy';
+  const solAmount = (isBuy ? +q.inAmount : +q.outAmount) / 1e9;
+  const tokRaw = isBuy ? +q.outAmount : +q.inAmount;
+  const tokenAmount = dec != null ? tokRaw / 10 ** dec : null;
+  const sp = solUsd();
+  const sig = await signAndSend(walletKey, tx);
+  const rec = logTrade({ id: 'tr' + Date.now() + Math.random().toString(36).slice(2, 6), ts: Date.now(), wallet: walletKey, auto, side, mint, symbol: t?.symbol || short(mint),
+    solAmount, tokenAmount, priceSol: tokenAmount ? solAmount / tokenAmount : null, priceUsd: tokenAmount && sp ? solAmount * sp / tokenAmount : null, solUsd: sp,
+    impactPct: impactPct(q), slippageBps: q.slippageBps, route: routeLabel(q), prioFeeLamports: swap.prioritizationFeeLamports ?? null,
+    signature: sig, status: 'pending', fill: 'quote', plan: isBuy ? planOf(t) : null, exitTag });
+  onStatus(`Sent ✓ <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} on Solscan ↗</a> · waiting for confirmation…`);
+  const conf = await waitForConfirmation(sig, (st) => onStatus(`Sent ✓ <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} ↗</a> · ${esc(st)}…`));
+  if (!conf.ok) { updateTrade(rec.id, { status: /not confirmed/.test(conf.err) ? 'unknown' : 'failed', error: conf.err }); throw new Error('Transaction ' + (conf.err || 'failed') + ` — ${sig}`); }
+  const fill = await getFill(sig, w.pubkey, mint);
+  const patch = { status: 'confirmed' };
+  if (fill && fill.tokDelta) { const tk = Math.abs(fill.tokDelta); patch.tokenAmount = tk; patch.fill = 'chain';
+    const solReal = isBuy ? solAmount : (fill.solDelta != null ? Math.max(0, fill.solDelta + fill.fee) : solAmount);
+    patch.solAmount = solReal; patch.priceSol = solReal / tk; patch.priceUsd = sp ? solReal * sp / tk : null; patch.feeSol = fill.fee; }
+  updateTrade(rec.id, patch);
+  refreshBalances(walletKey);
+  return { sig, rec: LOG.find(x => x.id === rec.id) };
+}
+
+/* ---------------- manual trade modal ---------------- */
+async function openTrade(side, mint, { sol, pct } = {}) {
+  const walletKey = activeKey; const w = active();
+  if (!w.pubkey) { if (walletKey === 'phantom') { const ok = await connectPhantom(false); if (!ok) return; } else return toast('Create or unlock the burner wallet first', 'warn'); }
+  if (walletKey === 'burner' && !w.kp) return toast('Unlock the burner wallet first', 'warn');
+  const t = tokenInfo(mint); const isBuy = side === 'buy';
+  let amountRaw, inMint, outMint, inLabel;
+  if (isBuy) {
+    const errs = buyGuards(walletKey, mint, sol);
+    if (errs.length) { toast('Blocked by safety guard: ' + errs[0], 'err', 7000); return; }
+    if ((t.flags || []).some(f => f.sev === 'critical')) return toast('Blocked: token has a CRITICAL flag (rugged).', 'err', 7000);
+    amountRaw = BigInt(Math.round(sol * 1e9)); inMint = WSOL; outMint = mint; inLabel = fmtSol(sol);
+  } else {
+    if (!w.tokens.size && w.pubkey) await refreshBalances(walletKey);
+    const h = w.tokens.get(mint); if (!h || h.raw === 0n) return toast(`No ${t.symbol} balance in ${w.label} wallet`, 'warn');
+    amountRaw = pct >= 100 ? h.raw : (h.raw * BigInt(Math.round(pct * 100))) / 10000n; if (amountRaw === 0n) return toast('Amount too small', 'warn');
+    inMint = mint; outMint = WSOL; inLabel = `${fmtTok(Number(amountRaw) / 10 ** h.decimals)} ${t.symbol} (${pct}%)`;
+  }
+  const issues = isBuy ? riskIssues(t) : [];
+  let slip = S.slippagePct; let qo = null; let qErr = null;
+  const body = () => {
+    const q = qo?.quote; const imp = q ? impactPct(q) : null;
+    let outTxt = '—', minTxt = '—', pxTxt = '—';
+    if (q) {
+      const dOut = isBuy ? (decCache.get(mint) ?? null) : 9;
+      outTxt = dOut != null ? (isBuy ? `${fmtTok(+q.outAmount / 10 ** dOut)} ${esc(t.symbol)}` : fmtSol(+q.outAmount / 1e9, 5)) : q.outAmount + ' (raw)';
+      minTxt = dOut != null ? (isBuy ? `${fmtTok(+q.otherAmountThreshold / 10 ** dOut)} ${esc(t.symbol)}` : fmtSol(+q.otherAmountThreshold / 1e9, 5)) : q.otherAmountThreshold;
+      const sp = solUsd(); const dTok = decCache.get(mint);
+      if (sp && dTok != null) { const tok = (isBuy ? +q.outAmount : +q.inAmount) / 10 ** dTok, s = (isBuy ? +q.inAmount : +q.outAmount) / 1e9; pxTxt = price(s * sp / tok); }
+    }
+    const impCls = imp == null ? '' : imp > 5 ? 'text-rose-300' : imp > 2 ? 'text-amber-300' : 'text-emerald-300';
+    const row = (k, v, c = '') => `<div class="flex justify-between gap-3 py-1 border-b border-white/5"><span class="text-slate-400">${k}</span><span class="font-mono text-right ${c}">${v}</span></div>`;
+    return `
+      <div class="flex items-center gap-2 mb-3"><span class="text-[11px] px-2 py-0.5 rounded-md ${isBuy ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'}">${isBuy ? 'BUY' : 'SELL'}</span><b>${esc(t.symbol)}</b><span class="text-[11px] font-mono text-slate-500">${esc(short(mint))}</span><span class="ml-auto text-[11px] text-slate-400">via ${esc(w.label)} ${esc(short(w.pubkey))}</span></div>
+      <div class="text-xs">
+        ${row('You pay', esc(inLabel))}
+        ${row('You receive (est.)', outTxt)}
+        ${row(`Minimum received (${slip}% slippage)`, minTxt)}
+        ${row('Implied price', pxTxt)}
+        ${row('Price impact', imp == null ? '—' : imp.toFixed(2) + '%', impCls)}
+        ${row('Route', esc(q ? routeLabel(q) : '—'))}
+        ${row('Priority fee', `auto (${esc(S.prioLevel)}), max ${S.prioMaxSol} SOL`)}
+        ${row('Network/ATA rent', isBuy && !w.tokens.get(mint) ? '≈0.000005 + ~0.002 SOL (new token account)' : '≈0.000005 SOL')}
+        ${row('Quote age', `<span id="tmAge">${qo ? Math.round((Date.now() - qo.at) / 1000) + 's' : '—'}</span>`)}
+      </div>
+      <div class="flex items-end gap-2 mt-3"><label class="flex-1 text-xs"><span class="text-slate-400">Slippage % (max 15)</span><input id="tmSlip" type="number" min="0.1" max="15" step="0.1" value="${slip}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label><button id="tmRequote" class="rounded-lg px-3 py-1.5 text-xs bg-ink-700 hover:bg-ink-600 border border-white/10">↻ Re-quote</button></div>
+      ${qErr ? `<div class="mt-3 text-xs text-rose-300">✖ Quote failed: ${esc(qErr)}</div>` : ''}
+      ${imp != null && imp > 5 ? `<label class="mt-3 flex gap-2 items-start rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-200"><input id="tmImpOk" type="checkbox" class="mt-0.5 accent-rose-500" /> <span>Price impact is <b>${imp.toFixed(2)}%</b> (&gt; 5%). I understand I will get a much worse price and still want to proceed.</span></label>` : ''}
+      ${issues.length ? `<div class="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-200"><b>⚠ Red flags / checklist fails:</b><ul class="list-disc pl-4 mt-1 space-y-0.5">${issues.slice(0, 6).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+        <label class="mt-2 flex gap-2 items-start"><input id="tmFlagOk" type="checkbox" class="mt-0.5 accent-amber-500" /> <span>I reviewed these red flags and accept the extra risk.</span></label></div>` : ''}
+      ${t.entry && isBuy ? `<div class="mt-3 text-[11px] text-slate-400">Plan: ${esc(t.entry.strat)} · zone ${price(t.entry.zoneLo)}–${price(t.entry.zoneHi)} · stop ${price(t.entry.stop)} · TP1 ${price(t.exit?.tp1)}</div>` : ''}
+      <p class="mt-3 text-[10px] text-slate-500">This is a real, irreversible on-chain swap routed by Jupiter. ${walletKey === 'phantom' ? 'Phantom will show the transaction — check it before approving.' : 'The burner key signs locally in this browser.'} Not financial advice.</p>`;
+  };
+  const doQuote = async () => {
+    qErr = null; qo = null; $('tmBody').innerHTML = body(); wire(); modalStatus('<span class="spinner spinner-light"></span> Fetching Jupiter quote…');
+    try { if (isBuy) await getDecimals(mint).catch(() => null); else await getDecimals(mint).catch(() => null);
+      qo = await getQuote({ inputMint: inMint, outputMint: outMint, amountRaw, slippageBps: Math.round(slip * 100) }); }
+    catch (e) { qErr = e.message; }
+    $('tmBody').innerHTML = body(); wire(); revalidate();
+  };
+  const wire = () => {
+    $('tmRequote')?.addEventListener('click', () => { const v = Math.min(15, Math.max(0.1, +$('tmSlip').value || slip)); slip = v; doQuote(); });
+    $('tmBody').querySelectorAll('input[type=checkbox]').forEach(i => i.addEventListener('change', revalidate));
+  };
+  resetModalButtons();
+  openModal({ title: `${isBuy ? 'Buy' : 'Sell'} ${t.symbol}`, html: body(), confirmLabel: walletKey === 'phantom' ? 'Confirm & sign in Phantom' : 'Confirm & sign with burner',
+    validate: () => { if (!qo) return false; const imp = impactPct(qo.quote); if (imp > 5 && !$('tmImpOk')?.checked) return false; if (issues.length && !$('tmFlagOk')?.checked) return false; return true; },
+    onConfirm: async () => {
+      if (Date.now() - qo.at > 30000) { modalStatus('Quote older than 30s — refreshing…'); await doQuote(); if (!qo) throw new Error('Re-quote failed'); if (impactPct(qo.quote) > 5 && !$('tmImpOk')?.checked) throw new Error('Price impact now > 5% — review and tick the override'); throw new Error('Quote refreshed — review the new numbers and confirm again'); }
+      if (isBuy) { const errs = buyGuards(walletKey, mint, sol); if (errs.length) throw new Error('Blocked: ' + errs[0]); }
+      const res = await executeSwap({ walletKey, side, mint, quoteObj: qo, t, onStatus: (h) => modalStatus(h) });
+      modalStatus(`✔ Confirmed · <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(res.sig)}">${short(res.sig)} on Solscan ↗</a>`, 'text-emerald-300');
+      toast(`${isBuy ? 'Bought' : 'Sold'} ${t.symbol} ✓`, 'ok'); return true;
+    } });
+  M.timer = setInterval(() => { const el = $('tmAge'); if (el && qo) { const a = Math.round((Date.now() - qo.at) / 1000); el.textContent = a + 's' + (a > 30 ? ' (stale — will re-quote)' : ''); } }, 1000);
+  doQuote();
+}
+
+/* ---------------- rendering: wallet card, header, cards ---------------- */
+function renderWallet() {
+  const ph = WALLETS.phantom, bu = WALLETS.burner, aw = active();
+  $('btnWalletLabel').textContent = ph.pubkey ? short(ph.pubkey) + (isNum(ph.sol) ? ' · ' + ph.sol.toFixed(3) + ' SOL' : '') : 'Connect Phantom';
+  const st = $('walletStatus');
+  const anyConn = ph.pubkey || bu.pubkey;
+  st.textContent = aw.pubkey ? `Active: ${aw.label}${aw.key === 'burner' ? (bu.kp ? ' (unlocked)' : ' (locked)') : ''}` : 'Not connected';
+  st.className = 'text-[11px] px-2 py-0.5 rounded-full border ' + (aw.pubkey ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20');
+  const prov = getProvider();
+  const wRow = (w) => `<div class="rounded-xl bg-ink-850 border ${activeKey === w.key ? 'border-violet-500/40' : 'border-white/5'} p-3">
+      <div class="flex items-center justify-between gap-2"><label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="activeW" value="${w.key}" ${activeKey === w.key ? 'checked' : ''} ${w.pubkey ? '' : 'disabled'} class="accent-violet-500" /><b class="text-slate-200">${w.key === 'phantom' ? '👻 Phantom' : '🔥 Burner'}</b><span class="text-[10px] text-slate-500">${w.key === 'phantom' ? 'you sign every trade' : 'local key · auto-trading'}</span></label>
+      ${w.key === 'phantom' && w.pubkey ? `<button data-act="disconnect" class="text-[11px] text-rose-300 hover:underline">Disconnect</button>` : ''}</div>
+      ${w.pubkey ? `<div class="mt-1.5 flex items-center justify-between gap-2 font-mono text-[11px]"><a href="${solscanAcc(w.pubkey)}" target="_blank" rel="noopener" class="text-violet-300 hover:underline">${short(w.pubkey)} ↗</a><button data-copy="${w.pubkey}" class="text-slate-500 hover:text-slate-200">copy ⧉</button><span class="text-slate-200">${isNum(w.sol) ? w.sol.toFixed(4) + ' SOL' : (w.err ? '<span class=text-rose-300>RPC error</span>' : '…')}</span></div>${w.err ? `<div class="text-[10px] text-rose-300 mt-1">${esc(w.err)}</div>` : ''}`
+        : w.key === 'phantom' ? (prov ? `<button data-act="connect" class="mt-2 w-full rounded-lg py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white">Connect Phantom</button>`
+          : `<div class="mt-2 text-[11px] text-slate-400">Phantom not detected. Desktop: install the <a class="text-violet-300 underline" href="https://phantom.app/download" target="_blank" rel="noopener">Phantom extension</a> (needs https or localhost). Mobile: <a class="text-violet-300 underline" href="${phantomDeepLink()}">open this page in the Phantom app ↗</a>.</div>`)
+        : `<div class="mt-1 text-[11px] text-slate-500">Not created yet — see Burner wallet below.</div>`}
+    </div>`;
+  $('walletInfo').innerHTML = `<div class="space-y-2">${wRow(ph)}${wRow(bu)}</div>
+    ${anyConn ? `<div class="mt-2 flex items-center justify-between text-[11px]"><span>Today: <b class="text-slate-200">${spentToday().toFixed(3)}</b> / ${S.dailyMaxSol} SOL spent · max ${S.maxSolPerTrade} SOL/trade</span><button data-act="refresh" class="text-violet-300 hover:underline">↻ Balances</button></div>` : ''}`;
+  $('walletInfo').querySelectorAll('input[name=activeW]').forEach(r => r.addEventListener('change', () => setActive(r.value)));
+  $('walletInfo').querySelector('[data-act=connect]')?.addEventListener('click', () => connectPhantom(false));
+  $('walletInfo').querySelector('[data-act=disconnect]')?.addEventListener('click', () => disconnectPhantom(false));
+  $('walletInfo').querySelector('[data-act=refresh]')?.addEventListener('click', () => refreshBalances());
+  $('walletInfo').querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { if (await copyText(b.dataset.copy)) toast('Address copied', 'ok', 1500); }));
+  $('setMaxPos').textContent = maxPos();
+}
+let lastBalTs = null;
+function hydrate() {
+  if (lastResult && lastResult.ts !== lastBalTs && (WALLETS.phantom.pubkey || WALLETS.burner.pubkey)) { lastBalTs = lastResult.ts; setTimeout(() => refreshBalances(), 0); }
+  const w = active();
+  document.querySelectorAll('.trade-row').forEach(el => {
+    const mint = el.dataset.mint; const t = tokenInfo(mint); const s = suggestedBuySol(t);
+    const h = w.tokens?.get(mint); const hold = h && h.raw > 0n;
+    const ok = t.verdict === 'Candidate';
+    el.innerHTML = `<div class="rounded-xl bg-ink-900/70 border border-white/5 p-2.5">
+      <div class="flex items-center gap-1.5">
+        <input type="number" min="0" step="0.001" value="${s.sol || ''}" placeholder="SOL" class="buy-amt w-20 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in SOL" />
+        <span class="text-[11px] text-slate-500">SOL</span>
+        <button class="btn-buy flex-1 rounded-lg py-1.5 text-xs font-bold ${ok ? 'bg-emerald-500 hover:bg-emerald-400 text-ink-950' : 'bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200'}">Buy${ok ? '' : ' ⚠'}</button>
+      </div>
+      <div class="text-[10px] text-slate-500 mt-1">${esc(s.note)} · via ${esc(w.label)}</div>
+      <div class="flex items-center gap-1 mt-1.5 text-[11px]"><span class="text-slate-400 mr-auto">${w.pubkey ? `Hold: <b class="text-slate-200">${hold ? fmtTok(h.ui) : '0'}</b>` : 'Wallet not connected'}</span>
+        ${[25, 50, 100].map(p => `<button data-pct="${p}" class="btn-sell rounded-md px-2 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/20 disabled:opacity-30" ${hold ? '' : 'disabled'}>Sell ${p}%</button>`).join('')}</div>
+    </div>`;
+    el.querySelector('.btn-buy').addEventListener('click', () => openTrade('buy', mint, { sol: +el.querySelector('.buy-amt').value }));
+    el.querySelectorAll('.btn-sell').forEach(b => b.addEventListener('click', () => openTrade('sell', mint, { pct: +b.dataset.pct })));
+  });
+}
+
+/* ---------------- portfolio: positions + trade log ---------------- */
+const livePrices = new Map(); let alerted = load(LS.alerts, {});
+async function refreshPrices() {
+  const mints = [...new Set([...openPositions().map(p => p.mint), ...armedEntries().map(t => t.mint)])];
+  if (!mints.length) return;
+  for (let i = 0; i < mints.length; i += 30) {
+    try { const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.slice(i, i + 30).join(','));
+      const best = new Map(); for (const p of arr || []) { const m = p.baseToken?.address; if (!m) continue; if (!best.has(m) || (p.liquidity?.usd || 0) > (best.get(m).liquidity?.usd || 0)) best.set(m, p); }
+      for (const [m, p] of best) livePrices.set(m, { price: +p.priceUsd, liq: p.liquidity?.usd ?? null, at: Date.now() }); }
+    catch (e) { console.warn('price refresh', e); }
+  }
+  try { const c = await fetchSolContext(); if (isNum(c.price)) { T_state.solPrice = c.price; renderTicker(c); } } catch { }
+  checkAlerts(); renderPortfolio();
+}
+function levelState(p) {
+  const lp = livePrices.get(p.mint)?.price; const pl = p.plan || {};
+  if (!isNum(lp)) return { cls: 'text-slate-500', label: 'no price' };
+  if (isNum(pl.stop) && lp <= pl.stop) return { cls: 'text-rose-300 font-bold', label: '⛔ STOP HIT', lvl: 'stop' };
+  if (isNum(pl.tp3) && lp >= pl.tp3) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP3 (5x) hit', lvl: 'tp3' };
+  if (isNum(pl.tp2) && lp >= pl.tp2) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP2 (3x) hit', lvl: 'tp2' };
+  if (isNum(pl.tp1) && lp >= pl.tp1) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP1 (2x) hit', lvl: 'tp1' };
+  if (isNum(pl.stop) && lp <= pl.stop * 1.1) return { cls: 'text-amber-300', label: 'near stop' };
+  return { cls: 'text-slate-400', label: 'in range' };
+}
+function checkAlerts() {
+  for (const p of openPositions()) { const s = levelState(p); if (!s.lvl) continue; const k = p.key + ':' + s.lvl;
+    if (!alerted[k]) { alerted[k] = Date.now(); save(LS.alerts, alerted); toast(`${p.symbol} (${p.wallet}): ${s.label} — alert only${p.wallet === 'burner' && A.on && A.autoExit ? ', auto-exit engine will act' : ', no auto-execution'}`, s.lvl === 'stop' ? 'err' : 'ok', 9000);
+      try { if (window.Notification && Notification.permission === 'granted') new Notification('SolanaMemeSniper: ' + p.symbol, { body: s.label }); } catch { } } }
+}
+function renderPortfolio() {
+  const el = $('portfolio'); if (!el) return;
+  const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
+  if (!LOG.length && !anyW && !AUTOLOG.length) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = p.plan || {};
+    const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
+    return `<tr class="border-t border-white/5 align-top ${s.lvl === 'stop' ? 'bg-rose-500/10' : s.lvl ? 'bg-emerald-500/10' : ''}">
+      <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}</div></td>
+      <td class="pr-2 font-mono">${fmtTok(p.qty)}</td><td class="pr-2 font-mono">${price(p.avgUsd)}</td><td class="pr-2 font-mono">${price(lp)}</td>
+      <td class="pr-2 font-mono ${pctCls(pnl)}">${pct(pnl)}<div class="text-[10px]">${isNum(pnlUsd) ? (pnlUsd >= 0 ? '+' : '') + usd(pnlUsd, 2) : ''}</div></td>
+      <td class="pr-2 font-mono text-rose-300">${price(pl.stop)}</td><td class="pr-2 font-mono text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
+      <td class="pr-2 ${s.cls}">${s.label}</td>
+      <td class="whitespace-nowrap">${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}</td></tr>`; }).join('');
+  const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
+      <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
+      <td class="pr-2 font-mono">${fmtSol(r.solAmount)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
+      <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
+      <td class="font-mono"><a class="text-violet-300 hover:underline" target="_blank" rel="noopener" href="${solscanTx(r.signature)}">${esc(short(r.signature))} ↗</a></td></tr>`).join('');
+  el.innerHTML = `<section id="sec-portfolio" class="glass rounded-2xl p-4 sm:p-5">
+    <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
+      <div class="flex gap-2 text-[11px]"><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
+    <div class="text-[11px] text-slate-500 mb-2">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop/targets come from the analysis at buy time · <b>alerts only</b> unless burner auto-exit is ON</div>
+    ${open.length ? `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Qty</th><th>Avg entry</th><th>Price</th><th>PnL</th><th>Stop</th><th>TP1/TP2</th><th>Status</th><th>Sell</th></tr></thead><tbody>${posRows}</tbody></table></div>` : '<p class="text-xs text-slate-500">No open positions.</p>'}
+    ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
+    <div id="autoLogBox"></div>
+  </section>`;
+  el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.sell, { pct: +b.dataset.pct })));
+  $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
+  $('pfCsv').addEventListener('click', () => {
+    const cols = ['ts', 'wallet', 'auto', 'side', 'symbol', 'mint', 'solAmount', 'tokenAmount', 'priceUsd', 'status', 'signature', 'impactPct', 'route'];
+    const csv = [cols.join(','), ...LOG.map(r => cols.map(c => JSON.stringify(c === 'ts' ? new Date(r.ts).toISOString() : (r[c] ?? ''))).join(','))].join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'sms-trades.csv'; a.click(); });
+  $('pfClear').addEventListener('click', () => { if (confirm('Clear the local trade log? (On-chain history is not affected.)')) { LOG = []; saveLog(); alerted = {}; save(LS.alerts, alerted); renderPortfolio(); } });
+  renderAutoLog();
+}
+function renderAutoLog() {
+  const box = $('autoLogBox'); if (!box) return; if (!AUTOLOG.length) { box.innerHTML = ''; return; }
+  const c = { info: 'text-slate-400', ok: 'text-emerald-300', warn: 'text-amber-300', err: 'text-rose-300' };
+  box.innerHTML = `<details class="mt-3"><summary class="cursor-pointer text-xs text-slate-400">▸ Auto-trade log (${AUTOLOG.length})</summary><ul class="mt-2 space-y-0.5 max-h-56 overflow-y-auto scroll-thin font-mono text-[11px]">${[...AUTOLOG].reverse().slice(0, 120).map(l => `<li class="${c[l.level] || ''}"><span class="text-slate-600">${new Date(l.ts).toLocaleTimeString()}</span> ${esc(l.msg)}${l.sig ? ` <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(l.sig)}">tx↗</a>` : ''}</li>`).join('')}</ul></details>`;
+}
+
+/* ---------------- burner wallet (encrypted in localStorage) ---------------- */
+const enc = new TextEncoder();
+async function deriveKey(pass, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptSecret(secret, pass) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await deriveKey(pass, salt), secret));
+  return { salt: bytesToB64(salt), iv: bytesToB64(iv), ct: bytesToB64(ct) };
+}
+async function decryptSecret(rec, pass) {
+  try { return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(rec.iv) }, await deriveKey(pass, b64ToBytes(rec.salt)), b64ToBytes(rec.ct))); }
+  catch { throw new Error('Wrong passphrase (or corrupted key data)'); }
+}
+const burnerRec = () => load(LS.burner, null);
+let burnerOpen = false;
+const passField = (id, ph = 'Passphrase') => `<input id="${id}" type="password" autocomplete="new-password" placeholder="${ph}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm" />`;
+
+function createBurner() {
+  if (burnerRec() && !confirm('A burner wallet already exists in this browser. Creating a new one REPLACES it — export its key / withdraw funds first! Continue?')) return;
+  resetModalButtons();
+  openModal({ title: '🔥 Create burner wallet', confirmLabel: 'Generate wallet',
+    html: `<p class="text-xs text-slate-300">A new Solana keypair is generated <b>in this browser</b>. The secret key is encrypted with your passphrase (AES-GCM, PBKDF2 310k) and stored only in this browser's localStorage. It is never sent anywhere.</p>
+      <ul class="text-[11px] text-amber-200/90 list-disc pl-4 mt-2 space-y-0.5"><li>Fund it only with a small amount you can afford to lose.</li><li>Clearing browser data deletes the key — export it if you want a backup.</li><li>If you forget the passphrase, the funds are lost.</li></ul>
+      <label class="block mt-3 text-xs text-slate-400">Passphrase (min 10 characters)${passField('bpPass')}</label>
+      <label class="block mt-2 text-xs text-slate-400">Repeat passphrase${passField('bpPass2')}</label>
+      <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="bpAck" type="checkbox" class="mt-0.5 accent-violet-500" /> I understand this is a hot wallet in my browser and I will only fund small amounts.</label>`,
+    validate: () => ($('bpPass')?.value || '').length >= 10 && $('bpPass').value === $('bpPass2').value && $('bpAck').checked,
+    onConfirm: async () => {
+      modalStatus('<span class="spinner spinner-light"></span> Generating & encrypting…');
+      const w = await loadWeb3(); const kp = w.Keypair.generate();
+      const e = await encryptSecret(kp.secretKey, $('bpPass').value);
+      save(LS.burner, { v: 1, pub: kp.publicKey.toBase58(), kdf: 'PBKDF2-SHA256-310000/AES-GCM-256', created: Date.now(), ...e });
+      Object.assign(WALLETS.burner, { pubkey: kp.publicKey.toBase58(), kp, sol: null, tokens: new Map() });
+      setActive('burner'); renderBurner(); refreshBalances('burner'); toast('Burner wallet created & unlocked: ' + short(kp.publicKey.toBase58()), 'ok');
+      modalStatus(`✔ Created <span class="font-mono">${kp.publicKey.toBase58()}</span>. Fund it with a small amount of SOL.`, 'text-emerald-300'); return true;
+    } });
+}
+function parseSecretKey(text) {
+  const t = String(text || '').trim(); if (!t) throw new Error('Paste a private key');
+  let bytes;
+  if (t.startsWith('[')) {
+    let arr; try { arr = JSON.parse(t); } catch { throw new Error('Invalid JSON byte array'); }
+    if (!Array.isArray(arr) || !arr.every(x => Number.isInteger(x) && x >= 0 && x <= 255)) throw new Error('JSON must be an array of integers 0–255');
+    bytes = Uint8Array.from(arr);
+  } else {
+    if (!/^[1-9A-HJ-NP-Za-km-z]+$/.test(t)) throw new Error('Not a valid base58 key or JSON byte array');
+    bytes = b58decode(t);
+  }
+  if (bytes.length !== 64) { bytes.fill(0); throw new Error(`Expected a 64-byte secret key, got ${bytes.length} bytes`); }
+  return bytes;
+}
+function importBurner() {
+  if (burnerRec() && !confirm('A burner wallet already exists in this browser. Importing REPLACES it — export its key / withdraw funds first! Continue?')) return;
+  resetModalButtons(); let derived = null; let sk = null;
+  const wipe = () => { if (sk) sk.fill(0); sk = null; derived = null; const f = $('biKey'); if (f) f.value = ''; };
+  openModal({ title: '📥 Import existing key as burner', confirmLabel: 'Import & encrypt',
+    html: `<p class="text-xs text-slate-300">Paste a Solana private key: <b>base58</b> (Phantom export) or a <b>JSON byte array</b> (64 bytes, Solana CLI format). It is decrypted only in this browser, encrypted with your passphrase (AES-GCM, PBKDF2 310k) and never sent anywhere.</p>
+      <div class="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-200/90">Prefer a dedicated wallet with a small balance — auto-trading can spend from it. Don't import your main wallet.</div>
+      <label class="block mt-3 text-xs text-slate-400">Private key<textarea id="biKey" rows="3" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 font-mono text-[11px]" style="-webkit-text-security:disc"></textarea></label>
+      <button id="biDerive" class="mt-2 rounded-lg px-3 py-1.5 text-xs bg-ink-700 hover:bg-ink-600 border border-white/10">Derive address</button>
+      <div id="biAddr" class="mt-2 text-xs"></div>
+      <label class="block mt-3 text-xs text-slate-400">Passphrase (min 10 characters)${passField('biPass')}</label>
+      <label class="block mt-2 text-xs text-slate-400">Repeat passphrase${passField('biPass2')}</label>
+      <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="biAck" type="checkbox" class="mt-0.5 accent-violet-500" /> <span>The address above is the wallet I want to import.</span></label>`,
+    validate: () => !!derived && ($('biPass')?.value || '').length >= 10 && $('biPass').value === $('biPass2').value && $('biAck').checked,
+    onClose: wipe,
+    onConfirm: async () => {
+      if (!sk || !derived) throw new Error('Derive the address first');
+      modalStatus('<span class="spinner spinner-light"></span> Encrypting…');
+      const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(Uint8Array.from(sk));
+      if (kp.publicKey.toBase58() !== derived) throw new Error('Key changed — derive again');
+      const e = await encryptSecret(kp.secretKey, $('biPass').value);
+      killSwitch('import');
+      save(LS.burner, { v: 1, pub: derived, kdf: 'PBKDF2-SHA256-310000/AES-GCM-256', created: Date.now(), imported: true, ...e });
+      Object.assign(WALLETS.burner, { pubkey: derived, kp, sol: null, tokens: new Map() });
+      const addr = derived; wipe(); ['biPass', 'biPass2'].forEach(id => { if ($(id)) $(id).value = ''; });
+      setActive('burner'); renderBurner(); refreshBalances('burner'); toast('Key imported & unlocked: ' + short(addr), 'ok');
+      modalStatus(`✔ Imported <span class="font-mono">${esc(addr)}</span> — stored encrypted in this browser.`, 'text-emerald-300'); return true;
+    } });
+  const keyEl = $('biKey');
+  keyEl.addEventListener('input', () => { if (sk) sk.fill(0); sk = null; derived = null; $('biAddr').innerHTML = ''; if ($('biAck')) $('biAck').checked = false; revalidate(); });
+  $('biDerive').addEventListener('click', async () => {
+    try {
+      if (sk) sk.fill(0); sk = parseSecretKey(keyEl.value);
+      const w = await loadWeb3(); let kp;
+      try { kp = w.Keypair.fromSecretKey(Uint8Array.from(sk)); } catch { throw new Error('Invalid secret key (public half does not match)'); }
+      derived = kp.publicKey.toBase58();
+      $('biAddr').innerHTML = `<div class="rounded-lg bg-ink-800 border border-emerald-500/30 p-2"><div class="text-slate-400">Derived address — confirm it matches your wallet:</div><div class="font-mono text-emerald-300 break-all mt-0.5">${esc(derived)}</div></div>`;
+    } catch (err) { derived = null; if (sk) sk.fill(0); sk = null; $('biAddr').innerHTML = `<div class="text-rose-300">✖ ${esc(err.message)}</div>`; }
+    revalidate();
+  });
+}
+function unlockBurner() {
+  const rec = burnerRec(); if (!rec) return; resetModalButtons();
+  openModal({ title: '🔓 Unlock burner wallet', confirmLabel: 'Unlock', html: `<p class="text-xs text-slate-400">Address <span class="font-mono">${esc(short(rec.pub))}</span>. The key stays in memory until you lock it or close the tab.</p><label class="block mt-2 text-xs text-slate-400">Passphrase${passField('buPass')}</label>`,
+    validate: () => ($('buPass')?.value || '').length > 0,
+    onConfirm: async () => { modalStatus('<span class="spinner spinner-light"></span> Decrypting…');
+      const sk = await decryptSecret(rec, $('buPass').value); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
+      if (kp.publicKey.toBase58() !== rec.pub) throw new Error('Decrypted key does not match stored address');
+      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); } });
+  setTimeout(() => $('buPass')?.focus(), 50);
+}
+function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); toast('Burner locked (key wiped from memory)', 'info'); }
+function exportBurner() {
+  const rec = burnerRec(); if (!rec) return; resetModalButtons();
+  openModal({ title: '⚠️ Export burner private key', confirmLabel: 'Reveal key', danger: true,
+    html: `<div class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-200">Anyone with this key controls the wallet's funds. Never paste it into a website or chat, and never share it. Only import it into a wallet you trust (Phantom → Add account → Import private key).</div>
+      <label class="block mt-3 text-xs text-slate-400">Passphrase${passField('bePass')}</label>
+      <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="beAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand the risk and I am in a private place.</label>`,
+    validate: () => ($('bePass')?.value || '').length > 0 && $('beAck').checked,
+    onConfirm: async () => { const sk = await decryptSecret(rec, $('bePass').value); const k = b58encode(sk);
+      $('tmBody').innerHTML = `<p class="text-xs text-slate-400">Private key (base58, Phantom-compatible). It is hidden again when you close this window.</p><textarea readonly class="mt-2 w-full h-24 rounded-lg bg-ink-800 border border-rose-500/40 p-2 font-mono text-[11px] break-all" id="beKey">${k}</textarea><button id="beCopy" class="mt-2 rounded-lg px-3 py-1.5 text-xs bg-ink-700 border border-white/10">Copy key</button>`;
+      $('beCopy').addEventListener('click', async () => { if (await copyText(k)) toast('Key copied — clear your clipboard after use', 'warn'); }); return true; } });
+}
+function withdrawBurner() {
+  const b = WALLETS.burner; if (!b.kp) return toast('Unlock the burner first', 'warn'); resetModalButtons();
+  const nTok = [...(b.tokens?.values() || [])].filter(h => h.raw > 0n).length;
+  openModal({ title: '↗ Withdraw all SOL from burner', confirmLabel: 'Withdraw all SOL', danger: true,
+    html: `<p class="text-xs text-slate-400">Sends the full SOL balance (minus the 0.000005 SOL network fee) from <span class="font-mono">${esc(short(b.pubkey))}</span> to the address below. ${nTok ? `<b class="text-amber-300">${nTok} token balance(s) are NOT moved</b> — sell them first.` : ''}</p>
+      <label class="block mt-3 text-xs text-slate-400">Destination address (e.g. your Phantom)<input id="bwDest" spellcheck="false" value="${esc(WALLETS.phantom.pubkey || '')}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 font-mono text-xs" /></label>
+      <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="bwAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I double-checked the destination address. Transfers are irreversible.</label>`,
+    validate: () => isAddr($('bwDest')?.value) && $('bwDest').value.trim() !== b.pubkey && $('bwAck').checked,
+    onConfirm: async () => {
+      const w = await loadWeb3(); const dest = new w.PublicKey($('bwDest').value.trim());
+      killSwitch('withdraw'); modalStatus('<span class="spinner spinner-light"></span> Building transfer…');
+      const bal = (await rpc('getBalance', [b.pubkey, { commitment: 'confirmed' }])).value; const lamports = bal - 5000;
+      if (lamports <= 0) throw new Error('Balance too low to withdraw');
+      const { value: bh } = await rpc('getLatestBlockhash', [{ commitment: 'confirmed' }]);
+      const tx = new w.Transaction({ feePayer: b.kp.publicKey, recentBlockhash: bh.blockhash }).add(w.SystemProgram.transfer({ fromPubkey: b.kp.publicKey, toPubkey: dest, lamports }));
+      tx.sign(b.kp);
+      const sig = await rpc('sendTransaction', [bytesToB64(tx.serialize()), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }], 30000);
+      autoLog(`Withdraw ${(lamports / 1e9).toFixed(5)} SOL → ${short(dest.toBase58())}`, 'warn', { sig });
+      modalStatus(`Sent <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} ↗</a> · confirming…`);
+      const c = await waitForConfirmation(sig, (st) => modalStatus(`Sent <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} ↗</a> · ${esc(st)}…`));
+      if (!c.ok) throw new Error('Withdraw not confirmed: ' + c.err);
+      modalStatus(`✔ Withdrawn ${(lamports / 1e9).toFixed(5)} SOL · <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">Solscan ↗</a>`, 'text-emerald-300'); refreshBalances('burner'); return true;
+    } });
+}
+function deleteBurner() {
+  const b = WALLETS.burner;
+  if (!confirm(`Delete the burner wallet ${short(b.pubkey)} from this browser?\n\nIf it still holds SOL or tokens and you have NOT exported the key, those funds are lost forever.`)) return;
+  if (prompt('Type DELETE to confirm') !== 'DELETE') return;
+  killSwitch('deleted'); localStorage.removeItem(LS.burner); Object.assign(WALLETS.burner, { pubkey: null, kp: null, sol: null, tokens: new Map() });
+  if (activeKey === 'burner') setActive(WALLETS.phantom.pubkey ? 'phantom' : 'phantom'); renderBurner(); renderWallet(); toast('Burner deleted', 'info');
+}
+async function renderQR(pub) { try { const QR = (await import(QR_URL)).default; const url = await QR.toDataURL('solana:' + pub, { margin: 1, width: 168, color: { dark: '#07090f', light: '#ffffff' } }); const img = $('burnerQR'); if (img) { img.src = url; img.classList.remove('hidden'); } } catch (e) { console.warn('QR', e); } }
+
+function renderBurner() {
+  const box = $('burnerBox'); if (!box) return; const b = WALLETS.burner; const rec = burnerRec();
+  const num = (id, v, step, label, extra = '') => `<label class="block"><span class="text-slate-400">${label}</span><input id="${id}" type="number" step="${step}" value="${v}" ${extra} class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>`;
+  box.innerHTML = `<details id="burnerDetails" class="rounded-xl bg-ink-850 border ${A.on ? 'border-rose-500/50' : 'border-white/5'}" ${A.on || b.kp || burnerOpen ? 'open' : ''}>
+    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-between"><span>🔥 Burner wallet &amp; auto-trading <span class="text-slate-500 font-normal">(optional)</span></span>${A.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse">AUTO ON</span>' : '<span class="text-[10px] text-slate-500">auto off</span>'}</summary>
+    <div class="px-3 pb-3 text-xs space-y-2.5">
+      <div class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-200/90">Hot wallet in your browser. Auto mode signs Jupiter swaps <b>without asking</b>, within the hard caps below, and <b>only while this tab is open</b>. Fund only small amounts. <span class="fa block mt-0.5">فقط مقدار کم واریز کن؛ ربات فقط وقتی این تب باز است کار می‌کند.</span></div>
+      ${!rec ? `<div class="grid grid-cols-2 gap-1.5"><button id="bCreate" class="rounded-lg py-2 font-semibold bg-orange-600 hover:bg-orange-500 text-white">Create burner wallet</button><button id="bImport" class="rounded-lg py-2 font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10">📥 Import existing key</button></div>` : `
+      <div class="flex gap-3 items-start">
+        <img id="burnerQR" alt="Deposit QR" class="hidden w-24 h-24 rounded-lg bg-white p-1 shrink-0" />
+        <div class="min-w-0 flex-1">
+          <div class="text-slate-400">Deposit address</div>
+          <div class="font-mono text-[11px] text-slate-200 break-all">${esc(rec.pub)}</div>
+          <div class="flex gap-2 mt-1"><button id="bCopy" class="text-violet-300 hover:underline">copy ⧉</button><a class="text-violet-300 hover:underline" target="_blank" rel="noopener" href="${solscanAcc(rec.pub)}">Solscan ↗</a></div>
+          <div class="mt-1">Balance: <b class="font-mono text-slate-200">${isNum(b.sol) ? b.sol.toFixed(4) + ' SOL' : '…'}</b> · ${b.kp ? '<span class="text-emerald-300">unlocked</span>' : '<span class="text-slate-400">locked</span>'}</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-1.5">
+        ${b.kp ? `<button id="bLock" class="rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">🔒 Lock</button>` : `<button id="bUnlock" class="rounded-lg py-1.5 bg-violet-600 hover:bg-violet-500 text-white font-semibold">🔓 Unlock</button>`}
+        <button id="bWithdraw" class="rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10 disabled:opacity-40" ${b.kp ? '' : 'disabled'}>↗ Withdraw all</button>
+        <button id="bExport" class="rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">🔑 Export key</button>
+        <button id="bDelete" class="rounded-lg py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20">🗑 Delete</button>
+        <button id="bImport" class="col-span-2 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">📥 Import existing key (replaces this burner)</button>
+      </div>
+      <div class="border-t border-white/5 pt-2.5">
+        <div class="font-semibold text-slate-200 mb-1.5">🤖 Auto-trade hard caps</div>
+        <div class="grid grid-cols-2 gap-2">
+          ${num('aMaxTrade', A.maxSolPerTrade, '0.01', 'Max SOL / auto trade', 'min="0.001"')}
+          ${num('aDaily', A.dailyCap, '0.01', 'Auto daily cap (SOL)', 'min="0.001"')}
+          ${num('aMinConv', A.minConviction, '1', 'Min conviction', 'min="50" max="100"')}
+          ${num('aImpact', A.maxImpact, '0.1', 'Max price impact % (≤5)', 'min="0.1" max="5"')}
+          ${num('aSlip', A.slipCap, '0.1', 'Slippage cap % (≤15)', 'min="0.1" max="15"')}
+          ${num('aScanMin', A.scanMin, '1', 'Scan interval (min ≥5)', 'min="5"')}
+        </div>
+        <label class="mt-2 flex items-center gap-2"><input id="aExit" type="checkbox" ${A.autoExit ? 'checked' : ''} class="accent-violet-500" /> Auto-exit: sell at stop, scale out 40% at TP1/TP2, trail rest</label>
+        <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan "latest boosted" every interval</label>
+        <p class="text-[10px] text-slate-500 mt-1">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, global max ${S.maxSolPerTrade} SOL/trade &amp; ${S.dailyMaxSol} SOL/day.</p>
+        <div class="flex gap-2 mt-2"><button id="aSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save caps</button>
+          ${A.on ? `<button id="aKill" class="flex-[2] rounded-lg py-2 font-extrabold bg-rose-600 hover:bg-rose-500 text-white">⛔ KILL SWITCH</button>` : `<button id="aOn" class="flex-[2] rounded-lg py-2 font-bold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-40" ${b.kp ? '' : 'disabled title="Unlock burner first"'}>Auto-trade ON</button>`}</div>
+        <div id="autoStatus" class="mt-1.5 text-[10px] text-slate-500">${esc(autoStatusText())}</div>
+      </div>`}
+    </div></details>`;
+  $('burnerDetails').addEventListener('toggle', (e) => { burnerOpen = e.target.open; });
+  const on = (id, f) => $(id)?.addEventListener('click', f);
+  on('bCreate', createBurner); on('bImport', importBurner); on('bUnlock', unlockBurner); on('bLock', lockBurner); on('bExport', exportBurner); on('bWithdraw', withdrawBurner); on('bDelete', deleteBurner);
+  on('bCopy', async () => { if (await copyText(rec.pub)) toast('Burner address copied', 'ok', 1500); });
+  on('aSave', () => { readAutoInputs(); toast('Auto caps saved', 'ok'); renderBurner(); });
+  on('aOn', enableAuto); on('aKill', () => killSwitch('manual'));
+  if (rec) renderQR(rec.pub);
+  renderKillFab();
+}
+function readAutoInputs() {
+  const g = (id) => $(id) ? +$(id).value : undefined;
+  Object.assign(A, { maxSolPerTrade: g('aMaxTrade') ?? A.maxSolPerTrade, dailyCap: g('aDaily') ?? A.dailyCap, minConviction: g('aMinConv') ?? A.minConviction, maxImpact: g('aImpact') ?? A.maxImpact, slipCap: g('aSlip') ?? A.slipCap, scanMin: g('aScanMin') ?? A.scanMin,
+    autoExit: $('aExit') ? $('aExit').checked : A.autoExit, autoScan: $('aScan') ? $('aScan').checked : A.autoScan });
+  sanitizeSettings(); const { on, ...persist } = A; save(LS.auto, persist);
+  if (A.on) startTimers();
+}
+
+/* ---------------- auto-trading engine (burner only) ---------------- */
+let tickTimer = null, scanTimer = null, autoBusy = false, lastTick = null, lastScan = null;
+const sellFails = {}; let autoHigh = load('sms:autohigh', {});
+function autoStatusText() {
+  if (!A.on) return 'Auto-trade is OFF. Nothing will be signed automatically.';
+  return `ON · tick every 30s${lastTick ? ' · last ' + new Date(lastTick).toLocaleTimeString() : ''}${A.autoScan ? ` · scan every ${A.scanMin} min${lastScan ? ' (last ' + new Date(lastScan).toLocaleTimeString() + ')' : ''}` : ' · no auto-scan'} · exits ${A.autoExit ? 'ON' : 'off'} · armed ${armedEntries().length}`;
+}
+function staticEligible(t) {
+  const r = [];
+  if (!t) return ['no data'];
+  if (t.verdict !== 'Candidate') r.push('verdict ' + t.verdict);
+  if (!(t.conviction >= A.minConviction)) r.push(`conviction ${t.conviction} < ${A.minConviction}`);
+  if (t.fails?.length) r.push('filter fail');
+  if ((t.flags || []).some(f => ['critical', 'high', 'med'].includes(f.sev))) r.push('red flags');
+  for (const k of ['lp', 'mint', 'top10']) if (t.checklist?.[k]?.status !== 'ok') r.push(k + ' not verified ✔');
+  if (t.checklist?.volume?.status === 'bad') r.push('volume quality');
+  if (t.onCurve) r.push('bonding curve');
+  if (!t.entry?.zoneLo || !t.entry?.stop) r.push('no entry plan');
+  return r;
+}
+function armedEntries() {
+  if (!lastResult?.tokens || Date.now() - lastResult.ts > 60 * 60e3) return [];
+  return lastResult.tokens.filter(t => !staticEligible(t).length);
+}
+function inZone(t, px) { const e = t.entry; if (!isNum(px)) return false;
+  if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= e.zoneHi * 1.03;
+  return px <= e.zoneHi && px > e.stop; }
+async function autoTick() {
+  if (!A.on || autoBusy) return; const b = WALLETS.burner;
+  if (!b.kp) { killSwitch('burner locked'); return; }
+  autoBusy = true; lastTick = Date.now();
+  try {
+    await refreshPrices(); await refreshBalances('burner');
+    // ---- exits
+    if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner')) {
+      if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const pl = p.plan || {}; if (!isNum(lp)) continue;
+      if ((sellFails[p.key] || 0) >= 3) continue;
+      autoHigh[p.key] = Math.max(autoHigh[p.key] || 0, lp); save('sms:autohigh', autoHigh);
+      const pnl = p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const ageH = (Date.now() - p.firstTs) / 3.6e6;
+      let pctSell = 0, tag = null;
+      if (isNum(pl.stop) && lp <= pl.stop) { pctSell = 100; tag = 'stop'; }
+      else if (p.tp1Done && isNum(pl.trail) && lp <= autoHigh[p.key] * (1 - pl.trail / 100)) { pctSell = 100; tag = 'trail'; }
+      else if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) { pctSell = 40; tag = 'tp2'; }
+      else if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) { pctSell = 40; tag = 'tp1'; }
+      else if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) { pctSell = 100; tag = 'time'; }
+      if (!pctSell) continue;
+      await autoSell(p, pctSell, tag, lp);
+    }
+    // ---- entries (max one buy per tick)
+    if (!A.on) return;
+    const held = new Set(openPositions().map(p => p.mint));
+    const recent = new Set(LOG.filter(r => r.auto && r.side === 'buy' && Date.now() - r.ts < 24 * 3.6e6).map(r => r.mint));
+    for (const t of armedEntries().sort((a, b) => b.conviction - a.conviction)) {
+      if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) continue;
+      const px = livePrices.get(t.mint)?.price;
+      if (!inZone(t, px)) continue;
+      const s = suggestedBuySol(t); const sol = Math.min(s.sol, A.maxSolPerTrade, S.maxSolPerTrade);
+      if (!(sol >= 0.001)) { autoLog(`${t.symbol}: in zone but size ${sol} SOL too small — skipped`, 'warn'); continue; }
+      const errs = buyGuards('burner', t.mint, sol, { auto: true }); if (errs.length) { autoLog(`${t.symbol}: buy blocked — ${errs[0]}`, 'warn'); break; }
+      autoLog(`${t.symbol}: price ${price(px)} in entry zone (${t.entry.strat}) → quoting ${sol} SOL`, 'info');
+      const slip = Math.min(S.slippagePct, A.slipCap);
+      let qo; try { qo = await getQuote({ inputMint: WSOL, outputMint: t.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); } catch (e) { autoLog(`${t.symbol}: quote failed — ${e.message}`, 'err'); continue; }
+      const imp = impactPct(qo.quote); if (imp > A.maxImpact) { autoLog(`${t.symbol}: price impact ${imp.toFixed(2)}% > ${A.maxImpact}% — skipped`, 'warn'); continue; }
+      if (!A.on) return;
+      try { const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true });
+        autoLog(`BUY ${t.symbol} ${sol} SOL @ ${price(r.rec.priceUsd)} (impact ${imp.toFixed(2)}%)`, 'ok', { sig: r.sig }); toast(`🤖 Auto-bought ${t.symbol} (${sol} SOL)`, 'ok', 8000); }
+      catch (e) { autoLog(`${t.symbol}: buy failed — ${e.message}`, 'err'); }
+      break;
+    }
+  } catch (e) { autoLog('Tick error: ' + e.message, 'err'); }
+  finally { autoBusy = false; const st = $('autoStatus'); if (st) st.textContent = autoStatusText(); }
+}
+async function autoSell(p, pctSell, tag, lp) {
+  const b = WALLETS.burner; const h = b.tokens.get(p.mint); if (!h || h.raw === 0n) return;
+  const raw = pctSell >= 100 ? h.raw : (h.raw * BigInt(pctSell)) / 100n; if (raw === 0n) return;
+  autoLog(`${p.symbol}: ${tag.toUpperCase()} trigger at ${price(lp)} → selling ${pctSell}%`, 'warn');
+  try {
+    const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.max(A.slipCap, tag === 'stop' ? Math.min(15, A.slipCap * 2) : A.slipCap) * 100) });
+    const imp = impactPct(qo.quote); if (imp > 15) throw new Error(`price impact ${imp.toFixed(1)}% > 15% — not selling automatically`);
+    const r = await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: tokenInfo(p.mint), auto: true, exitTag: tag });
+    autoLog(`SELL ${pctSell}% ${p.symbol} (${tag}) → ${fmtSol(r.rec.solAmount)}`, 'ok', { sig: r.sig }); toast(`🤖 Auto-sold ${pctSell}% ${p.symbol} (${tag})`, tag === 'stop' ? 'warn' : 'ok', 8000);
+    delete sellFails[p.key];
+  } catch (e) { sellFails[p.key] = (sellFails[p.key] || 0) + 1; autoLog(`${p.symbol}: auto-sell failed (${sellFails[p.key]}/3) — ${e.message}`, 'err'); }
+}
+async function autoScan() {
+  if (!A.on || !A.autoScan) return;
+  if (busy) { autoLog('Scan skipped (analysis already running)', 'info'); return; }
+  lastScan = Date.now(); autoLog('Auto-scan: Scan latest boosted…', 'info');
+  await runAnalysis({ boosted: true });
+  autoLog(`Auto-scan done: ${armedEntries().length} armed entr${armedEntries().length === 1 ? 'y' : 'ies'}`, 'info'); autoTick();
+}
+function startTimers() { clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = setInterval(autoTick, 30000); if (A.autoScan) scanTimer = setInterval(autoScan, A.scanMin * 60e3); }
+function enableAuto() {
+  readAutoInputs(); const b = WALLETS.burner; if (!b.kp) return toast('Unlock the burner first', 'warn'); resetModalButtons();
+  openModal({ title: '🤖 Turn auto-trading ON', confirmLabel: 'Start auto-trading', danger: true,
+    html: `<p class="text-xs text-slate-300">The burner wallet <span class="font-mono">${esc(short(b.pubkey))}</span> (${isNum(b.sol) ? b.sol.toFixed(4) : '?'} SOL) will <b>sign and send swaps automatically, without asking</b>, while this tab stays open.</p>
+      <ul class="text-[11px] text-slate-300 list-disc pl-4 mt-2 space-y-0.5"><li>Max ${A.maxSolPerTrade} SOL per trade · ${A.dailyCap} SOL per day (auto) · ${maxPos()} open positions</li><li>Only Candidates with conviction ≥ ${A.minConviction}, verified checklist, no red flags, price impact ≤ ${A.maxImpact}%, slippage ≤ ${A.slipCap}%</li><li>Buys only when live price enters the analysis entry zone; one buy per token</li><li>Auto-exit: ${A.autoExit ? 'ON (stop / TP1 / TP2 / trailing / time stop)' : 'OFF (alerts only)'} · Auto-scan: ${A.autoScan ? 'every ' + A.scanMin + ' min' : 'OFF'}</li></ul>
+      <div class="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-[11px] text-rose-200">Heuristic scores can be wrong; meme coins can rug or go to zero in seconds; bugs, RPC or API failures can cause losses. Background tabs may be throttled. Use the KILL SWITCH any time.</div>
+      <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="aoAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand and accept that trades will execute without per-trade confirmation within these caps.</label>`,
+    validate: () => $('aoAck')?.checked,
+    onConfirm: async () => { A.on = true; startTimers(); autoLog(`AUTO ON — caps ${A.maxSolPerTrade} SOL/trade, ${A.dailyCap} SOL/day, conv ≥ ${A.minConviction}, impact ≤ ${A.maxImpact}%`, 'warn');
+      try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch { }
+      renderBurner(); renderPortfolio(); toast('🤖 Auto-trading ON — keep this tab open', 'warn', 6000); setTimeout(autoTick, 500); if (A.autoScan && !lastResult) setTimeout(autoScan, 1000); } });
+}
+function killSwitch(reason = 'manual') {
+  const was = A.on; A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null;
+  if (was) { autoLog(`⛔ KILL SWITCH (${reason}) — auto-trading stopped`, 'err'); toast('⛔ Auto-trading stopped', 'err'); }
+  renderBurner(); renderPortfolio();
+}
+function renderKillFab() {
+  let f = $('killFab');
+  if (!A.on) { f?.remove(); return; }
+  if (!f) { f = document.createElement('button'); f.id = 'killFab'; f.className = 'fixed bottom-4 left-4 z-50 rounded-full px-4 py-3 font-extrabold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-2xl animate-pulse'; f.addEventListener('click', () => killSwitch('fab')); document.body.appendChild(f); }
+  f.textContent = '🤖 AUTO ON · ⛔ KILL';
+}
+window.addEventListener('beforeunload', (e) => { if (A.on) { e.preventDefault(); e.returnValue = 'Auto-trading is ON — closing the tab stops it.'; } });
+
+/* ---------------- settings wiring ---------------- */
+function fillSettings() {
+  $('setRpc').value = S.rpc; $('setSlip').value = S.slippagePct; $('setMaxTrade').value = S.maxSolPerTrade; $('setDaily').value = S.dailyMaxSol; $('setReserve').value = S.reserveSol;
+  $('setPrioLevel').value = S.prioLevel; $('setPrioMax').value = S.prioMaxSol; $('setJup').value = S.jupBase; $('setJupKey').value = S.jupKey || ''; $('setMaxPos').textContent = maxPos();
+}
+$('setRpcPreset').addEventListener('change', (e) => { if (e.target.value) $('setRpc').value = e.target.value; e.target.value = ''; });
+$('btnSaveSettings').addEventListener('click', () => {
+  Object.assign(S, { rpc: $('setRpc').value.trim(), slippagePct: +$('setSlip').value, maxSolPerTrade: +$('setMaxTrade').value, dailyMaxSol: +$('setDaily').value, reserveSol: +$('setReserve').value,
+    prioLevel: $('setPrioLevel').value, prioMaxSol: +$('setPrioMax').value, jupBase: $('setJup').value, jupKey: $('setJupKey').value.trim() });
+  sanitizeSettings(); save(LS.settings, S); fillSettings(); renderWallet(); hydrate(); renderBurner(); toast('Settings saved', 'ok'); refreshBalances();
+});
+$('btnResetSettings').addEventListener('click', () => { S = { ...DEFAULTS }; save(LS.settings, S); fillSettings(); toast('Defaults restored (not yet affecting caps until saved)', 'info'); });
+$('risk').addEventListener('change', () => { $('setMaxPos').textContent = maxPos(); renderWallet(); renderBurner(); });
+$('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('tradeCard').scrollIntoView({ behavior: 'smooth' }); else connectPhantom(false); });
+
+/* ---------------- init ---------------- */
+fillSettings(); renderWallet(); renderBurner(); renderPortfolio(); hydrate();
+setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
+if (WALLETS.burner.pubkey) refreshBalances('burner');
+setInterval(() => { if (openPositions().length && !A.on) refreshPrices(); }, 60000);
+if (openPositions().length) setTimeout(refreshPrices, 1500);
+
+return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards,
+  encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap };
+})();
+window.SMS_TRADE = T;
+</script>
+
+</body>
+</html>
