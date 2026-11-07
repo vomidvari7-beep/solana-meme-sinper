@@ -42,8 +42,37 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       </div>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <div id="solTicker" class="flex items-center gap-2 text-sm glass rounded-xl px-3 py-1.5">
-        <span class="text-slate-400">SOL</span><span id="solPrice" class="font-mono font-semibold">—</span><span id="solChg" class="font-mono text-xs text-slate-500">loading…</span><span id="solFilterHead" class="hidden text-[10px] px-1.5 py-0.5 rounded border"></span>
+      <div id="solTicker" class="flex items-center gap-2 text-sm glass rounded-xl px-2.5 py-1.5">
+        <div class="leading-tight min-w-0">
+          <div class="flex items-center gap-1.5"><span class="text-slate-400">SOL</span><span id="solPrice" class="font-mono font-semibold">—</span><span id="solChg" class="font-mono text-xs text-slate-500">loading…</span></div>
+          <div id="solGaugeState" class="text-[10px] text-slate-400 truncate max-w-[8.5rem] sm:max-w-none"></div>
+        </div>
+        <svg id="solGauge" viewBox="0 0 80 46" class="w-14 h-8 sm:w-[4.25rem] sm:h-9 shrink-0" role="img" aria-label="SOL fear and greed">
+          <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="butt"/>
+          <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="#f97316" stroke-width="6"/>
+          <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="#eab308" stroke-width="6"/>
+          <path d="M55.4 14.2 A32 32 0 0 1 68.2 28" fill="none" stroke="#86efac" stroke-width="6"/>
+          <path d="M68.2 28 A32 32 0 0 1 72 40" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="butt"/>
+          <line id="solGaugeNeedle" x1="40" y1="40" x2="40" y2="16" stroke="#f8fafc" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="40" cy="40" r="2.4" fill="#f8fafc"/>
+        </svg>
+      </div>
+      <div id="dexTicker" class="flex items-center gap-2 text-sm glass rounded-xl px-2.5 py-1.5" title="DEX Mood from the latest scan">
+        <div class="leading-tight min-w-0">
+          <div class="text-[10px] uppercase tracking-wide text-slate-500">DEX Mood</div>
+          <div id="dexGaugeState" class="text-[10px] text-slate-300 truncate max-w-[8.5rem] sm:max-w-none">—</div>
+          <div id="dexTrend" class="text-[10px] text-slate-500">1h — · 24h —</div>
+        </div>
+        <svg id="dexGauge" viewBox="0 0 80 46" class="w-14 h-8 sm:w-[4.25rem] sm:h-9 shrink-0" role="img" aria-label="DEX mood">
+          <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="butt"/>
+          <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="#f97316" stroke-width="6"/>
+          <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="#eab308" stroke-width="6"/>
+          <path d="M55.4 14.2 A32 32 0 0 1 68.2 28" fill="none" stroke="#86efac" stroke-width="6"/>
+          <path d="M68.2 28 A32 32 0 0 1 72 40" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="butt"/>
+          <line id="dexGaugeNeedle" x1="40" y1="40" x2="40" y2="16" stroke="#f8fafc" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="40" cy="40" r="2.4" fill="#f8fafc"/>
+        </svg>
+        <svg id="dexSpark" viewBox="0 0 64 28" class="w-14 h-7 shrink-0 hidden sm:block" role="img" aria-label="DEX mood last 24h, Tehran time"><path id="dexSparkPath" d="" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg>
       </div>
       <button id="btnWallet" class="rounded-xl px-3 py-1.5 text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition flex items-center gap-2"><span>👻</span><span id="btnWalletLabel">Connect Phantom</span></button>
     </div>
@@ -312,7 +341,7 @@ async function fetchSolContext() {
     const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + SOL_MINT);
     const usdc = (arr || []).filter(p => p.baseToken?.address === SOL_MINT && /^(USDC|USDT)$/.test(p.quoteToken?.symbol || ''))
       .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-    if (usdc) Object.assign(ctx, { price: +usdc.priceUsd, h1: usdc.priceChange?.h1 ?? null, h6: usdc.priceChange?.h6 ?? null, h24: usdc.priceChange?.h24 ?? null, source: `DexScreener ${usdc.dexId} SOL/${usdc.quoteToken.symbol}` });
+    if (usdc) Object.assign(ctx, { price: +usdc.priceUsd, m5: usdc.priceChange?.m5 ?? null, h1: usdc.priceChange?.h1 ?? null, h6: usdc.priceChange?.h6 ?? null, h24: usdc.priceChange?.h24 ?? null, source: `DexScreener ${usdc.dexId} SOL/${usdc.quoteToken.symbol}` });
   } catch (e) { ctx.error = 'DexScreener SOL: ' + e.message; }
   if (!isNum(ctx.price) || !isNum(ctx.h24)) {
     try { const j = await fetchJSON('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true');
@@ -417,6 +446,88 @@ function normalizePair(p) {
     socialLinks: [...(info.websites || []).map(w => ({ label: w.label || 'Website', url: w.url })), ...(info.socials || []).map(s => ({ label: s.type || s.platform || 'link', url: s.url }))],
     boosts: p.boosts?.active || 0
   };
+}
+function moodLabel(value) {
+  if (value == null || !isFinite(+value)) return '—';
+  const v = +value;
+  return v <= 20 ? 'Extreme Fear' : v <= 40 ? 'Fear' : v <= 60 ? 'Neutral' : v <= 80 ? 'Greed' : 'Extreme Greed';
+}
+function dexMoodFromTokens(tokens) {
+  const list = (tokens || []).filter(Boolean);
+  if (!list.length) return null;
+  const bsr = (tf) => {
+    let b = 0, s = 0;
+    for (const t of list) { const x = t.txns?.[tf]; if (!x) continue; b += x.buys || 0; s += x.sells || 0; }
+    if (b + s < 20) return null;
+    const ratio = s ? b / s : (b ? 3 : 1);
+    return clamp(50 + (ratio - 1) * 40, 0, 100);
+  };
+  const shareUp = (k) => {
+    const xs = list.filter(t => isNum(t.chg?.[k]));
+    if (!xs.length) return null;
+    return xs.filter(t => t.chg[k] > 0).length / xs.length * 100;
+  };
+  let v1 = 0, v24 = 0, nV = 0;
+  for (const t of list) if (isNum(t.vol?.h1) && isNum(t.vol?.h24) && t.vol.h24 > 0) { v1 += t.vol.h1; v24 += t.vol.h24; nV++; }
+  const accel = nV && v24 > 0 ? v1 / (v24 / 24) : null;
+  const accelScore = accel == null ? null : clamp(50 + (accel - 1) * 25, 0, 100);
+  const aged = list.filter(t => isNum(t.ageH));
+  const young = aged.filter(t => t.ageH < 24);
+  const youngGreen = young.filter(t => isNum(t.chg?.h1) && t.chg.h1 > 0).length;
+  const newFlow = !aged.length ? null : clamp(35 + (young.length / aged.length) * 40 + (young.length ? (youngGreen / young.length - 0.5) * 30 : 0), 0, 100);
+  const parts = [];
+  const m5 = bsr('m5'), h1 = bsr('h1');
+  if (m5 != null) parts.push([m5, 0.12]);
+  if (h1 != null) parts.push([h1, 0.22]);
+  const up1 = shareUp('h1'), up6 = shareUp('h6');
+  if (up1 != null) parts.push([up1, 0.24]);
+  if (up6 != null) parts.push([up6, 0.16]);
+  if (accelScore != null) parts.push([accelScore, 0.16]);
+  if (newFlow != null) parts.push([newFlow, 0.10]);
+  if (!parts.length) return null;
+  const w = parts.reduce((s, p) => s + p[1], 0);
+  const value = Math.round(parts.reduce((s, p) => s + p[0] * p[1], 0) / w);
+  return { value, label: moodLabel(value), n: list.length };
+}
+function loadDexHist() {
+  try {
+    const v = JSON.parse(localStorage.getItem('sms:dexmood') || '[]');
+    const now = Date.now();
+    return Array.isArray(v) ? v.filter(p => p && isNum(+p.v) && now - p.ts < 864e5) : [];
+  } catch { return []; }
+}
+function dexTrend(hist, value) {
+  if (!hist?.length || value == null) return { h1: null, h24: null };
+  const now = Date.now();
+  const nearest = (ms, minAge) => {
+    let best = null, bestD = Infinity;
+    for (const p of hist) {
+      const age = now - p.ts;
+      if (age < minAge) continue;
+      const d = Math.abs(age - ms);
+      if (d < bestD) { best = p; bestD = d; }
+    }
+    return best;
+  };
+  const a = nearest(3600e3, 30 * 60e3);
+  const b = nearest(24 * 3600e3, 6 * 3600e3);
+  return { h1: a ? value - a.v : null, h24: b ? value - b.v : null };
+}
+function recordDexMood(tokens) {
+  const mood = dexMoodFromTokens(tokens);
+  if (!mood) return null;
+  const now = Date.now();
+  const point = { ts: now, v: mood.value };
+  let hist = loadDexHist();
+  const last = hist[hist.length - 1];
+  if (last && now - last.ts < 2 * 60e3) hist[hist.length - 1] = point;
+  else hist.push(point);
+  hist = hist.filter(p => now - p.ts < 864e5).slice(-500);
+  try { localStorage.setItem('sms:dexmood', JSON.stringify(hist)); } catch { /* storage full */ }
+  window.__SMS_DEX = { ...mood, ts: now };
+  window.__SMS_DEX_HIST = hist;
+  if (typeof window.__smsSolBadge === 'function') window.__smsSolBadge();
+  return mood;
 }
 function bestPairsByToken(pairs, wantedMints) {
   const by = new Map();
@@ -779,6 +890,7 @@ async function runAnalysis({ boosted = false } = {}) {
     const best = bestPairsByToken(allPairs, new Set(mints));
     if (!best.length) throw new Error('No live DEX data found for the provided input.');
     const toks = best.map(normalizePair);
+    try { recordDexMood(toks); } catch (e) { console.warn('dex mood', e); }
 
     // Market regime
     const vols = toks.map(t => t.vol.h24 || 0).sort((a, b) => a - b); const medVol = vols[Math.floor(vols.length / 2)] || 0;
@@ -1156,7 +1268,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause' };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -1188,6 +1300,9 @@ function sanitizeSettings() {
   A.sol1hMin = Number.isFinite(+A.sol1hMin) ? +A.sol1hMin : AUTO_DEFAULTS.sol1hMin;
   A.sol24hMin = Number.isFinite(+A.sol24hMin) ? +A.sol24hMin : AUTO_DEFAULTS.sol24hMin;
   A.solMode = A.solMode === 'halve' ? 'halve' : 'pause';
+  A.moodSource = ['sol', 'dex', 'both'].includes(A.moodSource) ? A.moodSource : 'both';
+  A.solPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.solPauseBelow) ? +A.solPauseBelow : 25));
+  A.dexPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.dexPauseBelow) ? +A.dexPauseBelow : 25));
 }
 sanitizeSettings();
 const maxPos = () => { const n = Math.round(+S.maxOpenPositions); return (n >= 1 && n <= 20) ? n : 2; };
@@ -1979,10 +2094,17 @@ function renderBurner() {
           ${num('aScanMin', A.scanMin, '1', 'Scan interval (min ≥5)', 'min="5"')}
         </div>
         <div class="mt-2 rounded-lg border border-white/10 p-2 space-y-2">
-          <label class="flex items-center gap-2"><input id="aSolOn" type="checkbox" ${A.solFilter ? 'checked' : ''} class="accent-violet-500" /> SOL market filter</label>
+          <label class="flex items-center gap-2"><input id="aSolOn" type="checkbox" ${A.solFilter ? 'checked' : ''} class="accent-violet-500" /> Pause auto-buys on mood</label>
+          <label class="block"><span class="text-slate-400">Use</span>
+            <select id="aMoodSrc" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5">
+              <option value="sol" ${A.moodSource === 'sol' ? 'selected' : ''}>SOL gauge</option>
+              <option value="dex" ${A.moodSource === 'dex' ? 'selected' : ''}>DEX Mood gauge</option>
+              <option value="both" ${A.moodSource !== 'sol' && A.moodSource !== 'dex' ? 'selected' : ''}>Both</option>
+            </select>
+          </label>
           <div class="grid grid-cols-2 gap-2">
-            ${num('aSol1h', A.sol1hMin, '0.1', 'Pause if SOL 1h change below %')}
-            ${num('aSol24', A.sol24hMin, '0.1', 'Pause if SOL 24h change below %')}
+            ${num('aSolBelow', A.solPauseBelow, '1', 'SOL pause below', 'min="0" max="100"')}
+            ${num('aDexBelow', A.dexPauseBelow, '1', 'DEX pause below', 'min="0" max="100"')}
           </div>
           <label class="block"><span class="text-slate-400">When SOL is below a threshold</span>
             <select id="aSolMode" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5">
@@ -2016,7 +2138,8 @@ function readAutoInputs() {
   if ($('aMaxPos')) S.maxOpenPositions = g('aMaxPos');
   Object.assign(A, { maxSolPerTrade: g('aMaxTrade') ?? A.maxSolPerTrade, dailyCap: g('aDaily') ?? A.dailyCap, balancePct: g('aBalPct') ?? A.balancePct, minConviction: g('aMinConv') ?? A.minConviction, maxImpact: g('aImpact') ?? A.maxImpact, slipCap: g('aSlip') ?? A.slipCap, scanMin: g('aScanMin') ?? A.scanMin,
     autoExit: $('aExit') ? $('aExit').checked : A.autoExit, autoScan: $('aScan') ? $('aScan').checked : A.autoScan,
-    solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, sol1hMin: $('aSol1h') ? +$('aSol1h').value : A.sol1hMin, sol24hMin: $('aSol24') ? +$('aSol24').value : A.sol24hMin, solMode: $('aSolMode')?.value || A.solMode });
+    solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, solMode: $('aSolMode')?.value || A.solMode,
+    moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
   if (A.on) startTimers();
@@ -2034,28 +2157,92 @@ async function ensureSolMarket() {
     return n;
   } catch { return window.__SMS_SOL || null; }
 }
+function solMood(c) {
+  const parts = [];
+  if (isNum(c?.m5)) parts.push([c.m5, 0.15]);
+  if (isNum(c?.h1)) parts.push([c.h1, 0.35]);
+  if (isNum(c?.h6)) parts.push([c.h6, 0.20]);
+  if (isNum(c?.h24)) parts.push([c.h24, 0.30]);
+  if (!parts.length) return { value: null, label: '—' };
+  const w = parts.reduce((s, p) => s + p[1], 0);
+  const pctW = parts.reduce((s, p) => s + p[0] * p[1], 0) / w;
+  const value = Math.round(clamp(50 + pctW * 5, 0, 100));
+  const label = value <= 20 ? 'Extreme Fear' : value <= 40 ? 'Fear' : value <= 60 ? 'Neutral' : value <= 80 ? 'Greed' : 'Extreme Greed';
+  return { value, label };
+}
+function gaugePhrase(mood, tripped, action) {
+  const base = !mood || mood.value == null ? '—' : `${mood.label} ${mood.value}`;
+  if (!tripped || action === 'ok') return base;
+  return base + (action === 'halve' ? ' · size halved' : ' · auto-buys paused');
+}
 function solFilterState() {
-  if (!A.solFilter) return { active: false, action: 'ok', badge: 'SOL filter: off' };
   const c = window.__SMS_SOL || lastResult?.sol || {};
-  const hits = [];
-  if (isNum(c.h1) && c.h1 < A.sol1hMin) hits.push({ tf: '1h', chg: c.h1 });
-  if (isNum(c.h24) && c.h24 < A.sol24hMin) hits.push({ tf: '24h', chg: c.h24 });
-  if (!hits.length) return { active: true, action: 'ok', badge: (isNum(c.h1) || isNum(c.h24)) ? 'SOL filter: on' : 'SOL filter: on (no SOL change data)' };
-  hits.sort((a, b) => a.chg - b.chg);
-  const label = `SOL ${hits[0].chg.toFixed(1)}% ${hits[0].tf}`;
-  if (A.solMode === 'halve') return { active: true, action: 'halve', badge: `SOL filter: size halved (${label})` };
-  return { active: true, action: 'pause', badge: `SOL filter: paused (${label})` };
+  const mood = solMood(c);
+  const dex = window.__SMS_DEX || { value: null, label: '—' };
+  const src = A.moodSource || 'both';
+  const useSol = src === 'sol' || src === 'both';
+  const useDex = src === 'dex' || src === 'both';
+  const solLow = useSol && mood.value != null && mood.value < A.solPauseBelow;
+  const dexLow = useDex && dex.value != null && dex.value < A.dexPauseBelow;
+  let action = 'ok';
+  if (A.solFilter && (solLow || dexLow)) action = A.solMode === 'halve' ? 'halve' : 'pause';
+  const bits = [];
+  if (solLow) bits.push('SOL ' + gaugePhrase(mood, true, action));
+  if (dexLow) bits.push('DEX ' + gaugePhrase(dex, true, action));
+  const badge = !A.solFilter ? gaugePhrase(mood, false, 'ok') : (bits.length ? bits.join(' · ') : gaugePhrase(mood, false, 'ok'));
+  return { active: !!A.solFilter, action, mood, dex, solLow, dexLow, badge };
+}
+function paintNeedle(id, value) {
+  const needle = $(id); if (!needle) return;
+  const deg = value == null ? 0 : -90 + (value / 100) * 180;
+  needle.setAttribute('transform', `rotate(${deg} 40 40)`);
+}
+function dexArrow(delta) {
+  if (delta == null || !isFinite(delta)) return '—';
+  if (delta >= 2) return '▲' + Math.round(delta);
+  if (delta <= -2) return '▼' + Math.abs(Math.round(delta));
+  return '→';
+}
+function paintDexSpark(hist) {
+  const path = $('dexSparkPath'); const svg = $('dexSpark');
+  if (!path || !svg) return;
+  if (!hist || hist.length < 2) { path.setAttribute('d', ''); return; }
+  const minT = hist[0].ts, maxT = hist[hist.length - 1].ts;
+  const span = Math.max(1, maxT - minT);
+  const d = hist.map((p, i) => {
+    const x = 2 + ((p.ts - minT) / span) * 60;
+    const y = 2 + (1 - Math.max(0, Math.min(100, p.v)) / 100) * 24;
+    return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+  path.setAttribute('d', d);
+  try {
+    const fmt = (ts) => new Date(ts).toLocaleString('en-GB', { timeZone: 'Asia/Tehran', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    svg.setAttribute('aria-label', `DEX mood ${fmt(minT)} – ${fmt(maxT)} Tehran`);
+  } catch { /* ignore */ }
 }
 function updateSolFilterBadge() {
   const g = solFilterState();
   const b = $('solFilterBadge');
-  if (b) { b.textContent = g.badge; b.className = 'text-[11px] ' + (g.action === 'pause' ? 'text-rose-300' : g.action === 'halve' ? 'text-amber-200' : 'text-slate-400'); }
-  const h = $('solFilterHead');
-  if (!h) return;
-  if (!A.solFilter) { h.classList.add('hidden'); return; }
-  h.classList.remove('hidden');
-  h.textContent = g.badge;
-  h.className = 'text-[10px] px-1.5 py-0.5 rounded border ' + (g.action === 'pause' ? 'border-rose-500/40 text-rose-200 bg-rose-500/10' : g.action === 'halve' ? 'border-amber-500/40 text-amber-200 bg-amber-500/10' : 'border-white/10 text-slate-300');
+  if (b) { b.textContent = A.solFilter ? g.badge : 'Mood pause off'; b.className = 'text-[11px] ' + (g.action === 'pause' ? 'text-rose-300' : g.action === 'halve' ? 'text-amber-200' : 'text-slate-400'); }
+  const st = $('solGaugeState');
+  if (st) {
+    st.textContent = gaugePhrase(g.mood, g.solLow, g.action);
+    st.className = 'text-[10px] truncate max-w-[8.5rem] sm:max-w-none ' + (g.solLow && g.action === 'pause' ? 'text-rose-300' : g.solLow && g.action === 'halve' ? 'text-amber-200' : 'text-slate-400');
+  }
+  paintNeedle('solGaugeNeedle', g.mood?.value);
+  const solG = $('solGauge'); if (solG) solG.setAttribute('aria-label', 'SOL ' + gaugePhrase(g.mood, g.solLow, g.action));
+  const dx = $('dexGaugeState');
+  if (dx) {
+    dx.textContent = gaugePhrase(g.dex, g.dexLow, g.action);
+    dx.className = 'text-[10px] truncate max-w-[8.5rem] sm:max-w-none ' + (g.dexLow && g.action === 'pause' ? 'text-rose-300' : g.dexLow && g.action === 'halve' ? 'text-amber-200' : 'text-slate-300');
+  }
+  paintNeedle('dexGaugeNeedle', g.dex?.value);
+  const hist = window.__SMS_DEX_HIST || [];
+  const tr = dexTrend(hist, g.dex?.value);
+  const trend = $('dexTrend');
+  if (trend) trend.textContent = `1h ${dexArrow(tr.h1)} · 24h ${dexArrow(tr.h24)}`;
+  paintDexSpark(hist);
+  const dexG = $('dexGauge'); if (dexG) dexG.setAttribute('aria-label', 'DEX ' + gaugePhrase(g.dex, g.dexLow, g.action));
 }
 function noteSolFilter(gate, log) {
   updateSolFilterBadge();
@@ -2650,6 +2837,8 @@ $('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('
 
 /* ---------------- init ---------------- */
 fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderPortfolio(); hydrate();
+try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
+updateSolFilterBadge();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
 if (WALLETS.burner.pubkey) refreshBalances('burner');
 setInterval(() => { if (openPositions().length && !A.on) refreshPrices(); }, 60000);
