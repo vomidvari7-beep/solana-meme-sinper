@@ -622,14 +622,124 @@ function analyzeStructure(candles, tf) {
     else retest = 'pending';
   }
   const lastLow = lows.length ? lows.at(-1).price : null;
-  return { tf, trend, hLabel, lLabel, trendlineBreak, bos, breakout: trendlineBreak || bos, lastLH, lastLow, newHL, brokenLevel, retest };
+  const px = cs[last].c;
+  const pivots = [
+    ...highs.map(h => ({ price: h.price, kind: 'H' })),
+    ...lows.map(l => ({ price: l.price, kind: 'L' }))
+  ].sort((a, b) => a.price - b.price);
+  const zones = [];
+  for (const pt of pivots) {
+    let z = zones.find(z => Math.abs(pt.price - z.mid) / z.mid <= 0.015);
+    if (!z) { z = { lo: pt.price, hi: pt.price, mid: pt.price, sum: 0, touches: 0, highTouches: 0, lowTouches: 0 }; zones.push(z); }
+    z.touches++; z.sum += pt.price; z.lo = Math.min(z.lo, pt.price); z.hi = Math.max(z.hi, pt.price); z.mid = z.sum / z.touches;
+    if (pt.kind === 'H') z.highTouches++; else z.lowTouches++;
+  }
+  for (const z of zones) z.strength = z.touches + (z.touches >= 3 ? 1 : 0);
+  const below = zones.filter(z => z.mid < px).sort((a, b) => b.mid - a.mid);
+  const above = zones.filter(z => z.mid > px).sort((a, b) => a.mid - b.mid);
+  const support = below.find(z => z.lowTouches >= 1) || below[0] || null;
+  const resist = above.find(z => z.highTouches >= 1) || above[0] || null;
+  const tags = (c, zone) => !!zone && c.l <= zone.hi * 1.03 && c.l >= zone.lo * 0.96;
+  const strongSup = !!(support && support.touches >= 2);
+  const supportReaction = strongSup && cs.slice(-20).some(c => tags(c, support));
+  const atSupport = strongSup && (tags(cs[last], support) || (px >= support.lo * 0.97 && px <= support.hi * 1.03));
+  const patterns = [];
+  let reversalLow = null;
+  const noteLow = (v) => { reversalLow = reversalLow == null ? v : Math.min(reversalLow, v); };
+  for (let i = Math.max(1, cs.length - 6); i < cs.length; i++) {
+    const c = cs[i];
+    if (!strongSup || !tags(c, support)) continue;
+    const rng = c.h - c.l;
+    const body = Math.abs(c.c - c.o);
+    const lower = Math.min(c.o, c.c) - c.l;
+    const upper = c.h - Math.max(c.o, c.c);
+    if (rng > 0 && lower >= Math.max(body, rng * 0.12) * 2 && upper <= rng * 0.28 && (c.c - c.l) / rng >= 0.58) {
+      if (!patterns.includes('hammer')) patterns.push('hammer');
+      noteLow(c.l);
+    }
+    const prev = cs[i - 1];
+    if (prev && prev.c < prev.o && c.c > c.o && c.o <= prev.c && c.c >= prev.o && Math.abs(c.c - c.o) >= Math.abs(prev.c - prev.o)) {
+      if (!patterns.includes('bullish engulfing')) patterns.push('bullish engulfing');
+      noteLow(Math.min(c.l, prev.l));
+    }
+  }
+  if (cs.length >= 3 && strongSup) {
+    const a = cs[cs.length - 3], b = cs[cs.length - 2], c = cs[cs.length - 1];
+    const aBody = Math.abs(a.c - a.o), bBody = Math.abs(b.c - b.o);
+    const bear = a.c < a.o && aBody >= (a.h - a.l) * 0.4;
+    const star = (b.h - b.l) > 0 && bBody <= (b.h - b.l) * 0.45;
+    const bull = c.c > c.o && c.c >= (a.o + a.c) / 2;
+    if (bear && star && bull && (tags(a, support) || tags(b, support) || tags(c, support))) {
+      if (!patterns.includes('morning star')) patterns.push('morning star');
+      noteLow(Math.min(a.l, b.l, c.l));
+    }
+  }
+  if (strongSup && lows.length >= 2) {
+    const a = lows.at(-2), b = lows.at(-1);
+    const near = (v) => Math.abs(v - support.mid) / support.mid <= 0.03;
+    if (near(a.price) && near(b.price)) {
+      const diff = (b.price - a.price) / a.price;
+      if (Math.abs(diff) <= 0.012 && !patterns.includes('double bottom')) { patterns.push('double bottom'); noteLow(Math.min(a.price, b.price)); }
+      else if (diff > 0.002 && diff <= 0.035 && !patterns.includes('higher low')) { patterns.push('higher low'); noteLow(b.price); }
+    }
+  }
+  let trendlineVol = false;
+  if (pair) {
+    const from = Math.max(pair[1].i + 1, cs.length - 8);
+    for (let i = from; i < cs.length; i++) {
+      if (cs[i].c > lineAt(pair[0], pair[1], i) && cs[i].v >= avgVol(cs, i) * 1.5) trendlineVol = true;
+    }
+    if (trendlineVol && cs[last].c < lineAt(pair[0], pair[1], last)) trendlineVol = false;
+  }
+  let resBreak = false, brokenResist = null;
+  const recentFrom = Math.max(2, cs.length - 8);
+  for (const z of zones) {
+    if (z.highTouches < 2 || z.highTouches < z.lowTouches || z.hi >= px) continue;
+    let broke = false;
+    for (let i = recentFrom; i < cs.length; i++) if (cs[i].c > z.hi && cs[i].v >= avgVol(cs, i) * 1.5) broke = true;
+    if (broke && cs[last].c >= z.hi && (!brokenResist || z.hi > brokenResist.hi)) { resBreak = true; brokenResist = z; }
+  }
+  const volBreak = trendlineVol || resBreak;
+  let nearTrendline = false;
+  if (pair) {
+    const gap = (lineAt(pair[0], pair[1], last) - px) / px;
+    nearTrendline = gap >= -0.008 && gap <= 0.05;
+  }
+  let nearResist = false;
+  if (resist) {
+    const gap = (resist.lo - px) / px;
+    nearResist = gap >= -0.008 && gap <= 0.05;
+  }
+  const breakLevel = trendlineVol && pair ? lineAt(pair[0], pair[1], last) : (resBreak && brokenResist ? brokenResist.hi : brokenLevel);
+  return {
+    tf, trend, hLabel, lLabel, trendlineBreak, bos, breakout: trendlineBreak || bos || volBreak, lastLH, lastLow, newHL, brokenLevel, retest,
+    support, resist, patterns, reversalLow, supportReaction, atSupport, trendlineVol, resBreak, volBreak, nearTrendline, nearResist, brokenResist, breakLevel
+  };
 }
-function formatTa(primary, confirm) {
+function breakoutSignal(primary, confirm) {
+  const rev = primary.patterns && primary.patterns.length;
+  const confirmed = !!(primary.volBreak || confirm?.volBreak);
+  const near = primary.nearTrendline || primary.nearResist || confirm?.nearTrendline || confirm?.nearResist;
+  if ((primary.supportReaction || confirm?.supportReaction) && rev && confirmed) return 'breakout';
+  if (primary.atSupport && rev && near && !confirmed) return 'watch';
+  return null;
+}
+function formatTa(primary, confirm, signal) {
   const struct = primary.lLabel || primary.hLabel || '—';
-  const bits = [struct + (primary.trend === 'up' ? ' ✓' : '')];
+  const bits = [];
+  if (signal === 'breakout') bits.push('BREAKOUT ✅');
+  else if (signal === 'watch') bits.push('Breakout watch 👀');
+  bits.push(struct + (primary.trend === 'up' ? ' ✓' : ''));
   bits.push(primary.trendlineBreak ? 'trendline broken ✓' : 'trendline not broken');
   if (isNum(primary.lastLH)) bits.push('last LH ' + price(primary.lastLH) + (primary.bos ? ' broken ✓' : ' not broken'));
   bits.push(primary.retest === 'held' ? 'retest held ✓' : primary.retest === 'pending' ? 'retest pending' : primary.retest === 'failed' ? 'retest failed' : 'retest n/a');
+  const zoneBit = (label, z) => z ? label + ' ' + price(z.mid) + ' ×' + z.touches : null;
+  const sBit = zoneBit('S', primary.support), rBit = zoneBit('R', primary.resist);
+  if (sBit) bits.push(sBit);
+  if (rBit) bits.push(rBit);
+  if (confirm?.support) bits.push(zoneBit(confirm.tf + ' S', confirm.support));
+  if (confirm?.resist) bits.push(zoneBit(confirm.tf + ' R', confirm.resist));
+  if (primary.patterns?.length) bits.push(primary.patterns.join(', '));
   return `TA ${primary.tf}/${confirm.tf}: ${bits.join(' · ')} · ${primary.tf} ${primary.trend} · ${confirm.tf} ${confirm.trend}`;
 }
 async function fetchOhlcv(pool, tfKey) {
@@ -656,7 +766,8 @@ async function loadTokenTa(token) {
   const cc = await fetchOhlcv(token.pairAddress, cTf);
   const primary = analyzeStructure(pc, pTf);
   const confirm = analyzeStructure(cc, cTf);
-  return { ok: true, line: formatTa(primary, confirm), primary, confirm };
+  const signal = breakoutSignal(primary, confirm);
+  return { ok: true, line: formatTa(primary, confirm, signal), primary, confirm, signal };
 }
 
 function analyzeToken(t, rug, prof, focus, regime, ta) {
@@ -800,7 +911,16 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
   const p = t.priceUsd; let strat, reason, zone, trigger, taStop = null;
   const cleanCk = ['lp', 'mint', 'top10', 'volume'].every(k => checklist[k].status === 'ok');
   const pr = ta?.ok ? ta.primary : null;
-  if (pr && !onCurve && pr.trendlineBreak && pr.bos && (isNum(pr.brokenLevel) || isNum(pr.newHL) || isNum(pr.lastLow))) {
+  if (ta?.signal === 'breakout' && pr && !onCurve && (isNum(pr.breakLevel) || isNum(pr.brokenLevel) || isNum(pr.lastLH))) {
+    const lvl = isNum(pr.breakLevel) ? pr.breakLevel : (isNum(pr.brokenLevel) ? pr.brokenLevel : pr.lastLH);
+    strat = 'Trendline break + retest';
+    const names = pr.patterns?.length ? pr.patterns.join(', ') : 'reversal';
+    reason = `BREAKOUT: ${names} at support, then a close above the trendline or resistance with volume at least 1.5× the recent average.`;
+    zone = [lvl * 0.985, lvl * 1.012];
+    trigger = pr.retest === 'held' ? 'Retest of the broken level is holding — entry is that retest.' : 'Entry is a retest of the broken level that holds. Skip if the retest fails.';
+    const floors = [pr.reversalLow, pr.support?.lo].filter(isNum);
+    if (floors.length) taStop = Math.min(...floors) * 0.998;
+  } else if (pr && !onCurve && pr.trendlineBreak && pr.bos && (isNum(pr.brokenLevel) || isNum(pr.newHL) || isNum(pr.lastLow))) {
     const lvl = isNum(pr.brokenLevel) ? pr.brokenLevel : pr.lastLH;
     const hl = isNum(pr.newHL) ? pr.newHL : pr.lastLow;
     strat = 'Trendline break + retest';
@@ -847,7 +967,7 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
 <script>
 'use strict';
 /* ============================ MAIN FLOW ============================ */
-let busy = false; let lastResult = null;
+let busy = false; let lastResult = null; let breakoutOnlyView = false;
 const VORDER = { Candidate: 0, Watchlist: 1, Rejected: 2 };
 function collectInputs() { return { risk: $('risk').value, focus: $('focus').value, source: $('source').value, pasted: $('pasted').value, notes: $('notes').value, account: $('account').value, useRug: $('useRug').checked, minAgeH: $('minAgeH').value, maxAgeD: $('maxAgeD').value }; }
 function applyInputs(i) { if (!i) return; $('risk').value = i.risk || 'Balanced'; $('focus').value = i.focus || 'Organic'; $('source').value = i.source || 'DexScreener';
@@ -1024,9 +1144,12 @@ function render(R) {
       </div>
     </article>`;
   const rejRows = rej.map(t => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><a class="text-slate-300 hover:underline" href="${safeUrl(t.url)}" target="_blank" rel="noopener">${esc(t.symbol)}</a></td><td class="pr-2 font-mono text-rose-300">${t.conviction}</td><td class="pr-2 font-mono">${usd(t.liq)}</td><td class="pr-2 font-mono ${pctCls(t.chg.h24)}">${pct(t.chg.h24, 0)}</td><td class="text-slate-400 py-1.5">${esc([...t.fails, ...t.flags.filter(f => f.sev !== 'low').map(f => f.text.split(' — ')[0])].slice(0, 3).join(' · ') || 'Low conviction')}</td></tr>`).join('');
+  const brkHits = toks.filter(t => t.ta?.signal === 'breakout' || t.ta?.signal === 'watch');
+  const rank = breakoutOnlyView ? brkHits : top;
   html += section('sec-rank', 'Candidate Ranking', '01–04', `
-    ${top.length ? `<div class="grid sm:grid-cols-2 gap-3">${top.map(card).join('')}</div>` : `<div class="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">No token passed the ${esc(R.inputs.risk)} filters with acceptable conviction. <b>Recommendation: stay flat.</b> Closest tokens are shown below for reference.</div>`}
-    ${rej.length ? `<details class="mt-4" ${top.length ? '' : 'open'}><summary class="cursor-pointer text-xs text-slate-400 hover:text-slate-200">▸ ${rej.length} rejected token(s) — why</summary>
+    <label class="mb-3 flex items-center gap-2 text-xs text-slate-300"><input id="brkOnly" type="checkbox" ${breakoutOnlyView ? 'checked' : ''} class="accent-violet-500" /> Breakout only <span class="text-slate-500">(${brkHits.length} BREAKOUT / watch)</span></label>
+    ${rank.length ? `<div class="grid sm:grid-cols-2 gap-3">${rank.map(card).join('')}</div>` : (breakoutOnlyView ? `<div class="rounded-xl border border-white/10 bg-ink-850 p-4 text-sm text-slate-300">No BREAKOUT or watch tokens in this scan.</div>` : `<div class="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">No token passed the ${esc(R.inputs.risk)} filters with acceptable conviction. <b>Recommendation: stay flat.</b> Closest tokens are shown below for reference.</div>`)}
+    ${!breakoutOnlyView && rej.length ? `<details class="mt-4" ${top.length ? '' : 'open'}><summary class="cursor-pointer text-xs text-slate-400 hover:text-slate-200">▸ ${rej.length} rejected token(s) — why</summary>
       <div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[480px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Score</th><th>Liq</th><th>24h</th><th>Reason</th></tr></thead><tbody>${rejRows}</tbody></table></div></details>` : ''}
   `, 'Quick filter · on-chain · social · momentum');
 
@@ -1102,6 +1225,8 @@ function render(R) {
   `);
 
   el.innerHTML = html;
+  const brkOnly = el.querySelector('#brkOnly');
+  if (brkOnly) brkOnly.addEventListener('change', () => { breakoutOnlyView = brkOnly.checked; render(R); });
   el.querySelectorAll('.copy-addr').forEach(b => b.addEventListener('click', async () => { if (await copyText(b.dataset.addr)) toast('Mint address copied', 'ok', 1800); }));
   if (window.SMS_TRADE) window.SMS_TRADE.hydrate();
 }
@@ -1268,7 +1393,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25 };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -1303,6 +1428,7 @@ function sanitizeSettings() {
   A.moodSource = ['sol', 'dex', 'both'].includes(A.moodSource) ? A.moodSource : 'both';
   A.solPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.solPauseBelow) ? +A.solPauseBelow : 25));
   A.dexPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.dexPauseBelow) ? +A.dexPauseBelow : 25));
+  A.breakoutOnly = !!A.breakoutOnly;
 }
 sanitizeSettings();
 const maxPos = () => { const n = Math.round(+S.maxOpenPositions); return (n >= 1 && n <= 20) ? n : 2; };
@@ -2116,6 +2242,7 @@ function renderBurner() {
         </div>
         <label class="mt-2 flex items-center gap-2"><input id="aExit" type="checkbox" ${A.autoExit ? 'checked' : ''} class="accent-violet-500" /> Auto-exit: sell at stop, sell 50% at +50%, 50% of rest at +100%, trail rest</label>
         <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan "latest boosted" every interval</label>
+        <label class="mt-1 flex items-center gap-2"><input id="aBrk" type="checkbox" ${A.breakoutOnly ? 'checked' : ''} class="accent-violet-500" /> Auto-buy only BREAKOUT-confirmed tokens</label>
         <p class="text-[10px] text-slate-500 mt-1">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${S.maxSolPerTrade} SOL/trade &amp; ${S.dailyMaxSol} SOL/day.</p>
         <div class="flex gap-2 mt-2"><button id="aSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save caps</button>
           ${A.on ? `<button id="aKill" class="flex-[2] rounded-lg py-2 font-extrabold bg-rose-600 hover:bg-rose-500 text-white">⛔ KILL SWITCH</button>` : `<button id="aOn" class="flex-[2] rounded-lg py-2 font-bold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-40" ${b.kp ? '' : 'disabled title="Unlock burner first"'}>Auto-trade ON</button>`}</div>
@@ -2137,7 +2264,7 @@ function readAutoInputs() {
   if ($('gDaily')) S.dailyMaxSol = g('gDaily');
   if ($('aMaxPos')) S.maxOpenPositions = g('aMaxPos');
   Object.assign(A, { maxSolPerTrade: g('aMaxTrade') ?? A.maxSolPerTrade, dailyCap: g('aDaily') ?? A.dailyCap, balancePct: g('aBalPct') ?? A.balancePct, minConviction: g('aMinConv') ?? A.minConviction, maxImpact: g('aImpact') ?? A.maxImpact, slipCap: g('aSlip') ?? A.slipCap, scanMin: g('aScanMin') ?? A.scanMin,
-    autoExit: $('aExit') ? $('aExit').checked : A.autoExit, autoScan: $('aScan') ? $('aScan').checked : A.autoScan,
+    autoExit: $('aExit') ? $('aExit').checked : A.autoExit, autoScan: $('aScan') ? $('aScan').checked : A.autoScan, breakoutOnly: $('aBrk') ? $('aBrk').checked : !!A.breakoutOnly,
     solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, solMode: $('aSolMode')?.value || A.solMode,
     moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
@@ -2270,6 +2397,7 @@ function staticEligible(t) {
   if (t.checklist?.volume?.status === 'bad') r.push('volume quality');
   if (t.onCurve) r.push('bonding curve');
   if (t.ta?.ok && t.ta.confirm?.trend === 'down' && !t.ta.confirm.breakout && !t.ta.primary?.breakout) r.push('HTF downtrend');
+  if (A.breakoutOnly && t.ta?.signal !== 'breakout') r.push('not BREAKOUT confirmed');
   if (!t.entry?.zoneLo || !t.entry?.stop) r.push('no entry plan');
   return r;
 }
