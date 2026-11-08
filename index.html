@@ -547,7 +547,8 @@ const OHLCV_TF = {
   '5m':  { path: 'minute', aggregate: 5, limit: 120 },
   '15m': { path: 'minute', aggregate: 15, limit: 120 },
   '1h':  { path: 'hour', aggregate: 1, limit: 120 },
-  '4h':  { path: 'hour', aggregate: 4, limit: 80 }
+  '4h':  { path: 'hour', aggregate: 4, limit: 80 },
+  '1m':  { path: 'minute', aggregate: 1, limit: 60 }
 };
 const ohlcvCache = new Map();
 let ohlcvNextAt = 0;
@@ -560,6 +561,85 @@ function avgVol(cs, end, n = 20) {
   const sl = cs.slice(Math.max(0, end - n), end);
   if (!sl.length) return 0;
   return sl.reduce((s, c) => s + (c.v || 0), 0) / sl.length;
+}
+function momentumFromCandles(candles) {
+  const cs = (candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0 && c.c > 0);
+  if (cs.length < 20) return { state: 'none', reason: 'not enough 1m candles' };
+  const win = cs.slice(-60);
+  const boxEnd = Math.max(17, win.length - 3);
+  const box = win.slice(0, boxEnd);
+  const highs = [];
+  for (let i = 1; i < box.length - 1; i++) {
+    if (box[i].h >= box[i - 1].h && box[i].h >= box[i + 1].h) highs.push({ price: box[i].h, close: box[i].c });
+  }
+  const clusters = [];
+  for (const h of [...highs].sort((a, b) => a.price - b.price)) {
+    let z = clusters.find(c => Math.abs(h.price - c.mid) / c.mid <= 0.015);
+    if (!z) { z = { mid: h.price, hi: h.price, sum: 0, n: 0, rejects: 0 }; clusters.push(z); }
+    z.n++; z.sum += h.price; z.hi = Math.max(z.hi, h.price); z.mid = z.sum / z.n;
+    if (h.close <= h.price) z.rejects++;
+  }
+  const ranked = clusters.filter(c => c.n >= 2 && c.rejects >= 2).sort((a, b) => b.hi - a.hi);
+  if (!ranked.length) return { state: 'none', reason: 'no range high rejected at least twice' };
+  const level = ranked[0].hi;
+  const touches = box.filter(c => c.h >= level * 0.985 && c.c <= level).length;
+  if (touches < 2) return { state: 'none', level, reason: 'range high not rejected twice' };
+  const broke = (i) => {
+    const avg = avgVol(win, i, 20);
+    return avg > 0 && win[i].c > level && win[i].v >= avg * 1.5;
+  };
+  let breakAt = -1;
+  for (let i = Math.max(2, win.length - 6); i < win.length; i++) if (broke(i)) { breakAt = i; break; }
+  const last = win[win.length - 1];
+  const consecutive = win.length >= 2 && win.slice(-2).every(c => c.c > level);
+  let retest = false;
+  if (breakAt >= 0) {
+    for (let i = breakAt + 1; i < win.length; i++) if (win[i].l <= level * 1.01 && win[i].c > level) retest = true;
+  }
+  const base = { level, touches };
+  if (breakAt >= 0 && last.c > level && (consecutive || retest)) {
+    if (last.c > level * 1.15) return { state: 'none', ...base, reason: 'price already >15% above the broken level' };
+    return { state: 'trigger', ...base, reason: consecutive ? '2 closes above the range high on >1.5× volume' : 'retest held above the range high on >1.5× volume' };
+  }
+  return { state: 'watch', ...base, reason: `box forming, range high rejected ${touches}×` };
+}
+function momentumStop(entry, level) {
+  if (!(entry > 0) || !(level > 0)) return null;
+  let stop = level * 0.98;
+  const floor = entry * (1 - 0.12);
+  const ceil = entry * (1 - 0.05);
+  if (stop > ceil) stop = ceil;
+  if (stop < floor) stop = floor;
+  return stop;
+}
+function m5BuySell(t) {
+  const tx = t?.txns?.m5;
+  if (!tx) return null;
+  const b = +tx.buys || 0, s = +tx.sells || 0;
+  if (b + s <= 0) return null;
+  return s ? b / s : 99;
+}
+function momentumGate(t, maxAge) {
+  if (!t || !isNum(t.ageH)) return 'age unknown';
+  if (!(t.ageH < maxAge)) return '';
+  if (!t.pairAddress) return 'no pool';
+  if (t.onCurve) return 'bonding curve';
+  if ((t.flags || []).some(f => f.sev === 'critical' || f.sev === 'high')) return 'critical/high flag';
+  const rug = t.rug || {};
+  if (!rug.available) return 'rug check unavailable';
+  if (rug.rugged) return 'rugged';
+  if (rug.mintRevoked !== true) return 'mint authority not revoked';
+  if (rug.freezeRevoked !== true) return 'freeze authority not revoked';
+  const dex = (t.dexId || '').toLowerCase();
+  const graduated = dex.includes('pumpswap') || /pump$/i.test(t.mint || '');
+  if (!graduated && !(isNum(rug.lpLockedPct) && rug.lpLockedPct >= 50)) return 'LP not locked/burned';
+  if (!(isNum(t.liq) && t.liq > 0)) return 'liquidity unknown';
+  return null;
+}
+function momentumLabel(t) {
+  if (t?.momentum?.state === 'trigger') return 'MOMENTUM ⚡';
+  if (t?.momentum?.state === 'watch') return 'Momentum watch';
+  return '';
 }
 function swingPoints(cs, k = 2) {
   const highs = [], lows = [];
@@ -1125,6 +1205,20 @@ async function runAnalysis({ boosted = false } = {}) {
       .sort((a, b) => (VORDER[a.verdict] - VORDER[b.verdict]) || (b.conviction - a.conviction));
     let n = 0; for (const a of analyzed) if (a.verdict === 'Candidate' && ++n > prof.maxPos) {
       a.verdict = 'Watchlist'; a.flags.push({ sev: 'low', text: `Exceeds max ${prof.maxPos} simultaneous positions — kept on watchlist` }); a.entry.riskPct = 0; a.entry.notionalPct = 0; }
+    let momOn = false, momAge = 6;
+    try {
+      const ac = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {};
+      momOn = !!ac.momentumOn;
+      if (Number.isFinite(+ac.momentumMaxAgeH) && +ac.momentumMaxAgeH >= 0.5) momAge = Math.min(48, +ac.momentumMaxAgeH);
+    } catch { /* momentum off */ }
+    if (momOn) {
+      const young = analyzed.filter(t => momentumGate(t, momAge) === null);
+      for (let i = 0; i < young.length; i++) {
+        setProgress(`1m candles ${i + 1}/${young.length}: ${young[i].symbol}…`);
+        try { young[i].momentum = momentumFromCandles(await fetchOhlcv(young[i].pairAddress, '1m')); }
+        catch (e) { young[i].momentum = { state: 'none', reason: e.message || '1m candles unavailable' }; }
+      }
+    }
 
     lastResult = { ts: Date.now(), inputs, sol, regime, tokens: analyzed, warnings, boosted };
     render(lastResult);
@@ -1205,7 +1299,7 @@ function render(R) {
       <div class="flex items-start gap-3">
         ${t.image ? `<img src="${safeUrl(t.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs shrink-0">${esc(t.symbol.slice(0,3))}</div>`}
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span></div>
+          <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span>${momentumLabel(t) ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border ${t.momentum.state === 'trigger' ? 'border-amber-400/40 bg-amber-500/15 text-amber-200' : 'border-white/15 text-slate-300'}" title="${esc(t.momentum.reason || '')}">${momentumLabel(t)}</span>` : ''}</div>
           <div class="text-xs text-slate-400 truncate">${esc(t.name)} · ${esc(t.dexId)}</div>
           <button class="copy-addr mt-0.5 text-[11px] font-mono text-slate-500 hover:text-violet-300" data-addr="${esc(t.mint)}" title="Copy mint address">${esc(short(t.mint))} ⧉</button>
         </div>
@@ -1483,7 +1577,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18 };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -1519,6 +1613,8 @@ function sanitizeSettings() {
   A.solPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.solPauseBelow) ? +A.solPauseBelow : 25));
   A.dexPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.dexPauseBelow) ? +A.dexPauseBelow : 25));
   A.breakoutOnly = !!A.breakoutOnly;
+  A.momentumOn = !!A.momentumOn;
+  { const n = +A.momentumMaxAgeH; A.momentumMaxAgeH = Number.isFinite(n) ? Math.min(48, Math.max(0.5, n)) : 6; }
   const pctOr = (v, d, lo, hi) => { const n = +v; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
   A.beAtPct = pctOr(A.beAtPct, 25, 0, 500);
   A.earlyAtPct = pctOr(A.earlyAtPct, 40, 0, 500);
@@ -2316,6 +2412,7 @@ function renderBurner() {
           ${num('aBeAt', A.beAtPct, '1', 'Break-even at +%', 'min="0" max="500"')}
           ${num('aEarlyAt', A.earlyAtPct, '1', 'Early trail at +%', 'min="0" max="500"')}
           ${num('aEarlyTr', A.earlyTrailPct, '1', 'Early trail %', 'min="1" max="90"')}
+          ${num('aMomAge', A.momentumMaxAgeH, '0.5', 'Momentum max age (h)', 'min="0.5" max="48"')}
         </div>
         <div class="mt-2 rounded-lg border border-white/10 p-2 space-y-2">
           <label class="flex items-center gap-2"><input id="aSolOn" type="checkbox" ${A.solFilter ? 'checked' : ''} class="accent-violet-500" /> Pause auto-buys on mood</label>
@@ -2341,6 +2438,7 @@ function renderBurner() {
         <label class="mt-2 flex items-center gap-2"><input id="aExit" type="checkbox" ${A.autoExit ? 'checked' : ''} class="accent-violet-500" /> Auto-exit: sell at stop, sell 50% at +50%, 50% of rest at +100%, trail rest</label>
         <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan "latest boosted" every interval</label>
         <label class="mt-1 flex items-center gap-2"><input id="aBrk" type="checkbox" ${A.breakoutOnly ? 'checked' : ''} class="accent-violet-500" /> Auto-buy only BREAKOUT-confirmed tokens</label>
+        <label class="mt-1 flex items-center gap-2"><input id="aMom" type="checkbox" ${A.momentumOn ? 'checked' : ''} class="accent-violet-500" /> Momentum breakout (new tokens)</label>
         <p class="text-[10px] text-slate-500 mt-1">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${S.maxSolPerTrade} SOL/trade &amp; ${S.dailyMaxSol} SOL/day.</p>
         <div class="flex gap-2 mt-2"><button id="aSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save caps</button>
           ${A.on ? `<button id="aKill" class="flex-[2] rounded-lg py-2 font-extrabold bg-rose-600 hover:bg-rose-500 text-white">⛔ KILL SWITCH</button>` : `<button id="aOn" class="flex-[2] rounded-lg py-2 font-bold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-40" ${b.kp ? '' : 'disabled title="Unlock burner first"'}>Auto-trade ON</button>`}</div>
@@ -2365,7 +2463,8 @@ function readAutoInputs() {
     autoExit: $('aExit') ? $('aExit').checked : A.autoExit, autoScan: $('aScan') ? $('aScan').checked : A.autoScan, breakoutOnly: $('aBrk') ? $('aBrk').checked : !!A.breakoutOnly,
     solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, solMode: $('aSolMode')?.value || A.solMode,
     moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow,
-    beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct });
+    beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct,
+    momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
   if (A.on) startTimers();
@@ -2480,7 +2579,7 @@ window.__smsSolBadge = updateSolFilterBadge;
 
 /* ---------------- auto-trading engine (burner only) ---------------- */
 let tickTimer = null, scanTimer = null, autoBusy = false, lastTick = null, lastScan = null;
-const sellFails = {}; let autoHigh = load('sms:autohigh', {}); let autoStop = load('sms:autostop', {});
+const sellFails = {}; const momSeen = {}; let autoHigh = load('sms:autohigh', {}); let autoStop = load('sms:autostop', {});
 function effectiveStop(p, lp) {
   const pl = positionTargets(p);
   let high = isNum(autoHigh[p.key]) ? autoHigh[p.key] : 0;
@@ -2537,6 +2636,71 @@ function priceExit(p, lp) {
   if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) return { pctSell: 100, tag: 'time' };
   return null;
 }
+function logMom(t, msg, level) {
+  const k = t.mint + '|' + msg;
+  if (momSeen[k]) return;
+  momSeen[k] = Date.now();
+  autoLog(`${t.symbol}: momentum — ${msg}`, level || 'info');
+}
+async function momentumTick(b, solGate, held, recent) {
+  const maxAge = A.momentumMaxAgeH;
+  const young = lastResult.tokens.filter(t => isNum(t.ageH) && t.ageH < maxAge).sort((a, c) => a.ageH - c.ageH);
+  let changed = false;
+  for (const t of young) {
+    if (!A.on) return;
+    const gate = momentumGate(t, maxAge);
+    if (gate === '') continue;
+    if (gate) { logMom(t, gate, 'warn'); continue; }
+    if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) { logMom(t, 'already held', 'info'); continue; }
+    let cs;
+    try { cs = await fetchOhlcv(t.pairAddress, '1m'); }
+    catch (e) {
+      const reason = e.message || '1m candles unavailable';
+      if (t.momentum?.reason !== reason) { t.momentum = { state: 'none', reason }; changed = true; }
+      logMom(t, reason, 'warn');
+      continue;
+    }
+    const m = momentumFromCandles(cs);
+    if (t.momentum?.state !== m.state || t.momentum?.reason !== m.reason) changed = true;
+    t.momentum = m;
+    const lvl = isNum(m.level) ? ' @ ' + price(m.level) : '';
+    if (m.state === 'watch') { logMom(t, m.reason + lvl, 'info'); continue; }
+    if (m.state !== 'trigger') { logMom(t, m.reason || 'no box', 'info'); continue; }
+    const px = livePrices.get(t.mint)?.price || t.priceUsd;
+    if (isNum(px) && px > m.level * 1.15) { logMom(t, 'price already >15% above the broken level', 'warn'); continue; }
+    const bsr = m5BuySell(t);
+    if (!(bsr >= 1.5)) { logMom(t, '5m buy/sell ' + (bsr == null ? 'unavailable' : bsr.toFixed(2)) + ' < 1.5', 'warn'); continue; }
+    const sug = suggestedBuySol(t);
+    const base = sug.sol > 0 ? sug.sol : Math.min(A.maxSolPerTrade, S.maxSolPerTrade);
+    let sol = +(base / 3).toFixed(6);
+    if (solGate.action === 'halve') sol = +(sol / 2).toFixed(6);
+    const sized = clampAutoBuy(sol);
+    if (sized.err) { autoLog(`${t.symbol}: momentum buy blocked — ${sized.err}`, 'warn'); break; }
+    sol = +sized.sol.toFixed(6);
+    if (!(sol >= 0.001)) { logMom(t, '1/3 size too small', 'warn'); continue; }
+    const errs = buyGuards('burner', t.mint, sol, { auto: true });
+    if (errs.length) { autoLog(`${t.symbol}: momentum buy blocked — ${errs[0]}`, 'warn'); break; }
+    const entryPx = isNum(px) && px > 0 ? px : m.level;
+    const stop = momentumStop(entryPx, m.level);
+    const prof = effectiveProfile($('risk')?.value || 'Balanced', collectInputs());
+    const plan = { stop, zoneLo: m.level, zoneHi: m.level * 1.015, tp3: entryPx * 5, trail: prof.trail, timeStopH: prof.timeStopH, strat: 'Momentum breakout', conviction: t.conviction };
+    autoLog(`${t.symbol}: MOMENTUM ⚡ ${m.reason}${lvl} → market buy ${sol} SOL (1/3), stop ${price(stop)}`, 'info');
+    const slip = Math.min(S.slippagePct, A.slipCap);
+    let qo;
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: t.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
+    catch (e) { autoLog(`${t.symbol}: momentum quote failed — ${e.message}`, 'err'); continue; }
+    const imp = impactPct(qo.quote);
+    if (imp > A.maxImpact) { autoLog(`${t.symbol}: momentum price impact ${imp.toFixed(2)}% > ${A.maxImpact}% — skipped`, 'warn'); continue; }
+    if (!A.on) return;
+    try {
+      const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan } });
+      autoLog(`BUY ${t.symbol} ${sol} SOL momentum @ ${price(r.rec.priceUsd)} (impact ${imp.toFixed(2)}%)`, 'ok', { sig: r.sig });
+      toast(`⚡ Momentum buy ${t.symbol} (${sol} SOL)`, 'ok', 8000);
+    } catch (e) { autoLog(`${t.symbol}: momentum buy failed — ${e.message}`, 'err'); }
+    break;
+  }
+  if (changed && lastResult) render(lastResult);
+}
 async function autoTick() {
   if (!A.on || autoBusy) return; const b = WALLETS.burner;
   if (!b.kp) { killSwitch('burner locked'); return; }
@@ -2556,6 +2720,7 @@ async function autoTick() {
     if (solGate.action === 'pause') return;
     const held = new Set(openPositions().map(p => p.mint));
     const recent = new Set(LOG.filter(r => r.auto && r.side === 'buy' && Date.now() - r.ts < 24 * 3.6e6).map(r => r.mint));
+    let boughtThisTick = false;
     for (const t of armedEntries().sort((a, b) => b.conviction - a.conviction)) {
       if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) continue;
       const px = livePrices.get(t.mint)?.price;
@@ -2573,10 +2738,11 @@ async function autoTick() {
       const imp = impactPct(qo.quote); if (imp > A.maxImpact) { autoLog(`${t.symbol}: price impact ${imp.toFixed(2)}% > ${A.maxImpact}% — skipped`, 'warn'); continue; }
       if (!A.on) return;
       try { const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true });
-        autoLog(`BUY ${t.symbol} ${sol} SOL @ ${price(r.rec.priceUsd)} (impact ${imp.toFixed(2)}%)`, 'ok', { sig: r.sig }); toast(`🤖 Auto-bought ${t.symbol} (${sol} SOL)`, 'ok', 8000); }
+        autoLog(`BUY ${t.symbol} ${sol} SOL @ ${price(r.rec.priceUsd)} (impact ${imp.toFixed(2)}%)`, 'ok', { sig: r.sig }); toast(`🤖 Auto-bought ${t.symbol} (${sol} SOL)`, 'ok', 8000); boughtThisTick = true; }
       catch (e) { autoLog(`${t.symbol}: buy failed — ${e.message}`, 'err'); }
       break;
     }
+    if (!boughtThisTick && A.momentumOn && lastResult?.tokens) await momentumTick(b, solGate, held, recent);
   } catch (e) { autoLog('Tick error: ' + e.message, 'err'); }
   finally { autoBusy = false; const st = $('autoStatus'); if (st) st.textContent = autoStatusText(); }
 }
