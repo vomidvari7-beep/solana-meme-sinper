@@ -129,7 +129,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
         <textarea id="notes" rows="2" placeholder="e.g. avoid AI narrative, already holding X…" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
       </label>
       <label class="mt-3 flex items-center gap-2 text-xs text-slate-400 select-none">
-        <input id="useRug" type="checkbox" checked class="accent-violet-500 w-4 h-4" /> Verify with RugCheck (top 10 tokens, slower)
+        <input id="useRug" type="checkbox" checked class="accent-violet-500 w-4 h-4" /> Verify with RugCheck (deep-check list, slower)
       </label>
       <div class="mt-4 grid grid-cols-2 gap-2">
         <button id="btnAnalyze" class="col-span-2 btn-primary rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 transition disabled:opacity-60"><span id="analyzeLabel">⚡ Analyze</span></button>
@@ -303,12 +303,45 @@ function toast(msg, type = 'info', ms = 4200) {
   el.textContent = msg; $('toasts').appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, ms);
 }
-async function fetchJSON(url, { timeout = 12000 } = {}) {
+const paceState = {
+  gecko: { gap: 2500, next: 0, tail: Promise.resolve() },
+  rug: { gap: 1500, next: 0, tail: Promise.resolve() }
+};
+function paceHost(kind, fn) {
+  const slot = paceState[kind];
+  if (!slot) return Promise.resolve().then(fn);
+  const run = slot.tail.then(async () => {
+    const wait = slot.next - Date.now();
+    if (wait > 0) await sleep(wait);
+    slot.next = Date.now() + slot.gap;
+    return fn();
+  });
+  slot.tail = run.then(() => {}, () => {});
+  return run;
+}
+function paceKind(url) {
+  if (/geckoterminal\.com/i.test(url)) return 'gecko';
+  if (/rugcheck\.xyz/i.test(url)) return 'rug';
+  return '';
+}
+async function fetchJSONOnce(url, { timeout = 12000 } = {}) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
   try { const r = await fetch(url, { signal: ctl.signal, headers: { Accept: 'application/json' } });
     if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; } return await r.json(); }
   catch (e) { if (e.name === 'AbortError') { const x = new Error('timeout'); x.status = 0; throw x; } throw e; }
   finally { clearTimeout(t); }
+}
+async function fetchJSON(url, opts) {
+  const kind = paceKind(url);
+  let delay = kind === 'rug' ? 1500 : 2500;
+  for (let i = 0; i < 3; i++) {
+    try { return await (kind ? paceHost(kind, () => fetchJSONOnce(url, opts)) : fetchJSONOnce(url, opts)); }
+    catch (e) {
+      if (e.status !== 429 || i === 2) throw e;
+      await sleep(delay);
+      delay *= 2;
+    }
+  }
 }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; }
@@ -552,7 +585,6 @@ const OHLCV_TF = {
   '1m':  { path: 'minute', aggregate: 1, limit: 60 }
 };
 const ohlcvCache = new Map();
-let ohlcvNextAt = 0;
 function tfsForAge(ageH) {
   if (!isNum(ageH) || ageH < 48) return ['5m', '15m'];
   if (ageH <= 168) return ['15m', '1h'];
@@ -878,9 +910,6 @@ async function fetchOhlcv(pool, tfKey) {
   const key = pool + '|' + tfKey;
   const hit = ohlcvCache.get(key);
   if (hit && Date.now() - hit.at < 4 * 60e3) return hit.candles;
-  const wait = ohlcvNextAt - Date.now();
-  if (wait > 0) await sleep(wait);
-  ohlcvNextAt = Date.now() + 2100;
   const spec = OHLCV_TF[tfKey];
   const url = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=${spec.limit}&currency=usd`;
   const j = await fetchJSON(url, { timeout: 12000 });
@@ -1124,7 +1153,19 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
 <script>
 'use strict';
 /* ============================ MAIN FLOW ============================ */
-let busy = false; let lastResult = null; let breakoutOnlyView = false;
+let busy = false; let lastResult = null; let breakoutOnlyView = false; let queuedAutoScan = false;
+function deepCheckN() {
+  let n = 20;
+  try {
+    const live = window.SMS_TRADE?.auto?.deepN;
+    if (Number.isFinite(+live)) n = +live;
+    else {
+      const a = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {};
+      if (Number.isFinite(+a.deepN)) n = +a.deepN;
+    }
+  } catch { /* default */ }
+  return Math.min(30, Math.max(5, Math.round(n) || 20));
+}
 const VORDER = { Candidate: 0, Watchlist: 1, Rejected: 2 };
 function collectInputs() { return { risk: $('risk').value, focus: $('focus').value, source: $('source').value, pasted: $('pasted').value, notes: $('notes').value, account: $('account').value, useRug: $('useRug').checked, minAgeH: $('minAgeH').value, maxAgeD: $('maxAgeD').value }; }
 function applyInputs(i) { if (!i) return; $('risk').value = i.risk || 'Balanced'; $('focus').value = i.focus || 'Organic'; $('source').value = i.source || 'DexScreener';
@@ -1178,34 +1219,47 @@ async function runAnalysis({ boosted = false } = {}) {
 
     // Pre-rank without RugCheck to choose which tokens to verify
     const pre = toks.map(t => analyzeToken(t, digestRug(null), prof, inputs.focus, regime)).sort((a, b) => (a.fails.length - b.fails.length) || (b.conviction - a.conviction));
+    const deepN = deepCheckN();
+    const targets = pre.slice(0, deepN);
     const rugMap = new Map();
-    if (inputs.useRug) {
-      const targets = pre.slice(0, 10); let blocked = 0, partial = 0;
-      for (let i = 0; i < targets.length; i++) {
-        setProgress(`RugCheck ${i + 1}/${targets.length}: ${targets[i].symbol}…`);
-        const rr = await fetchRugReport(targets[i].mint); if (!rr.ok) blocked++; else if (rr.summaryOnly) partial++;
-        rugMap.set(targets[i].mint, digestRug(rr, targets[i].pairAddress));
-        if (i < targets.length - 1) await sleep(350);
-      }
-      if (blocked) warnings.push(`RugCheck unavailable for ${blocked}/${targets.length} token(s) (CORS, network or rate-limit) — those checklist items show "Unknown — verify manually".`);
-      if (partial) warnings.push(`RugCheck returned summary only for ${partial} token(s) — top-10 holders unknown for those.`);
-      if (pre.length > 10) warnings.push(`RugCheck run on the top 10 of ${pre.length} tokens only (rate limits). Others show "Unknown".`);
-    } else warnings.push('RugCheck verification disabled — LP / mint / holder checks are Unknown.');
     const taMap = new Map();
-    const taTargets = pre.slice(0, 10);
-    let taFail = 0;
-    for (let i = 0; i < taTargets.length; i++) {
-      setProgress(`Candles ${i + 1}/${taTargets.length}: ${taTargets[i].symbol}…`);
-      try { taMap.set(taTargets[i].mint, await loadTokenTa(taTargets[i])); }
-      catch (e) { taFail++; taMap.set(taTargets[i].mint, { ok: false, line: 'TA: unavailable', error: e.message }); }
+    let blocked = 0, partial = 0, taFail = 0;
+    const outside = inputs.useRug ? `not checked (outside top ${deepN})` : 'disabled';
+    const scoreAll = () => {
+      const analyzed = toks.map(t => analyzeToken(t, rugMap.get(t.mint) || digestRug({ ok: false, error: outside }), prof, inputs.focus, regime, taMap.get(t.mint) || null))
+        .sort((a, b) => (VORDER[a.verdict] - VORDER[b.verdict]) || (b.conviction - a.conviction));
+      let n = 0;
+      for (const a of analyzed) if (a.verdict === 'Candidate' && ++n > prof.maxPos) {
+        a.verdict = 'Watchlist'; a.flags.push({ sev: 'low', text: `Exceeds max ${prof.maxPos} simultaneous positions — kept on watchlist` }); a.entry.riskPct = 0; a.entry.notionalPct = 0;
+      }
+      return analyzed;
+    };
+    const publish = (tokens, deepProgress) => {
+      lastResult = { ts: Date.now(), inputs, sol, regime, tokens, warnings: warnings.slice(), boosted, deepProgress: deepProgress || '' };
+      render(lastResult);
+    };
+    if (!inputs.useRug) warnings.push('RugCheck verification disabled — LP / mint / holder checks are Unknown.');
+    publish(scoreAll(), targets.length ? `Deep checks 0/${targets.length}` : '');
+    for (let i = 0; i < targets.length; i++) {
+      const label = `Deep checks ${i + 1}/${targets.length}`;
+      setProgress(label);
+      publish(scoreAll(), label);
+      if (inputs.useRug) {
+        const rr = await fetchRugReport(targets[i].mint);
+        if (!rr.ok) blocked++; else if (rr.summaryOnly) partial++;
+        rugMap.set(targets[i].mint, digestRug(rr, targets[i].pairAddress));
+      }
+      try { taMap.set(targets[i].mint, await loadTokenTa(targets[i])); }
+      catch (e) { taFail++; taMap.set(targets[i].mint, { ok: false, line: 'TA: unavailable', error: e.message }); }
+      publish(scoreAll(), `Deep checks ${i + 1}/${targets.length}`);
     }
-    if (taFail) warnings.push(`GeckoTerminal candles unavailable for ${taFail}/${taTargets.length} token(s) — those keep the %-change momentum read (TA: unavailable).`);
-    if (pre.length > 10) warnings.push('Candle structure run on the top 10 only (GeckoTerminal rate limit).');
+    if (inputs.useRug && blocked) warnings.push(`RugCheck unavailable for ${blocked}/${targets.length} token(s) (CORS, network or rate-limit) — those checklist items show "Unknown — verify manually".`);
+    if (inputs.useRug && partial) warnings.push(`RugCheck returned summary only for ${partial} token(s) — top-10 holders unknown for those.`);
+    if (inputs.useRug && pre.length > deepN) warnings.push(`RugCheck run on the top ${deepN} of ${pre.length} tokens only (rate limits). Others show "Unknown".`);
+    if (taFail) warnings.push(`GeckoTerminal candles unavailable for ${taFail}/${targets.length} token(s) — those keep the %-change momentum read (TA: unavailable).`);
+    if (pre.length > deepN) warnings.push(`Candle structure run on the top ${deepN} only (GeckoTerminal rate limit).`);
     setProgress('Scoring…');
-    const analyzed = toks.map(t => analyzeToken(t, rugMap.get(t.mint) || digestRug({ ok: false, error: inputs.useRug ? 'not checked (outside top 10)' : 'disabled' }), prof, inputs.focus, regime, taMap.get(t.mint) || null))
-      .sort((a, b) => (VORDER[a.verdict] - VORDER[b.verdict]) || (b.conviction - a.conviction));
-    let n = 0; for (const a of analyzed) if (a.verdict === 'Candidate' && ++n > prof.maxPos) {
-      a.verdict = 'Watchlist'; a.flags.push({ sev: 'low', text: `Exceeds max ${prof.maxPos} simultaneous positions — kept on watchlist` }); a.entry.riskPct = 0; a.entry.notionalPct = 0; }
+    let analyzed = scoreAll();
     let momOn = false, momAge = 6;
     try {
       const ac = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {};
@@ -1221,7 +1275,7 @@ async function runAnalysis({ boosted = false } = {}) {
       }
     }
 
-    lastResult = { ts: Date.now(), inputs, sol, regime, tokens: analyzed, warnings, boosted };
+    lastResult = { ts: Date.now(), inputs, sol, regime, tokens: analyzed, warnings, boosted, deepProgress: targets.length ? `Deep checks ${targets.length}/${targets.length}` : '' };
     render(lastResult);
     try { localStorage.setItem('sms:last', JSON.stringify(lastResult)); } catch (e) { toast('Could not save locally: ' + e.message, 'warn'); }
     updateLastIndicator();
@@ -1231,7 +1285,14 @@ async function runAnalysis({ boosted = false } = {}) {
     if (window.innerWidth < 1024) $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     console.error(e); toast('Analysis failed: ' + e.message, 'err', 7000);
-  } finally { setBusy(false); }
+  } finally {
+    setBusy(false);
+    if (queuedAutoScan) {
+      queuedAutoScan = false;
+      const go = window.__smsAutoScan;
+      if (typeof go === 'function') setTimeout(go, 50);
+    }
+  }
 }
 
 /* ============================ RENDER ============================ */
@@ -1274,6 +1335,7 @@ function render(R) {
     <span class="px-2 py-1 rounded-lg bg-white/5">Focus: <b class="text-slate-200">${esc(R.inputs.focus)}</b></span>
     <span class="px-2 py-1 rounded-lg bg-white/5">Source: ${esc(R.inputs.source)}${R.boosted ? ' · latest boosted' : ''}</span>
     <span class="px-2 py-1 rounded-lg bg-white/5">${toks.length} analyzed · <span class="text-emerald-300">${cands.length} candidate</span> · <span class="text-amber-300">${watch.length} watch</span> · <span class="text-rose-300">${rej.length} rejected</span></span>
+    ${R.deepProgress ? `<span class="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-200 border border-amber-500/20">${esc(R.deepProgress)}</span>` : ''}
   </div>`;
 
   // Market Context
@@ -1578,7 +1640,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6 };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -1616,6 +1678,7 @@ function sanitizeSettings() {
   A.breakoutOnly = !!A.breakoutOnly;
   A.momentumOn = !!A.momentumOn;
   { const n = +A.momentumMaxAgeH; A.momentumMaxAgeH = Number.isFinite(n) ? Math.min(48, Math.max(0.5, n)) : 6; }
+  { const n = Math.round(+A.deepN); A.deepN = Number.isFinite(n) ? Math.min(30, Math.max(5, n)) : 20; }
   const pctOr = (v, d, lo, hi) => { const n = +v; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
   A.beAtPct = pctOr(A.beAtPct, 25, 0, 500);
   A.earlyAtPct = pctOr(A.earlyAtPct, 40, 0, 500);
@@ -2414,6 +2477,7 @@ function renderBurner() {
           ${num('aEarlyAt', A.earlyAtPct, '1', 'Early trail at +%', 'min="0" max="500"')}
           ${num('aEarlyTr', A.earlyTrailPct, '1', 'Early trail %', 'min="1" max="90"')}
           ${num('aMomAge', A.momentumMaxAgeH, '0.5', 'Momentum max age (h)', 'min="0.5" max="48"')}
+          ${num('aDeep', A.deepN, '1', 'Deep-check top N', 'min="5" max="30"')}
         </div>
         <div class="mt-2 rounded-lg border border-white/10 p-2 space-y-2">
           <label class="flex items-center gap-2"><input id="aSolOn" type="checkbox" ${A.solFilter ? 'checked' : ''} class="accent-violet-500" /> Pause auto-buys on mood</label>
@@ -2465,7 +2529,7 @@ function readAutoInputs() {
     solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, solMode: $('aSolMode')?.value || A.solMode,
     moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow,
     beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct,
-    momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH });
+    momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH, deepN: $('aDeep') ? +$('aDeep').value : A.deepN });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
   if (A.on) startTimers();
@@ -2765,11 +2829,12 @@ async function autoSell(p, pctSell, tag, lp, extra) {
 }
 async function autoScan() {
   if (!A.on || !A.autoScan) return;
-  if (busy) { autoLog('Scan skipped (analysis already running)', 'info'); return; }
+  if (busy) { queuedAutoScan = true; autoLog('Scan queued — the previous scan is still running', 'info'); return; }
   lastScan = Date.now(); autoLog('Auto-scan: Scan latest boosted…', 'info');
   await runAnalysis({ boosted: true });
   autoLog(`Auto-scan done: ${armedEntries().length} armed entr${armedEntries().length === 1 ? 'y' : 'ies'}`, 'info'); autoTick();
 }
+window.__smsAutoScan = autoScan;
 function startTimers() { clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = setInterval(autoTick, 30000); if (A.autoScan) scanTimer = setInterval(autoScan, A.scanMin * 60e3); }
 function enableAuto() {
   readAutoInputs(); const b = WALLETS.burner; if (!b.kp) return toast('Unlock the burner first', 'warn'); resetModalButtons();
