@@ -721,21 +721,31 @@ function analyzeStructure(candles, tf) {
   };
 }
 function supportForEntry(ta, price, maxDrop) {
-  const from = (s) => {
-    if (!s) return null;
+  const listOf = (s) => {
+    if (!s || !isNum(price) || price <= 0) return [];
     const list = Array.isArray(s.supports) && s.supports.length ? s.supports : (s.support ? [s.support] : []);
-    let best = null;
+    const out = [];
     for (const z of list) {
       if (!isNum(z?.lo) || !isNum(z?.hi) || !(z.lo > 0) || z.hi < z.lo) continue;
       if (z.lo > price) continue;
       const dist = z.hi < price ? (price - z.hi) / price : 0;
       if (dist > maxDrop) continue;
-      if (!best || z.mid > best.mid) best = z;
+      out.push({ lo: z.lo, hi: z.hi, mid: isNum(z.mid) ? z.mid : (z.lo + z.hi) / 2, touches: z.touches || 0, tf: s.tf });
     }
-    return best ? { lo: best.lo, hi: best.hi, mid: best.mid, tf: s.tf } : null;
+    return out;
   };
-  if (!ta?.ok || !isNum(price) || price <= 0) return null;
-  return from(ta.primary) || from(ta.confirm);
+  const nearest = (arr) => arr.reduce((b, z) => (!b || z.mid > b.mid) ? z : b, null);
+  if (!ta?.ok) return null;
+  const primary = listOf(ta.primary), confirm = listOf(ta.confirm);
+  const multiP = primary.filter(z => z.touches >= 2), multiC = confirm.filter(z => z.touches >= 2);
+  if (multiP.length || multiC.length) return nearest(multiP.length ? multiP : multiC);
+  return nearest(primary) || nearest(confirm);
+}
+function widenAnchor(lo, hi) {
+  const level = (lo + hi) / 2;
+  if (!(level > 0)) return [lo, hi];
+  if (!(hi > lo) || (hi - lo) / level < 0.02) return [level * 0.99, level * 1.015];
+  return [lo, hi];
 }
 function swingForEntry(ta) {
   const from = (s) => {
@@ -987,17 +997,17 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
   if (!absZone && strat === 'Break of Short-Term Structure') {
     const sw = swingForEntry(ta);
     if (sw) {
-      zone = [sw.lvl, sw.lvl * 1.03];
-      absZone = true; anchor = 'swing'; anchorPx = sw.lvl; taStop = sw.lvl * 0.995;
-      trigger = `Enter on a close above the ${sw.tf} swing high ${price(sw.lvl)} (zone ${price(sw.lvl)}–${price(sw.lvl * 1.03)}) with rising volume.`;
+      zone = widenAnchor(sw.lvl, sw.lvl * 1.03);
+      absZone = true; anchor = 'swing'; anchorPx = sw.lvl; taStop = zone[0] * 0.998;
+      trigger = `Enter on a close above the ${sw.tf} swing high ${price(sw.lvl)} (zone ${price(zone[0])}–${price(zone[1])}) with rising volume.`;
     } else noAnchor = true;
   } else if (!absZone) {
     const parabolic = (isNum(t.chg.h6) && t.chg.h6 > 100) || (isNum(t.chg.h1) && t.chg.h1 > 30);
     const sup = supportForEntry(ta, p, parabolic ? 0.35 : 0.25);
     if (sup) {
-      zone = [sup.lo, sup.hi];
-      absZone = true; anchor = 'support'; anchorPx = sup.mid; taStop = sup.lo * 0.998;
-      trigger = `Fill inside the ${sup.tf} support ${price(sup.lo)}–${price(sup.hi)}. ` + trigger;
+      zone = widenAnchor(sup.lo, sup.hi);
+      absZone = true; anchor = 'support'; anchorPx = sup.mid; taStop = zone[0] * 0.998;
+      trigger = `Fill inside the ${sup.tf} support ${price(zone[0])}–${price(zone[1])}. ` + trigger;
     } else noAnchor = true;
   }
   if (noAnchor) reason += ' No chart level in range — zone is a % of the current price (not used for auto-buy).';
@@ -1009,12 +1019,19 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
     const widest = mid * (1 - stopPctBase / 100);
     if (taStop < mid) stop = Math.max(taStop, widest);
   }
+  if ((anchor === 'support' || anchor === 'swing') && isNum(stop) && isNum(zoneLo) && isNum(zoneHi)) {
+    const mid = (zoneLo + zoneHi) / 2;
+    const minDist = Math.max(0.05, (prof.stopPct * 0.6) / 100);
+    const closest = mid * (1 - minDist);
+    const widest = mid * (1 - stopPctBase / 100);
+    stop = Math.max(Math.min(stop, closest), widest);
+  }
   let riskPct = conviction >= 75 ? 1.5 : conviction >= 65 ? 1.0 : conviction >= 55 ? 0.75 : 0.5;
   riskPct = Math.min(riskPct, prof.riskCap); if (regime.bad) riskPct = Math.max(0.5, riskPct / 2);
   if (verdict !== 'Candidate') riskPct = 0;
   const avgEntry = isNum(zoneLo) ? (zoneLo + zoneHi) / 2 : null;
-  const stopDist = isNum(avgEntry) && isNum(stop) ? (avgEntry - stop) / avgEntry : stopPctBase / 100;
-  const notionalPct = riskPct ? riskPct / stopDist : 0;
+  const stopDist = isNum(avgEntry) && isNum(stop) && avgEntry > stop ? (avgEntry - stop) / avgEntry : stopPctBase / 100;
+  const notionalPct = Math.min(100, riskPct && stopDist > 0 ? riskPct / stopDist : 0);
   const exit = { tp1: isNum(avgEntry) ? avgEntry * 1.5 : null, tp2: isNum(avgEntry) ? avgEntry * 2 : null, tp3: isNum(avgEntry) ? avgEntry * 5 : null, trail: prof.trail, timeStopH: prof.timeStopH };
 
   return { ...t, onCurve, rug, flags, fails, volLiq, liqMcap, bsr1, bsr24, accel, ta: ta || null,
@@ -1818,10 +1835,11 @@ function suggestedBuySol(t) {
   const acctIn = parseFloat($('account').value);
   const w = active(); const acctUsd = isNum(acctIn) && acctIn > 0 ? acctIn : (isNum(w.sol) ? w.sol * sp : null);
   if (!acctUsd) return { sol: 0, note: 'Set account size or connect a wallet for sizing' };
-  const fullUsd = acctUsd * t.entry.notionalPct / 100, trancheUsd = fullUsd * 0.4;
+  const sizePct = Math.min(100, t.entry.notionalPct);
+  const fullUsd = acctUsd * sizePct / 100, trancheUsd = fullUsd * 0.4;
   const raw = trancheUsd / sp; const cap = activeKey === 'burner' && A.on ? Math.min(S.maxSolPerTrade, A.maxSolPerTrade) : S.maxSolPerTrade;
   const sol = Math.max(0, Math.min(raw, cap));
-  return { sol: +sol.toFixed(4), note: `Tranche 1/3 (40%) of ${t.entry.notionalPct.toFixed(1)}% size on ${usd(acctUsd)}${raw > cap ? ` · capped at ${cap} SOL` : ''}` };
+  return { sol: +sol.toFixed(4), note: `Tranche 1/3 (40%) of ${sizePct.toFixed(1)}% size on ${usd(acctUsd)}${raw > cap ? ` · capped at ${cap} SOL` : ''}` };
 }
 
 /* ---------------- modal manager ---------------- */
