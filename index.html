@@ -920,6 +920,38 @@ async function fetchOhlcv(pool, tfKey) {
   ohlcvCache.set(key, { at: Date.now(), candles });
   return candles;
 }
+let taCacheMem = null; let taCacheSeq = 0;
+function loadTaCache() {
+  if (taCacheMem) return taCacheMem;
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem('sms:tacache') || '{}') || {}; } catch { raw = {}; }
+  const now = Date.now();
+  const entries = Object.entries(raw).filter(([, v]) => v?.ta?.ok && isNum(v.at) && now - v.at < 90 * 60e3)
+    .sort((a, b) => (b[1].at - a[1].at) || ((b[1].seq || 0) - (a[1].seq || 0))).slice(0, 100);
+  taCacheMem = Object.fromEntries(entries);
+  return taCacheMem;
+}
+function rememberTa(mint, ta) {
+  if (!mint || !ta?.ok) return;
+  const all = loadTaCache();
+  const { cached, cachedAt, ...clean } = ta;
+  all[mint] = { at: Date.now(), seq: ++taCacheSeq, ta: clean };
+  const now = Date.now();
+  const entries = Object.entries(all).filter(([, v]) => v?.ta?.ok && now - v.at < 90 * 60e3)
+    .sort((a, b) => (b[1].at - a[1].at) || ((b[1].seq || 0) - (a[1].seq || 0))).slice(0, 100);
+  taCacheMem = Object.fromEntries(entries);
+  try { localStorage.setItem('sms:tacache', JSON.stringify(taCacheMem)); } catch { /* memory copy still stands */ }
+}
+function takeCachedTa(mint) {
+  const row = loadTaCache()[mint];
+  if (!row?.ta?.ok || !isNum(row.at) || Date.now() - row.at >= 90 * 60e3) return null;
+  return { ...row.ta, cached: true, cachedAt: row.at };
+}
+function taCacheLabel(ta) {
+  if (!ta?.cached || !isNum(ta.cachedAt)) return '';
+  const mins = Math.max(0, Math.round((Date.now() - ta.cachedAt) / 60000));
+  return `TA cached (${mins} min ago)`;
+}
 async function loadTokenTa(token) {
   if (!token?.pairAddress) return { ok: false, line: 'TA: unavailable', error: 'no pool' };
   const [pTf, cTf] = tfsForAge(token.ageH);
@@ -1249,8 +1281,19 @@ async function runAnalysis({ boosted = false } = {}) {
         if (!rr.ok) blocked++; else if (rr.summaryOnly) partial++;
         rugMap.set(targets[i].mint, digestRug(rr, targets[i].pairAddress));
       }
-      try { taMap.set(targets[i].mint, await loadTokenTa(targets[i])); }
-      catch (e) { taFail++; taMap.set(targets[i].mint, { ok: false, line: 'TA: unavailable', error: e.message }); }
+      try {
+        const fresh = await loadTokenTa(targets[i]);
+        if (fresh?.ok) { rememberTa(targets[i].mint, fresh); taMap.set(targets[i].mint, fresh); }
+        else {
+          const cached = takeCachedTa(targets[i].mint);
+          if (cached) taMap.set(targets[i].mint, cached);
+          else { taFail++; taMap.set(targets[i].mint, fresh || { ok: false, line: 'TA: unavailable', error: 'no pool' }); }
+        }
+      } catch (e) {
+        const cached = takeCachedTa(targets[i].mint);
+        if (cached) taMap.set(targets[i].mint, cached);
+        else { taFail++; taMap.set(targets[i].mint, { ok: false, line: 'TA: unavailable', error: e.message }); }
+      }
       publish(scoreAll(), `Deep checks ${i + 1}/${targets.length}`);
     }
     if (inputs.useRug && blocked) warnings.push(`RugCheck unavailable for ${blocked}/${targets.length} token(s) (CORS, network or rate-limit) — those checklist items show "Unknown — verify manually".`);
@@ -1376,6 +1419,7 @@ function render(R) {
         ${['m5','h1','h6','h24'].map(k => `<span><span class="text-slate-500">${k}</span> <span class="${pctCls(t.chg[k])}">${pct(t.chg[k], 0)}</span></span>`).join('')}
       </div>
       ${t.ta?.line ? `<div class="mt-2 text-[11px] leading-snug ${t.ta.ok ? 'text-slate-300' : 'text-slate-500'}">${esc(t.ta.line)}</div>` : ''}
+      ${taCacheLabel(t.ta) ? `<div class="mt-1 text-[11px] text-amber-200">${esc(taCacheLabel(t.ta))}</div>` : ''}
       ${zoneAnchorLabel(t.entry) ? `<div class="mt-1 text-[11px] ${t.entry.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(t.entry))}</div>` : ''}
       ${t.flags.length ? `<div class="flex flex-wrap gap-1 mt-3">${t.flags.slice(0, 4).map(f => `<span class="text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}" title="${esc(f.text)}">${esc(f.text.split(' — ')[0])}</span>`).join('')}${t.flags.length > 4 ? `<span class="text-[10px] text-slate-500 self-center">+${t.flags.length - 4} more</span>` : ''}</div>` : '<div class="text-[11px] text-emerald-300 mt-3">✔ No red flags detected</div>'}
       ${t.fails.length ? `<div class="text-[10px] text-rose-300/80 mt-2">Filter fail: ${esc(t.fails.join(' · '))}</div>` : ''}
@@ -1439,6 +1483,7 @@ function render(R) {
           ${stat('Position size', e.notionalPct ? e.notionalPct.toFixed(1) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.notionalPct / 100)}</span>` : '') : '—')}
         </div>
         ${zoneAnchorLabel(e) ? `<p class="text-[11px] mt-2 ${e.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(e))}</p>` : ''}
+        ${taCacheLabel(t.ta) ? `<p class="text-[11px] mt-2 text-amber-200">${esc(taCacheLabel(t.ta))}</p>` : ''}
         ${t.ta?.line ? `<p class="text-[11px] text-slate-300 mt-2">${esc(t.ta.line)}</p>` : ''}
         <p class="text-[11px] text-slate-400 mt-2">🎯 ${esc(e.trigger)} Scale in 40% → 30% → 30% across the zone; never full size at once.</p>
       </div>`; }).join('')}</div>
@@ -2685,6 +2730,7 @@ function staticEligible(t) {
   if (A.breakoutOnly && t.ta?.signal !== 'breakout') r.push('not BREAKOUT confirmed');
   if (!t.entry?.zoneLo || !t.entry?.stop) r.push('no entry plan');
   if (t.entry?.noAnchor) r.push('no real support level — % zone only');
+  if (t.ta?.cached && isNum(t.ta.cachedAt) && Date.now() - t.ta.cachedAt >= 60 * 60e3) r.push('cached TA older than 60 min');
   return r;
 }
 function armedEntries() {
