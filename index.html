@@ -577,7 +577,7 @@ function swingPoints(cs, k = 2) {
 function lineAt(a, b, i) { if (b.i === a.i) return b.price; return a.price + (b.price - a.price) * (i - a.i) / (b.i - a.i); }
 function analyzeStructure(candles, tf) {
   const cs = (candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0);
-  const empty = { tf, trend: 'range', hLabel: null, lLabel: null, trendlineBreak: false, bos: false, breakout: false, lastLH: null, lastLow: null, newHL: null, brokenLevel: null, retest: 'none' };
+  const empty = { tf, trend: 'range', hLabel: null, lLabel: null, trendlineBreak: false, bos: false, breakout: false, lastLH: null, lastHigh: null, lastLow: null, newHL: null, brokenLevel: null, retest: 'none', supports: [] };
   if (cs.length < 15) return empty;
   const { highs, lows } = swingPoints(cs, 2);
   const hLabel = highs.length >= 2 ? (highs.at(-1).price > highs.at(-2).price ? 'HH' : 'LH') : null;
@@ -635,6 +635,10 @@ function analyzeStructure(candles, tf) {
     if (pt.kind === 'H') z.highTouches++; else z.lowTouches++;
   }
   for (const z of zones) z.strength = z.touches + (z.touches >= 3 ? 1 : 0);
+  const supports = zones.filter(z => z.lowTouches >= 1 && isNum(z.lo) && isNum(z.hi) && z.lo > 0 && z.hi >= z.lo)
+    .map(z => ({ lo: z.lo, hi: z.hi, mid: z.mid, touches: z.touches, strength: z.strength }))
+    .sort((a, b) => b.mid - a.mid);
+  const lastHigh = highs.length ? highs.at(-1).price : null;
   const below = zones.filter(z => z.mid < px).sort((a, b) => b.mid - a.mid);
   const above = zones.filter(z => z.mid > px).sort((a, b) => a.mid - b.mid);
   const support = below.find(z => z.lowTouches >= 1) || below[0] || null;
@@ -712,9 +716,46 @@ function analyzeStructure(candles, tf) {
   }
   const breakLevel = trendlineVol && pair ? lineAt(pair[0], pair[1], last) : (resBreak && brokenResist ? brokenResist.hi : brokenLevel);
   return {
-    tf, trend, hLabel, lLabel, trendlineBreak, bos, breakout: trendlineBreak || bos || volBreak, lastLH, lastLow, newHL, brokenLevel, retest,
+    tf, trend, hLabel, lLabel, trendlineBreak, bos, breakout: trendlineBreak || bos || volBreak, lastLH, lastHigh, lastLow, newHL, brokenLevel, retest, supports,
     support, resist, patterns, reversalLow, supportReaction, atSupport, trendlineVol, resBreak, volBreak, nearTrendline, nearResist, brokenResist, breakLevel
   };
+}
+function supportForEntry(ta, price, maxDrop) {
+  const from = (s) => {
+    if (!s) return null;
+    const list = Array.isArray(s.supports) && s.supports.length ? s.supports : (s.support ? [s.support] : []);
+    let best = null;
+    for (const z of list) {
+      if (!isNum(z?.lo) || !isNum(z?.hi) || !(z.lo > 0) || z.hi < z.lo) continue;
+      if (z.lo > price) continue;
+      const dist = z.hi < price ? (price - z.hi) / price : 0;
+      if (dist > maxDrop) continue;
+      if (!best || z.mid > best.mid) best = z;
+    }
+    return best ? { lo: best.lo, hi: best.hi, mid: best.mid, tf: s.tf } : null;
+  };
+  if (!ta?.ok || !isNum(price) || price <= 0) return null;
+  return from(ta.primary) || from(ta.confirm);
+}
+function swingForEntry(ta) {
+  const from = (s) => {
+    if (!s) return null;
+    if (isNum(s.lastLH) && s.lastLH > 0) return s.lastLH;
+    if (isNum(s.lastHigh) && s.lastHigh > 0) return s.lastHigh;
+    return null;
+  };
+  if (!ta?.ok) return null;
+  const p = from(ta.primary);
+  if (isNum(p)) return { lvl: p, tf: ta.primary.tf };
+  const c = from(ta.confirm);
+  return isNum(c) ? { lvl: c, tf: ta.confirm.tf } : null;
+}
+function zoneAnchorLabel(e) {
+  if (!e) return '';
+  if (e.noAnchor) return 'Zone: % estimate (no S/R)';
+  if (e.anchor === 'swing' && isNum(e.anchorPx)) return 'Zone: swing ' + price(e.anchorPx);
+  if (e.anchor === 'support' && isNum(e.anchorPx)) return 'Zone: support ' + price(e.anchorPx);
+  return '';
 }
 function breakoutSignal(primary, confirm) {
   const rev = primary.patterns && primary.patterns.length;
@@ -941,7 +982,25 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
   else if (isNum(t.chg.h24) && t.chg.h24 < -20) { strat = 'Liquidity / Support Zone Reaction'; reason = 'Bleeding with no clear buyer return; act only at a clear support / high-volume node with visible absorption.'; zone = [0.80, 0.90]; trigger = 'Wait for wicks into support with buys absorbing sells (5m buy/sell > 1.2).'; }
   else if (cleanCk && isNum(t.chg.h24) && t.chg.h24 > 0 && isNum(t.chg.h6) && t.chg.h6 >= 0 && isNum(bsr24) && bsr24 > 1.2 && conviction >= 65) { strat = 'Controlled Dip Buy'; reason = 'Strong trend + clean checklist: buy a measured 10–25% dip while higher structure holds.'; zone = [0.75, 0.90]; trigger = 'Only while higher-low structure holds and volume does not collapse.'; }
   else { strat = 'Pullback + Volume Confirmation'; reason = 'Default method: enter on a small pullback after the initial move if volume and buyers stay healthy.'; zone = [0.85, 0.92]; trigger = 'Confirm buy/sell ratio > 1.2 on the bounce.'; }
-  const absZone = pr && (strat === 'Trendline break + retest' || strat === 'Pullback to last HL');
+  let absZone = strat === 'Trendline break + retest' || strat === 'Pullback to last HL';
+  let noAnchor = false, anchor = null, anchorPx = null;
+  if (!absZone && strat === 'Break of Short-Term Structure') {
+    const sw = swingForEntry(ta);
+    if (sw) {
+      zone = [sw.lvl, sw.lvl * 1.03];
+      absZone = true; anchor = 'swing'; anchorPx = sw.lvl; taStop = sw.lvl * 0.995;
+      trigger = `Enter on a close above the ${sw.tf} swing high ${price(sw.lvl)} (zone ${price(sw.lvl)}–${price(sw.lvl * 1.03)}) with rising volume.`;
+    } else noAnchor = true;
+  } else if (!absZone) {
+    const parabolic = (isNum(t.chg.h6) && t.chg.h6 > 100) || (isNum(t.chg.h1) && t.chg.h1 > 30);
+    const sup = supportForEntry(ta, p, parabolic ? 0.35 : 0.25);
+    if (sup) {
+      zone = [sup.lo, sup.hi];
+      absZone = true; anchor = 'support'; anchorPx = sup.mid; taStop = sup.lo * 0.998;
+      trigger = `Fill inside the ${sup.tf} support ${price(sup.lo)}–${price(sup.hi)}. ` + trigger;
+    } else noAnchor = true;
+  }
+  if (noAnchor) reason += ' No chart level in range — zone is a % of the current price (not used for auto-buy).';
   const zoneLo = isNum(p) ? (absZone ? zone[0] : p * zone[0]) : null, zoneHi = isNum(p) ? (absZone ? zone[1] : p * zone[1]) : null;
   const stopPctBase = prof.stopPct + (isNum(t.chg.h6) && Math.abs(t.chg.h6) > 100 ? 5 : 0);
   let stop = isNum(zoneLo) ? zoneLo * (1 - stopPctBase / 100) : null;
@@ -961,7 +1020,7 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
   return { ...t, onCurve, rug, flags, fails, volLiq, liqMcap, bsr1, bsr24, accel, ta: ta || null,
     sub: { onchain, social, momentum, risk: riskS, parts: { liqS, lmS, vlS, safety, safetyNote, holdersS, bsrS, trendS, accS, penalty, caps } },
     contrib, conviction, verdict, checklist,
-    entry: { strat, reason, trigger, zoneLo, zoneHi, stop, stopPct: stopDist * 100, riskPct, notionalPct }, exit };
+    entry: { strat, reason, trigger, zoneLo, zoneHi, stop, stopPct: stopDist * 100, riskPct, notionalPct, noAnchor, anchor, anchorPx }, exit };
 }
 </script>
 <script>
@@ -1143,6 +1202,7 @@ function render(R) {
         ${['m5','h1','h6','h24'].map(k => `<span><span class="text-slate-500">${k}</span> <span class="${pctCls(t.chg[k])}">${pct(t.chg[k], 0)}</span></span>`).join('')}
       </div>
       ${t.ta?.line ? `<div class="mt-2 text-[11px] leading-snug ${t.ta.ok ? 'text-slate-300' : 'text-slate-500'}">${esc(t.ta.line)}</div>` : ''}
+      ${zoneAnchorLabel(t.entry) ? `<div class="mt-1 text-[11px] ${t.entry.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(t.entry))}</div>` : ''}
       ${t.flags.length ? `<div class="flex flex-wrap gap-1 mt-3">${t.flags.slice(0, 4).map(f => `<span class="text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}" title="${esc(f.text)}">${esc(f.text.split(' — ')[0])}</span>`).join('')}${t.flags.length > 4 ? `<span class="text-[10px] text-slate-500 self-center">+${t.flags.length - 4} more</span>` : ''}</div>` : '<div class="text-[11px] text-emerald-300 mt-3">✔ No red flags detected</div>'}
       ${t.fails.length ? `<div class="text-[10px] text-rose-300/80 mt-2">Filter fail: ${esc(t.fails.join(' · '))}</div>` : ''}
       <div class="trade-row mt-3" data-mint="${esc(t.mint)}"></div>
@@ -1204,6 +1264,7 @@ function render(R) {
           ${stat('Risk / token', e.riskPct ? e.riskPct.toFixed(2) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.riskPct / 100)}</span>` : '') : '0 — no trade')}
           ${stat('Position size', e.notionalPct ? e.notionalPct.toFixed(1) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.notionalPct / 100)}</span>` : '') : '—')}
         </div>
+        ${zoneAnchorLabel(e) ? `<p class="text-[11px] mt-2 ${e.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(e))}</p>` : ''}
         ${t.ta?.line ? `<p class="text-[11px] text-slate-300 mt-2">${esc(t.ta.line)}</p>` : ''}
         <p class="text-[11px] text-slate-400 mt-2">🎯 ${esc(e.trigger)} Scale in 40% → 30% → 30% across the zone; never full size at once.</p>
       </div>`; }).join('')}</div>
@@ -1273,7 +1334,7 @@ function toMarkdown(R) {
   L.push('## Conviction Score (40/25/20/15)');
   list.forEach(t => L.push(`- **${t.symbol}: ${t.conviction}/100** — on-chain ${Math.round(t.sub.onchain)} (${t.contrib.onchain.toFixed(1)} pts) · social ${Math.round(t.sub.social)} (${t.contrib.social.toFixed(1)}) · momentum ${Math.round(t.sub.momentum)} (${t.contrib.momentum.toFixed(1)}) · risk ${Math.round(t.sub.risk)} (${t.contrib.risk.toFixed(1)})${t.sub.parts.caps.length ? ' · caps: ' + t.sub.parts.caps.join('; ') : ''}`));
   L.push('', '## Entry Strategy');
-  list.forEach(t => { const e = t.entry; L.push(`- **${t.symbol}** — ${e.strat}: ${e.reason} Zone ${price(e.zoneLo)}–${price(e.zoneHi)}, stop ${price(e.stop)} (≈−${e.stopPct.toFixed(0)}%), risk ${e.riskPct ? e.riskPct.toFixed(2) + '% of account (size ≈ ' + e.notionalPct.toFixed(1) + '% of account)' : '0 — no trade'}. ${e.trigger} Scale in 40/30/30.`); });
+  list.forEach(t => { const e = t.entry; const zlab = zoneAnchorLabel(e); L.push(`- **${t.symbol}** — ${e.strat}: ${e.reason} Zone ${price(e.zoneLo)}–${price(e.zoneHi)}${zlab ? ' (' + zlab + ')' : ''}, stop ${price(e.stop)} (≈−${e.stopPct.toFixed(0)}%), risk ${e.riskPct ? e.riskPct.toFixed(2) + '% of account (size ≈ ' + e.notionalPct.toFixed(1) + '% of account)' : '0 — no trade'}. ${e.trigger} Scale in 40/30/30.`); });
   L.push('', '## Exit Plan');
   const prot = exitProtect();
   list.forEach(t => L.push(`- **${t.symbol}** — TP1 +50% ${price(t.exit.tp1)} (sell 50%), TP2 +100% ${price(t.exit.tp2)} (sell 50% of the rest), trail the rest ${t.exit.trail}% from the high; before TP1, break-even at +${prot.be}% (stop to entry +1%) and early trail at +${prot.early}% (${prot.trail}% under the high). Stops only move up. Time stop ${t.exit.timeStopH}h.`));
@@ -2437,14 +2498,15 @@ function staticEligible(t) {
   if (t.ta?.ok && t.ta.confirm?.trend === 'down' && !t.ta.confirm.breakout && !t.ta.primary?.breakout) r.push('HTF downtrend');
   if (A.breakoutOnly && t.ta?.signal !== 'breakout') r.push('not BREAKOUT confirmed');
   if (!t.entry?.zoneLo || !t.entry?.stop) r.push('no entry plan');
+  if (t.entry?.noAnchor) r.push('no real support level — % zone only');
   return r;
 }
 function armedEntries() {
   if (!lastResult?.tokens || Date.now() - lastResult.ts > 60 * 60e3) return [];
   return lastResult.tokens.filter(t => !staticEligible(t).length);
 }
-function inZone(t, px) { const e = t.entry; if (!isNum(px)) return false;
-  if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= e.zoneHi * 1.03;
+function inZone(t, px) { const e = t.entry; if (!isNum(px) || !e || e.noAnchor) return false;
+  if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= (e.anchor === 'swing' ? e.zoneHi : e.zoneHi * 1.03);
   return px <= e.zoneHi && px > e.stop; }
 function priceExit(p, lp) {
   if (!isNum(lp)) return null;
