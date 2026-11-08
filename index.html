@@ -153,6 +153,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       <div id="walletInfo" class="text-xs text-slate-400"></div>
       <div id="burnerBox" class="mt-3"></div>
       <div id="whaleBox" class="mt-3"></div>
+      <div id="sniperBox" class="mt-3"></div>
       <details id="settingsBox" class="mt-3 rounded-xl bg-ink-850 border border-white/5">
         <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white">⚙️ Safety guards &amp; settings</summary>
         <div class="px-3 pb-3 space-y-2.5 text-xs">
@@ -1889,9 +1890,9 @@ function positions() {
   for (const r of LOG) {
     if (r.status !== 'confirmed') continue;
     const k = r.wallet + ':' + r.mint; let p = by.get(k);
-    if (!p) { p = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false, copy: false, copyState: null }; by.set(k, p); }
-    if (r.side === 'buy') { p.bought += r.tokenAmount || 0; p.costUsd += (r.tokenAmount || 0) * (r.priceUsd || 0); p.costSol += r.solAmount || 0; if (r.plan) p.plan = r.plan; if (r.auto) p.auto = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
-    else { p.sold += r.tokenAmount || 0; if (r.exitTag === 'tp1') p.tp1Done = true; if (r.exitTag === 'tp2') p.tp2Done = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
+    if (!p) { p = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false, copy: false, copyState: null, sniper: false }; by.set(k, p); }
+    if (r.side === 'buy') { p.bought += r.tokenAmount || 0; p.costUsd += (r.tokenAmount || 0) * (r.priceUsd || 0); p.costSol += r.solAmount || 0; if (r.plan) p.plan = r.plan; if (r.auto) p.auto = true; if (r.sniper) p.sniper = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
+    else { p.sold += r.tokenAmount || 0; if (r.exitTag === 'tp1') p.tp1Done = true; if (r.exitTag === 'tp2') p.tp2Done = true; if (r.sniper) p.sniper = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
     p.symbol = r.symbol || p.symbol;
   }
   const out = [];
@@ -2189,14 +2190,14 @@ function renderPortfolio() {
   const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = s.eff || effectiveStop(p, lp);
     const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
     return `<tr class="border-t border-white/5 align-top ${s.lvl === 'stop' ? 'bg-rose-500/10' : s.lvl ? 'bg-emerald-500/10' : ''}">
-      <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}${p.copy ? ' · copy' : ''}</div></td>
+      <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}${p.copy ? ' · copy' : ''}${p.sniper ? ' · SNIPE 🎯' : ''}</div></td>
       <td class="pr-2 font-mono">${fmtTok(p.qty)}</td><td class="pr-2 font-mono">${price(p.avgUsd)}</td><td class="pr-2 font-mono">${price(lp)}</td>
       <td class="pr-2 font-mono ${pctCls(pnl)}">${pct(pnl)}<div class="text-[10px]">${isNum(pnlUsd) ? (pnlUsd >= 0 ? '+' : '') + usd(pnlUsd, 2) : ''}</div></td>
       <td class="pr-2 font-mono text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
       <td class="whitespace-nowrap">${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}</td></tr>`; }).join('');
   const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
-      <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
+      <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
       <td class="pr-2 font-mono">${fmtSol(r.solAmount)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
       <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
       <td class="font-mono"><a class="text-violet-300 hover:underline" target="_blank" rel="noopener" href="${solscanTx(r.signature)}">${esc(short(r.signature))} ↗</a></td></tr>`).join('');
@@ -2581,6 +2582,10 @@ window.__smsSolBadge = updateSolFilterBadge;
 let tickTimer = null, scanTimer = null, autoBusy = false, lastTick = null, lastScan = null;
 const sellFails = {}; const momSeen = {}; let autoHigh = load('sms:autohigh', {}); let autoStop = load('sms:autostop', {});
 function effectiveStop(p, lp) {
+  if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
+    const pl = positionTargets(p);
+    return { ...pl, stop: p.avgUsd * 0.85, reason: 'sniper -15%', tp1: p.avgUsd * 1.3, high: Math.max(isNum(lp) ? lp : 0, autoHigh[p.key] || 0) };
+  }
   const pl = positionTargets(p);
   let high = isNum(autoHigh[p.key]) ? autoHigh[p.key] : 0;
   if (isNum(lp) && lp > high) { high = lp; autoHigh[p.key] = high; save('sms:autohigh', autoHigh); }
@@ -2709,7 +2714,7 @@ async function autoTick() {
     await refreshPrices(); await refreshBalances('burner');
     await ensureSolMarket();
     // ---- exits (always, even when the SOL filter pauses new buys)
-    if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner')) {
+    if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper)) {
       if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const ex = priceExit(p, lp); if (!ex) continue;
       await autoSell(p, ex.pctSell, ex.tag, lp);
     }
@@ -2782,18 +2787,22 @@ function killSwitch(reason = 'manual') {
   const was = A.on; A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null;
   const wasC = !!(typeof COPY !== 'undefined' && COPY.on);
   if (wasC) stopCopy(reason, { quiet: true });
+  const wasS = !!(typeof SNIPER !== 'undefined' && SNIPER.on);
+  if (wasS) stopSniper(reason, { quiet: true });
   if (was) { autoLog(`⛔ KILL SWITCH (${reason}) — auto-trading stopped`, 'err'); toast('⛔ Auto-trading stopped', 'err'); }
   else if (wasC) toast('⛔ Copy mode stopped', 'err');
-  renderBurner(); if (typeof renderWhale === 'function') renderWhale(); renderPortfolio();
+  else if (wasS) toast('⛔ Launch sniper stopped', 'err');
+  renderBurner(); if (typeof renderWhale === 'function') renderWhale(); if (typeof renderSniper === 'function') renderSniper(); renderPortfolio();
 }
 function renderKillFab() {
   let f = $('killFab');
   const copyOn = typeof COPY !== 'undefined' && COPY.on;
-  if (!A.on && !copyOn) { f?.remove(); return; }
+  const sniperOn = typeof SNIPER !== 'undefined' && SNIPER.on;
+  if (!A.on && !copyOn && !sniperOn) { f?.remove(); return; }
   if (!f) { f = document.createElement('button'); f.id = 'killFab'; f.className = 'fixed bottom-4 left-4 z-50 rounded-full px-4 py-3 font-extrabold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-2xl animate-pulse'; f.addEventListener('click', () => killSwitch('fab')); document.body.appendChild(f); }
-  f.textContent = (A.on ? '🤖 AUTO ON' : '🐋 COPY ON') + ' · ⛔ KILL';
+  f.textContent = (A.on ? '🤖 AUTO ON' : copyOn ? '🐋 COPY ON' : '🎯 SNIPE ON') + ' · ⛔ KILL';
 }
-window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on)) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
+window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on)) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
 
 
 /* ---------------- whale copy-trade ---------------- */
@@ -3231,6 +3240,343 @@ function stopCopy(reason, opts) {
 }
 loadCopyBooks();
 
+/* ---------------- launch sniper (separate from scanner / whales / momentum) ---------------- */
+const SNIPER_DEFAULTS = { on: false, pollSec: 20, minAgeMin: 2, maxAgeMin: 30, minLiq: 5000, maxMcap: 500000, sizeSol: 0.05, dailySol: 0.5, maxOpen: 2 };
+let SNIPER = { ...SNIPER_DEFAULTS, ...load('sms:sniper', {}) };
+function sanitizeSniper() {
+  const n = (v, d, lo, hi) => { const x = +v; return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
+  SNIPER.pollSec = Math.round(n(SNIPER.pollSec, 20, 15, 60));
+  SNIPER.minAgeMin = n(SNIPER.minAgeMin, 2, 0, 120);
+  SNIPER.maxAgeMin = n(SNIPER.maxAgeMin, 30, 1, 240);
+  if (SNIPER.maxAgeMin <= SNIPER.minAgeMin) SNIPER.maxAgeMin = SNIPER.minAgeMin + 1;
+  SNIPER.minLiq = n(SNIPER.minLiq, 5000, 0, 1e9);
+  SNIPER.maxMcap = n(SNIPER.maxMcap, 500000, 1000, 1e12);
+  SNIPER.sizeSol = n(SNIPER.sizeSol, 0.05, 0.001, 100);
+  SNIPER.dailySol = n(SNIPER.dailySol, 0.5, 0.001, 1000);
+  SNIPER.maxOpen = Math.round(n(SNIPER.maxOpen, 2, 1, 10));
+  SNIPER.on = false;
+}
+sanitizeSniper();
+let sniperRows = [];
+let sniperLogLines = load('sms:sniperlog', []);
+let sniperVol = {};
+let sniperSafetyMemo = {};
+let sniperTimer = null, sniperExitTimer = null, sniperBusy = false;
+const sniperHigh = load('sms:sniperhigh', {});
+function saveSniper() { const { on, ...rest } = SNIPER; save('sms:sniper', { ...rest, on: false }); }
+const sniperSaid = {};
+function sniperNote(msg, level = 'info') {
+  if (sniperSaid[msg] && Date.now() - sniperSaid[msg] < 90000) return;
+  sniperSaid[msg] = Date.now();
+  sniperLogLines.push({ ts: Date.now(), msg, level });
+  sniperLogLines = sniperLogLines.slice(-200);
+  save('sms:sniperlog', sniperLogLines);
+  const el = $('sniperFeed'); if (el) el.innerHTML = sniperFeedHtml();
+}
+function sniperFeedHtml() {
+  if (!sniperLogLines.length) return '<li class="text-slate-500">No sniper events yet.</li>';
+  return [...sniperLogLines].reverse().slice(0, 40).map(l => `<li class="${l.level === 'err' ? 'text-rose-300' : l.level === 'warn' ? 'text-amber-200' : l.level === 'ok' ? 'text-emerald-300' : 'text-slate-300'}"><span class="text-slate-500">${esc(new Date(l.ts).toLocaleTimeString())}</span> ${esc(l.msg)}</li>`).join('');
+}
+function sniperMomentum(p, prevVol) {
+  const buys = +p.m5b || 0, sells = +p.m5s || 0, txns = buys + sells, chg = isNum(+p.m5chg) ? +p.m5chg : null;
+  const reasons = [];
+  if (!(buys >= 2 * sells)) reasons.push(`5m buys ${buys} < 2× sells ${sells}`);
+  if (txns < 30) reasons.push(`5m txns ${txns} < 30`);
+  if (chg == null || chg < 10 || chg > 150) reasons.push(`5m change ${chg == null ? 'unknown' : chg.toFixed(0) + '%'} not in +10%..+150%`);
+  const rising = isNum(prevVol) && prevVol > 0 && +p.m5vol > prevVol;
+  if (!rising) reasons.push(prevVol == null ? '5m volume waiting for next sample' : '5m volume not rising');
+  return { ok: reasons.length === 0, reasons };
+}
+function sniperCheap(p) {
+  const ageMin = p.created ? (Date.now() - p.created) / 60000 : null;
+  const mom = sniperMomentum(p, sniperVol[p.mint]);
+  const checks = [
+    { name: 'age', ok: isNum(ageMin) && ageMin >= SNIPER.minAgeMin && ageMin <= SNIPER.maxAgeMin, detail: ageMin == null ? 'unknown' : ageMin.toFixed(1) + 'm' },
+    { name: 'liquidity', ok: isNum(p.liq) && p.liq >= SNIPER.minLiq, detail: isNum(p.liq) ? '$' + Math.round(p.liq).toLocaleString() : 'unknown' },
+    { name: 'mcap', ok: isNum(p.mcap) && p.mcap > 0 && p.mcap <= SNIPER.maxMcap, detail: isNum(p.mcap) ? '$' + Math.round(p.mcap).toLocaleString() : 'unknown' },
+    { name: 'momentum', ok: mom.ok, detail: mom.ok ? '5m momentum' : mom.reasons[0] }
+  ];
+  return { ageMin, checks, ok: checks.every(c => c.ok) };
+}
+function decodeMintFlags(b64) {
+  try {
+    const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    if (raw.length < 50) return { ok: false, detail: 'short mint account' };
+    const u32 = (o) => raw[o] | (raw[o + 1] << 8) | (raw[o + 2] << 16) | (raw[o + 3] << 24);
+    return { ok: true, mintRevoked: u32(0) === 0, freezeRevoked: u32(46) === 0, decimals: raw[44] };
+  } catch (e) { return { ok: false, detail: e.message }; }
+}
+function devHoldingPct(report) {
+  const r = report?.data || {};
+  if (isNum(+r.creatorBalancePct)) return +r.creatorBalancePct;
+  const creator = typeof r.creator === 'string' ? r.creator : (r.creator?.address || r.creatorAddress || null);
+  if (creator && Array.isArray(r.topHolders)) {
+    const h = r.topHolders.find(x => x && (x.address === creator || x.owner === creator));
+    if (h && isNum(+h.pct)) return +h.pct;
+  }
+  return null;
+}
+function sniperExitDecision(p, lp, high, now) {
+  if (!p || !isNum(lp) || !(p.avgUsd > 0)) return null;
+  const entry = p.avgUsd, hi = Math.max(high || 0, lp), t = now || Date.now();
+  if (lp <= entry * 0.85) return { pct: 100, tag: 'stop' };
+  if (!p.tp1Done && lp >= entry * 1.3) return { pct: 50, tag: 'tp1' };
+  if (p.tp1Done && lp <= hi * 0.85) return { pct: 100, tag: 'trail' };
+  if (!p.tp1Done && t - p.firstTs >= 30 * 60e3 && lp < entry * 1.1) return { pct: 100, tag: 'time' };
+  return null;
+}
+function geckoPool(row) {
+  const a = row?.attributes || {};
+  const SOL = 'So11111111111111111111111111111111111111112';
+  const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+  const idOf = (rel) => String(rel?.data?.id || '').replace(/^solana_/, '');
+  let mint = idOf(row.relationships?.base_token);
+  const quote = idOf(row.relationships?.quote_token);
+  let price = +a.base_token_price_usd || null;
+  if (mint === SOL || mint === USDC) { mint = quote; price = +a.quote_token_price_usd || null; }
+  if (!mint || mint.length < 32 || IGNORE.has(mint)) return null;
+  const m5 = a.transactions?.m5 || {};
+  const chg = a.price_change_percentage?.m5;
+  return {
+    mint, symbol: String(a.name || mint).split('/')[0].trim() || short(mint), pool: a.address || '',
+    created: Date.parse(a.pool_created_at || '') || null, liq: +a.reserve_in_usd || null,
+    mcap: +a.market_cap_usd || +a.fdv_usd || null, price,
+    m5b: +m5.buys || 0, m5s: +m5.sells || 0, m5chg: chg == null || chg === '' ? null : +chg,
+    m5vol: +a.volume_usd?.m5 || 0, source: 'gecko', quote
+  };
+}
+async function discoverSnipes() {
+  try {
+    const j = await fetchJSON('https://api.geckoterminal.com/api/v2/networks/solana/new_pools?page=1', { timeout: 12000 });
+    const rows = (j?.data || []).map(geckoPool).filter(Boolean);
+    if (rows.length) return rows;
+  } catch (e) { sniperNote('GeckoTerminal new pools: ' + e.message, 'warn'); }
+  try {
+    const profiles = await fetchJSON('https://api.dexscreener.com/token-profiles/latest/v1', { timeout: 12000 });
+    const mints = (Array.isArray(profiles) ? profiles : []).filter(t => t.chainId === 'solana' && t.tokenAddress && !IGNORE.has(t.tokenAddress)).map(t => t.tokenAddress).slice(0, 30);
+    if (!mints.length) return [];
+    const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.join(','), { timeout: 12000 });
+    const best = new Map();
+    for (const p of arr || []) {
+      const mint = p.baseToken?.address;
+      if (!mint || IGNORE.has(mint)) continue;
+      const cur = best.get(mint);
+      if (!cur || (p.pairCreatedAt || 0) > (cur.pairCreatedAt || 0)) best.set(mint, p);
+    }
+    return [...best.values()].map(p => ({
+      mint: p.baseToken.address, symbol: p.baseToken.symbol || short(p.baseToken.address), pool: p.pairAddress,
+      created: p.pairCreatedAt || null, liq: p.liquidity?.usd ?? null, mcap: p.marketCap ?? p.fdv ?? null,
+      price: p.priceUsd != null ? +p.priceUsd : null, m5b: p.txns?.m5?.buys || 0, m5s: p.txns?.m5?.sells || 0,
+      m5chg: p.priceChange?.m5 != null ? +p.priceChange.m5 : null, m5vol: p.volume?.m5 || 0, source: 'dex'
+    }));
+  } catch (e) { sniperNote('DexScreener backup: ' + e.message, 'warn'); return []; }
+}
+async function sniperSafety(p) {
+  const hit = sniperSafetyCache(p.mint);
+  if (hit) return hit;
+  const checks = [];
+  const slip = Math.round(Math.min(S.slippagePct, A.slipCap) * 100);
+  try {
+    await getQuote({ inputMint: WSOL, outputMint: p.mint, amountRaw: BigInt(Math.max(1, Math.round(SNIPER.sizeSol * 1e9))), slippageBps: slip });
+    checks.push({ name: 'jupiter', ok: true, detail: 'route' });
+  } catch { checks.push({ name: 'jupiter', ok: false, detail: 'no route' }); return cacheSafety(p.mint, checks); }
+  let decimals = 6;
+  try {
+    const info = await rpc('getAccountInfo', [p.mint, { encoding: 'base64' }]);
+    const data = info?.value?.data;
+    const b64 = Array.isArray(data) ? data[0] : null;
+    const flags = b64 ? decodeMintFlags(b64) : { ok: false, detail: 'account missing' };
+    if (!flags.ok) { checks.push({ name: 'mint', ok: false, detail: flags.detail || 'unreadable' }); return cacheSafety(p.mint, checks); }
+    decimals = flags.decimals;
+    checks.push({ name: 'mint authority', ok: flags.mintRevoked, detail: flags.mintRevoked ? 'revoked' : 'active' });
+    checks.push({ name: 'freeze authority', ok: flags.freezeRevoked, detail: flags.freezeRevoked ? 'revoked' : 'active' });
+    if (!flags.mintRevoked || !flags.freezeRevoked) return cacheSafety(p.mint, checks);
+  } catch (e) { checks.push({ name: 'mint', ok: false, detail: e.message }); return cacheSafety(p.mint, checks); }
+  const rr = await fetchRugReport(p.mint);
+  const rug = digestRug(rr, p.pool);
+  if (rug.available) {
+    const danger = (rug.risks || []).filter(r => String(r.level).toLowerCase() === 'danger');
+    checks.push({ name: 'rug danger', ok: !danger.length, detail: danger.length ? danger.map(d => d.name).slice(0, 2).join(', ') : 'none' });
+    checks.push({ name: 'top-10', ok: isNum(rug.top10) && rug.top10 <= 30, detail: isNum(rug.top10) ? rug.top10.toFixed(1) + '%' : 'unknown' });
+  } else {
+    checks.push({ name: 'rug danger', ok: true, detail: 'unavailable' });
+    checks.push({ name: 'top-10', ok: false, detail: 'unknown' });
+  }
+  const dev = devHoldingPct(rr);
+  checks.push(isNum(dev) ? { name: 'dev holding', ok: dev <= 10, detail: dev.toFixed(1) + '%' } : { name: 'dev holding', ok: true, detail: 'unknown' });
+  try {
+    const one = decimals <= 9 ? (BigInt(10) ** BigInt(decimals)) : 1000000n;
+    await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: one, slippageBps: 1000 });
+    checks.push({ name: 'honeypot', ok: true, detail: 'sell route' });
+  } catch { checks.push({ name: 'honeypot', ok: false, detail: 'no sell route' }); }
+  return cacheSafety(p.mint, checks);
+}
+function sniperSafetyCache(mint) {
+  const hit = sniperSafetyMemo[mint];
+  if (hit && Date.now() - hit.at < 8 * 60e3) return hit.checks;
+  return null;
+}
+function cacheSafety(mint, checks) { sniperSafetyMemo[mint] = { at: Date.now(), checks }; return checks; }
+function rememberSniper(p, checks) {
+  const row = { mint: p.mint, symbol: p.symbol, at: Date.now(), liq: p.liq, mcap: p.mcap, ageMin: p.ageMin, source: p.source, checks };
+  sniperRows = [row, ...sniperRows.filter(r => r.mint !== p.mint)].slice(0, 100);
+}
+async function sniperPoll() {
+  if (!SNIPER.on || sniperBusy) return;
+  if (!WALLETS.burner.kp) { sniperNote('burner locked — sniper idle', 'warn'); return; }
+  sniperBusy = true;
+  try {
+    const pools = await discoverSnipes();
+    const gate = solFilterState();
+    const ready = [];
+    let safetyBudget = 4;
+    for (const p of pools) {
+      const cheap = sniperCheap(p);
+      p.ageMin = cheap.ageMin;
+      sniperVol[p.mint] = p.m5vol;
+      let checks = cheap.checks;
+      if (cheap.ok && safetyBudget > 0) {
+        safetyBudget--;
+        try { checks = checks.concat(await sniperSafety(p)); }
+        catch (e) { checks = checks.concat([{ name: 'safety', ok: false, detail: e.message }]); }
+      } else if (cheap.ok) checks = checks.concat([{ name: 'safety', ok: false, detail: 'queued' }]);
+      rememberSniper(p, checks);
+      if (checks.every(c => c.ok)) ready.push(p);
+    }
+    for (const p of ready) {
+      if (LOG.some(r => r.sniper && r.side === 'buy' && r.mint === p.mint && ['pending', 'confirmed'].includes(r.status))) { sniperNote(p.symbol + ' already sniped', 'info'); continue; }
+      if (gate.action === 'pause') { sniperNote(p.symbol + ' paused — ' + gate.badge, 'warn'); break; }
+      const openSnipes = openPositions().filter(x => x.sniper).length;
+      if (openSnipes >= SNIPER.maxOpen) { sniperNote('max concurrent snipes ' + openSnipes + '/' + SNIPER.maxOpen, 'warn'); break; }
+      const spent = spentToday(r => r.sniper);
+      let sol = SNIPER.sizeSol;
+      if (gate.action === 'halve') sol = +(sol / 2).toFixed(6);
+      if (spent + sol > SNIPER.dailySol + 1e-9) { sniperNote('sniper daily cap ' + spent.toFixed(3) + '/' + SNIPER.dailySol + ' SOL', 'warn'); break; }
+      const bc = burnerTradeCap();
+      if (!bc.ok) { sniperNote(bc.err, 'warn'); break; }
+      sol = Math.min(sol, S.maxSolPerTrade, bc.byPct);
+      sol = +sol.toFixed(6);
+      if (!(sol >= 0.001)) { sniperNote(p.symbol + ' size too small after caps', 'warn'); continue; }
+      const errs = buyGuards('burner', p.mint, sol);
+      if (errs.length) { sniperNote(p.symbol + ' blocked — ' + errs[0], 'warn'); break; }
+      const slip = Math.min(S.slippagePct, A.slipCap);
+      let qo;
+      try { qo = await getQuote({ inputMint: WSOL, outputMint: p.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
+      catch (e) { sniperNote(p.symbol + ' quote failed — ' + e.message, 'err'); continue; }
+      const imp = impactPct(qo.quote);
+      if (imp > A.maxImpact) { sniperNote(p.symbol + ' impact ' + imp.toFixed(2) + '% > ' + A.maxImpact + '%', 'warn'); continue; }
+      if (!SNIPER.on) return;
+      const entryGuess = p.price > 0 ? p.price : null;
+      const plan = { stop: entryGuess ? entryGuess * 0.85 : null, strat: 'Launch sniper', trail: 15, timeStopH: 0.5 };
+      try {
+        const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, extra: { sniper: true, plan } });
+        sniperNote('SNIPE 🎯 ' + p.symbol + ' ' + sol + ' SOL @ ' + price(r.rec.priceUsd), 'ok');
+        toast('🎯 Sniped ' + p.symbol + ' (' + sol + ' SOL)', 'ok', 8000);
+      } catch (e) { sniperNote(p.symbol + ' buy failed — ' + e.message, 'err'); }
+      break;
+    }
+    renderSniper();
+  } catch (e) { sniperNote('poll error — ' + e.message, 'err'); }
+  finally { sniperBusy = false; }
+}
+async function sniperSell(p, pct, tag, lp) {
+  const b = WALLETS.burner;
+  if (!b.kp) return;
+  let h = b.tokens.get(p.mint);
+  if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* ignore */ } h = b.tokens.get(p.mint); }
+  if (!h || h.raw === 0n) return;
+  const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
+  if (raw === 0n) return;
+  sniperNote(p.symbol + ' ' + tag + ' at ' + price(lp) + ' → sell ' + pct + '%', 'warn');
+  try {
+    const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.min(15, Math.max(A.slipCap, S.slippagePct)) * 100) });
+    const r = await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { sniper: true } });
+    sniperNote('SELL ' + pct + '% ' + p.symbol + ' (' + tag + ')', 'ok');
+    return r;
+  } catch (e) { sniperNote(p.symbol + ' sell failed — ' + e.message, 'err'); }
+}
+async function sniperExitTick() {
+  const open = openPositions().filter(p => p.sniper && p.wallet === 'burner');
+  if (!open.length) return;
+  try { await refreshPrices(); } catch { /* price map may still be warm */ }
+  let changed = false;
+  for (const p of openPositions().filter(x => x.sniper && x.wallet === 'burner')) {
+    const lp = livePrices.get(p.mint)?.price;
+    const hi = Math.max(sniperHigh[p.key] || 0, isNum(lp) ? lp : 0);
+    if (hi !== sniperHigh[p.key]) { sniperHigh[p.key] = hi; changed = true; }
+    const ex = sniperExitDecision(p, lp, hi, Date.now());
+    if (!ex) continue;
+    await sniperSell(p, ex.pct, ex.tag, lp);
+  }
+  if (changed) save('sms:sniperhigh', sniperHigh);
+}
+function startSniper() {
+  clearInterval(sniperTimer);
+  sniperTimer = setInterval(sniperPoll, SNIPER.pollSec * 1000);
+  if (!sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
+  setTimeout(sniperPoll, 400);
+}
+function stopSniper(reason, opts) {
+  const was = SNIPER.on;
+  SNIPER.on = false;
+  clearInterval(sniperTimer); sniperTimer = null;
+  saveSniper();
+  if (was) sniperNote('stopped (' + reason + ')', 'err');
+  if (was && !opts?.quiet) toast('⛔ Launch sniper stopped', 'err');
+  renderKillFab();
+  if (!opts?.quiet) renderSniper();
+}
+function readSniperForm() {
+  const g = (id) => $(id) ? +$(id).value : undefined;
+  Object.assign(SNIPER, {
+    pollSec: g('sPoll') ?? SNIPER.pollSec, minAgeMin: g('sAgeMin') ?? SNIPER.minAgeMin, maxAgeMin: g('sAgeMax') ?? SNIPER.maxAgeMin,
+    minLiq: g('sLiq') ?? SNIPER.minLiq, maxMcap: g('sMcap') ?? SNIPER.maxMcap, sizeSol: g('sSize') ?? SNIPER.sizeSol,
+    dailySol: g('sDaily') ?? SNIPER.dailySol, maxOpen: g('sOpen') ?? SNIPER.maxOpen
+  });
+  const keep = SNIPER.on;
+  sanitizeSniper();
+  SNIPER.on = keep;
+}
+function renderSniper() {
+  const box = $('sniperBox'); if (!box) return;
+  const open = $('sniperDetails')?.open || SNIPER.on;
+  const num = (id, v, step, label, extra = '') => `<label class="block"><span class="text-slate-400">${label}</span><input id="${id}" type="number" step="${step}" value="${v}" ${extra} class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>`;
+  const rows = sniperRows.slice(0, 8).map(r => `<li class="border-t border-white/5 py-1"><b class="text-slate-200">${esc(r.symbol)}</b> <span class="text-slate-500">${esc(r.source)}</span><div class="text-[10px]">${r.checks.map(c => `<span class="${c.ok ? 'text-emerald-300' : 'text-rose-300'}">${esc(c.name)}: ${esc(c.detail)}</span>`).join(' · ')}</div></li>`).join('');
+  box.innerHTML = `<details id="sniperDetails" class="rounded-xl bg-ink-850 border ${SNIPER.on ? 'border-amber-400/50' : 'border-white/5'}" ${open ? 'open' : ''}>
+    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-between"><span>🎯 Launch Sniper</span>${SNIPER.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-ink-900">SNIPE ON</span>' : '<span class="text-[10px] text-slate-500">off</span>'}</summary>
+    <div class="px-3 pb-3 text-xs space-y-2">
+      <p class="text-[11px] text-slate-400">First pump of brand-new pools. Own size and daily cap. Still uses the global per-trade cap, daily max, max positions, 20% balance, slippage, impact, and mood pause. Turns off on reload.</p>
+      <div class="grid grid-cols-2 gap-2">
+        ${num('sPoll', SNIPER.pollSec, '1', 'Poll seconds', 'min="15" max="60"')}
+        ${num('sAgeMin', SNIPER.minAgeMin, '1', 'Min pool age (min)', 'min="0"')}
+        ${num('sAgeMax', SNIPER.maxAgeMin, '1', 'Max pool age (min)', 'min="1"')}
+        ${num('sLiq', SNIPER.minLiq, '100', 'Min liquidity USD', 'min="0"')}
+        ${num('sMcap', SNIPER.maxMcap, '1000', 'Max mcap USD', 'min="1000"')}
+        ${num('sSize', SNIPER.sizeSol, '0.01', 'SOL per snipe', 'min="0.001"')}
+        ${num('sDaily', SNIPER.dailySol, '0.01', 'Sniper daily cap (SOL)', 'min="0.001"')}
+        ${num('sOpen', SNIPER.maxOpen, '1', 'Max concurrent snipes', 'min="1" max="10"')}
+      </div>
+      <div class="flex gap-2">
+        <button id="sSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save sniper</button>
+        ${SNIPER.on ? `<button id="sOff" class="flex-1 rounded-lg py-1.5 font-bold bg-rose-600 hover:bg-rose-500 text-white">Sniper OFF</button>` : `<button id="sOn" class="flex-1 rounded-lg py-1.5 font-bold bg-amber-400 hover:bg-amber-300 text-ink-900">Sniper ON</button>`}
+      </div>
+      <div class="text-[11px] text-slate-500">Candidates ${sniperRows.length} · sniped today ${spentToday(r => r.sniper).toFixed(3)}/${SNIPER.dailySol} SOL</div>
+      <ul class="max-h-40 overflow-y-auto scroll-thin font-mono text-[11px]">${rows || '<li class="text-slate-500">No pools seen yet.</li>'}</ul>
+      <ul id="sniperFeed" class="space-y-0.5 max-h-36 overflow-y-auto scroll-thin font-mono text-[11px]">${sniperFeedHtml()}</ul>
+    </div></details>`;
+  $('sSave')?.addEventListener('click', () => { readSniperForm(); saveSniper(); toast('Sniper settings saved', 'ok'); renderSniper(); if (SNIPER.on) startSniper(); });
+  $('sOff')?.addEventListener('click', () => stopSniper('manual'));
+  $('sOn')?.addEventListener('click', () => {
+    if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+    readSniperForm();
+    resetModalButtons();
+    openModal({ title: '🎯 Turn Launch Sniper ON', confirmLabel: 'Start sniper', danger: true,
+      html: `<p class="text-xs text-slate-300">The burner will market-buy brand-new pools that pass the sniper checks, ${SNIPER.sizeSol} SOL each, while this tab is open. It turns off on reload.</p><label class="mt-3 flex gap-2 items-start text-xs"><input id="sAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand snipes execute without asking.</label>`,
+      validate: () => $('sAck')?.checked,
+      onConfirm: async () => { SNIPER.on = true; saveSniper(); startSniper(); renderSniper(); renderKillFab(); sniperNote('SNIPER ON — ' + SNIPER.sizeSol + ' SOL, daily ' + SNIPER.dailySol + ', poll ' + SNIPER.pollSec + 's', 'warn'); toast('🎯 Launch sniper ON', 'warn', 6000); } });
+  });
+}
+
 /* ---------------- settings wiring ---------------- */
 function fillSettings() {
   $('setRpc').value = S.rpc; $('setSlip').value = S.slippagePct; $('setMaxTrade').value = S.maxSolPerTrade; $('setDaily').value = S.dailyMaxSol; $('setReserve').value = S.reserveSol;
@@ -3247,7 +3593,8 @@ $('risk').addEventListener('change', () => { $('setMaxPos').textContent = maxPos
 $('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('tradeCard').scrollIntoView({ behavior: 'smooth' }); else connectPhantom(false); });
 
 /* ---------------- init ---------------- */
-fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderPortfolio(); hydrate();
+fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderPortfolio(); hydrate();
+if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
 try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
 updateSolFilterBadge();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
@@ -3258,6 +3605,7 @@ if (openPositions().length) setTimeout(refreshPrices, 1500);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper,
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
