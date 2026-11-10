@@ -50,6 +50,7 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
   - highlights STOP HIT / TP hit as **alerts only**;
   - exports to CSV.
   - Open positions are cards (table view still available): source badge, live P&amp;L, a stop-to-target bar, and sell buttons.
+  - **Closed trades** sit under the open cards. Buys and sells on the same token form one round trip until the balance is about zero; partial sells stay in that trip. Each card shows Tehran open/close time, hold time, average entry and exit, SOL in and out, realized P&amp;L in USD (SOL and % beside it), and the exit reason. The header totals P&amp;L, win rate, average win and loss, best and worst, and profit factor, with Today / Week / Month / All and source filters. USD uses the SOL price stored on the fill (`solUsd`); if that is missing the live price is used and marked ≈. New fills record `solUsd`.
   - **Wealth growth** charts burner equity (SOL balance + open positions, in SOL and USD). Snapshots land in `sms:equity` about every 5 minutes while the page is open and whenever a burner trade closes. Old points are downsampled and kept for about a year. Day / Week / Month / All use Tehran time (UTC+3:30). The unit defaults to USD and is remembered. Week and month also show daily realized P&amp;L.
 
 ## Burner wallet + auto-trading (optional)

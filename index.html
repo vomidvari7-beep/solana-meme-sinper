@@ -2403,8 +2403,20 @@ async function signAndSend(walletKey, tx) {
 /* ---------------- trade log & positions ---------------- */
 let LOG = load(LS.log, []);
 const saveLog = () => { LOG = LOG.slice(-500); save(LS.log, LOG); };
-function logTrade(rec) { LOG.push(rec); saveLog(); noteTradeForEquity(rec); renderPortfolio(); return rec; }
-function updateTrade(id, patch) { const r = LOG.find(x => x.id === id); if (r) { Object.assign(r, patch); saveLog(); noteTradeForEquity(r); renderPortfolio(); } return r; }
+function liveSolPx() {
+  const a = solUsd();
+  if (isNum(a) && a > 0) return a;
+  const b = solPriceNow();
+  return isNum(b) && b > 0 ? b : null;
+}
+function ensureSolPx(rec) {
+  if (!rec || (isNum(rec.solUsd) && rec.solUsd > 0)) return rec;
+  const p = liveSolPx();
+  if (p) rec.solUsd = p;
+  return rec;
+}
+function logTrade(rec) { ensureSolPx(rec); LOG.push(rec); saveLog(); noteTradeForEquity(rec); renderPortfolio(); return rec; }
+function updateTrade(id, patch) { const r = LOG.find(x => x.id === id); if (r) { Object.assign(r, patch); ensureSolPx(r); saveLog(); noteTradeForEquity(r); renderPortfolio(); } return r; }
 let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
@@ -3537,6 +3549,211 @@ function posCard(p) {
   </article>`;
 }
 function upClass(n) { return n >= 0 ? 'text-emerald-300' : 'text-rose-300'; }
+let closedRange = 'all', closedSrc = 'all';
+try {
+  const saved = JSON.parse(localStorage.getItem('sms:closedf') || 'null');
+  if (saved && ['today', 'week', 'month', 'all'].includes(saved.range)) closedRange = saved.range;
+  if (saved && ['all', 'auto', 'manual', 'copy', 'snipe', 'mylist'].includes(saved.src)) closedSrc = saved.src;
+} catch { /* all */ }
+function saveClosedF() { try { localStorage.setItem('sms:closedf', JSON.stringify({ range: closedRange, src: closedSrc })); } catch { /* ignore */ } }
+function tehranWhen(ts) {
+  if (!isNum(ts)) return '—';
+  const p = tehranParts(ts), now = tehranParts(Date.now());
+  return pad2(p.m) + '/' + pad2(p.day) + (p.y !== now.y ? '/' + p.y : '') + ' ' + pad2(p.h) + ':' + pad2(p.min);
+}
+function spanText(ms) {
+  const s = Math.max(0, ms / 1000);
+  if (s < 60) return Math.max(1, Math.round(s)) + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
+}
+function legUsd(r, livePx) {
+  const sol = +r?.solAmount;
+  if (!isNum(sol)) return { usd: null, approx: false, sol: 0 };
+  if (isNum(r.solUsd) && r.solUsd > 0) return { usd: sol * r.solUsd, approx: false, sol };
+  if (isNum(livePx) && livePx > 0) return { usd: sol * livePx, approx: true, sol };
+  return { usd: null, approx: true, sol };
+}
+function legTokenPx(r, livePx) {
+  if (isNum(r.priceUsd) && r.priceUsd > 0) return r.priceUsd;
+  const v = legUsd(r, livePx);
+  return isNum(v.usd) && r.tokenAmount > 0 ? v.usd / r.tokenAmount : null;
+}
+function exitReasonLabel(tag) {
+  const t = String(tag || '').toLowerCase();
+  if (!t) return 'manual';
+  if (t === 'tp1') return 'TP1';
+  if (t === 'tp2') return 'TP2';
+  if (/^tp\d+$/.test(t)) return t.toUpperCase();
+  if (t === 'trail' || t === 'early trail') return 'trail';
+  if (t === 'stop' || t === 'break-even') return 'stop';
+  if (t === 'time') return 'time stop';
+  return 'manual';
+}
+function closedSource(c) {
+  if (c.myList) return { id: 'mylist', label: 'MY LIST', cls: 'border-amber-300/40 bg-amber-400/15 text-amber-100' };
+  if (c.sniper) return { id: 'snipe', label: 'SNIPE', cls: 'border-amber-400/40 bg-amber-500/15 text-amber-200' };
+  if (c.copy) return { id: 'copy', label: 'COPY', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-200' };
+  if (c.auto) return { id: 'auto', label: 'AUTO', cls: 'border-violet-400/40 bg-violet-500/15 text-violet-200' };
+  return { id: 'manual', label: 'MANUAL', cls: 'border-white/15 bg-white/5 text-slate-300' };
+}
+function signedUsd(n, approx) {
+  if (!isNum(n)) return '—';
+  const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  return (approx ? '≈ ' : '') + sign + '$' + Math.abs(n).toFixed(2);
+}
+function signedSol(n) {
+  if (!isNum(n)) return '—';
+  const sign = n > 0 ? '+' : n < 0 ? '' : '';
+  return sign + n.toFixed(4) + ' SOL';
+}
+function closedRounds(livePx) {
+  const rows = LOG.filter(r => r.status === 'confirmed' && r.mint).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const open = new Map();
+  const out = [];
+  for (const r of rows) {
+    const k = (r.wallet || '') + ':' + r.mint;
+    let c = open.get(k);
+    if (c?.done) c = null;
+    if (!c) {
+      if (r.side !== 'buy') continue;
+      c = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol || short(r.mint), openTs: r.ts, closeTs: null, buys: [], sells: [], auto: false, copy: false, sniper: false, myList: false, bought: 0, sold: 0, done: false };
+      open.set(k, c);
+    }
+    if (r.side === 'buy') {
+      c.buys.push(r);
+      c.bought += r.tokenAmount || 0;
+      if (r.auto) c.auto = true;
+      if (r.copy) c.copy = true;
+      if (r.sniper) c.sniper = true;
+      if (r.myList || r.plan?.myList) c.myList = true;
+    } else {
+      c.sells.push(r);
+      c.sold += r.tokenAmount || 0;
+      if (r.auto) c.auto = true;
+      if (r.copy) c.copy = true;
+      if (r.sniper) c.sniper = true;
+      if (r.myList || r.plan?.myList) c.myList = true;
+    }
+    c.symbol = r.symbol || c.symbol;
+    const remain = c.bought - c.sold;
+    if (c.bought > 0 && c.sells.length && remain <= c.bought * 0.001) {
+      c.done = true;
+      c.closeTs = r.ts;
+      c.exit = exitReasonLabel(r.exitTag);
+      out.push(finishRound(c, livePx));
+    }
+  }
+  return out;
+}
+function finishRound(c, livePx) {
+  let solIn = 0, solOut = 0, usdIn = 0, usdOut = 0, approx = false, haveIn = false, haveOut = false;
+  let eTok = 0, ePx = 0, xTok = 0, xPx = 0;
+  for (const r of c.buys) {
+    const v = legUsd(r, livePx);
+    solIn += v.sol;
+    if (isNum(v.usd)) { usdIn += v.usd; haveIn = true; }
+    if (v.approx) approx = true;
+    const px = legTokenPx(r, livePx);
+    if (isNum(px) && r.tokenAmount > 0) { eTok += r.tokenAmount; ePx += r.tokenAmount * px; }
+  }
+  for (const r of c.sells) {
+    const v = legUsd(r, livePx);
+    solOut += v.sol;
+    if (isNum(v.usd)) { usdOut += v.usd; haveOut = true; }
+    if (v.approx) approx = true;
+    const px = legTokenPx(r, livePx);
+    if (isNum(px) && r.tokenAmount > 0) { xTok += r.tokenAmount; xPx += r.tokenAmount * px; }
+  }
+  const pnlUsd = haveIn && haveOut ? usdOut - usdIn : null;
+  const pnlSol = solOut - solIn;
+  const pnlPct = isNum(pnlUsd) && usdIn > 0 ? pnlUsd / usdIn * 100 : (solIn > 0 ? pnlSol / solIn * 100 : null);
+  return { ...c, solIn, solOut, usdIn, usdOut, pnlUsd, pnlSol, pnlPct, approx: approx || !haveIn || !haveOut, avgEntry: eTok > 0 ? ePx / eTok : null, avgExit: xTok > 0 ? xPx / xTok : null, src: closedSource(c) };
+}
+function inClosedRange(ts, range) {
+  if (!isNum(ts) || range === 'all') return range === 'all';
+  if (range === 'today') return tehranDayKey(ts) === tehranDayKey(Date.now());
+  if (range === 'week') return ts >= Date.now() - 7 * 86400000;
+  return ts >= Date.now() - 30 * 86400000;
+}
+function closedSummary(list) {
+  let usd = 0, sol = 0, wins = 0, losses = 0, winSum = 0, lossSum = 0, approx = false;
+  let best = null, worst = null;
+  for (const c of list) {
+    if (c.approx) approx = true;
+    if (isNum(c.pnlUsd)) {
+      usd += c.pnlUsd;
+      if (!best || c.pnlUsd > best.pnlUsd) best = c;
+      if (!worst || c.pnlUsd < worst.pnlUsd) worst = c;
+      if (c.pnlUsd > 0) { wins++; winSum += c.pnlUsd; }
+      else if (c.pnlUsd < 0) { losses++; lossSum += c.pnlUsd; }
+    }
+    if (isNum(c.pnlSol)) sol += c.pnlSol;
+  }
+  const decided = wins + losses;
+  return {
+    n: list.length, usd, sol, wins, losses, approx,
+    winRate: decided ? wins / decided * 100 : null,
+    avgWin: wins ? winSum / wins : null,
+    avgLoss: losses ? lossSum / losses : null,
+    best, worst,
+    pf: lossSum < 0 ? winSum / Math.abs(lossSum) : (winSum > 0 ? Infinity : null)
+  };
+}
+function closedTradeCard(c) {
+  const img = (lastResult?.tokens || []).find(t => t.mint === c.mint)?.image;
+  const up = isNum(c.pnlUsd) ? c.pnlUsd >= 0 : (isNum(c.pnlPct) ? c.pnlPct >= 0 : true);
+  const col = !isNum(c.pnlUsd) && !isNum(c.pnlPct) ? 'text-slate-300' : up ? 'text-emerald-300' : 'text-rose-300';
+  return `<article class="rounded-xl border border-white/10 bg-ink-850/70 p-3">
+    <div class="flex items-start gap-2">
+      ${img ? `<img src="${safeUrl(img)}" alt="" class="w-8 h-8 rounded-lg object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-8 h-8 rounded-lg bg-ink-700 grid place-items-center text-[10px] font-bold shrink-0">${esc((c.symbol || '?').slice(0, 3))}</div>`}
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-1.5"><b class="break-words">${esc(c.symbol || short(c.mint))}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${c.src.cls}">${c.src.label}</span><span class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-300">${esc(c.exit)}</span></div>
+        <div class="mt-0.5 text-[10px] text-slate-500 whitespace-normal break-words">Opened ${esc(tehranWhen(c.openTs))} · closed ${esc(tehranWhen(c.closeTs))} · held ${esc(spanText((c.closeTs || 0) - (c.openTs || 0)))} · Tehran</div>
+      </div>
+      <div class="text-right min-w-0">
+        <div class="font-mono text-sm whitespace-normal break-words ${col}">${signedUsd(c.pnlUsd, c.approx)}</div>
+        <div class="font-mono text-[10px] whitespace-normal break-words ${col}">${signedSol(c.pnlSol)} · ${pct(c.pnlPct, 1)}</div>
+      </div>
+    </div>
+    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+      <div class="min-w-0"><span class="text-slate-500">Avg entry</span><div class="font-mono whitespace-normal break-words">${price(c.avgEntry)}</div></div>
+      <div class="min-w-0"><span class="text-slate-500">Avg exit</span><div class="font-mono whitespace-normal break-words">${price(c.avgExit)}</div></div>
+      <div class="min-w-0"><span class="text-slate-500">SOL in</span><div class="font-mono whitespace-normal break-words">${fmtSol(c.solIn)}</div></div>
+      <div class="min-w-0"><span class="text-slate-500">SOL out</span><div class="font-mono whitespace-normal break-words">${fmtSol(c.solOut)}</div></div>
+    </div>
+  </article>`;
+}
+function closedTradesHtml() {
+  const live = liveSolPx();
+  const all = closedRounds(live).sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0));
+  const last = all[0];
+  const list = all.filter(c => inClosedRange(c.closeTs, closedRange) && (closedSrc === 'all' || c.src.id === closedSrc));
+  const s = closedSummary(list);
+  const chip = (kind, id, label) => `<button type="button" data-closed-${kind}="${id}" class="rounded-full border px-2.5 py-1 text-[11px] ${(kind === 'range' ? closedRange : closedSrc) === id ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
+  const stat = (k, v, cls) => `<div class="min-w-0"><div class="text-[10px] text-slate-500">${k}</div><div class="font-mono text-[12px] whitespace-normal break-words ${cls || 'text-slate-100'}">${v}</div></div>`;
+  const lastHtml = last ? `<div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] whitespace-normal break-words">Last trade: <b>${esc(last.symbol || short(last.mint))}</b> <span class="${isNum(last.pnlUsd) && last.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300'}">${signedUsd(last.pnlUsd, last.approx)} (${pct(last.pnlPct, 0)})</span></div>` : '';
+  const pf = s.pf == null ? '—' : s.pf === Infinity ? '∞' : s.pf.toFixed(2);
+  return `<div class="mt-4">
+    <h3 class="font-bold text-sm mb-2">Closed trades</h3>
+    ${lastHtml}
+    <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-xl border border-white/10 bg-ink-900/40 p-3">
+      ${stat('Realized', signedUsd(s.usd, s.approx) + '<span class="block text-[10px] text-slate-400">' + signedSol(s.sol) + '</span>', isNum(s.usd) && s.usd < 0 ? 'text-rose-300' : 'text-emerald-300')}
+      ${stat('Trades', String(s.n))}
+      ${stat('Win rate', (s.winRate == null ? '—' : s.winRate.toFixed(1) + '%') + '<span class="block text-[10px] text-slate-400">' + s.wins + 'W / ' + s.losses + 'L</span>')}
+      ${stat('Avg win', signedUsd(s.avgWin, false), 'text-emerald-300')}
+      ${stat('Avg loss', signedUsd(s.avgLoss, false), 'text-rose-300')}
+      ${stat('Best', s.best ? esc(s.best.symbol) + ' ' + signedUsd(s.best.pnlUsd, s.best.approx) : '—', 'text-emerald-300')}
+      ${stat('Worst', s.worst ? esc(s.worst.symbol) + ' ' + signedUsd(s.worst.pnlUsd, s.worst.approx) : '—', 'text-rose-300')}
+      ${stat('Profit factor', pf)}
+    </div>
+    <div class="mt-2 flex flex-wrap gap-1.5">${chip('range', 'today', 'Today')}${chip('range', 'week', 'Week')}${chip('range', 'month', 'Month')}${chip('range', 'all', 'All')}</div>
+    <div class="mt-1.5 flex flex-wrap gap-1.5">${chip('src', 'all', 'All sources')}${chip('src', 'auto', 'AUTO')}${chip('src', 'manual', 'MANUAL')}${chip('src', 'copy', 'COPY')}${chip('src', 'snipe', 'SNIPE')}${chip('src', 'mylist', 'MY LIST')}</div>
+    <p class="mt-1 text-[10px] text-slate-600 whitespace-normal break-words">USD uses the SOL price saved on each fill. A missing price uses the live SOL price and is marked ≈.</p>
+    <div class="mt-2 space-y-2">${list.length ? list.map(closedTradeCard).join('') : '<p class="text-[11px] text-slate-500">No closed trades for this filter.</p>'}</div>
+  </div>`;
+}
 function renderPortfolio() {
   const el = $('portfolio'); if (!el) return;
   const ae = document.activeElement;
@@ -3567,6 +3784,7 @@ function renderPortfolio() {
     ${equityCardHtml()}
     <div class="text-[11px] text-slate-500 mb-2 whitespace-normal break-words">Open positions ${open.length}/${maxPos()} · spent today ${solWithUsd(spentToday())} / ${esc(sizeHint(S.dailyMaxSol) || S.dailyMaxSol + ' ' + unitWord())} (auto ${solWithUsd(spentToday(r => r.auto))} / ${esc(sizeHint(A.dailyCap) || A.dailyCap + ' ' + unitWord())}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
     ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
+    ${closedTradesHtml()}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
   </section>`;
@@ -3575,6 +3793,8 @@ function renderPortfolio() {
   $('wealthSol')?.addEventListener('click', () => { wealthUnit = 'sol'; try { localStorage.setItem('sms:wealthunit', 'sol'); } catch { /* ignore */ } renderPortfolio(); });
   el.querySelectorAll('[data-eqrange]').forEach(b => b.addEventListener('click', () => { equityRange = b.dataset.eqrange; try { localStorage.setItem('sms:equityrange', equityRange); } catch { /* ignore */ } renderPortfolio(); }));
   $('pfView')?.addEventListener('click', () => { posTableView = !posTableView; try { localStorage.setItem('sms:posview', posTableView ? 'table' : 'cards'); } catch { /* ignore */ } renderPortfolio(); });
+  el.querySelectorAll('[data-closed-range]').forEach(b => b.addEventListener('click', () => { closedRange = b.dataset.closedRange; saveClosedF(); renderPortfolio(); }));
+  el.querySelectorAll('[data-closed-src]').forEach(b => b.addEventListener('click', () => { closedSrc = b.dataset.closedSrc; saveClosedF(); renderPortfolio(); }));
   el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.sell, { pct: +b.dataset.pct })));
   el.querySelectorAll('[data-edit-stop]').forEach(b => b.addEventListener('click', () => { posEditKey = b.dataset.editStop; renderPortfolio(); }));
   el.querySelectorAll('[data-ms-cancel]').forEach(b => b.addEventListener('click', () => { posEditKey = null; renderPortfolio(); }));
