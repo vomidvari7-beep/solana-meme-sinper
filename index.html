@@ -7086,9 +7086,9 @@ function agentTime(v) {
 }
 function planFresh(p, now) {
   const t = now || Date.now();
-  const ts = agentTime(p?.ts);
+  const ts = agentTime(p?.ts) || agentTime(p?.updatedAt);
   if (!(ts > 0) || t - ts > 2 * 3600e3) return false;
-  const exp = agentNum(p?.expires);
+  const exp = agentTime(p?.expires);
   if (exp > 0 && t > exp) return false;
   return true;
 }
@@ -7111,6 +7111,7 @@ function agentTriggerHit(p, px) {
   if (!(trig > 0)) return false;
   if (mode === 'retest' || /retest|pullback/.test(cond)) return px <= trig * 1.03 && px >= trig * 0.97;
   if (mode === 'below' || /below|under|dip/.test(cond)) return px <= trig;
+  if (mode === 'break' || mode === 'above' || cond === 'above' || /break/.test(cond)) return px >= trig;
   return px >= trig;
 }
 function agentScaleOn(p, fallback) {
@@ -7215,7 +7216,7 @@ function renderAgentPicks() {
   const box = $('agentPicks'); if (!box) return;
   const stamp = (name, rows) => {
     let max = AG.fetched[name] || 0;
-    (rows || []).forEach(r => { const t = agentTime(r?.ts) || agentTime(r?.addedTs); if (t > max) max = t; });
+    (rows || []).forEach(r => { const t = agentTime(r?.ts) || agentTime(r?.updatedAt) || agentTime(r?.addedTs); if (t > max) max = t; });
     return tehranClock(max);
   };
   const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} · plans ${stamp('plans', [...AG.plans.values()])} · risk ${stamp('risk', AG.risk.positions)} · list file ${stamp('mylist', AG.listFile || [])} · config ${tehranClock(AG.fetched.config)}</div>`;
@@ -7269,8 +7270,11 @@ async function refreshAgents() {
       }
       if (name === 'mylist') AG.listFile = Array.isArray(data) ? data : [];
       if (name === 'plans') {
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.plans) ? data.plans : []);
         AG.plans = new Map();
-        (Array.isArray(data) ? data : []).forEach(p => { if (p && isAddr(p.mint) && planFresh(p)) AG.plans.set(p.mint, p); });
+        list.forEach(p => { if (p && isAddr(p.mint) && planFresh(p)) AG.plans.set(p.mint, p); });
+        const written = agentTime(data?.updatedAt) || agentTime(data?.updated_utc);
+        if (written) AG.fetched.plans = written;
       }
       if (name === 'risk' && data && typeof data === 'object') {
         AG.risk = { pause_auto_buy: !!data.pause_auto_buy, ts: agentNum(data.ts) || 0, positions: Array.isArray(data.positions) ? data.positions : [] };

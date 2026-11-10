@@ -35,16 +35,16 @@ Entry Analyst output. An array.
 | `tf` | Chart timeframe, such as `4h` |
 | `trigger_price` | Price that arms the buy |
 | `trigger_condition` | `above`, `below`, `retest`, or `immediate` |
-| `entry_mode` | `immediate`, `retest`, or `break` |
+| `entry_mode` | `immediate`, `retest`, or `break` (price at or above `trigger_price`) |
 | `scale_in` | `true` to start with 30%, `false` to buy the full size |
 | `stop`, `tp1`, `tp2` | Prices. A stop or take-profit the user set on that token wins |
 | `trail` | Trail percent after the entry, optional |
 | `rr` | Reward to risk, optional |
 | `confidence` | 0–100. Auto-buy needs at least 60 |
 | `status` | `ready`, `waiting`, or `invalid` |
-| `expires` | Milliseconds. After this the plan is ignored |
+| `expires` | Unix milliseconds or an ISO time. After this the plan is ignored |
 | `reason` | One line for the chip and the trade log |
-| `ts` | When the plan was written |
+| `ts`, `updatedAt` | When the plan was written, as Unix milliseconds or an ISO time. A plan older than 2 hours is ignored |
 
 Auto-buy uses a plan only when **Use agent plans** is on, `status` is `ready`, confidence is at least 60, the plan is not stale, and that token’s My List switch or scanner Auto is already on. The usual size caps still apply.
 
