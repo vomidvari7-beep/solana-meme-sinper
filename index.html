@@ -2030,16 +2030,25 @@ function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(
 function blankPos(k, r) {
   return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false, copy: false, copyState: null, sniper: false, closed: false };
 }
-function freshStop(p) {
-  const avg = p.avgUsd;
-  const planStop = p.plan?.stop;
-  if (isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) return planStop;
+function profileStopPct() {
   let pct = 20;
   try {
     const prof = effectiveProfile($('risk')?.value || 'Balanced', collectInputs());
-    if (isNum(prof?.stopPct)) pct = prof.stopPct;
+    if (isNum(prof?.stopPct) && prof.stopPct > 0 && prof.stopPct < 100) pct = prof.stopPct;
   } catch { /* profile inputs not ready */ }
-  if (isNum(avg) && avg > 0) return avg * (1 - pct / 100);
+  return pct;
+}
+function freshStop(p) {
+  const avg = p.avgUsd;
+  const planStop = p.plan?.stop;
+  const byPct = isNum(avg) && avg > 0 ? avg * (1 - profileStopPct() / 100) : null;
+  // A plan stop is the analyzed level. If that level sits much further below the
+  // actual fill than the profile stop (a dip-zone stop after a market buy), use the profile stop.
+  if (isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) {
+    if (isNum(byPct)) return Math.max(planStop, byPct);
+    return planStop;
+  }
+  if (isNum(byPct)) return byPct;
   return isNum(planStop) ? planStop : null;
 }
 function positions() {
@@ -2702,6 +2711,87 @@ function equityCardHtml() {
     ${equityRange === 'week' || equityRange === 'month' ? dailyBars(stats, from, unit) : ''}
   </div>`;
 }
+let posLevels = load('sms:poslevels', {});
+let posEditKey = null;
+function savePosLevels() { save('sms:poslevels', posLevels); }
+function levelId(p) { return (p?.key || '') + ':' + (p?.firstTs || 0); }
+function manualOf(p) { return posLevels[levelId(p)] || null; }
+function manualStopPrice(m, entry) {
+  if (!m) return null;
+  if (isNum(m.stop) && m.stop > 0) return m.stop;
+  if (isNum(m.stopPct) && m.stopPct > 0 && m.stopPct < 100 && isNum(entry) && entry > 0) return entry * (1 - m.stopPct / 100);
+  return null;
+}
+function manualTp(m, entry, which) {
+  const px = m?.[which];
+  const pct = m?.[which + 'Pct'];
+  if (isNum(px) && px > 0) return px;
+  if (isNum(pct) && pct > 0 && isNum(entry) && entry > 0) return entry * (1 + pct / 100);
+  return null;
+}
+function applyManualLevels(p, eff) {
+  const m = manualOf(p);
+  if (!m) return eff;
+  const entry = p?.avgUsd;
+  let tp1 = eff.tp1, tp2 = eff.tp2;
+  const custom1 = manualTp(m, entry, 'tp1');
+  const custom2 = manualTp(m, entry, 'tp2');
+  if (isNum(custom1)) tp1 = custom1;
+  if (isNum(custom2)) tp2 = custom2;
+  const stopPx = manualStopPrice(m, entry);
+  if (!isNum(stopPx)) return { ...eff, tp1, tp2 };
+  if (m.keepRaise === false) return { ...eff, stop: stopPx, reason: 'manual', tp1, tp2 };
+  if (!isNum(eff.stop) || stopPx > eff.stop + 1e-12) return { ...eff, stop: stopPx, reason: 'manual', tp1, tp2 };
+  return { ...eff, tp1, tp2 };
+}
+function posEditHtml(p) {
+  if (posEditKey !== p.key) return '';
+  const m = manualOf(p) || {};
+  const lp = livePrices.get(p.mint)?.price;
+  return `<div data-pos-edit class="mt-2 rounded-xl border border-white/10 bg-ink-900/70 p-2.5 space-y-2">
+    <div class="text-[11px] text-slate-400 whitespace-normal break-words">Live ${price(lp)} · entry ${price(p.avgUsd)}. Stop must be below the live price.</div>
+    <div class="grid grid-cols-2 gap-2 text-[11px]">
+      <label class="min-w-0">Stop price<input data-ms="stop" value="${isNum(m.stop) ? m.stop : ''}" placeholder="${price(p.initialStop)}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="min-w-0">or % below entry<input data-ms="stopPct" value="${isNum(m.stopPct) ? m.stopPct : ''}" placeholder="20" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="min-w-0">TP1 price<input data-ms="tp1" value="${isNum(m.tp1) ? m.tp1 : ''}" placeholder="auto +50%" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="min-w-0">or TP1 % above<input data-ms="tp1Pct" value="${isNum(m.tp1Pct) ? m.tp1Pct : ''}" placeholder="50" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="min-w-0">TP2 price<input data-ms="tp2" value="${isNum(m.tp2) ? m.tp2 : ''}" placeholder="auto +100%" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="min-w-0">or TP2 % above<input data-ms="tp2Pct" value="${isNum(m.tp2Pct) ? m.tp2Pct : ''}" placeholder="100" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+    </div>
+    <label class="flex items-center gap-2 text-[11px] text-slate-300"><input data-ms="raise" type="checkbox" class="accent-violet-500" ${m.keepRaise === false ? '' : 'checked'} /> Keep auto-raise</label>
+    <p data-ms-warn class="text-[11px] text-rose-300 whitespace-normal break-words hidden"></p>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" data-ms-save="${esc(p.key)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Save</button>
+      <button type="button" data-ms-reset="${esc(p.key)}" class="rounded-lg px-2.5 py-1.5 text-[11px] border border-white/10 text-slate-300">Reset to auto</button>
+      <button type="button" data-ms-cancel class="rounded-lg px-2.5 py-1.5 text-[11px] text-slate-400">Cancel</button>
+    </div>
+  </div>`;
+}
+function readManualForm(form, p) {
+  const raw = (name) => { const el = form.querySelector(`[data-ms="${name}"]`); const v = el ? el.value.trim() : ''; if (!v) return null; const n = +v; return Number.isFinite(n) ? n : NaN; };
+  const entry = p.avgUsd;
+  const live = livePrices.get(p.mint)?.price;
+  const stopIn = raw('stop'), pctIn = raw('stopPct');
+  const tp1In = raw('tp1'), tp1Pct = raw('tp1Pct'), tp2In = raw('tp2'), tp2Pct = raw('tp2Pct');
+  const bad = [stopIn, pctIn, tp1In, tp1Pct, tp2In, tp2Pct].some(n => Number.isNaN(n));
+  if (bad) return { error: 'Use numbers only' };
+  let stop = isNum(stopIn) ? stopIn : null;
+  if (stop == null && isNum(pctIn)) {
+    if (!(pctIn > 0 && pctIn < 100) || !(entry > 0)) return { error: 'Stop % must be between 0 and 100' };
+    stop = entry * (1 - pctIn / 100);
+  }
+  if (!(stop > 0)) return { error: 'Enter a stop price or a % below entry' };
+  const ceiling = isNum(live) ? live : entry;
+  if (!(isNum(ceiling) && stop < ceiling)) return { error: 'Stop must be below the live price' };
+  const tp1 = isNum(tp1In) ? tp1In : (isNum(tp1Pct) ? (entry > 0 ? entry * (1 + tp1Pct / 100) : null) : null);
+  const tp2 = isNum(tp2In) ? tp2In : (isNum(tp2Pct) ? (entry > 0 ? entry * (1 + tp2Pct / 100) : null) : null);
+  if (isNum(tp1Pct) && !(tp1Pct > 0)) return { error: 'TP1 % must be above 0' };
+  if (isNum(tp2Pct) && !(tp2Pct > 0)) return { error: 'TP2 % must be above 0' };
+  if (isNum(tp1) && isNum(entry) && !(tp1 > entry)) return { error: 'TP1 must be above entry' };
+  if (isNum(tp2) && isNum(entry) && !(tp2 > entry)) return { error: 'TP2 must be above entry' };
+  if (isNum(tp1) && isNum(tp2) && !(tp2 > tp1)) return { error: 'TP2 must be above TP1' };
+  return { stop: isNum(stopIn) ? stopIn : null, stopPct: isNum(stopIn) ? null : pctIn, tp1: isNum(tp1In) ? tp1In : null, tp1Pct: isNum(tp1In) ? null : tp1Pct, tp2: isNum(tp2In) ? tp2In : null, tp2Pct: isNum(tp2In) ? null : tp2Pct, keepRaise: !!form.querySelector('[data-ms="raise"]')?.checked };
+}
 function posCard(p) {
   const lp = livePrices.get(p.mint)?.price;
   const s = levelState(p);
@@ -2717,22 +2807,27 @@ function posCard(p) {
   const right = isNum(tp2) ? tp2 : tp1;
   const span = isNum(stop) && isNum(right) && right > stop ? right - stop : null;
   const at = (v) => span && isNum(v) ? Math.max(0, Math.min(100, (v - stop) / span * 100)) : null;
-  const cur = at(lp), entryAt = at(entry), highAt = at(high);
+  const cur = at(lp), entryAt = at(entry), highAt = at(high), tp1At = at(tp1);
   const tp1Hit = p.tp1Done || (isNum(lp) && isNum(tp1) && lp >= tp1);
   const tp2Hit = p.tp2Done || (isNum(lp) && isNum(tp2) && lp >= tp2);
-  const chip = (label, on) => `<span class="rounded-full border px-2 py-0.5 text-[10px] whitespace-normal ${on ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-400'}">${label}</span>`;
+  const chip = (label, on) => `<span class="rounded-full border px-2 py-0.5 text-[10px] whitespace-normal break-words ${on ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-400'}">${label}</span>`;
   const reason = pl.reason || 'initial';
+  const tick = (atPct, cls, title) => atPct == null ? '' : `<div class="absolute top-1 h-5 w-0.5 ${cls}" style="left:${atPct}%" title="${title}"></div>`;
   const bar = span ? `<div class="relative mt-3 h-7">
       <div class="absolute left-0 right-0 top-2.5 h-2 rounded-full bg-gradient-to-r from-rose-500/50 via-slate-600/40 to-emerald-500/50"></div>
       ${cur != null ? `<div class="pos-fill absolute left-0 top-2.5 h-2 rounded-full bg-gradient-to-r from-rose-400 to-emerald-400 transition-[width] duration-700 ease-out" data-bar="${cur}" data-key="${esc(p.key)}" style="width:${posBarMem[p.key] != null ? posBarMem[p.key] : 0}%"></div>` : ''}
-      ${entryAt != null ? `<div class="absolute top-1 h-5 w-0.5 bg-slate-100" style="left:${entryAt}%" title="entry"></div>` : ''}
+      ${tick(0, 'bg-rose-400', 'stop')}
+      ${tick(entryAt, 'bg-slate-100', 'entry')}
+      ${tick(tp1At, 'bg-emerald-300', 'TP1')}
+      ${tick(isNum(tp2) ? 99 : null, 'bg-emerald-400', 'TP2')}
       ${highAt != null ? `<div class="absolute top-1.5 h-4 w-0.5 bg-amber-300" style="left:${highAt}%" title="high"></div>` : ''}
       ${cur != null ? `<div class="absolute top-1.5 h-3.5 w-3.5 -ml-1.5 rounded-full bg-white shadow" style="left:${cur}%"></div>` : ''}
     </div>
-    <div class="flex flex-wrap justify-between gap-x-2 gap-y-0.5 text-[10px] leading-snug whitespace-normal break-words">
-      <span class="text-rose-300">stop ${price(stop)}</span>
-      <span class="text-slate-400">entry ${price(entry)}</span>
-      <span class="text-emerald-300">${isNum(tp2) ? 'TP2 ' + price(tp2) : 'TP1 ' + price(tp1)}</span>
+    <div class="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] leading-snug">
+      <span class="text-rose-300 whitespace-normal break-words">stop ${price(stop)}</span>
+      <span class="text-slate-300 whitespace-normal break-words sm:text-right">entry ${price(entry)}</span>
+      <span class="text-emerald-200 whitespace-normal break-words">TP1 ${price(tp1)}</span>
+      <span class="text-emerald-300 whitespace-normal break-words sm:text-right">TP2 ${price(tp2)}</span>
     </div>` : '';
   return `<article class="rounded-2xl bg-ink-850/80 border border-white/10 p-3.5 ${glow}">
     <div class="flex items-start gap-3">
@@ -2753,7 +2848,9 @@ function posCard(p) {
       <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words text-rose-300">${price(stop)}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
     </div>
     ${bar}
-    <div class="mt-2 flex flex-wrap gap-1.5">${chip('TP1 ' + (tp1Hit ? 'hit' : 'pending'), tp1Hit)}${chip('TP2 ' + (tp2Hit ? 'hit' : 'pending'), tp2Hit)}</div>
+    <div class="mt-2 flex flex-wrap gap-1.5">${chip('TP1 ' + price(tp1) + ' · ' + (tp1Hit ? 'hit' : 'pending'), tp1Hit)}${chip('TP2 ' + price(tp2) + ' · ' + (tp2Hit ? 'hit' : 'pending'), tp2Hit)}</div>
+    <button type="button" data-edit-stop="${esc(p.key)}" class="mt-2 text-[11px] text-violet-300 hover:underline">✏️ Edit stop</button>
+    ${posEditHtml(p)}
     <div class="mt-3 flex flex-wrap items-center gap-2">
       ${canSell ? [25, 50, 100].map(x => `<button data-sell="${esc(p.mint)}" data-pct="${x}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-rose-500/15 text-rose-200 border border-rose-500/25">Sell ${x}%</button>`).join('') : `<span class="text-[11px] text-slate-500">${p.wallet === activeKey ? 'No balance to sell' : 'Switch wallet to sell'}</span>`}
       <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-[11px] text-violet-300 hover:underline">DexScreener</a>
@@ -2763,6 +2860,8 @@ function posCard(p) {
 function upClass(n) { return n >= 0 ? 'text-emerald-300' : 'text-rose-300'; }
 function renderPortfolio() {
   const el = $('portfolio'); if (!el) return;
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest('[data-pos-edit]') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
   const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
   if (!LOG.length && !anyW && !AUTOLOG.length && !loadEquity().length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
@@ -2774,7 +2873,7 @@ function renderPortfolio() {
       <td class="pr-2 font-mono whitespace-normal break-words ${pctCls(m.pnl)}">${pct(m.pnl)}<div class="text-[10px]">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</div></td>
       <td class="pr-2 font-mono whitespace-normal break-words text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono whitespace-normal break-words text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
-      <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}</td></tr>`; }).join('');
+      <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}<button type="button" data-edit-stop="${esc(p.key)}" class="block mt-1 text-[10px] text-violet-300">Edit stop</button></td></tr>`; }).join('');
   const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
       <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
       <td class="pr-2 font-mono">${fmtSol(r.solAmount)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
@@ -2786,7 +2885,7 @@ function renderPortfolio() {
     <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
       <div class="flex flex-wrap gap-2 text-[11px]"><button id="pfView" class="text-violet-300 hover:underline">${posTableView ? 'Cards' : 'Table view'}</button><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
     <div class="text-[11px] text-slate-500 mb-2 whitespace-normal break-words">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
-    ${open.length ? (posTableView ? table : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
+    ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
     ${equityCardHtml()}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
@@ -2801,6 +2900,20 @@ function renderPortfolio() {
   el.querySelectorAll('[data-eqrange]').forEach(b => b.addEventListener('click', () => { equityRange = b.dataset.eqrange; try { localStorage.setItem('sms:equityrange', equityRange); } catch { /* ignore */ } renderPortfolio(); }));
   $('pfView')?.addEventListener('click', () => { posTableView = !posTableView; try { localStorage.setItem('sms:posview', posTableView ? 'table' : 'cards'); } catch { /* ignore */ } renderPortfolio(); });
   el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.sell, { pct: +b.dataset.pct })));
+  el.querySelectorAll('[data-edit-stop]').forEach(b => b.addEventListener('click', () => { posEditKey = b.dataset.editStop; renderPortfolio(); }));
+  el.querySelectorAll('[data-ms-cancel]').forEach(b => b.addEventListener('click', () => { posEditKey = null; renderPortfolio(); }));
+  el.querySelectorAll('[data-ms-reset]').forEach(b => b.addEventListener('click', () => {
+    const p = open.find(x => x.key === b.dataset.msReset); if (!p) return;
+    delete posLevels[levelId(p)]; savePosLevels(); posEditKey = null; renderPortfolio();
+  }));
+  el.querySelectorAll('[data-ms-save]').forEach(b => b.addEventListener('click', () => {
+    const p = open.find(x => x.key === b.dataset.msSave); if (!p) return;
+    const form = b.closest('[data-pos-edit]');
+    const got = readManualForm(form, p);
+    const warn = form.querySelector('[data-ms-warn]');
+    if (got.error) { if (warn) { warn.textContent = got.error; warn.classList.remove('hidden'); } return; }
+    posLevels[levelId(p)] = got; savePosLevels(); posEditKey = null; renderPortfolio();
+  }));
   $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
   $('pfCsv').addEventListener('click', () => {
     const cols = ['ts', 'wallet', 'auto', 'side', 'symbol', 'mint', 'solAmount', 'tokenAmount', 'priceUsd', 'status', 'signature', 'impactPct', 'route'];
@@ -3216,26 +3329,29 @@ function notePositionCycles(list) {
   } catch { /* copy books not ready */ }
 }
 function effectiveStop(p, lp) {
+  let eff;
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
     const pl = positionTargets(p);
-    return { ...pl, stop: p.avgUsd * 0.85, reason: 'sniper -15%', tp1: p.avgUsd * 1.3, high: Math.max(isNum(lp) ? lp : 0, autoHigh[p.key] || 0) };
+    eff = { ...pl, stop: p.avgUsd * 0.85, reason: 'sniper -15%', tp1: p.avgUsd * 1.3, high: Math.max(isNum(lp) ? lp : 0, autoHigh[p.key] || 0) };
+  } else {
+    const pl = positionTargets(p);
+    let high = isNum(autoHigh[p.key]) ? autoHigh[p.key] : 0;
+    if (isNum(lp) && lp > high) { high = lp; autoHigh[p.key] = high; save('sms:autohigh', autoHigh); }
+    const entry = p?.avgUsd;
+    let stop = isNum(pl.stop) ? pl.stop : null;
+    let reason = 'initial';
+    const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
+    if (isNum(entry) && entry > 0 && high > 0) {
+      if (high >= entry * (1 + A.beAtPct / 100)) raise(entry * 1.01, 'break-even');
+      if (high >= entry * (1 + A.earlyAtPct / 100)) raise(high * (1 - A.earlyTrailPct / 100), 'early trail');
+    }
+    if (p?.tp1Done && isNum(pl.trail) && high > 0) raise(high * (1 - pl.trail / 100), 'trail');
+    const prev = autoStop[p.key];
+    if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
+    else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
+    eff = { ...pl, stop, reason, high };
   }
-  const pl = positionTargets(p);
-  let high = isNum(autoHigh[p.key]) ? autoHigh[p.key] : 0;
-  if (isNum(lp) && lp > high) { high = lp; autoHigh[p.key] = high; save('sms:autohigh', autoHigh); }
-  const entry = p?.avgUsd;
-  let stop = isNum(pl.stop) ? pl.stop : null;
-  let reason = 'initial';
-  const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
-  if (isNum(entry) && entry > 0 && high > 0) {
-    if (high >= entry * (1 + A.beAtPct / 100)) raise(entry * 1.01, 'break-even');
-    if (high >= entry * (1 + A.earlyAtPct / 100)) raise(high * (1 - A.earlyTrailPct / 100), 'early trail');
-  }
-  if (p?.tp1Done && isNum(pl.trail) && high > 0) raise(high * (1 - pl.trail / 100), 'trail');
-  const prev = autoStop[p.key];
-  if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
-  else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
-  return { ...pl, stop, reason, high };
+  return applyManualLevels(p, eff);
 }
 function autoStatusText() {
   if (!A.on) return 'Auto-trade is OFF. Nothing will be signed automatically.';
