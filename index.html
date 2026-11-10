@@ -208,6 +208,15 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           <div class="rounded-lg bg-ink-800 px-2.5 py-2" id="sizeToggleSettings"></div>
           <div class="flex items-center justify-between rounded-lg bg-ink-800 px-2.5 py-2"><span class="text-slate-400">Max open positions <span class="text-slate-600">(hard cap)</span></span><b id="setMaxPos" class="font-mono text-slate-200">2</b></div>
           <label class="flex items-center gap-2 rounded-lg bg-ink-800 px-2.5 py-2"><input type="checkbox" checked disabled class="accent-emerald-500 w-4 h-4" /><span class="text-slate-300">Confirm every trade <span class="text-slate-500">(always on, can't be disabled)</span></span></label>
+          <div class="rounded-lg border border-white/10 p-2 space-y-2">
+            <div class="text-[11px] font-semibold text-slate-300">Agents</div>
+            <label class="flex items-center gap-2"><input id="agentUse" type="checkbox" class="accent-violet-500" checked /> Use agent plans</label>
+            <label class="flex items-center gap-2"><input id="agentExits" type="checkbox" class="accent-violet-500" /> Agent exits <span class="text-slate-500">(off: alert only)</span></label>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="agentCopyList" class="rounded-lg px-2 py-1.5 bg-ink-700 border border-white/10">Copy My List for agents</button>
+              <button type="button" id="agentCopyBurner" class="rounded-lg px-2 py-1.5 bg-ink-700 border border-white/10">Copy burner public address</button>
+            </div>
+          </div>
           <div class="flex gap-2"><button id="btnSaveSettings" class="flex-1 rounded-lg py-2 font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save settings</button><button id="btnResetSettings" class="rounded-lg px-3 py-2 bg-ink-700 hover:bg-ink-600 border border-white/10">Defaults</button></div>
         </div>
       </details>
@@ -217,6 +226,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   </section>
 
   <section class="lg:col-span-8 space-y-5" id="output">
+    <div id="agentPicks"></div>
     <div id="portfolio" class="hidden"></div>
     <div id="emptyState" class="glass rounded-2xl p-8 text-center">
       <div class="text-4xl mb-3">🎯</div>
@@ -1716,6 +1726,7 @@ function render(R) {
       ${(() => { const h = holderLine(t.mint); return `<div class="mt-2 flex items-center gap-2 text-[11px] whitespace-normal break-words ${h.cls}" title="${esc(h.tip || '')}"><span>${esc(h.text)}</span>${h.spark}</div>`; })()}
       ${t.ta?.line ? `<div class="mt-2 text-[11px] leading-snug ${t.ta.ok ? 'text-slate-300' : 'text-slate-500'}">${esc(t.ta.line)}</div>` : ''}
       ${taCacheLabel(t.ta) ? `<div class="mt-1 text-[11px] text-amber-200">${esc(taCacheLabel(t.ta))}</div>` : ''}
+      ${typeof agentPlanChip === 'function' ? agentPlanChip(t.mint) : ''}
       ${t.entry ? `<div class="mt-2 font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-xs text-slate-300"><span class="text-slate-500">${t.entry.strat && String(t.entry.strat).startsWith('Break') ? 'Trigger zone' : 'Entry zone'}</span><span class="block">from ${price(t.entry.zoneLo)}</span><span class="block">to ${price(t.entry.zoneHi)}</span><span class="block text-rose-300">stop ${price(t.entry.stop)}</span></div>` : ''}
       ${zoneAnchorLabel(t.entry) ? `<div class="mt-1 text-[11px] whitespace-normal break-words ${t.entry.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(t.entry))}</div>` : ''}
       ${t.flags.length ? `<div class="flex flex-wrap gap-1 mt-3">${t.flags.slice(0, 4).map(f => `<span class="text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}" title="${esc(f.text)}">${esc(f.text.split(' — ')[0])}</span>`).join('')}${t.flags.length > 4 ? `<span class="text-[10px] text-slate-500 self-center">+${t.flags.length - 4} more</span>` : ''}</div>` : '<div class="text-[11px] text-emerald-300 mt-3">✔ No red flags detected</div>'}
@@ -2542,7 +2553,9 @@ function planOf(t) { if (!t?.entry) return null; return { stop: t.entry.stop, zo
 function positionTargets(p) {
   const entry = p?.avgUsd; const pl = p?.plan || {};
   const stop = isNum(p?.initialStop) ? p.initialStop : pl.stop;
-  return { stop, trail: pl.trail, timeStopH: pl.timeStopH, tp3: pl.tp3, tp1: isNum(entry) && entry > 0 ? entry * 1.5 : null, tp2: isNum(entry) && entry > 0 ? entry * 2 : null };
+  const tp1 = pl.agent && isNum(pl.tp1) && pl.tp1 > 0 ? pl.tp1 : (isNum(entry) && entry > 0 ? entry * 1.5 : null);
+  const tp2 = pl.agent && isNum(pl.tp2) && pl.tp2 > 0 ? pl.tp2 : (isNum(entry) && entry > 0 ? entry * 2 : null);
+  return { stop, trail: pl.trail, timeStopH: pl.timeStopH, tp3: pl.tp3, tp1, tp2 };
 }
 function riskIssues(t) {
   const out = [];
@@ -3576,6 +3589,7 @@ function posCard(p) {
       <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words ${stopOut && isNum(stopOut.usd) ? pnlColor(stopOut.usd) : 'text-rose-300'}">${price(stop)}<span class="block">${stopOut ? esc(pnlPhrase(stopOut)) : ''}</span>${stopOut && isNum(stopOut.sol) ? `<span class="block text-[10px] text-slate-400">${esc(fmtPnlSol(stopOut.sol))}</span>` : ''}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
     </div>
     ${bar}
+    ${typeof agentRiskHtml === 'function' ? agentRiskHtml(p.mint) : ''}
     <div class="mt-2 flex flex-wrap gap-1.5">${isNum(stop) ? moneyChip('stop', stop, false) : ''}${isNum(tp1) ? moneyChip('tp1', tp1, tp1Hit) : ''}${isNum(tp2) ? moneyChip('tp2', tp2, tp2Hit) : ''}</div>
     <button type="button" data-edit-stop="${esc(p.key)}" class="mt-2 text-[11px] text-violet-300 hover:underline">✏️ Edit stop</button>
     ${typeof myListPlanHtml === 'function' ? myListPlanHtml(p, pl) : ''}
@@ -4507,6 +4521,11 @@ async function autoTick() {
     }
     // ---- entries (max one buy per tick)
     if (!A.on) return;
+    if (agentPauseBuys()) {
+      if (!AG.pauseLogged) { autoLog('Agent risk paused scanner auto-buy', 'warn'); AG.pauseLogged = true; }
+      return;
+    }
+    AG.pauseLogged = false;
     const solGate = solFilterState();
     noteSolFilter(solGate, autoLog);
     if (solGate.action === 'pause') return;
@@ -4541,6 +4560,19 @@ async function autoTick() {
     if (!boughtThisTick) for (const t of armedEntries().sort((a, b) => b.conviction - a.conviction)) {
       if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) continue;
       const px = livePrices.get(t.mint)?.price;
+      const ap = agentPlanFor(t.mint);
+      if (agentPlansOn() && ap) {
+        if (!(agentPlanUsable(ap) && agentTriggerHit(ap, px))) continue;
+        const full = sizedFull(t);
+        if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
+        const scaleOn = agentScaleOn(ap, A.scaleIn !== false);
+        const sol = scaleOn ? trancheSol(full.sol, A.starterPct || 30) : full.sol;
+        const plan = agentOrderPlan(planOf(t), ap, null);
+        const hit = await cappedBuy({ t, sol, reason: 'agent plan · ' + (ap.setup || ap.reason || 'ready') + (scaleOn ? ' · starter' : ''), scale: scaleOn ? { i: 1, of: 3, kind: 'starter' } : null, plan, halve: solGate.action === 'halve' });
+        if (hit === 'bought') { boughtThisTick = true; toast(`🤖 Auto-bought ${t.symbol}`, 'ok', 8000); }
+        if (hit === 'block' || hit === 'bought') break;
+        continue;
+      }
       const full = sizedFull(t);
       if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
       const zoneNow = inZone(t, px);
@@ -6715,6 +6747,7 @@ function renderMyList() {
         ${cell('Stop', esc(stopSum))}
         ${cell('If breaks', potSum ? `<span class="text-emerald-300">${esc(potSum)}</span>` : '')}
       </div>
+      ${typeof agentPlanChip === 'function' ? agentPlanChip(row.mint) : ''}
       <p class="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold ${v.ready ? 'text-emerald-300' : 'text-amber-200'}"><span class="h-1.5 w-1.5 shrink-0 rounded-full ${v.ready ? 'bg-emerald-400' : 'bg-amber-400'}"></span><span class="min-w-0 truncate">${v.ready ? 'Ready' : 'Not ready: ' + esc(v.why)}</span></p>
       ${posHtml}
       ${manualBuyHtml(row.id, listPrefill(v.spec), { compact: true })}
@@ -6930,13 +6963,20 @@ async function myListBuys() {
     const gate = listEntryReady(spec, { enabled: row.enabled, open: !!pos, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
     if (gate.state === 'disabled' || gate.state === 'cooldown') continue;
     const model = listChartModel(row, spec, px);
+    const agent = agentPlanFor(row.mint);
+    if (agentPlansOn() && agent && !pos) {
+      if (!(agentPlanUsable(agent) && agentTriggerHit(agent, px))) continue;
+    }
     const candles = model.candles || [];
     const hg = holderTrend(row.mint);
     const strong = strongRead({ candles, px, holdersUp: isNum(hg?.p1h) && hg.p1h > 0.4, volH1: row.dexPair?.volume?.h1, volH24: row.dexPair?.volume?.h24 });
     const resolved = resolveListSpend(spec);
     if (!resolved.ok) { autoLog('My List ' + (row.symbol || short(row.mint)) + ' — ' + resolved.error, 'warn'); continue; }
     const full = resolved.sol;
-    let plan = listPlan(spec, px, model);
+    const agentLive = agentPlansOn() && agent && agentPlanUsable(agent) && agentTriggerHit(agent, px);
+    const tradeSpec = agentLive ? agentSpec(spec, row, agent, px) : spec;
+    let plan = listPlan(tradeSpec, px, model);
+    if (agentLive) plan = agentOrderPlan(plan, agent, row);
     const t = { mint: row.mint, symbol: row.symbol || short(row.mint) };
     let sol = null, reason = '', scale = null;
     if (pos && MYLIST.scaleIn !== false && pos.scaleOf && pos.scaleI > 0 && pos.scaleI < pos.scaleOf) {
@@ -6947,7 +6987,17 @@ async function myListBuys() {
       if (pos.scaleI === 1 && pull) { sol = trancheSol(full, 35); reason = 'add 2/3 · pullback to zone'; scale = { i: 2, of: 3, kind: 'pullback' }; }
       else if (broke) { sol = trancheSol(full, 35); reason = 'add ' + (pos.scaleI + 1) + '/3 · breakout confirmation'; scale = { i: pos.scaleI + 1, of: 3, kind: 'breakout' }; }
     } else if (!pos && gate.state !== 'bought') {
-      if (MYLIST.scaleIn !== false && strong.strong) {
+      if (agentLive) {
+        const scaleOn = agentScaleOn(agent, MYLIST.scaleIn !== false);
+        if (scaleOn) {
+          sol = trancheSol(full, MYLIST.starterPct || 30);
+          reason = 'agent plan · ' + (agent.setup || 'ready') + ' · starter ' + (MYLIST.starterPct || 30) + '%';
+          scale = { i: 1, of: 3, kind: 'starter' };
+        } else {
+          sol = full;
+          reason = 'agent plan · ' + (agent.setup || 'ready') + (agent.reason ? ' · ' + agent.reason : '');
+        }
+      } else if (MYLIST.scaleIn !== false && strong.strong) {
         sol = trancheSol(full, MYLIST.starterPct || 30);
         reason = 'starter ' + (MYLIST.starterPct || 30) + '% · strong: ' + strong.reasons.join(', ');
         scale = { i: 1, of: 3, kind: 'starter' };
@@ -7007,6 +7057,241 @@ $('btnSaveList')?.addEventListener('click', () => {
   addMintsToList([...new Set([...(parsed.mints || []), ...(parsed.pairs || [])])]);
 });
 
+/* ---------------- agent files (shared JSON on main) ---------------- */
+const AGENT_RAW = 'https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/main/agents/';
+const AGENT_LS = 'sms:agents';
+const AG = { candidates: [], plans: new Map(), risk: { pause_auto_buy: false, ts: 0, positions: [] }, config: { burner_public_address: '', notes: '' }, fetched: {}, errors: {}, pauseLogged: false, seenRisk: {}, timer: null };
+function agentCfg() {
+  const d = { usePlans: true, exits: false };
+  try { const v = JSON.parse(localStorage.getItem(AGENT_LS) || 'null'); if (v && typeof v === 'object') return { usePlans: v.usePlans !== false, exits: !!v.exits }; } catch { /* default */ }
+  return d;
+}
+function saveAgentCfg(patch) { const next = { ...agentCfg(), ...patch }; try { localStorage.setItem(AGENT_LS, JSON.stringify(next)); } catch { /* ignore */ } return next; }
+function agentPlansOn() { return agentCfg().usePlans; }
+function agentExitsOn() { return agentCfg().exits; }
+function tehranClock(ts) {
+  if (!isNum(ts) || ts <= 0) return '—';
+  const p = tehranParts(ts);
+  return pad2(p.m) + '/' + pad2(p.day) + ' ' + pad2(p.h) + ':' + pad2(p.min);
+}
+function agentNum(v) { const n = +v; return Number.isFinite(n) ? n : null; }
+function planFresh(p, now) {
+  const t = now || Date.now();
+  const ts = agentNum(p?.ts);
+  if (!(ts > 0) || t - ts > 2 * 3600e3) return false;
+  const exp = agentNum(p?.expires);
+  if (exp > 0 && t > exp) return false;
+  return true;
+}
+function riskFresh(ts, now) {
+  const n = agentNum(ts);
+  return n > 0 && (now || Date.now()) - n <= 30 * 60e3;
+}
+function agentPlanFor(mint) { return AG.plans.get(mint) || null; }
+function agentPlanUsable(p) {
+  if (!p || !planFresh(p)) return false;
+  const conf = agentNum(p.confidence);
+  return p.status === 'ready' && conf >= 60;
+}
+function agentTriggerHit(p, px) {
+  if (!(px > 0)) return false;
+  const mode = String(p.entry_mode || '').toLowerCase();
+  const cond = String(p.trigger_condition || '').toLowerCase();
+  const trig = agentNum(p.trigger_price);
+  if (mode === 'immediate' || mode === 'now' || /immediate|market/.test(cond)) return true;
+  if (!(trig > 0)) return false;
+  if (mode === 'retest' || /retest|pullback/.test(cond)) return px <= trig * 1.03 && px >= trig * 0.97;
+  if (mode === 'below' || /below|under|dip/.test(cond)) return px <= trig;
+  return px >= trig;
+}
+function agentScaleOn(p, fallback) {
+  const v = p?.scale_in;
+  if (v === false || v === 0 || v === 'no' || v === 'off') return false;
+  if (v === true || v === 1 || v === 'yes' || v === 'on') return true;
+  return !!fallback;
+}
+function agentSpec(spec, row, plan, px) {
+  const next = { ...spec };
+  const manualStop = !!(row && ((isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0)));
+  const manualTp = !!(row && Array.isArray(row.tps) && row.tps.length);
+  if (!manualStop && agentNum(plan.stop) > 0) next.stopPx = +plan.stop;
+  if (!manualTp && px > 0) {
+    const tps = [];
+    if (agentNum(plan.tp1) > px) tps.push({ gainPct: (+plan.tp1 / px - 1) * 100, sellPct: 50 });
+    if (agentNum(plan.tp2) > px) tps.push({ gainPct: (+plan.tp2 / px - 1) * 100, sellPct: 50 });
+    if (tps.length) next.tps = tps;
+  }
+  if (!(row && isNum(row.trailPct)) && agentNum(plan.trail) > 0) { next.trailPct = +plan.trail; if (!(next.trailAtPct > 0)) next.trailAtPct = 0; }
+  return next;
+}
+function agentOrderPlan(plan, agent, row) {
+  const next = { ...(plan || {}) };
+  const manualStop = !!(row && ((isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0)));
+  if (!manualStop && agentNum(agent.stop) > 0) next.stop = +agent.stop;
+  if (agentNum(agent.tp1) > 0) next.tp1 = +agent.tp1;
+  if (agentNum(agent.tp2) > 0) next.tp2 = +agent.tp2;
+  next.agent = true;
+  next.strat = (next.strat || 'Agent') + ' · ' + (agent.setup || 'agent');
+  return next;
+}
+function agentPlanChip(mint) {
+  const p = agentPlanFor(mint);
+  if (!p) return '';
+  const ok = agentPlanUsable(p);
+  const cls = p.status === 'invalid' ? 'border-rose-400/40 text-rose-200' : ok ? 'border-emerald-400/40 text-emerald-100' : 'border-amber-300/40 text-amber-100';
+  const bits = [p.setup || 'Agent plan', p.tf || '', isNum(agentNum(p.trigger_price)) ? 'trigger ' + price(+p.trigger_price) : '', agentNum(p.stop) > 0 ? 'stop ' + price(+p.stop) : '', agentNum(p.tp1) > 0 ? 'TP ' + price(+p.tp1) : '', isNum(agentNum(p.confidence)) ? Math.round(+p.confidence) + '%' : '', p.status || ''].filter(Boolean);
+  return `<div class="mt-1.5 rounded-lg border ${cls} bg-white/5 px-2 py-1 text-[10px] leading-snug whitespace-normal break-words"><b>Agent plan</b> · ${bits.map(esc).join(' · ')}</div>`;
+}
+function agentRiskHtml(mint) {
+  const rows = (AG.risk.positions || []).filter(r => r && r.mint === mint && riskFresh(r.ts) && (r.action === 'take_partial' || r.action === 'exit_now') && !agentExitsOn());
+  if (!rows.length) return '';
+  return rows.map(r => `<div class="mt-2 rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[11px] font-semibold text-rose-100 whitespace-normal break-words">Agent: ${esc(r.action === 'exit_now' ? 'exit now' : 'take partial ' + (agentNum(r.partial_pct) || 50) + '%')} · ${esc(r.reason || 'review this position')}</div>`).join('');
+}
+function agentPauseBuys() { return !!(AG.risk.pause_auto_buy && riskFresh(AG.risk.ts)); }
+function playAgentAlert() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!readyAudio) readyAudio = new AC();
+    if (readyAudio.state === 'suspended') readyAudio.resume();
+    [440, 330].forEach((freq, i) => {
+      const o = readyAudio.createOscillator();
+      const g = readyAudio.createGain();
+      const t0 = readyAudio.currentTime + i * 0.18;
+      o.type = 'sawtooth'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.05, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      o.connect(g); g.connect(readyAudio.destination);
+      o.start(t0); o.stop(t0 + 0.18);
+    });
+  } catch { /* sound unavailable */ }
+}
+function applyAgentRisk() {
+  const now = Date.now();
+  for (const row of AG.risk.positions || []) {
+    if (!row || !riskFresh(row.ts, now) || !isAddr(row.mint)) continue;
+    const key = row.mint + '|' + row.action + '|' + row.ts;
+    if (AG.seenRisk[key]) continue;
+    const pos = openPositions().find(p => p.mint === row.mint && p.wallet === 'burner' && p.open);
+    if (row.action === 'raise_stop') {
+      if (!pos) continue;
+      const lp = livePrices.get(pos.mint)?.price;
+      const cur = effectiveStop(pos, lp)?.stop;
+      const next = agentNum(row.new_stop);
+      if (!(next > 0) || (isNum(cur) && next <= cur + 1e-12) || (isNum(lp) && next >= lp)) { AG.seenRisk[key] = now; continue; }
+      const id = levelId(pos);
+      const manual = posLevels[id] || {};
+      if (isNum(manual.stop) && manual.stop >= next) { AG.seenRisk[key] = now; continue; }
+      posLevels[id] = { ...manual, stop: next, keepRaise: true };
+      savePosLevels();
+      AG.seenRisk[key] = now;
+      autoLog((pos.symbol || row.mint) + ': agent raised stop to ' + price(next) + (row.reason ? ' — ' + row.reason : ''), 'info');
+      continue;
+    }
+    if (row.action !== 'take_partial' && row.action !== 'exit_now') { AG.seenRisk[key] = now; continue; }
+    if (!agentExitsOn()) {
+      AG.seenRisk[key] = now;
+      playAgentAlert();
+      continue;
+    }
+    if (!pos || !WALLETS.burner.kp) continue;
+    const lp = livePrices.get(pos.mint)?.price;
+    const pct = row.action === 'exit_now' ? 100 : Math.min(100, Math.max(1, agentNum(row.partial_pct) || 50));
+    AG.seenRisk[key] = now;
+    autoSell(pos, pct, 'agent', lp).catch(() => {});
+  }
+}
+function renderAgentPicks() {
+  const box = $('agentPicks'); if (!box) return;
+  const stamp = (name, rows) => {
+    let max = AG.fetched[name] || 0;
+    (rows || []).forEach(r => { const t = agentNum(r?.ts) || agentNum(r?.addedTs); if (t > max) max = t; });
+    return tehranClock(max);
+  };
+  const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} · plans ${stamp('plans', [...AG.plans.values()])} · risk ${stamp('risk', AG.risk.positions)} · list file ${stamp('mylist', AG.listFile || [])} · config ${tehranClock(AG.fetched.config)}</div>`;
+  const banner = agentPauseBuys() ? `<div class="mt-1 rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[12px] font-semibold text-rose-100">Agent risk paused scanner auto-buy</div>` : '';
+  const cards = AG.candidates.filter(c => c && isAddr(c.mint)).map(c => {
+    const plan = agentPlanFor(c.mint);
+    return `<article class="rounded-xl border border-white/10 bg-ink-850/80 p-2.5">
+      <div class="flex items-center gap-2"><b class="text-sm">${esc(c.symbol || short(c.mint))}</b><span class="text-[10px] text-slate-400">score ${isNum(agentNum(c.score)) ? Math.round(+c.score) : '—'}</span></div>
+      <div class="mt-1 text-[11px] text-slate-400 whitespace-normal break-words">${esc(c.reason || '')}${c.safety ? ' · ' + esc(c.safety) : ''}</div>
+      ${agentPlanChip(c.mint)}
+      <div class="mt-2 flex gap-2 text-[11px]">
+        <button type="button" data-agent-add="${esc(c.mint)}" class="rounded-lg px-2 py-1 bg-violet-600 text-white">Add to My List</button>
+        <button type="button" data-agent-buy="${esc(c.mint)}" class="rounded-lg px-2 py-1 bg-emerald-500 font-bold text-ink-950">Buy</button>
+      </div>
+    </article>`;
+  }).join('');
+  box.innerHTML = `<section class="glass rounded-2xl p-3">
+    <h2 class="font-bold text-sm mb-1">Agent picks</h2>
+    ${status}${banner}
+    ${cards ? `<div class="mt-2 space-y-2">${cards}</div>` : '<p class="mt-1 text-[11px] text-slate-500">No hunter candidates in the shared file yet.</p>'}
+  </section>`;
+  box.querySelectorAll('[data-agent-add]').forEach(b => b.addEventListener('click', () => {
+    const c = AG.candidates.find(x => x.mint === b.dataset.agentAdd);
+    if (!c) return;
+    addMintsToList([c.mint]);
+    const row = MYLIST.rows.find(r => r.mint === c.mint);
+    if (row && c.symbol) { row.symbol = String(c.symbol).slice(0, 16); saveMyList(); renderMyList(); }
+  }));
+  box.querySelectorAll('[data-agent-buy]').forEach(b => b.addEventListener('click', () => {
+    const c = AG.candidates.find(x => x.mint === b.dataset.agentBuy);
+    if (!c) return;
+    myListBuyNow({ mint: c.mint, symbol: c.symbol || short(c.mint), price: livePrices.get(c.mint)?.price || null }, null);
+  }));
+  const use = $('agentUse'), exits = $('agentExits');
+  if (use && document.activeElement !== use) use.checked = agentPlansOn();
+  if (exits && document.activeElement !== exits) exits.checked = agentExitsOn();
+}
+async function refreshAgents() {
+  const names = ['candidates', 'mylist', 'plans', 'risk', 'config'];
+  await Promise.all(names.map(async (name) => {
+    try {
+      const res = await fetch(AGENT_RAW + name + '.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error(name + ' ' + res.status);
+      const data = await res.json();
+      AG.fetched[name] = Date.now();
+      AG.errors[name] = '';
+      if (name === 'candidates') AG.candidates = Array.isArray(data) ? data : [];
+      if (name === 'mylist') AG.listFile = Array.isArray(data) ? data : [];
+      if (name === 'plans') {
+        AG.plans = new Map();
+        (Array.isArray(data) ? data : []).forEach(p => { if (p && isAddr(p.mint) && planFresh(p)) AG.plans.set(p.mint, p); });
+      }
+      if (name === 'risk' && data && typeof data === 'object') {
+        AG.risk = { pause_auto_buy: !!data.pause_auto_buy, ts: agentNum(data.ts) || 0, positions: Array.isArray(data.positions) ? data.positions : [] };
+      }
+      if (name === 'config' && data && typeof data === 'object') AG.config = { burner_public_address: String(data.burner_public_address || ''), notes: String(data.notes || '') };
+    } catch (e) { AG.errors[name] = e.message || String(e); }
+  }));
+  applyAgentRisk();
+  renderAgentPicks();
+  try { renderMyList(); } catch { /* list not ready */ }
+  try { if (lastResult) render(lastResult); } catch { /* scan not on screen */ }
+  try { renderPortfolio(); } catch { /* portfolio hidden */ }
+}
+function startAgents() {
+  clearInterval(AG.timer);
+  refreshAgents();
+  AG.timer = setInterval(refreshAgents, 150000);
+}
+function wireAgentSettings() {
+  $('agentUse')?.addEventListener('change', () => { saveAgentCfg({ usePlans: $('agentUse').checked }); renderAgentPicks(); });
+  $('agentExits')?.addEventListener('change', () => { saveAgentCfg({ exits: $('agentExits').checked }); renderPortfolio(); });
+  $('agentCopyList')?.addEventListener('click', async () => {
+    const payload = (MYLIST?.rows || []).map(r => ({ mint: r.mint, symbol: r.symbol || '', addedTs: r.addedTs || null }));
+    const ok = await copyText(JSON.stringify(payload, null, 2));
+    toast(ok ? 'My List JSON copied' : 'Copy failed', ok ? 'ok' : 'err');
+  });
+  $('agentCopyBurner')?.addEventListener('click', async () => {
+    const pub = WALLETS.burner?.pubkey || '';
+    if (!pub) { toast('No burner public address yet', 'warn'); return; }
+    const ok = await copyText(pub);
+    toast(ok ? 'Burner public address copied' : 'Copy failed', ok ? 'ok' : 'err');
+  });
+}
+
 /* ---------------- settings wiring ---------------- */
 function fillSettings() {
   $('setRpc').value = S.rpc; $('setSlip').value = S.slippagePct; $('setMaxTrade').value = S.maxSolPerTrade; $('setDaily').value = S.dailyMaxSol; $('setReserve').value = S.reserveSol;
@@ -7027,6 +7312,8 @@ $('btnSaveSettings').addEventListener('click', () => {
 $('btnResetSettings').addEventListener('click', () => { S = { ...DEFAULTS }; sanitizeSettings(); save(LS.settings, S); fillSettings(); renderBurner(); renderWallet(); updateHints(); toast('Settings defaults restored', 'info'); });
 $('risk').addEventListener('change', () => { $('setMaxPos').textContent = maxPos(); renderWallet(); renderBurner(); });
 $('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('tradeCard').scrollIntoView({ behavior: 'smooth' }); else connectPhantom(false); });
+wireAgentSettings();
+startAgents();
 
 /* ---------------- init ---------------- */
 const READY_LS = 'sms:readyalert';
@@ -7148,7 +7435,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
