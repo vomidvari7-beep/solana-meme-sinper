@@ -587,7 +587,7 @@ async function fetchRugReport(mint) {
     catch (e2) { return { ok: false, error: (e.status === 429 || e2.status === 429) ? 'rate-limited' : (/fetch|network/i.test(e2.message) ? 'blocked (CORS/network)' : e2.message) }; }
   }
 }
-function digestRug(rr, pairAddress) {
+function digestRug(rr, pairAddress, mint) {
   const d = { available: false, error: null, mintRevoked: null, freezeRevoked: null, lpLockedPct: null, top10: null, holders: null, insiders: null, rugged: null, score: null, risks: [], launchpad: null, summaryOnly: false };
   if (!rr || !rr.ok) { d.error = rr?.error || 'not checked'; return d; }
   const r = rr.data || {}; d.available = true; d.summaryOnly = !!rr.summaryOnly;
@@ -602,6 +602,7 @@ function digestRug(rr, pairAddress) {
   }
   d.mintRevoked = r.mintAuthority == null; d.freezeRevoked = r.freezeAuthority == null;
   d.rugged = !!r.rugged; d.holders = r.totalHolders ?? null; d.launchpad = r.launchpad?.name || null;
+  if (mint && isNum(+d.holders) && +d.holders >= 0) noteHolders(mint, +d.holders);
   const known = r.knownAccounts || {};
   const marketKeys = new Set((r.markets || []).flatMap(m => [m.pubkey, m.liquidityAAccount, m.liquidityBAccount]).filter(Boolean));
   const isPool = h => known[h.owner]?.type === 'AMM' || known[h.address]?.type === 'AMM' || known[h.owner]?.type === 'LOCKER' || marketKeys.has(h.owner) || marketKeys.has(h.address);
@@ -612,6 +613,107 @@ function digestRug(rr, pairAddress) {
   const mk = mkts.find(m => (m.pubkey || '').toLowerCase() === (pairAddress || '').toLowerCase()) || mkts.slice().sort((a, b) => ((b.lp?.quoteUSD||0)+(b.lp?.baseUSD||0)) - ((a.lp?.quoteUSD||0)+(a.lp?.baseUSD||0)))[0];
   if (mk?.lp && isNum(mk.lp.lpLockedPct)) d.lpLockedPct = mk.lp.lpLockedPct;
   return d;
+}
+const HOLDER_KEEP = 24 * 3600e3;
+let holderMem = null;
+function loadHolders() {
+  if (holderMem) return holderMem;
+  try { holderMem = JSON.parse(localStorage.getItem('sms:holders') || '{}') || {}; } catch { holderMem = {}; }
+  if (!holderMem || typeof holderMem !== 'object' || Array.isArray(holderMem)) holderMem = {};
+  return holderMem;
+}
+function saveHolders() {
+  try { localStorage.setItem('sms:holders', JSON.stringify(holderMem)); }
+  catch {
+    const keys = Object.keys(holderMem || {});
+    keys.slice(0, Math.ceil(keys.length / 2)).forEach(k => delete holderMem[k]);
+    try { localStorage.setItem('sms:holders', JSON.stringify(holderMem)); } catch { /* keep memory */ }
+  }
+}
+function noteHolders(mint, n, at) {
+  if (!mint || !isNum(n) || n < 0) return;
+  const all = loadHolders();
+  const wall = Date.now();
+  const now = isNum(at) ? at : wall;
+  let pts = (Array.isArray(all[mint]) ? all[mint] : []).filter(p => p && isNum(p.t) && isNum(p.n) && wall - p.t < HOLDER_KEEP && p.t <= wall + 60000);
+  pts.sort((a, b) => a.t - b.t);
+  const last = pts[pts.length - 1];
+  if (last && Math.abs(now - last.t) < 60e3 && last.n === n) return;
+  pts.push({ t: now, n });
+  pts.sort((a, b) => a.t - b.t);
+  if (pts.length > 300) {
+    const recent = pts.filter(p => wall - p.t < 2 * 3600e3);
+    const slim = [];
+    let bucket = -1;
+    for (const p of pts) {
+      if (wall - p.t < 2 * 3600e3) break;
+      const b = Math.floor(p.t / (5 * 60e3));
+      if (b !== bucket) { slim.push(p); bucket = b; }
+    }
+    pts = slim.concat(recent).slice(-400);
+  }
+  all[mint] = pts;
+  const keys = Object.keys(all);
+  if (keys.length > 100) {
+    keys.sort((a, b) => ((all[a].at(-1)?.t || 0) - (all[b].at(-1)?.t || 0))).slice(0, keys.length - 100).forEach(k => delete all[k]);
+  }
+  holderMem = all;
+  saveHolders();
+}
+function holderSample(pts, now, ago) {
+  const target = now - ago;
+  let best = null;
+  for (const p of pts) { if (p.t <= target) best = p; else break; }
+  if (!best) return null;
+  if (target - best.t > Math.max(ago * 0.6, 10 * 60e3)) return null;
+  return best;
+}
+function holderTrend(mint, now) {
+  const t = now || Date.now();
+  const pts = (loadHolders()[mint] || []).filter(p => t - p.t < HOLDER_KEEP).slice().sort((a, b) => a.t - b.t);
+  const last = pts[pts.length - 1];
+  const empty = { n: last ? last.n : null, collecting: true, d15: null, p15: null, d1h: null, p1h: null, d6h: null, p6h: null, perMin: null, delta: 0, falling: false, spark: pts.slice(-24) };
+  if (!last || pts.length < 2 || last.t - pts[0].t < 10 * 60e3) return empty;
+  const win = (ago) => {
+    const s = holderSample(pts, t, ago);
+    if (!s) return { d: null, p: null };
+    const d = last.n - s.n;
+    return { d, p: s.n > 0 ? d / s.n * 100 : null };
+  };
+  const m15 = win(15 * 60e3), h1 = win(3600e3), h6 = win(6 * 3600e3);
+  const base = holderSample(pts, t, 15 * 60e3) || holderSample(pts, t, 3600e3) || pts[0];
+  const spanMin = base && last.t > base.t ? (last.t - base.t) / 60000 : null;
+  const perMin = spanMin && spanMin >= 5 ? (last.n - base.n) / spanMin : null;
+  let delta = 0;
+  if (isNum(h1.p)) {
+    if (h1.p <= -3) delta = -6;
+    else if (h1.p >= 8) delta = 6;
+    else if (h1.p >= 3) delta = 3;
+    else if (h1.p <= -1) delta = -2;
+  }
+  return { n: last.n, collecting: false, d15: m15.d, p15: m15.p, d1h: h1.d, p1h: h1.p, d6h: h6.d, p6h: h6.p, perMin, delta, falling: isNum(h1.p) && h1.p <= -3, spark: pts.slice(-24) };
+}
+function holderSpark(pts) {
+  if (!pts || pts.length < 2) return '';
+  const xs = pts.slice(-24);
+  const min = Math.min(...xs.map(p => p.n)), max = Math.max(...xs.map(p => p.n));
+  const w = 64, h = 18;
+  const d = xs.map((p, i) => {
+    const x = xs.length === 1 ? 0 : (i / (xs.length - 1)) * w;
+    const y = max === min ? h / 2 : h - ((p.n - min) / (max - min)) * (h - 2) - 1;
+    return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+  const up = xs[xs.length - 1].n >= xs[0].n;
+  return `<svg viewBox="0 0 ${w} ${h}" class="w-16 h-4 shrink-0" aria-hidden="true"><path d="${d}" fill="none" stroke="${up ? '#34d399' : '#fb7185'}" stroke-width="1.5"></path></svg>`;
+}
+function holderLine(mint) {
+  const hg = holderTrend(mint);
+  if (!hg || hg.n == null) return { text: 'Holders collecting…', cls: 'text-slate-500', spark: '' };
+  if (hg.collecting || !isNum(hg.p1h)) return { text: 'Holders ' + Math.round(hg.n).toLocaleString('en-US') + ' · collecting…', cls: 'text-slate-500', spark: holderSpark(hg.spark) };
+  const arrow = hg.p1h > 0.4 ? '↑' : hg.p1h < -0.4 ? '↓' : '→';
+  const cls = hg.p1h > 0.4 ? 'text-emerald-300' : hg.p1h < -0.4 ? 'text-rose-300' : 'text-slate-400';
+  const tip = ['15m ' + (isNum(hg.p15) ? (hg.p15 > 0 ? '+' : '') + hg.p15.toFixed(1) + '%' : '—'), '6h ' + (isNum(hg.p6h) ? (hg.p6h > 0 ? '+' : '') + hg.p6h.toFixed(1) + '%' : '—'), isNum(hg.perMin) ? (hg.perMin > 0 ? '+' : '') + hg.perMin.toFixed(2) + '/min' : ''].filter(Boolean).join(' · ');
+  return { text: 'Holders ' + Math.round(hg.n).toLocaleString('en-US') + ' (' + (hg.p1h > 0 ? '+' : '') + hg.p1h.toFixed(1) + '% 1h ' + arrow + ')', cls, spark: holderSpark(hg.spark), tip };
 }
 </script>
 <script>
@@ -1169,6 +1271,8 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
     else if (isNum(rug.insiders) && rug.insiders > 0) add('low', `Small insider network (${rug.insiders} wallets)`);
     for (const r of rug.risks) if (r.level.toLowerCase() === 'danger' && !/mint authority|freeze authority|top 10|lp unlocked|amount of lp/i.test(r.name)) add('med', `RugCheck: ${r.name}${r.value ? ' (' + r.value + ')' : ''}`);
   }
+  const hg = holderTrend(t.mint);
+  if (hg.falling) add('med', 'Holders falling' + (isNum(hg.p1h) ? ' (' + hg.p1h.toFixed(1) + '% 1h)' : ''));
 
   // ---- 2. On-chain sub-score
   const liqS = isNum(liq) ? clamp(Math.log10(Math.max(liq, 1) / 5000) / Math.log10(250000 / 5000) * 100) : 0;
@@ -1222,7 +1326,8 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
 
   // ---- 6. Conviction
   const contrib = { onchain: 0.40 * onchain, social: 0.25 * social, momentum: 0.20 * momentum, risk: 0.15 * riskS };
-  let conviction = contrib.onchain + contrib.social + contrib.momentum + contrib.risk; const caps = [];
+  const holderDelta = hg.collecting ? 0 : hg.delta;
+  let conviction = contrib.onchain + contrib.social + contrib.momentum + contrib.risk + holderDelta; const caps = [];
   if (flags.some(f => f.sev === 'critical')) { conviction = Math.min(conviction, 10); caps.push('critical flag → max 10'); }
   const highFlags = flags.filter(f => f.sev === 'high').length;
   if (highFlags >= 2) { if (conviction > 40) caps.push('2+ high flags → max 40'); conviction = Math.min(conviction, 40); }
@@ -1335,7 +1440,7 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
   const exit = { tp1: isNum(avgEntry) ? avgEntry * 1.5 : null, tp2: isNum(avgEntry) ? avgEntry * 2 : null, tp3: isNum(avgEntry) ? avgEntry * 5 : null, trail: prof.trail, timeStopH: prof.timeStopH };
 
   return { ...t, onCurve, rug, flags, fails, volLiq, liqMcap, bsr1, bsr24, accel, ta: ta || null,
-    sub: { onchain, social, momentum, risk: riskS, parts: { liqS, lmS, vlS, safety, safetyNote, holdersS, bsrS, trendS, accS, penalty, caps } },
+    sub: { onchain, social, momentum, risk: riskS, parts: { liqS, lmS, vlS, safety, safetyNote, holdersS, bsrS, trendS, accS, penalty, caps, holderDelta, holderNote: hg.collecting ? 'collecting…' : ((isNum(hg.p1h) ? (hg.p1h > 0 ? '+' : '') + hg.p1h.toFixed(1) + '% 1h' : 'flat') + (isNum(hg.perMin) ? ', ' + (hg.perMin > 0 ? '+' : '') + hg.perMin.toFixed(2) + '/min' : '')) } },
     contrib, conviction, verdict, checklist,
     entry: { strat, reason, trigger, zoneLo, zoneHi, stop, stopPct: stopDist * 100, riskPct, notionalPct, noAnchor, anchor, anchorPx }, exit };
 }
@@ -1460,7 +1565,7 @@ async function runAnalysis({ boosted = false } = {}) {
       if (inputs.useRug) {
         const rr = await fetchRugReport(targets[i].mint);
         if (!rr.ok) blocked++; else if (rr.summaryOnly) partial++;
-        rugMap.set(targets[i].mint, digestRug(rr, targets[i].pairAddress));
+        rugMap.set(targets[i].mint, digestRug(rr, targets[i].pairAddress, targets[i].mint));
       }
       try {
         const fresh = await loadTokenTa(targets[i]);
@@ -1601,6 +1706,7 @@ function render(R) {
       <div class="flex justify-between text-[11px] font-mono mt-2 px-1">
         ${['m5','h1','h6','h24'].map(k => `<span><span class="text-slate-500">${k}</span> <span class="${pctCls(t.chg[k])}">${pct(t.chg[k], 0)}</span></span>`).join('')}
       </div>
+      ${(() => { const h = holderLine(t.mint); return `<div class="mt-2 flex items-center gap-2 text-[11px] whitespace-normal break-words ${h.cls}" title="${esc(h.tip || '')}"><span>${esc(h.text)}</span>${h.spark}</div>`; })()}
       ${t.ta?.line ? `<div class="mt-2 text-[11px] leading-snug ${t.ta.ok ? 'text-slate-300' : 'text-slate-500'}">${esc(t.ta.line)}</div>` : ''}
       ${taCacheLabel(t.ta) ? `<div class="mt-1 text-[11px] text-amber-200">${esc(taCacheLabel(t.ta))}</div>` : ''}
       ${t.entry ? `<div class="mt-2 font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-xs text-slate-300"><span class="text-slate-500">${t.entry.strat && String(t.entry.strat).startsWith('Break') ? 'Trigger zone' : 'Entry zone'}</span><span class="block">from ${price(t.entry.zoneLo)}</span><span class="block">to ${price(t.entry.zoneHi)}</span><span class="block text-rose-300">stop ${price(t.entry.stop)}</span></div>` : ''}
@@ -1651,7 +1757,8 @@ function render(R) {
           <div class="text-[11px] text-slate-400 font-mono mt-1 leading-relaxed break-words">On-chain = 25% liq(${Math.round(t.sub.parts.liqS)}) + 15% liq/mcap(${Math.round(t.sub.parts.lmS)}; ${isNum(t.liqMcap) ? (t.liqMcap*100).toFixed(1) + '%' : '—'}) + 20% vol/liq(${Math.round(t.sub.parts.vlS)}; ${isNum(t.volLiq) ? t.volLiq.toFixed(1) + 'x' : '—'}) + 30% safety(${Math.round(t.sub.parts.safety)}; ${esc(t.sub.parts.safetyNote)}) + 10% holders(${t.sub.parts.holdersS == null ? 'n/a→50' : Math.round(t.sub.parts.holdersS)})<br>
           Social = presence of X/TG/web/profile/boost (authenticity unverified)<br>
           Momentum = buy/sell 1h(${Math.round(t.sub.parts.bsrS)}) · trend 6h/24h(${Math.round(t.sub.parts.trendS)}) · vol accel(${Math.round(t.sub.parts.accS)}; ${isNum(t.accel) ? t.accel.toFixed(2) + 'x' : '—'})${t.ta?.line ? ' · ' + esc(t.ta.line) : ''}<br>
-          Risk = 100 − penalty ${t.sub.parts.penalty} (critical 100 · high 35 · med 20 · low 5)${t.sub.parts.caps.length ? '<br>Caps: ' + esc(t.sub.parts.caps.join('; ')) : ''}</div></details>
+          Risk = 100 − penalty ${t.sub.parts.penalty} (critical 100 · high 35 · med 20 · low 5)<br>
+          Holder growth = ${esc(t.sub.parts.holderNote || 'collecting…')} · score ${t.sub.parts.holderDelta > 0 ? '+' : ''}${t.sub.parts.holderDelta || 0}${t.sub.parts.caps.length ? '<br>Caps: ' + esc(t.sub.parts.caps.join('; ')) : ''}</div></details>
       </div>`).join('')}</div>
   `, '40% on-chain · 25% social · 20% momentum · 15% risk');
 
@@ -3907,7 +4014,7 @@ async function screenMint(mint) {
   const onCurve = /^(pumpfun|moonshot|launchlab|boop|believe)$/.test(dex) || (dex.includes('pump') && !dex.includes('pumpswap'));
   const graduated = dex.includes('pumpswap') || (!onCurve && /pump$/i.test(mint));
   let rug = digestRug({ ok: false, error: 'not checked' });
-  try { rug = digestRug(await fetchRugReport(mint), t.pairAddress); } catch { /* unknown */ }
+  try { rug = digestRug(await fetchRugReport(mint), t.pairAddress, mint); } catch { /* unknown */ }
   const prof = effectiveProfile($('risk').value, collectInputs());
   let conviction = null;
   try { conviction = analyzeToken(t, rug, prof, $('focus').value || 'Organic', { bad: false }).conviction; } catch { /* skip */ }
@@ -4327,7 +4434,7 @@ async function sniperSafety(p) {
     if (!flags.mintRevoked || !flags.freezeRevoked) return cacheSafety(p.mint, checks);
   } catch (e) { checks.push({ name: 'mint', ok: false, detail: e.message }); return cacheSafety(p.mint, checks); }
   const rr = await fetchRugReport(p.mint);
-  const rug = digestRug(rr, p.pool);
+  const rug = digestRug(rr, p.pool, p.mint);
   if (rug.available) {
     const danger = (rug.risks || []).filter(r => String(r.level).toLowerCase() === 'danger');
     checks.push({ name: 'rug danger', ok: !danger.length, detail: danger.length ? danger.map(d => d.name).slice(0, 2).join(', ') : 'none' });
@@ -4750,6 +4857,7 @@ function renderMyList() {
         <button type="button" data-ml-del="${esc(row.id)}" class="ml-auto text-[11px] text-rose-300">Remove</button>
       </div>
       <div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words leading-snug">Price ${price(px)} · to entry ${dist == null ? '—' : (dist > 0 ? '+' : '') + dist.toFixed(1) + '%'} · TA ${taAge == null ? '—' : Math.max(0, Math.round(taAge)) + 'm ago'}</div>
+      ${(() => { const h = holderLine(row.mint); return `<div class="mt-1 flex items-center gap-2 text-[11px] whitespace-normal break-words ${h.cls}" title="${esc(h.tip || '')}"><span>${esc(h.text)}</span>${h.spark}</div>`; })()}
       ${flags.length ? `<div class="mt-1 text-[10px] text-slate-400 whitespace-normal break-words">Info: ${esc(flags.join(' · '))}</div>` : ''}
       <details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-500">Override</summary>
         <div class="mt-1 grid grid-cols-2 gap-2 text-[11px]">
@@ -4967,6 +5075,19 @@ function startMyList() {
   clearInterval(listTimer);
   listTimer = setInterval(() => { myListTick(); }, 30000);
 }
+const holderPolled = {};
+async function refreshHolderWatch() {
+  const mints = [];
+  try { (MYLIST.rows || []).forEach(r => { if (r.mint) mints.push(r.mint); }); } catch { /* list not ready */ }
+  try { openPositions().forEach(p => { if (p.open && p.mint) mints.push(p.mint); }); } catch { /* no positions */ }
+  const now = Date.now();
+  for (const mint of [...new Set(mints)]) {
+    const last = (loadHolders()[mint] || []).at(-1);
+    if ((last && now - last.t < 5 * 60e3) || (holderPolled[mint] && now - holderPolled[mint] < 5 * 60e3)) continue;
+    holderPolled[mint] = now;
+    try { digestRug(await fetchRugReport(mint), null, mint); } catch { /* RugCheck spacing stays on the shared queue */ }
+  }
+}
 $('btnSaveList')?.addEventListener('click', () => {
   const parsed = parseInput($('pasted')?.value || '');
   addMintsToList([...new Set([...(parsed.mints || []), ...(parsed.pairs || [])])]);
@@ -5090,6 +5211,8 @@ function wireReadyNow() {
 window.__smsReady = renderReadyNow;
 
 fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
+setInterval(() => { refreshHolderWatch(); }, 60 * 1000);
+setTimeout(() => { refreshHolderWatch(); }, 20000);
 if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
 try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
 updateSolFilterBadge();
