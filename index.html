@@ -2768,21 +2768,31 @@ function hydrate() {
     const mint = el.dataset.mint; const t = tokenInfo(mint); const s = suggestedBuySol(t);
     const h = w.tokens?.get(mint); const hold = h && h.raw > 0n;
     const ok = t.verdict === 'Candidate';
+    const startAmt = s.sol ? (sizeStore === 'usd' && solPriceNow() ? (s.sol * solPriceNow()).toFixed(2) : s.sol) : '';
     el.innerHTML = `<div class="rounded-xl bg-ink-900/70 border border-white/5 p-2.5">
       <div class="flex items-center gap-1.5">
-        <input type="number" min="0" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" value="${s.sol ? (sizeStore === 'usd' && solPriceNow() ? (s.sol * solPriceNow()).toFixed(2) : s.sol) : ''}" placeholder="${unitWord()}" class="buy-amt w-24 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in ${unitWord()}" />
-        <span class="text-[11px] text-slate-500 whitespace-normal break-words">${unitWord()}${s.sol && solPriceNow() ? ' · ' + esc(sizeHint(sizeStore === 'usd' ? s.sol * solPriceNow() : s.sol)) : ''}</span>
+        <input type="number" inputmode="decimal" min="0" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" value="${startAmt}" placeholder="${unitWord()}" class="buy-amt w-24 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in ${unitWord()}" />
+        <span class="buy-hint text-[11px] text-slate-400 whitespace-normal break-words">${esc(previewAmount(startAmt))}</span>
         <button class="btn-buy flex-1 rounded-lg py-1.5 text-xs font-bold ${ok ? 'bg-emerald-500 hover:bg-emerald-400 text-ink-950' : 'bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200'}">Buy${ok ? '' : ' ⚠'}</button>
       </div>
+      <div class="mt-1.5 flex flex-wrap gap-1">${[5, 10, 20].map(n => `<button type="button" data-chip="${n}" class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-300">$${n}</button>`).join('')}</div>
       <div class="text-[10px] text-slate-500 mt-1">${esc(s.note)} · via ${esc(w.label)}</div>
       <div class="flex items-center gap-1 mt-1.5 text-[11px]"><span class="text-slate-400 mr-auto">${w.pubkey ? `Hold: <b class="text-slate-200">${hold ? fmtTok(h.ui) : '0'}</b>` : 'Wallet not connected'}</span>
         ${[25, 50, 100].map(p => `<button data-pct="${p}" class="btn-sell rounded-md px-2 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/20 disabled:opacity-30" ${hold ? '' : 'disabled'}>Sell ${p}%</button>`).join('')}</div>
     </div>`;
+    const hint = el.querySelector('.buy-hint');
+    const amt = el.querySelector('.buy-amt');
+    amt.addEventListener('input', () => { hint.textContent = previewAmount(amt.value); });
+    el.querySelectorAll('[data-chip]').forEach(b => b.addEventListener('click', () => {
+      const usd = +b.dataset.chip;
+      const px = solPriceNow();
+      amt.value = sizeStore === 'usd' || !(px > 0) ? String(usd) : (usd / px).toFixed(4);
+      hint.textContent = previewAmount(amt.value);
+    }));
     el.querySelector('.btn-buy').addEventListener('click', () => {
-      const raw = +el.querySelector('.buy-amt').value;
-      const sol = solCap(raw);
-      if (sol == null) return toast('SOL price unavailable — switch Size unit to SOL to buy manually.', 'err', 7000);
-      openTrade('buy', mint, { sol });
+      const spend = resolveTypedSpend(amt.value);
+      if (!spend.ok) return toast(spend.error, 'err', 8000);
+      openTrade('buy', mint, { sol: spend.sol });
     });
     el.querySelectorAll('.btn-sell').forEach(b => b.addEventListener('click', () => openTrade('sell', mint, { pct: +b.dataset.pct })));
   });
@@ -5282,10 +5292,10 @@ function renderSniper() {
 
 /* ---------------- My List (pasted watchlist, own entries and exits) ---------------- */
 const MYLIST_DEFAULTS = {
-  on: false, mode: 'zone', sizeMode: 'sol', sizeSol: 0.05, sizePct: 10, stopPct: 15, stopPx: null,
+  on: false, mode: 'zone', sizeMode: 'sol', sizePct: 10, stopPct: 15, stopPx: null,
   tps: [{ gainPct: 15, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: 10,
   timeStopMin: null, timeMinGain: 0, reentry: true, cooldownMin: 5, maxReentries: 3,
-  tf: '4h', earlyBreak: false
+  tf: '4h', earlyBreak: false, sizeSol: 5
 };
 const MYLIST_MODES = ['zone', 'momentum', 'range', 'now', 'trend', 'resist'];
 const LIST_TFS = ['1m', '5m', '15m', '1h', '4h'];
@@ -5325,7 +5335,7 @@ async function resolveCandleTf(pool, preferred) {
   return { tf: pick.tf, candles: got[pick.tf] || null, note: pick.note };
 }
 let MYLIST = loadMyList();
-if (MYLIST._tfMigrated) { delete MYLIST._tfMigrated; saveMyList(); }
+if (MYLIST._tfMigrated || MYLIST._sizeMigrated) { delete MYLIST._tfMigrated; delete MYLIST._sizeMigrated; saveMyList(); }
 let listTimer = null, listBusy = false;
 function parseTps(text) {
   const out = [];
@@ -5415,6 +5425,13 @@ function loadMyList() {
     base.tfDefault = '4h';
     base._tfMigrated = true;
   }
+  if (!base.sizeMigrated) {
+    const missing = !(base.sizeSol > 0);
+    const legacyUsdDust = sizeStore === 'usd' && base.sizeSol > 0 && base.sizeSol < 1;
+    if (missing || legacyUsdDust) base.sizeSol = sizeStore === 'usd' ? 5 : 0.05;
+    base.sizeMigrated = true;
+    base._sizeMigrated = true;
+  }
   base.rows = rows.map(sanitizeListRow).filter(Boolean);
   return base;
 }
@@ -5426,7 +5443,7 @@ function sanitizeListRow(r) {
     mint: r.mint, symbol: String(r.symbol || '').slice(0, 16), pool: r.pool || '',
     enabled: r.enabled !== false, mode: mapListMode(r.mode),
     sizeMode: r.sizeMode === 'pct' ? 'pct' : (r.sizeMode === 'sol' ? 'sol' : ''),
-    sizeSol: Number.isFinite(+r.sizeSol) ? +r.sizeSol : null,
+    sizeSol: Number.isFinite(+r.sizeSol) && +r.sizeSol > 0 ? +r.sizeSol : null,
     sizePct: Number.isFinite(+r.sizePct) ? +r.sizePct : null,
     stopPct: Number.isFinite(+r.stopPct) ? +r.stopPct : null,
     stopPx: Number.isFinite(+r.stopPx) && +r.stopPx > 0 ? +r.stopPx : null,
@@ -5475,7 +5492,8 @@ function listStrategy(row) {
   return {
     mode: row && row.mode ? row.mode : (d.mode || 'zone'),
     sizeMode: row && row.sizeMode ? row.sizeMode : (d.sizeMode || 'sol'),
-    sizeSol: use('sizeSol', 0.05), sizePct: use('sizePct', 10),
+    sizeSol: (row && isNum(row.sizeSol) && row.sizeSol > 0) ? row.sizeSol : ((isNum(d.sizeSol) && d.sizeSol > 0) ? d.sizeSol : (sizeStore === 'usd' ? 5 : 0.05)),
+    sizePct: (row && isNum(row.sizePct) && row.sizePct > 0) ? row.sizePct : ((isNum(d.sizePct) && d.sizePct > 0) ? d.sizePct : 10),
     stopPct: use('stopPct', 15), stopPx: row && isNum(row.stopPx) ? row.stopPx : null,
     tps: tps && tps.length ? tps : [{ gainPct: 15, sellPct: 100 }],
     beAtPct: row && row.beAtPct != null ? row.beAtPct : d.beAtPct,
@@ -5522,16 +5540,75 @@ function listDistance(spec, px, zone) {
   }
   return null;
 }
-function listSolSize(spec) {
-  const bal = isNum(WALLETS.burner.sol) ? WALLETS.burner.sol : WALLETS.burner.lastSol;
-  let sol = spec.sizeMode === 'pct' && isNum(spec.sizePct) && isNum(bal) ? bal * spec.sizePct / 100 : solCap(spec.sizeSol);
-  if (sol == null) return 0;
-  const cap = burnerTradeCap();
+function zoneWaitReason(zone, support) {
+  const touches = support?.touches;
+  if (isNum(touches) && touches >= 2) return 'support is outside the entry distance';
+  if ((zone && isNum(zone.lo)) || (isNum(touches) && touches < 2)) return 'support only 1 touch';
+  return 'no support zone yet';
+}
+function burnerSolBal() {
+  const w = WALLETS.burner;
+  if (isNum(w.sol)) return w.sol;
+  if (isNum(w.lastSol)) return w.lastSol;
+  return null;
+}
+function previewAmount(amount) {
+  const n = +amount;
+  const px = solPriceNow();
+  if (!isNum(n)) return '';
+  if (!(px > 0)) return 'SOL price unavailable';
+  if (sizeStore === 'usd') return '≈ ' + (n / px).toFixed(3) + ' SOL';
+  return '≈ $' + (n * px).toFixed(2);
+}
+function strategySizeText(spec) {
+  if (spec.sizeMode === 'pct') {
+    const pct = spec.sizePct > 0 ? spec.sizePct : 10;
+    const bal = burnerSolBal();
+    if (bal == null) return 'Size ' + pct + '% of balance (balance unknown)';
+    const sol = bal * pct / 100;
+    const px = solPriceNow();
+    return 'Size ' + pct + '% of balance ≈ ' + sol.toFixed(3) + ' SOL' + (px > 0 ? ' ($' + (sol * px).toFixed(2) + ')' : '');
+  }
+  const amt = spec.sizeSol > 0 ? spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05);
+  if (sizeStore === 'usd') return 'Size $' + (+amt).toFixed(2) + ' ' + previewAmount(amt);
+  return 'Size ' + (+amt).toFixed(3) + ' SOL ' + previewAmount(amt);
+}
+function capSpend(sol) {
+  const spend = quoteSpend(sol);
+  if (!spend.ok) return spend;
+  const px = solPriceNow();
   const maxTrade = solCap(S.maxSolPerTrade);
-  if (cap.ok) sol = Math.min(sol, cap.byPct);
-  if (maxTrade == null) return 0;
-  sol = Math.min(sol, maxTrade);
-  return sol;
+  if (maxTrade == null) return { ok: false, sol, error: 'SOL price unavailable — can’t check the per-trade cap' };
+  if (sol > maxTrade + 1e-9) {
+    const capUsd = px > 0 ? ' ($' + (maxTrade * px).toFixed(2) + ')' : '';
+    return { ok: false, sol, usd: spend.usd, label: spend.label, error: 'Above max per trade: ' + spend.label + ' — cap is ' + maxTrade.toFixed(4) + ' SOL' + capUsd };
+  }
+  return spend;
+}
+function resolveTypedSpend(amount) {
+  const n = +amount;
+  if (!isNum(n) || !(n > 0)) return { ok: false, sol: 0, error: 'Enter a size above 0' };
+  const px = solPriceNow();
+  if (sizeStore === 'usd' && !(px > 0)) return { ok: false, sol: 0, error: 'SOL price unavailable — can’t convert this USD size' };
+  return capSpend(sizeStore === 'usd' ? n / px : n);
+}
+function resolveListSpend(spec) {
+  if (spec.sizeMode === 'pct') {
+    const pct = isNum(spec.sizePct) && spec.sizePct > 0 ? spec.sizePct : 10;
+    const bal = burnerSolBal();
+    const text = strategySizeText(spec);
+    if (bal == null) return { ok: false, sol: 0, text, error: 'Burner balance unknown — can’t size ' + pct + '% of balance' };
+    if (!(bal > 0)) return { ok: false, sol: 0, text, error: 'Burner balance is 0 — can’t size ' + pct + '% of balance' };
+    const spend = capSpend(bal * pct / 100);
+    return { ...spend, text };
+  }
+  const amt = spec.sizeSol > 0 ? spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05);
+  const spend = resolveTypedSpend(amt);
+  return { ...spend, text: strategySizeText(spec) };
+}
+function listSolSize(spec) {
+  const got = resolveListSpend(spec);
+  return got.ok ? got.sol : 0;
 }
 function listBuyBlocks(sol) {
   const errs = [];
@@ -5732,7 +5809,7 @@ function listContext(row) {
   else if ((spec.mode === 'zone' || spec.mode === 'momentum' || spec.mode === 'trend' || spec.mode === 'resist') && (row.taStale || (isNum(taAge) && taAge >= 60))) why = 'chart data is stale';
   else if ((spec.mode === 'trend' || spec.mode === 'resist') && !row.pool && !row.breakLevel) why = 'waiting for the pool';
   else if (spec.mode === 'trend' || spec.mode === 'resist') why = row.breakReason || ('waiting for ' + spec.tf + ' close');
-  else if (spec.mode === 'zone' && (!row.zone || row.zone.noAnchor)) why = 'no support zone yet';
+  else if (spec.mode === 'zone' && (!row.zone || row.zone.noAnchor)) why = zoneWaitReason(row.zone, model.support);
   else if (spec.mode === 'momentum' && row.momState !== 'trigger') why = model.mom?.reason || 'momentum trigger is not confirmed';
   else if (spec.mode === 'range' && !(isNum(spec.rangeLo) && isNum(spec.rangeHi))) why = 'set a price range';
   else if (spec.mode === 'range') why = 'price is outside the range';
@@ -5948,15 +6025,16 @@ function openScanChart(mint) {
   openModal({ title: (row.symbol || 'Token') + ' chart', confirmLabel: 'Close', html: '<div id="mlChartLive"></div>', onConfirm: async () => {} });
   drawListChart(row, '4h');
 }
-async function myListBuyNow(row) {
+async function myListBuyNow(row, typed) {
   if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
   const spec = listStrategy(row);
-  const sol = +listSolSize(spec).toFixed(6);
-  const blocks = listBuyBlocks(sol);
+  const spend = typed == null || String(typed).trim() === '' ? resolveListSpend(spec) : resolveTypedSpend(typed);
+  if (!spend.ok) return toast(spend.error, 'err', 8000);
+  const blocks = listBuyBlocks(spend.sol).filter(e => !/Amount too small|Above max per trade|SOL price unavailable|Burner balance/.test(e));
   if (blocks.length) return toast(blocks[0], 'err', 8000);
-  const spend = quoteSpend(sol);
+  const sol = spend.sol;
   resetModalButtons();
-  openModal({ title: 'Buy ' + (row.symbol || short(row.mint)), confirmLabel: 'Buy now', danger: true,
+  openModal({ title: 'Buy ' + (row.symbol || short(row.mint)), confirmLabel: 'Buy', danger: true,
     html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Market buy <b>${esc(spend.label)}</b> of ${esc(row.symbol || short(row.mint))} (${spend.lamports.toLocaleString('en-US')} lamports) with this token’s stop and targets. The usual caps still apply.</p>`,
     onConfirm: async () => {
       const again = quoteSpend(sol);
@@ -6039,11 +6117,17 @@ function renderMyList() {
       </div>
       <div class="mt-2 flex items-center gap-2 text-[11px] whitespace-normal break-words ${holders.cls}" title="${esc(holders.tip || '')}"><span class="min-w-0">${esc(holders.text)}</span>${holders.spark}</div>
       ${flags.length ? `<div class="mt-2 flex flex-wrap gap-1">${flags.map(f => `<span class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-300 whitespace-normal break-words">${esc(f)}</span>`).join('')}</div>` : ''}
-      <div class="mt-3 rounded-xl px-2.5 py-2 text-[12px] font-semibold whitespace-normal break-words ${v.ready ? 'bg-emerald-500/15 text-emerald-200' : 'bg-white/5 text-slate-400'}">${v.ready ? 'READY — entering' : 'Not ready: ' + esc(v.why)}${v.ready && !MYLIST.on ? '<span class="block text-[10px] font-normal text-slate-400">Auto-buy is off. Buy now still works.</span>' : ''}</div>
+      <div class="mt-3 rounded-xl px-2.5 py-2 text-[12px] font-semibold whitespace-normal break-words ${v.ready ? 'bg-emerald-500/15 text-emerald-200' : 'bg-white/5 text-slate-400'}">${v.ready ? 'READY — entering' : 'Not ready: ' + esc(v.why)}${v.ready && !MYLIST.on ? '<span class="block text-[10px] font-normal text-slate-400">Auto-buy is off. Buy still uses the amount below.</span>' : ''}</div>
       ${posHtml}
-      <div class="mt-3 flex flex-wrap items-center gap-2">
+      <div class="mt-2 text-[11px] text-slate-300 whitespace-normal break-words">${esc(strategySizeText(v.spec))}</div>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <input type="number" inputmode="decimal" min="0" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" data-ml-amt="${esc(row.id)}" value="${esc((() => { if (v.spec.sizeMode === 'pct') { const bal = burnerSolBal(); const sol = bal > 0 ? bal * (v.spec.sizePct > 0 ? v.spec.sizePct : 10) / 100 : null; const px = solPriceNow(); if (sol && sizeStore === 'usd' && px > 0) return (sol * px).toFixed(2); if (sol) return sol.toFixed(4); } const amt = v.spec.sizeSol > 0 ? v.spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05); return sizeStore === 'usd' ? (+amt).toFixed(2) : (+amt).toFixed(4); })())}" class="w-24 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in ${unitWord()}" />
+        <span data-ml-hint="${esc(row.id)}" class="text-[10px] text-slate-400 whitespace-normal break-words">${esc(previewAmount((() => { const amt = v.spec.sizeSol > 0 ? v.spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05); return amt; })()))}</span>
+        <button type="button" data-ml-buy="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-emerald-500/15 text-emerald-200 border border-emerald-500/25">Buy</button>
+      </div>
+      <div class="mt-1.5 flex flex-wrap gap-1">${[5, 10, 20].map(n => `<button type="button" data-ml-chip="${n}" data-id="${esc(row.id)}" class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-300">$${n}</button>`).join('')}</div>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
         <button type="button" data-ml-edit="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Strategy</button>
-        <button type="button" data-ml-buy="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-emerald-500/15 text-emerald-200 border border-emerald-500/25">Buy now</button>
         <button type="button" data-ml-del="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] text-rose-300 border border-rose-500/20">Remove</button>
         <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-[11px] text-violet-300">DexScreener</a>
       </div>
@@ -6094,8 +6178,22 @@ function renderMyList() {
   box.querySelectorAll('[data-ml-edit]').forEach(el => el.addEventListener('click', () => {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlEdit); if (row) openListEditor(row);
   }));
+  box.querySelectorAll('[data-ml-amt]').forEach(input => {
+    const hint = box.querySelector('[data-ml-hint="' + input.dataset.mlAmt + '"]');
+    input.addEventListener('input', () => { if (hint) hint.textContent = previewAmount(input.value); });
+  });
+  box.querySelectorAll('[data-ml-chip]').forEach(b => b.addEventListener('click', () => {
+    const input = box.querySelector('[data-ml-amt="' + b.dataset.id + '"]');
+    if (!input) return;
+    const usd = +b.dataset.mlChip;
+    const px = solPriceNow();
+    input.value = sizeStore === 'usd' || !(px > 0) ? String(usd) : (usd / px).toFixed(4);
+    input.dispatchEvent(new Event('input'));
+  }));
   box.querySelectorAll('[data-ml-buy]').forEach(el => el.addEventListener('click', () => {
-    const row = MYLIST.rows.find(r => r.id === el.dataset.mlBuy); if (row) myListBuyNow(row);
+    const row = MYLIST.rows.find(r => r.id === el.dataset.mlBuy);
+    const input = el.closest('article')?.querySelector('[data-ml-amt]');
+    if (row) myListBuyNow(row, input ? input.value : null);
   }));
   box.querySelectorAll('[data-ml-chart]').forEach(el => el.addEventListener('click', () => openListChart(el.dataset.mlChart)));
   box.querySelectorAll('[data-ml-pos]').forEach(el => el.addEventListener('click', () => { document.getElementById('sec-portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
@@ -6214,11 +6312,14 @@ async function myListBuys() {
     const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
     if (!gate.ready) continue;
     if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) continue;
-    const sol = +listSolSize(spec).toFixed(6);
+    const resolved = resolveListSpend(spec);
+    autoLog('My List ' + (row.symbol || short(row.mint)) + ' auto size ' + (resolved.text || '') + (resolved.ok ? '' : ' — ' + resolved.error), resolved.ok ? 'info' : 'warn');
+    if (!resolved.ok) continue;
+    const sol = +resolved.sol.toFixed(6);
     const blocks = listBuyBlocks(sol);
-    if (blocks.length) continue;
+    if (blocks.length) { autoLog('My List ' + (row.symbol || short(row.mint)) + ' blocked — ' + blocks[0], 'warn'); continue; }
     let qo;
-      try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(quoteSpend(sol).lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) }); }
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(quoteSpend(sol).lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) }); }
     catch { continue; }
     if (!qo?.quote) continue;
     const entryPx = isNum(px) && px > 0 ? px : null;
@@ -6405,7 +6506,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, openScanChart, tfFallbackChoice, quoteSpend, get mylist() { return MYLIST; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
