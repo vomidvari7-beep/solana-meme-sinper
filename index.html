@@ -5142,120 +5142,383 @@ function myListPlanHtml(p, pl) {
   return `<div class="mt-2 text-[11px] leading-snug text-slate-300 whitespace-normal break-words"><b class="text-slate-400">Exit plan</b> · stop ${price(pl.stop)} (${esc(pl.reason || 'initial')}) · ${esc(be)} · ${esc(trail)} · ${esc(tps)}</div>`;
 }
 function modeLabel(mode) { return { zone: 'S/R zone', momentum: 'Momentum', range: 'Price range', now: 'Buy now' }[mode] || mode; }
-function stateLabel(state) { return { waiting: 'Waiting', inzone: 'In zone', bought: 'Bought', cooldown: 'Cooldown', disabled: 'Disabled' }[state] || 'Waiting'; }
+function listPlan(spec, entryPx) {
+  const stop = isNum(spec.stopPx) && entryPx && spec.stopPx < entryPx ? spec.stopPx : (entryPx ? entryPx * (1 - spec.stopPct / 100) : null);
+  return { myList: true, stop, strat: 'My List ' + spec.mode, exit: { stopPct: spec.stopPct, stopPx: spec.stopPx, tps: spec.tps, beAtPct: spec.beAtPct, trailAtPct: spec.trailAtPct, trailPct: spec.trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain } };
+}
+let listSort = 'ready', listTable = false;
+const listChartMemo = {};
+function listChartModel(row, spec, px) {
+  const candles = (row.cache?.candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0);
+  let ta = null, mom = null, line = null;
+  try {
+    if (candles.length >= 15) {
+      ta = analyzeStructure(candles, row.cache?.tf || '5m');
+      const { highs } = swingPoints(candles, 2);
+      for (let i = highs.length - 1; i >= 1; i--) if (highs[i].price < highs[i - 1].price) { line = [highs[i - 1], highs[i]]; break; }
+    }
+    if (spec.mode === 'momentum' && candles.length >= 20) mom = momentumFromCandles(candles);
+  } catch { /* the card still renders without a drawing */ }
+  let trigger = null;
+  if (spec.mode === 'now') trigger = isNum(px) ? px : null;
+  else if (spec.mode === 'range' && isNum(spec.rangeLo) && isNum(spec.rangeHi)) {
+    if (!isNum(px) || px < spec.rangeLo) trigger = spec.rangeLo;
+    else if (px > spec.rangeHi) trigger = spec.rangeHi;
+    else trigger = px;
+  } else if (spec.mode === 'momentum') trigger = isNum(mom?.level) ? mom.level : null;
+  else if (row.zone && isNum(row.zone.lo) && isNum(row.zone.hi) && !row.zone.noAnchor) trigger = (row.zone.lo + row.zone.hi) / 2;
+  const entry = isNum(trigger) ? trigger : (isNum(px) ? px : null);
+  const stopPct = isNum(spec.stopPct) ? spec.stopPct : 15;
+  const stop = isNum(spec.stopPx) && isNum(entry) && spec.stopPx < entry ? spec.stopPx : (isNum(entry) ? entry * (1 - stopPct / 100) : null);
+  const tp1 = spec.tps?.[0] && isNum(entry) ? entry * (1 + spec.tps[0].gainPct / 100) : null;
+  const tp2 = spec.tps?.[1] && isNum(entry) ? entry * (1 + spec.tps[1].gainPct / 100) : null;
+  const risk = isNum(entry) && isNum(stop) && entry > stop ? entry - stop : null;
+  const reward = isNum(entry) && isNum(tp1) && tp1 > entry ? tp1 - entry : null;
+  return {
+    candles, ta, mom, line, trigger, entry, stop, tp1, tp2,
+    rr: risk && reward ? reward / risk : null,
+    scalp: !!(spec.tps?.length === 1 && spec.tps[0].sellPct >= 99),
+    gain1: spec.tps?.[0]?.gainPct ?? null, gain2: spec.tps?.[1]?.gainPct ?? null,
+    support: ta?.support || null, resist: ta?.resist || null, trend: ta?.trend || null,
+    zone: row.zone && isNum(row.zone.lo) ? row.zone : null
+  };
+}
+function listChartSvg(model, opt) {
+  const w = opt?.w || 320, h = opt?.h || 112;
+  const full = model?.candles || [];
+  const cs = full.slice(-80);
+  if (cs.length < 2) return { svg: '', empty: true };
+  const minC = Math.min(...cs.map(c => c.l)), maxC = Math.max(...cs.map(c => c.h));
+  const span = (maxC - minC) || Math.abs(maxC) * 0.04 || 1;
+  const min = minC - span * 0.12, max = maxC + span * 0.12;
+  const y = (p) => (1 - (p - min) / (max - min)) * (h - 8) + 4;
+  const x = (i) => (i / (cs.length - 1)) * (w - 8) + 4;
+  const show = (p) => isNum(p) && p >= min && p <= max;
+  const start = full.length - cs.length;
+  const bw = Math.max(1, (w - 8) / cs.length * 0.62);
+  const bodies = cs.map((c, i) => {
+    const open = isNum(c.o) ? c.o : c.c;
+    const up = c.c >= open;
+    const top = y(Math.max(open, c.c)), bot = y(Math.min(open, c.c));
+    const col = up ? '#34d399' : '#fb7185';
+    return `<line x1="${x(i).toFixed(2)}" y1="${y(c.h).toFixed(2)}" x2="${x(i).toFixed(2)}" y2="${y(c.l).toFixed(2)}" stroke="${col}" stroke-width="1"/><rect x="${(x(i) - bw / 2).toFixed(2)}" y="${top.toFixed(2)}" width="${bw.toFixed(2)}" height="${Math.max(1, bot - top).toFixed(2)}" fill="${col}"/>`;
+  }).join('');
+  const band = (lo, hi, fill) => {
+    if (!isNum(lo) || !isNum(hi)) return '';
+    const a = Math.max(min, Math.min(lo, hi)), b = Math.min(max, Math.max(lo, hi));
+    if (!(b > a)) return '';
+    return `<rect x="0" y="${y(b).toFixed(2)}" width="${w}" height="${Math.max(1, y(a) - y(b)).toFixed(2)}" fill="${fill}"/>`;
+  };
+  const hline = (p, color, dash) => show(p) ? `<line x1="0" y1="${y(p).toFixed(2)}" x2="${w}" y2="${y(p).toFixed(2)}" stroke="${color}" stroke-width="1"${dash ? ` stroke-dasharray="${dash}"` : ''}/>` : '';
+  let tl = '';
+  if (model.line) {
+    const [a, b] = model.line;
+    const iEnd = full.length - 1, i0 = Math.max(a.i, start);
+    const p0 = lineAt(a, b, i0), pEnd = lineAt(a, b, iEnd);
+    if (isNum(p0) && isNum(pEnd)) tl = `<line x1="${x(i0 - start).toFixed(2)}" y1="${y(p0).toFixed(2)}" x2="${x(iEnd - start).toFixed(2)}" y2="${y(pEnd).toFixed(2)}" stroke="#fbbf24" stroke-width="1.25"/>`;
+  }
+  const mark = show(model.trigger) ? `<circle cx="${x(cs.length - 1).toFixed(2)}" cy="${y(model.trigger).toFixed(2)}" r="3.2" fill="#fff" stroke="#7c3aed" stroke-width="1"/>` : '';
+  const svg = `<svg viewBox="0 0 ${w} ${h}" data-min="${min}" data-max="${max}" data-vh="${h}" class="w-full h-auto" role="img" aria-label="Price chart with trendline, support, resistance, trigger, stop and targets">${band(model.support?.lo, model.support?.hi, 'rgba(52,211,153,0.16)')}${band(model.resist?.lo, model.resist?.hi, 'rgba(251,113,133,0.14)')}${band(model.zone?.lo, model.zone?.hi, 'rgba(167,139,250,0.18)')}${bodies}${tl}${hline(model.stop, '#fb7185', '3 2')}${hline(model.tp1, '#34d399', '3 2')}${hline(model.tp2, '#6ee7b7', '2 3')}${hline(model.trigger, '#c4b5fd', '')}${mark}</svg>`;
+  return { svg, empty: false };
+}
+function listContext(row) {
+  const spec = listStrategy(row);
+  const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
+  const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
+  const open = !!listPosition(row.mint);
+  const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
+  const model = listChartModel(row, spec, px);
+  let badge = 'Waiting', why = 'price is away from the trigger', ready = false;
+  if (!row.enabled || gate.state === 'disabled') { badge = 'Disabled'; why = 'token is switched off'; }
+  else if (gate.state === 'bought') { badge = 'Bought'; why = 'a position is already open'; }
+  else if (gate.state === 'cooldown') {
+    badge = 'Cooldown';
+    if (!spec.reentry && row.boughtOnce) why = 're-entry is off';
+    else if (row.cooldownUntil && Date.now() < row.cooldownUntil) why = 'cooldown ' + Math.max(1, Math.ceil((row.cooldownUntil - Date.now()) / 60000)) + 'm left';
+    else why = 'daily re-entry cap reached';
+  } else if (!isNum(px)) why = 'no live price yet';
+  else if ((spec.mode === 'zone' || spec.mode === 'momentum') && (row.taStale || (isNum(taAge) && taAge >= 60))) why = 'chart data is stale';
+  else if (spec.mode === 'zone' && (!row.zone || row.zone.noAnchor)) why = 'no support zone yet';
+  else if (spec.mode === 'momentum' && row.momState !== 'trigger') why = model.mom?.reason || 'momentum trigger is not confirmed';
+  else if (spec.mode === 'range' && !(isNum(spec.rangeLo) && isNum(spec.rangeHi))) why = 'set a price range';
+  else if (spec.mode === 'range') why = 'price is outside the range';
+  else if (spec.mode === 'zone') why = 'price is outside the entry zone';
+  if (gate.ready && badge === 'Waiting') {
+    const blocks = listBuyBlocks(+listSolSize(spec).toFixed(6));
+    if (!WALLETS.burner.kp) { badge = 'In zone'; why = 'burner is locked'; }
+    else if (blocks.length) { badge = 'In zone'; why = blocks[0]; }
+    else { badge = 'READY — entering'; why = ''; ready = true; }
+  } else if (badge === 'Waiting' && (row.inZone || (spec.mode === 'momentum' && row.momState === 'trigger') || (spec.mode === 'range' && isNum(px) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && px >= spec.rangeLo && px <= spec.rangeHi))) badge = 'In zone';
+  const dist = listDistance(spec, px, row.zone);
+  return { spec, px, taAge, open, gate, model, badge, why, ready, dist };
+}
+function listDistText(dist) {
+  if (!isNum(dist)) return '—';
+  if (Math.abs(dist) < 0.05) return '0% · at trigger';
+  return Math.abs(dist).toFixed(1) + '% ' + (dist > 0 ? 'above' : 'below');
+}
+function listBadgeCls(badge) {
+  if (badge === 'READY — entering') return 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200';
+  if (badge === 'In zone') return 'border-amber-400/40 bg-amber-500/15 text-amber-200';
+  if (badge === 'Bought') return 'border-violet-400/40 bg-violet-500/15 text-violet-200';
+  if (badge === 'Cooldown') return 'border-orange-400/40 bg-orange-500/15 text-orange-200';
+  if (badge === 'Disabled') return 'border-white/10 bg-white/5 text-slate-500';
+  return 'border-white/10 bg-white/5 text-slate-300';
+}
+function listDefaultChip() {
+  const tp = formatTps(MYLIST.tps) || '15:100';
+  const size = MYLIST.sizeMode === 'pct' ? (MYLIST.sizePct + '% of balance') : (sizeHint(MYLIST.sizeSol) || (MYLIST.sizeSol + ' ' + unitWord()));
+  return modeLabel(MYLIST.mode || 'zone') + ' · ' + size + ' · stop ' + MYLIST.stopPct + '%' + (isNum(MYLIST.stopPx) ? ' / ' + price(MYLIST.stopPx) : '') + ' · TP ' + tp;
+}
+function modalNum(id) { const el = $(id); if (!el || !String(el.value || '').trim()) return null; const n = +el.value; return Number.isFinite(n) ? n : null; }
+function listField(label, inner) { return `<label class="block min-w-0 text-[11px] text-slate-400">${label}${inner}</label>`; }
+function listInp(id, val, ph) { return `<input id="${id}" value="${esc(val ?? '')}" placeholder="${esc(ph || '')}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 font-mono text-slate-100" />`; }
+function openListDefaults() {
+  const m = MYLIST;
+  resetModalButtons();
+  openModal({ title: 'Default My List strategy', confirmLabel: 'Save strategy',
+    html: `<p class="text-[11px] text-slate-400 whitespace-normal break-words">New tokens use this until you set a token strategy. Auto-buy still turns off on reload.</p>
+      <div class="mt-2 grid grid-cols-2 gap-2">${listField('Entry', `<select id="mlEdMode" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5">${MYLIST_MODES.map(v => `<option value="${v}" ${m.mode === v ? 'selected' : ''}>${modeLabel(v)}</option>`).join('')}</select>`)}
+      ${listField('Size', `<select id="mlEdSize" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="sol" ${m.sizeMode !== 'pct' ? 'selected' : ''}>${unitWord()} amount</option><option value="pct" ${m.sizeMode === 'pct' ? 'selected' : ''}>% of balance</option></select>`)}
+      ${listField('Size (' + unitWord() + ')', listInp('mlEdSizeSol', m.sizeSol) + `<span class="block text-[10px] text-slate-500 whitespace-normal break-words">${esc(sizeHint(m.sizeSol))}</span>`)}
+      ${listField('% of balance', listInp('mlEdSizePct', m.sizePct))}
+      ${listField('Stop % below entry', listInp('mlEdStop', m.stopPct))}
+      ${listField('Stop price (optional)', listInp('mlEdStopPx', m.stopPx ?? ''))}
+      ${listField('Take profit gain:sell', listInp('mlEdTps', formatTps(m.tps), '15:50, 30:50'))}
+      ${listField('Scalp % then close', `<div class="mt-0.5 flex gap-1"><input id="mlEdScalpPct" value="15" class="w-16 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 font-mono" /><button type="button" id="mlEdScalp" class="rounded-lg px-2 py-1 border border-white/10 text-slate-200">Use scalp</button></div>`)}
+      ${listField('Breakeven at +% (blank off)', listInp('mlEdBe', m.beAtPct ?? ''))}
+      ${listField('Trail starts +% (blank off)', listInp('mlEdTrailAt', m.trailAtPct ?? ''))}
+      ${listField('Trail % below high', listInp('mlEdTrail', m.trailPct ?? ''))}
+      ${listField('Time stop minutes', listInp('mlEdTime', m.timeStopMin ?? ''))}
+      ${listField('Time stop min gain %', listInp('mlEdTimeGain', m.timeMinGain ?? 0))}
+      ${listField('Cooldown minutes', listInp('mlEdCool', m.cooldownMin))}
+      ${listField('Max re-entries / day', listInp('mlEdReMax', m.maxReentries))}
+      </div>
+      <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdRe" type="checkbox" class="accent-violet-500" ${m.reentry !== false ? 'checked' : ''}/> Look for a new entry after a close</label>`,
+    onConfirm: async () => {
+      MYLIST.mode = MYLIST_MODES.includes($('mlEdMode')?.value) ? $('mlEdMode').value : 'zone';
+      MYLIST.sizeMode = $('mlEdSize')?.value === 'pct' ? 'pct' : 'sol';
+      MYLIST.sizeSol = modalNum('mlEdSizeSol') || 0.05;
+      MYLIST.sizePct = modalNum('mlEdSizePct') || 10;
+      MYLIST.stopPct = modalNum('mlEdStop') || 15;
+      MYLIST.stopPx = modalNum('mlEdStopPx');
+      const tps = parseTps($('mlEdTps')?.value);
+      if (tps.length) MYLIST.tps = tps;
+      MYLIST.beAtPct = modalNum('mlEdBe');
+      MYLIST.trailAtPct = modalNum('mlEdTrailAt');
+      MYLIST.trailPct = modalNum('mlEdTrail');
+      MYLIST.timeStopMin = modalNum('mlEdTime');
+      MYLIST.timeMinGain = modalNum('mlEdTimeGain') || 0;
+      MYLIST.cooldownMin = modalNum('mlEdCool') || 0;
+      MYLIST.maxReentries = modalNum('mlEdReMax') ?? 3;
+      MYLIST.reentry = !!$('mlEdRe')?.checked;
+      saveMyList(); toast('My List strategy saved', 'ok'); renderMyList();
+    } });
+  $('mlEdScalp')?.addEventListener('click', () => { const n = modalNum('mlEdScalpPct') || 15; if ($('mlEdTps')) $('mlEdTps').value = n + ':100'; });
+}
+function openListEditor(row) {
+  const cur = row.mode || '';
+  const re = row.reentry == null ? '' : (row.reentry ? 'yes' : 'no');
+  resetModalButtons();
+  openModal({ title: 'Strategy · ' + (row.symbol || short(row.mint)), confirmLabel: 'Save token',
+    html: `<p class="text-[11px] text-slate-400 whitespace-normal break-words">Blank fields keep the list default. Saved on this token only.</p>
+      <div class="mt-2 grid grid-cols-2 gap-2">${listField('Entry', `<select id="mlEdMode" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${cur ? '' : 'selected'}>List default</option>${MYLIST_MODES.map(v => `<option value="${v}" ${cur === v ? 'selected' : ''}>${modeLabel(v)}</option>`).join('')}</select>`)}
+      ${listField('Size', `<select id="mlEdSize" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${row.sizeMode ? '' : 'selected'}>Default</option><option value="sol" ${row.sizeMode === 'sol' ? 'selected' : ''}>${unitWord()}</option><option value="pct" ${row.sizeMode === 'pct' ? 'selected' : ''}>% balance</option></select>`)}
+      ${listField('Size (' + unitWord() + ')', listInp('mlEdSizeSol', row.sizeSol ?? '', 'default'))}
+      ${listField('% of balance', listInp('mlEdSizePct', row.sizePct ?? '', 'default'))}
+      ${listField('Range from', listInp('mlEdLo', row.rangeLo ?? ''))}
+      ${listField('Range to', listInp('mlEdHi', row.rangeHi ?? ''))}
+      ${listField('Stop %', listInp('mlEdStop', row.stopPct ?? '', 'default'))}
+      ${listField('Stop price', listInp('mlEdStopPx', row.stopPx ?? ''))}
+      ${listField('TP gain:sell', listInp('mlEdTps', formatTps(row.tps), '15:100'))}
+      ${listField('Breakeven +%', listInp('mlEdBe', row.beAtPct ?? '', 'default'))}
+      ${listField('Trail starts +%', listInp('mlEdTrailAt', row.trailAtPct ?? '', 'default'))}
+      ${listField('Trail %', listInp('mlEdTrail', row.trailPct ?? '', 'default'))}
+      ${listField('Time stop minutes', listInp('mlEdTime', row.timeStopMin ?? '', 'default'))}
+      ${listField('Time min gain %', listInp('mlEdTimeGain', row.timeMinGain ?? '', 'default'))}
+      ${listField('Cooldown minutes', listInp('mlEdCool', row.cooldownMin ?? '', 'default'))}
+      ${listField('Max re-entries', listInp('mlEdReMax', row.maxReentries ?? '', 'default'))}
+      ${listField('Re-entry', `<select id="mlEdRe" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${re ? '' : 'selected'}>Default</option><option value="yes" ${re === 'yes' ? 'selected' : ''}>On</option><option value="no" ${re === 'no' ? 'selected' : ''}>Off</option></select>`)}
+      </div>`,
+    onConfirm: async () => {
+      row.mode = mapListMode($('mlEdMode')?.value);
+      const sm = $('mlEdSize')?.value;
+      row.sizeMode = sm === 'sol' || sm === 'pct' ? sm : '';
+      row.sizeSol = modalNum('mlEdSizeSol');
+      row.sizePct = modalNum('mlEdSizePct');
+      row.rangeLo = modalNum('mlEdLo');
+      row.rangeHi = modalNum('mlEdHi');
+      row.stopPct = modalNum('mlEdStop');
+      row.stopPx = modalNum('mlEdStopPx');
+      row.tps = parseTps($('mlEdTps')?.value || '');
+      row.beAtPct = modalNum('mlEdBe');
+      row.trailAtPct = modalNum('mlEdTrailAt');
+      row.trailPct = modalNum('mlEdTrail');
+      row.timeStopMin = modalNum('mlEdTime');
+      row.timeMinGain = modalNum('mlEdTimeGain');
+      row.cooldownMin = modalNum('mlEdCool');
+      row.maxReentries = modalNum('mlEdReMax');
+      row.reentry = $('mlEdRe')?.value === '' ? null : $('mlEdRe').value === 'yes';
+      saveMyList(); renderMyList(); toast('Token strategy saved', 'ok');
+    } });
+}
+function openListChart(id) {
+  const row = MYLIST.rows.find(r => r.id === id);
+  const model = listChartMemo[id];
+  if (!row || !model) return;
+  const drawn = listChartSvg(model, { w: 360, h: 220 });
+  resetModalButtons();
+  openModal({ title: (row.symbol || short(row.mint)) + ' chart', confirmLabel: 'Close',
+    html: drawn.empty ? '<p class="text-xs text-slate-400 whitespace-normal break-words">Candles are not here yet. The chart fills in on the next My List check.</p>' : `<div style="touch-action:none">${drawn.svg.replace('<svg ', '<svg id="mlChartSvg" ')}<div id="mlChartTip" class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">Drag across the chart to read a price.</div><p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">Yellow trendline · green support · red resistance · violet entry zone · purple trigger · rose stop · green targets.</p></div>`,
+    onConfirm: async () => {} });
+  const svg = $('mlChartSvg'), tip = $('mlChartTip');
+  if (!svg || !tip) return;
+  const read = (ev) => {
+    const r = svg.getBoundingClientRect();
+    if (!(r.height > 0)) return;
+    const min = +svg.dataset.min, max = +svg.dataset.max, vh = +svg.dataset.vh || 220;
+    const yv = ((ev.clientY - r.top) / r.height) * vh;
+    const px = min + (1 - (yv - 4) / (vh - 8)) * (max - min);
+    const cs = (model.candles || []).slice(-80);
+    const i = Math.max(0, Math.min(cs.length - 1, Math.round(((ev.clientX - r.left) / r.width) * (cs.length - 1))));
+    const c = cs[i];
+    tip.textContent = price(px) + (c ? ' · O ' + price(c.o) + ' H ' + price(c.h) + ' L ' + price(c.l) + ' C ' + price(c.c) : '');
+  };
+  svg.addEventListener('pointerdown', (ev) => { try { svg.setPointerCapture(ev.pointerId); } catch { /* move still arrives */ } read(ev); });
+  svg.addEventListener('pointermove', read);
+}
+async function myListBuyNow(row) {
+  if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+  const spec = listStrategy(row);
+  const sol = +listSolSize(spec).toFixed(6);
+  const blocks = listBuyBlocks(sol);
+  if (blocks.length) return toast(blocks[0], 'warn');
+  resetModalButtons();
+  openModal({ title: 'Buy ' + (row.symbol || short(row.mint)), confirmLabel: 'Buy now', danger: true,
+    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Market buy about ${sol.toFixed(4)} SOL of ${esc(row.symbol || short(row.mint))} with this token’s stop and targets. The usual caps still apply.</p>`,
+    onConfirm: async () => {
+      const qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
+      if (!qo?.quote) throw new Error('no Jupiter route');
+      const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
+      const plan = listPlan(spec, isNum(px) && px > 0 ? px : null);
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
+      row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
+      saveMyList(); renderMyList(); toast('My List buy ' + (row.symbol || short(row.mint)), 'ok', 8000);
+    } });
+}
 function renderMyList() {
   const box = $('myListBox'); if (!box) return;
   const focus = document.activeElement;
   if (focus && box.contains(focus) && /^(INPUT|TEXTAREA|SELECT)$/.test(focus.tagName)) return;
-  const modeOpts = (cur) => ['', ...MYLIST_MODES].map(v => `<option value="${v}" ${v === (cur || '') ? 'selected' : ''}>${v ? modeLabel(v) : 'List default'}</option>`).join('');
-  const rows = MYLIST.rows.map(row => {
-    const spec = listStrategy(row);
-    const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
-    const open = !!listPosition(row.mint);
-    const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
-    const ready = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
-    const dist = listDistance(spec, px, row.zone);
-    const info = (lastResult?.tokens || []).find(t => t.mint === row.mint);
-    const flags = (row.flags && row.flags.length ? row.flags : (info?.flags || []).map(f => f.text)).slice(0, 3);
-    return `<article class="rounded-xl border border-white/10 bg-ink-900/40 p-2.5" data-row="${esc(row.id)}">
-      <div class="flex flex-wrap items-center gap-2">
-        <label class="flex items-center gap-1 text-[11px]"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
-        <b class="break-words">${esc(row.symbol || short(row.mint))}</b>
-        <span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px]">${stateLabel(ready.state)}</span>
-        <span class="text-[10px] text-slate-500">${esc(modeLabel(spec.mode))}</span>
-        <button type="button" data-ml-del="${esc(row.id)}" class="ml-auto text-[11px] text-rose-300">Remove</button>
-      </div>
-      <div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words leading-snug">Price ${price(px)} · to entry ${dist == null ? '—' : (dist > 0 ? '+' : '') + dist.toFixed(1) + '%'} · TA ${taAge == null ? '—' : Math.max(0, Math.round(taAge)) + 'm ago'}</div>
-      ${(() => { const h = holderLine(row.mint); return `<div class="mt-1 flex items-center gap-2 text-[11px] whitespace-normal break-words ${h.cls}" title="${esc(h.tip || '')}"><span>${esc(h.text)}</span>${h.spark}</div>`; })()}
-      ${flags.length ? `<div class="mt-1 text-[10px] text-slate-400 whitespace-normal break-words">Info: ${esc(flags.join(' · '))}</div>` : ''}
-      <details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-500">Override</summary>
-        <div class="mt-1 grid grid-cols-2 gap-2 text-[11px]">
-          <label>Mode<select data-ml="mode" data-id="${esc(row.id)}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1">${modeOpts(row.mode)}</select></label>
-          <label>Size<select data-ml="sizeMode" data-id="${esc(row.id)}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1"><option value="" ${row.sizeMode ? '' : 'selected'}>Default</option><option value="sol" ${row.sizeMode === 'sol' ? 'selected' : ''}>SOL</option><option value="pct" ${row.sizeMode === 'pct' ? 'selected' : ''}>% balance</option></select></label>
-          <label>Range from<input data-ml="rangeLo" data-id="${esc(row.id)}" value="${row.rangeLo ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-          <label>Range to<input data-ml="rangeHi" data-id="${esc(row.id)}" value="${row.rangeHi ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-          <label>Stop %<input data-ml="stopPct" data-id="${esc(row.id)}" value="${row.stopPct ?? ''}" placeholder="default" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-          <label>TP gain:sell<input data-ml="tps" data-id="${esc(row.id)}" value="${esc(formatTps(row.tps))}" placeholder="15:100" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+  const views = MYLIST.rows.map(row => ({ row, ...listContext(row) }));
+  views.forEach(v => { listChartMemo[v.row.id] = v.model; });
+  const rank = (v) => {
+    const badgeOrder = { 'READY — entering': 0, 'In zone': 1, Waiting: 2, Bought: 3, Cooldown: 4, Disabled: 5 };
+    return listSort === 'distance'
+      ? [v.dist == null ? 1 : 0, v.dist == null ? 0 : Math.abs(v.dist)]
+      : [v.ready ? 0 : 1, badgeOrder[v.badge] ?? 9, v.dist == null ? 1e9 : Math.abs(v.dist)];
+  };
+  views.sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] - rb[i];
+    return 0;
+  });
+  const cell = (k, v) => `<div class="min-w-0"><div class="text-slate-500">${k}</div><div class="text-slate-100 whitespace-normal break-words">${v}</div></div>`;
+  const cards = views.map(v => {
+    const row = v.row, pair = row.dexPair || {}, info = pair.info || {};
+    const name = pair.baseToken?.name || '';
+    const pc = pair.priceChange || {};
+    const h1 = pc.h1 != null ? +pc.h1 : null, h24 = pc.h24 != null ? +pc.h24 : null;
+    const flags = (row.flags && row.flags.length ? row.flags : ((lastResult?.tokens || []).find(t => t.mint === row.mint)?.flags || []).map(f => f.text)).slice(0, 4);
+    const drawn = listChartSvg(v.model, { w: 320, h: 108 });
+    const trend = v.model.trend === 'up' ? 'Up' : v.model.trend === 'down' ? 'Down' : v.model.trend === 'range' ? 'Range' : '—';
+    const zone = v.model.zone && isNum(v.model.zone.lo) ? price(v.model.zone.lo) + '–' + price(v.model.zone.hi) : '';
+    const sup = v.model.support && isNum(v.model.support.mid) ? price(v.model.support.mid) + (v.model.support.touches ? ' ×' + v.model.support.touches : '') : (zone || '—');
+    const res = v.model.resist && isNum(v.model.resist.mid) ? price(v.model.resist.mid) + (v.model.resist.touches ? ' ×' + v.model.resist.touches : '') : '—';
+    const tp1 = isNum(v.model.tp1) ? price(v.model.tp1) + (v.model.scalp ? ' · scalp +' + v.model.gain1 + '%' : (isNum(v.model.gain1) ? ' +' + v.model.gain1 + '%' : '')) : '—';
+    const tp2 = v.model.scalp ? 'scalp closes the rest' : (isNum(v.model.tp2) ? price(v.model.tp2) + (isNum(v.model.gain2) ? ' +' + v.model.gain2 + '%' : '') : '—');
+    const holders = holderLine(row.mint);
+    const pos = listPosition(row.mint);
+    let posHtml = '';
+    if (pos) {
+      const lp = livePrices.get(row.mint)?.price;
+      const money = posMoney(pos, lp);
+      const pl = effectiveStop(pos, lp);
+      posHtml = `<button type="button" data-ml-pos="${esc(row.mint)}" class="mt-2 w-full rounded-xl border border-violet-400/30 bg-violet-500/10 px-2.5 py-2 text-left text-[11px] text-violet-100 whitespace-normal break-words">Open ${esc(pos.symbol)} · ${pct(money.pnl)} · stop ${price(pl.stop)} · tap to view</button>`;
+    }
+    const glow = v.ready ? 'shadow-[0_0_22px_rgba(34,197,94,0.14)] border-emerald-500/25' : 'border-white/10';
+    const dex = pair.url || ('https://dexscreener.com/solana/' + row.mint);
+    return `<article class="rounded-2xl bg-ink-850/80 border p-3.5 ${glow}" data-row="${esc(row.id)}">
+      <div class="flex items-start gap-3">
+        ${info.imageUrl ? `<img src="${safeUrl(info.imageUrl)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs font-bold shrink-0">${esc((row.symbol || '?').slice(0, 3))}</div>`}
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(row.symbol || short(row.mint))}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></div>
+          <div class="text-[11px] text-slate-500 break-words">${esc(name || short(row.mint))}</div>
         </div>
-      </details>
+        <label class="flex items-center gap-1.5 text-[11px] text-slate-300 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
+      </div>
+      <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+        <div class="min-w-0"><div class="text-slate-500">Live</div><div class="font-mono text-slate-100 whitespace-normal break-words">${price(v.px)}</div><div class="whitespace-normal break-words ${!isNum(h1) ? 'text-slate-500' : (h1 >= 0 ? 'text-emerald-300' : 'text-rose-300')}">1h ${pct(h1, 1)} · 24h ${pct(h24, 1)}</div></div>
+        <div class="min-w-0 text-right"><div class="text-slate-500">Mcap / liq</div><div class="font-mono whitespace-normal break-words">${usd(pair.marketCap ?? pair.fdv)}</div><div class="text-slate-400 whitespace-normal break-words">liq ${usd(pair.liquidity?.usd)}</div></div>
+      </div>
+      <button type="button" data-ml-chart="${esc(row.id)}" class="mt-3 block w-full rounded-xl border border-white/10 bg-ink-900/70 p-1.5 text-left" style="touch-action:manipulation" aria-label="Open chart">
+        ${drawn.empty ? '<div class="h-16 grid place-items-center text-[11px] text-slate-500">Chart waiting for candles</div>' : drawn.svg}
+        <div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500"><span>trend</span><span>S/R</span><span>trigger</span><span>stop</span><span>TP</span></div>
+      </button>
+      <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+        ${cell('Trend', trend)}${cell('Support', sup + (zone && v.model.support ? '<div class="text-slate-400">zone ' + zone + '</div>' : ''))}
+        ${cell('Resistance', res)}${cell('Setup', esc(modeLabel(v.spec.mode)))}
+        ${cell('Trigger', price(v.model.trigger))}${cell('To trigger', listDistText(v.dist))}
+        ${cell('Stop', price(v.model.stop))}${cell('TP1', tp1)}
+        ${cell('TP2', tp2)}${cell('R:R', isNum(v.model.rr) ? '1 : ' + v.model.rr.toFixed(2) : '—')}
+      </div>
+      <div class="mt-2 flex items-center gap-2 text-[11px] whitespace-normal break-words ${holders.cls}" title="${esc(holders.tip || '')}"><span class="min-w-0">${esc(holders.text)}</span>${holders.spark}</div>
+      ${flags.length ? `<div class="mt-2 flex flex-wrap gap-1">${flags.map(f => `<span class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-300 whitespace-normal break-words">${esc(f)}</span>`).join('')}</div>` : ''}
+      <div class="mt-3 rounded-xl px-2.5 py-2 text-[12px] font-semibold whitespace-normal break-words ${v.ready ? 'bg-emerald-500/15 text-emerald-200' : 'bg-white/5 text-slate-400'}">${v.ready ? 'READY — entering' : 'Not ready: ' + esc(v.why)}${v.ready && !MYLIST.on ? '<span class="block text-[10px] font-normal text-slate-400">Auto-buy is off. Buy now still works.</span>' : ''}</div>
+      ${posHtml}
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" data-ml-edit="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Strategy</button>
+        <button type="button" data-ml-buy="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-emerald-500/15 text-emerald-200 border border-emerald-500/25">Buy now</button>
+        <button type="button" data-ml-del="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] text-rose-300 border border-rose-500/20">Remove</button>
+        <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-[11px] text-violet-300">DexScreener</a>
+      </div>
     </article>`;
   }).join('');
-  box.innerHTML = `<details id="myListDetails" class="rounded-xl bg-ink-850 border ${MYLIST.on ? 'border-amber-300/50' : 'border-white/5'}" open>
-    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 flex items-center justify-between"><span>My List ⭐</span>${MYLIST.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-300 text-ink-900">AUTO ON</span>' : '<span class="text-[10px] text-slate-500">auto off</span>'}</summary>
-    <div class="px-3 pb-3 text-xs space-y-2">
-      <p class="text-[11px] text-slate-400 whitespace-normal break-words">Tokens from the pasted list. Flags are info only. Auto-buy skips RugCheck, insider, liquidity, age, and conviction. A Jupiter route plus max positions, balance %, and daily cap still apply. The auto-buy switch resets when you reload.</p>
-      <div class="grid grid-cols-2 gap-2 text-[11px]">
-        <label>Default entry<select id="mlMode" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1">${MYLIST_MODES.map(v => `<option value="${v}" ${MYLIST.mode === v ? 'selected' : ''}>${modeLabel(v)}</option>`).join('')}</select></label>
-        <label>Size<select id="mlSizeMode" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1"><option value="sol" ${MYLIST.sizeMode !== 'pct' ? 'selected' : ''}>SOL amount</option><option value="pct" ${MYLIST.sizeMode === 'pct' ? 'selected' : ''}>% of balance</option></select></label>
-        <label>Size (${unitWord()})<input id="mlSizeSol" type="number" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" min="0" value="${MYLIST.sizeSol}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /><span class="block text-[10px] text-slate-500 whitespace-normal break-words">${esc(sizeHint(MYLIST.sizeSol))}</span></label>
-        <label>% balance<input id="mlSizePct" type="number" step="1" min="1" max="100" value="${MYLIST.sizePct}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Stop % below entry<input id="mlStop" type="number" step="1" min="1" max="90" value="${MYLIST.stopPct}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Stop price (optional)<input id="mlStopPx" value="${MYLIST.stopPx ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label class="col-span-2">Take profit gain:sell %<input id="mlTps" value="${esc(formatTps(MYLIST.tps))}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Breakeven at +% (blank = off)<input id="mlBe" value="${MYLIST.beAtPct ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Trail starts +% (blank = off)<input id="mlTrailAt" value="${MYLIST.trailAtPct ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Trail % below high<input id="mlTrail" value="${MYLIST.trailPct ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Time stop minutes<input id="mlTime" value="${MYLIST.timeStopMin ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Time stop min gain %<input id="mlTimeGain" value="${MYLIST.timeMinGain ?? 0}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Cooldown minutes<input id="mlCool" type="number" min="0" value="${MYLIST.cooldownMin}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-        <label>Max re-entries / day<input id="mlReMax" type="number" min="0" value="${MYLIST.maxReentries}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
-      </div>
-      <label class="flex items-center gap-2 text-[11px]"><input id="mlRe" type="checkbox" class="accent-violet-500" ${MYLIST.reentry !== false ? 'checked' : ''} /> Look for a new entry after a close</label>
-      <div class="flex flex-wrap gap-2">
-        <button type="button" id="mlScalp" class="rounded-lg px-2 py-1 text-[11px] border border-white/10">Scalp: take <span id="mlScalpN">${isNum(MYLIST.tps?.[0]?.gainPct) ? MYLIST.tps[0].gainPct : 15}</span>% and close</button>
-        <input id="mlScalpPct" type="number" min="1" value="15" class="w-16 rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono text-[11px]" />
-        <button type="button" id="mlSave" class="rounded-lg px-2 py-1 text-[11px] bg-ink-700 border border-white/10">Save strategy</button>
-        <button type="button" id="mlClear" class="rounded-lg px-2 py-1 text-[11px] text-rose-300">Clear list</button>
-        ${MYLIST.on ? '<button type="button" id="mlOff" class="rounded-lg px-2 py-1 text-[11px] font-bold bg-rose-600 text-white">My List auto-buy OFF</button>' : '<button type="button" id="mlOn" class="rounded-lg px-2 py-1 text-[11px] font-bold bg-amber-300 text-ink-900">My List auto-buy ON</button>'}
-      </div>
-      <div class="space-y-2">${rows || '<p class="text-[11px] text-slate-500">No tokens yet. Paste mints above and tap Save as My List.</p>'}</div>
-    </div></details>`;
-  const num = (id) => { const v = $(id)?.value.trim(); if (!v) return null; const n = +v; return Number.isFinite(n) ? n : null; };
-  const readDefaults = () => {
-    MYLIST.mode = MYLIST_MODES.includes($('mlMode')?.value) ? $('mlMode').value : 'zone';
-    MYLIST.sizeMode = $('mlSizeMode')?.value === 'pct' ? 'pct' : 'sol';
-    MYLIST.sizeSol = num('mlSizeSol') || 0.05;
-    MYLIST.sizePct = num('mlSizePct') || 10;
-    MYLIST.stopPct = num('mlStop') || 15;
-    MYLIST.stopPx = num('mlStopPx');
-    const tps = parseTps($('mlTps')?.value);
-    if (tps.length) MYLIST.tps = tps;
-    MYLIST.beAtPct = num('mlBe');
-    MYLIST.trailAtPct = num('mlTrailAt');
-    MYLIST.trailPct = num('mlTrail');
-    MYLIST.timeStopMin = num('mlTime');
-    MYLIST.timeMinGain = num('mlTimeGain') || 0;
-    MYLIST.cooldownMin = num('mlCool') || 0;
-    MYLIST.maxReentries = num('mlReMax') ?? 3;
-    MYLIST.reentry = !!$('mlRe')?.checked;
-    box.querySelectorAll('[data-ml]').forEach(el => {
-      const row = MYLIST.rows.find(r => r.id === el.dataset.id); if (!row) return;
-      const f = el.dataset.ml;
-      if (f === 'mode') row.mode = mapListMode(el.value);
-      else if (f === 'sizeMode') row.sizeMode = el.value === 'sol' || el.value === 'pct' ? el.value : '';
-      else if (f === 'tps') row.tps = parseTps(el.value);
-      else if (f === 'rangeLo' || f === 'rangeHi' || f === 'stopPct') { const n = +el.value; row[f] = el.value.trim() && Number.isFinite(n) ? n : null; }
-    });
-  };
-  $('mlSave')?.addEventListener('click', () => { readDefaults(); saveMyList(); toast('My List strategy saved', 'ok'); renderMyList(); });
-  $('mlScalp')?.addEventListener('click', () => {
-    const n = num('mlScalpPct') || 15;
-    if ($('mlTps')) $('mlTps').value = n + ':100';
-    if ($('mlScalpN')) $('mlScalpN').textContent = String(n);
-    MYLIST.tps = [{ gainPct: n, sellPct: 100 }];
-    saveMyList(); toast('Scalp preset: +' + n + '% sell 100%', 'ok');
-  });
+  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><b>${esc(v.row.symbol || short(v.row.mint))}</b></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" class="text-rose-300">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
+  const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="rounded-full border px-2.5 py-1 text-[11px] ${listSort === key ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
+  box.innerHTML = `<div class="rounded-2xl border ${MYLIST.on ? 'border-amber-300/40' : 'border-white/10'} bg-ink-900/30 p-3">
+    <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="font-bold text-sm">My List ⭐</h3>
+      <div class="flex flex-wrap gap-2 text-[11px]"><button type="button" id="mlView" class="text-violet-300">${listTable ? 'Cards' : 'Table view'}</button><button type="button" id="mlClear" class="text-rose-300">Clear list</button></div></div>
+    <p class="mt-1 text-[11px] text-slate-500 whitespace-normal break-words">Flags are info only. Auto-buy skips RugCheck, insider, liquidity, age, and conviction. A Jupiter route plus the position, balance, and daily caps still apply. The auto-buy switch resets on reload.</p>
+    <div class="mt-2 flex flex-wrap items-center gap-2">
+      <span class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-200 whitespace-normal break-words">${esc(listDefaultChip())}</span>
+      <button type="button" id="mlEditDefault" class="rounded-lg px-2.5 py-1.5 text-[11px] border border-white/10 text-violet-200">Edit default strategy</button>
+      ${MYLIST.on ? '<button type="button" id="mlOff" class="rounded-lg px-2.5 py-1.5 text-[11px] font-bold bg-rose-600 text-white">My List auto-buy OFF</button>' : '<button type="button" id="mlOn" class="rounded-lg px-2.5 py-1.5 text-[11px] font-bold bg-amber-300 text-ink-900">My List auto-buy ON</button>'}
+    </div>
+    <div class="mt-2 flex flex-wrap gap-2">
+      <input id="mlAddMint" placeholder="Mint address" class="min-w-0 flex-1 rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" />
+      <button type="button" id="mlAdd" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Add</button>
+    </div>
+    <div class="mt-2 flex flex-wrap gap-1.5">${sortBtn('ready', 'Ready first')}${sortBtn('distance', 'Distance to trigger')}</div>
+    <div class="mt-3 ${listTable ? '' : 'space-y-3'}">${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
+  </div>`;
+  $('mlView')?.addEventListener('click', () => { listTable = !listTable; renderMyList(); });
   $('mlClear')?.addEventListener('click', () => { MYLIST.rows = []; saveMyList(); renderMyList(); });
+  $('mlEditDefault')?.addEventListener('click', () => openListDefaults());
   $('mlOff')?.addEventListener('click', () => stopMyList('manual'));
   $('mlOn')?.addEventListener('click', () => {
     if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
-    readDefaults();
     resetModalButtons();
     openModal({ title: 'My List auto-buy', confirmLabel: 'Start', danger: true,
-      html: `<p class="text-xs text-slate-300">Listed tokens can market-buy when their entry hits. Quality filters are not applied. Caps still are. This switch turns off on reload.</p><label class="mt-3 flex gap-2 text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
+      html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Listed tokens can market-buy when their entry hits. Quality filters are not applied. Caps still are. This switch turns off on reload.</p><label class="mt-3 flex gap-2 text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
       validate: () => $('mlAck')?.checked,
       onConfirm: async () => { MYLIST.on = true; saveMyList(); startMyList(); renderMyList(); renderKillFab(); toast('My List auto-buy ON', 'warn', 6000); myListTick(); } });
   });
+  $('mlAdd')?.addEventListener('click', () => {
+    const parsed = parseInput($('mlAddMint')?.value || '');
+    addMintsToList([...new Set([...(parsed.mints || []), ...(parsed.pairs || [])])]);
+  });
+  box.querySelectorAll('[data-ml-sort]').forEach(b => b.addEventListener('click', () => { listSort = b.dataset.mlSort; renderMyList(); }));
   box.querySelectorAll('[data-ml-on]').forEach(el => el.addEventListener('change', () => {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlOn); if (!row) return;
     row.enabled = el.checked; saveMyList(); renderMyList();
@@ -5263,7 +5526,14 @@ function renderMyList() {
   box.querySelectorAll('[data-ml-del]').forEach(el => el.addEventListener('click', () => {
     MYLIST.rows = MYLIST.rows.filter(r => r.id !== el.dataset.mlDel); saveMyList(); renderMyList();
   }));
-  box.querySelectorAll('[data-ml]').forEach(el => el.addEventListener('change', () => { readDefaults(); saveMyList(); renderMyList(); }));
+  box.querySelectorAll('[data-ml-edit]').forEach(el => el.addEventListener('click', () => {
+    const row = MYLIST.rows.find(r => r.id === el.dataset.mlEdit); if (row) openListEditor(row);
+  }));
+  box.querySelectorAll('[data-ml-buy]').forEach(el => el.addEventListener('click', () => {
+    const row = MYLIST.rows.find(r => r.id === el.dataset.mlBuy); if (row) myListBuyNow(row);
+  }));
+  box.querySelectorAll('[data-ml-chart]').forEach(el => el.addEventListener('click', () => openListChart(el.dataset.mlChart)));
+  box.querySelectorAll('[data-ml-pos]').forEach(el => el.addEventListener('click', () => { document.getElementById('sec-portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
 }
 function addMintsToList(addrs) {
   let n = 0;
@@ -5359,8 +5629,7 @@ async function myListBuys() {
     catch { continue; }
     if (!qo?.quote) continue;
     const entryPx = isNum(px) && px > 0 ? px : null;
-    const stop = isNum(spec.stopPx) && entryPx && spec.stopPx < entryPx ? spec.stopPx : (entryPx ? entryPx * (1 - spec.stopPct / 100) : null);
-    const plan = { myList: true, stop, strat: 'My List ' + spec.mode, exit: { stopPct: spec.stopPct, stopPx: spec.stopPx, tps: spec.tps, beAtPct: spec.beAtPct, trailAtPct: spec.trailAtPct, trailPct: spec.trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain } };
+    const plan = listPlan(spec, entryPx);
     try {
       await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
       row.boughtOnce = true;
@@ -5543,7 +5812,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList,
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, get mylist() { return MYLIST; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
