@@ -2364,33 +2364,160 @@ function checkAlerts() {
     if (!alerted[k]) { alerted[k] = Date.now(); save(LS.alerts, alerted); toast(`${p.symbol} (${p.wallet}): ${s.label} — alert only${p.wallet === 'burner' && A.on && A.autoExit ? ', auto-exit engine will act' : ', no auto-execution'}`, s.lvl === 'stop' ? 'err' : 'ok', 9000);
       try { if (window.Notification && Notification.permission === 'granted') new Notification('SolanaMemeSniper: ' + p.symbol, { body: s.label }); } catch { } } }
 }
+let posTableView = false;
+let wealthUnit = 'usd';
+try { posTableView = localStorage.getItem('sms:posview') === 'table'; } catch { /* cards */ }
+try { const u = localStorage.getItem('sms:wealthunit'); if (u === 'sol' || u === 'usd') wealthUnit = u; } catch { /* usd */ }
+const posBarMem = {};
+function posSource(p) {
+  if (p.sniper) return { label: 'SNIPE 🎯', cls: 'border-amber-400/40 bg-amber-500/15 text-amber-200' };
+  if (p.copy) return { label: 'WHALE', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-200' };
+  if (p.plan?.strat && /momentum/i.test(p.plan.strat)) return { label: 'MOMENTUM ⚡', cls: 'border-sky-400/40 bg-sky-500/15 text-sky-200' };
+  if (p.auto) return { label: 'AUTO', cls: 'border-violet-400/40 bg-violet-500/15 text-violet-200' };
+  return { label: 'MANUAL', cls: 'border-white/15 bg-white/5 text-slate-300' };
+}
+function heldFor(ts) {
+  const s = Math.max(0, (Date.now() - (ts || Date.now())) / 1000);
+  if (s < 60) return Math.max(1, Math.round(s)) + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
+}
+function posMoney(p, lp) {
+  const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null;
+  const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null;
+  const solPx = solUsd();
+  const valueUsd = isNum(lp) ? p.qty * lp : null;
+  const valueSol = isNum(valueUsd) && solPx ? valueUsd / solPx : null;
+  const frac = p.bought > 0 ? Math.min(1, Math.max(0, p.qty / p.bought)) : 1;
+  const costSolLeft = (p.costSol || 0) * frac;
+  const pnlSol = isNum(valueSol) ? valueSol - costSolLeft : null;
+  return { pnl, pnlUsd, pnlSol, valueUsd, valueSol, costSolLeft };
+}
+function wealthHtml(open) {
+  let usdSum = 0, solSum = 0, usdKnown = false, solKnown = false;
+  for (const p of open) {
+    const lp = livePrices.get(p.mint)?.price;
+    const m = posMoney(p, lp);
+    if (isNum(m.pnlUsd)) { usdSum += m.pnlUsd; usdKnown = true; }
+    if (isNum(m.pnlSol)) { solSum += m.pnlSol; solKnown = true; }
+  }
+  const useSol = wealthUnit === 'sol';
+  const n = useSol ? solSum : usdSum;
+  const known = useSol ? solKnown : usdKnown;
+  const up = known && n >= 0;
+  const glow = !known ? '' : up ? 'shadow-[0_0_28px_rgba(34,197,94,0.16)]' : 'shadow-[0_0_28px_rgba(244,63,94,0.16)]';
+  const shown = !known ? '—' : (useSol ? ((n >= 0 ? '+' : '') + n.toFixed(4) + ' SOL') : ((n >= 0 ? '+' : '') + usd(usdSum, 2)));
+  return `<div class="glass rounded-2xl p-4 mb-3 ${glow}">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="min-w-0">
+        <div class="text-[10px] uppercase tracking-wide text-slate-500">Wealth growth</div>
+        <div class="mt-1 font-mono text-2xl sm:text-3xl whitespace-normal break-words ${!known ? 'text-slate-400' : up ? 'text-emerald-300' : 'text-rose-300'}">${shown}</div>
+        <div class="text-[11px] text-slate-500 mt-0.5">Open positions, unrealized</div>
+      </div>
+      <div class="flex rounded-lg border border-white/10 overflow-hidden text-[11px]">
+        <button type="button" id="wealthUsd" class="px-2.5 py-1 ${wealthUnit !== 'sol' ? 'bg-white/10 text-slate-100' : 'text-slate-400'}">USD</button>
+        <button type="button" id="wealthSol" class="px-2.5 py-1 ${wealthUnit === 'sol' ? 'bg-white/10 text-slate-100' : 'text-slate-400'}">SOL</button>
+      </div>
+    </div>
+  </div>`;
+}
+function posCard(p) {
+  const lp = livePrices.get(p.mint)?.price;
+  const s = levelState(p);
+  const pl = s.eff || effectiveStop(p, lp);
+  const m = posMoney(p, lp);
+  const src = posSource(p);
+  const info = (lastResult?.tokens || []).find(t => t.mint === p.mint);
+  const dex = info?.url || ('https://dexscreener.com/solana/' + p.mint);
+  const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
+  const up = isNum(m.pnl) && m.pnl >= 0;
+  const glow = !isNum(m.pnl) ? '' : up ? 'shadow-[0_0_22px_rgba(34,197,94,0.14)] border-emerald-500/25' : 'shadow-[0_0_22px_rgba(244,63,94,0.14)] border-rose-500/25';
+  const stop = pl.stop, tp1 = pl.tp1, tp2 = pl.tp2, entry = p.avgUsd, high = pl.high;
+  const right = isNum(tp2) ? tp2 : tp1;
+  const span = isNum(stop) && isNum(right) && right > stop ? right - stop : null;
+  const at = (v) => span && isNum(v) ? Math.max(0, Math.min(100, (v - stop) / span * 100)) : null;
+  const cur = at(lp), entryAt = at(entry), highAt = at(high);
+  const tp1Hit = p.tp1Done || (isNum(lp) && isNum(tp1) && lp >= tp1);
+  const tp2Hit = p.tp2Done || (isNum(lp) && isNum(tp2) && lp >= tp2);
+  const chip = (label, on) => `<span class="rounded-full border px-2 py-0.5 text-[10px] whitespace-normal ${on ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-400'}">${label}</span>`;
+  const reason = pl.reason || 'initial';
+  const bar = span ? `<div class="relative mt-3 h-7">
+      <div class="absolute left-0 right-0 top-2.5 h-2 rounded-full bg-gradient-to-r from-rose-500/50 via-slate-600/40 to-emerald-500/50"></div>
+      ${cur != null ? `<div class="pos-fill absolute left-0 top-2.5 h-2 rounded-full bg-gradient-to-r from-rose-400 to-emerald-400 transition-[width] duration-700 ease-out" data-bar="${cur}" data-key="${esc(p.key)}" style="width:${posBarMem[p.key] != null ? posBarMem[p.key] : 0}%"></div>` : ''}
+      ${entryAt != null ? `<div class="absolute top-1 h-5 w-0.5 bg-slate-100" style="left:${entryAt}%" title="entry"></div>` : ''}
+      ${highAt != null ? `<div class="absolute top-1.5 h-4 w-0.5 bg-amber-300" style="left:${highAt}%" title="high"></div>` : ''}
+      ${cur != null ? `<div class="absolute top-1.5 h-3.5 w-3.5 -ml-1.5 rounded-full bg-white shadow" style="left:${cur}%"></div>` : ''}
+    </div>
+    <div class="flex flex-wrap justify-between gap-x-2 gap-y-0.5 text-[10px] leading-snug whitespace-normal break-words">
+      <span class="text-rose-300">stop ${price(stop)}</span>
+      <span class="text-slate-400">entry ${price(entry)}</span>
+      <span class="text-emerald-300">${isNum(tp2) ? 'TP2 ' + price(tp2) : 'TP1 ' + price(tp1)}</span>
+    </div>` : '';
+  return `<article class="rounded-2xl bg-ink-850/80 border border-white/10 p-3.5 ${glow}">
+    <div class="flex items-start gap-3">
+      ${info?.image ? `<img src="${safeUrl(info.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs font-bold shrink-0">${esc((p.symbol || '?').slice(0, 3))}</div>`}
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(p.symbol)}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${src.cls}">${src.label}</span></div>
+        <div class="text-[11px] text-slate-500 break-words">${esc(p.wallet)} · held ${heldFor(p.firstTs)}</div>
+      </div>
+      <div class="text-right min-w-0">
+        <div class="font-mono text-xl leading-none whitespace-normal break-words ${!isNum(m.pnl) ? 'text-slate-400' : upClass(m.pnl)}">${pct(m.pnl)}</div>
+        <div class="mt-1 font-mono text-[11px] whitespace-normal break-words ${!isNum(m.pnlUsd) ? 'text-slate-500' : upClass(m.pnlUsd)}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : '—'}${isNum(m.pnlSol) ? ' · ' + (m.pnlSol >= 0 ? '+' : '') + m.pnlSol.toFixed(4) + ' SOL' : ''}</div>
+      </div>
+    </div>
+    <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+      <div class="min-w-0"><div class="text-slate-500">Live</div><div class="font-mono whitespace-normal break-words text-slate-100">${price(lp)}</div></div>
+      <div class="min-w-0"><div class="text-slate-500">Entry</div><div class="font-mono whitespace-normal break-words">${price(entry)}</div></div>
+      <div class="min-w-0"><div class="text-slate-500">Size</div><div class="font-mono whitespace-normal break-words">${fmtSol(m.costSolLeft)}<span class="block text-slate-400">${isNum(m.valueUsd) ? usd(m.valueUsd, 2) : '—'}</span></div></div>
+      <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words text-rose-300">${price(stop)}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
+    </div>
+    ${bar}
+    <div class="mt-2 flex flex-wrap gap-1.5">${chip('TP1 ' + (tp1Hit ? 'hit' : 'pending'), tp1Hit)}${chip('TP2 ' + (tp2Hit ? 'hit' : 'pending'), tp2Hit)}</div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      ${canSell ? [25, 50, 100].map(x => `<button data-sell="${esc(p.mint)}" data-pct="${x}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-rose-500/15 text-rose-200 border border-rose-500/25">Sell ${x}%</button>`).join('') : `<span class="text-[11px] text-slate-500">${p.wallet === activeKey ? 'No balance to sell' : 'Switch wallet to sell'}</span>`}
+      <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-[11px] text-violet-300 hover:underline">DexScreener</a>
+    </div>
+  </article>`;
+}
+function upClass(n) { return n >= 0 ? 'text-emerald-300' : 'text-rose-300'; }
 function renderPortfolio() {
   const el = $('portfolio'); if (!el) return;
   const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
   if (!LOG.length && !anyW && !AUTOLOG.length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const pnlUsd = isNum(lp) && p.avgUsd ? p.qty * (lp - p.avgUsd) : null; const s = levelState(p); const pl = s.eff || effectiveStop(p, lp);
+  const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const m = posMoney(p, lp); const s = levelState(p); const pl = s.eff || effectiveStop(p, lp);
     const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
     return `<tr class="border-t border-white/5 align-top ${s.lvl === 'stop' ? 'bg-rose-500/10' : s.lvl ? 'bg-emerald-500/10' : ''}">
       <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}${p.copy ? ' · copy' : ''}${p.sniper ? ' · SNIPE 🎯' : ''}</div></td>
-      <td class="pr-2 font-mono">${fmtTok(p.qty)}</td><td class="pr-2 font-mono">${price(p.avgUsd)}</td><td class="pr-2 font-mono">${price(lp)}</td>
-      <td class="pr-2 font-mono ${pctCls(pnl)}">${pct(pnl)}<div class="text-[10px]">${isNum(pnlUsd) ? (pnlUsd >= 0 ? '+' : '') + usd(pnlUsd, 2) : ''}</div></td>
-      <td class="pr-2 font-mono text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
+      <td class="pr-2 font-mono">${fmtTok(p.qty)}</td><td class="pr-2 font-mono whitespace-normal break-words">${price(p.avgUsd)}</td><td class="pr-2 font-mono whitespace-normal break-words">${price(lp)}</td>
+      <td class="pr-2 font-mono whitespace-normal break-words ${pctCls(m.pnl)}">${pct(m.pnl)}<div class="text-[10px]">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</div></td>
+      <td class="pr-2 font-mono whitespace-normal break-words text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono whitespace-normal break-words text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
-      <td class="whitespace-nowrap">${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}</td></tr>`; }).join('');
+      <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}</td></tr>`; }).join('');
   const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
       <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
       <td class="pr-2 font-mono">${fmtSol(r.solAmount)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
       <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
       <td class="font-mono"><a class="text-violet-300 hover:underline" target="_blank" rel="noopener" href="${solscanTx(r.signature)}">${esc(short(r.signature))} ↗</a></td></tr>`).join('');
+  const cards = open.map(posCard).join('');
+  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Qty</th><th>Avg entry</th><th>Price</th><th>PnL</th><th>Stop</th><th>TP1/TP2</th><th>Status</th><th>Sell</th></tr></thead><tbody>${posRows}</tbody></table></div>`;
   el.innerHTML = `<section id="sec-portfolio" class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
-      <div class="flex gap-2 text-[11px]"><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
-    <div class="text-[11px] text-slate-500 mb-2">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
-    ${open.length ? `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Qty</th><th>Avg entry</th><th>Price</th><th>PnL</th><th>Stop</th><th>TP1/TP2</th><th>Status</th><th>Sell</th></tr></thead><tbody>${posRows}</tbody></table></div>` : '<p class="text-xs text-slate-500">No open positions.</p>'}
+      <div class="flex flex-wrap gap-2 text-[11px]"><button id="pfView" class="text-violet-300 hover:underline">${posTableView ? 'Cards' : 'Table view'}</button><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
+    <div class="text-[11px] text-slate-500 mb-2 whitespace-normal break-words">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
+    ${open.length ? wealthHtml(open) + (posTableView ? table : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
   </section>`;
+  el.querySelectorAll('.pos-fill').forEach(bar => {
+    const to = bar.dataset.bar;
+    const key = bar.dataset.key;
+    requestAnimationFrame(() => { bar.style.width = to + '%'; if (to != null && to !== '') posBarMem[key] = +to; });
+  });
+  $('wealthUsd')?.addEventListener('click', () => { wealthUnit = 'usd'; try { localStorage.setItem('sms:wealthunit', 'usd'); } catch { /* ignore */ } renderPortfolio(); });
+  $('wealthSol')?.addEventListener('click', () => { wealthUnit = 'sol'; try { localStorage.setItem('sms:wealthunit', 'sol'); } catch { /* ignore */ } renderPortfolio(); });
+  $('pfView')?.addEventListener('click', () => { posTableView = !posTableView; try { localStorage.setItem('sms:posview', posTableView ? 'table' : 'cards'); } catch { /* ignore */ } renderPortfolio(); });
   el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.sell, { pct: +b.dataset.pct })));
   $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
   $('pfCsv').addEventListener('click', () => {
