@@ -1170,12 +1170,13 @@ function ohlcvTtl(tfKey) {
   if (tfKey === '1h') return 5 * 60e3;
   return 4 * 60e3;
 }
-async function fetchOhlcv(pool, tfKey) {
-  const key = pool + '|' + tfKey;
+async function fetchOhlcv(pool, tfKey, token) {
+  const key = pool + '|' + tfKey + (token ? '|' + token : '');
   const hit = ohlcvCache.get(key);
   if (hit && Date.now() - hit.at < ohlcvTtl(tfKey)) return hit.candles;
   const spec = OHLCV_TF[tfKey];
-  const url = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=${spec.limit}&currency=usd`;
+  const tokenQ = token ? '&token=' + encodeURIComponent(token) : '';
+  const url = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=${spec.limit}&currency=usd${tokenQ}`;
   const j = await fetchJSON(url, { timeout: 12000 });
   const list = j?.data?.attributes?.ohlcv_list;
   if (!Array.isArray(list) || list.length < 15) throw new Error('short candle set');
@@ -1219,8 +1220,8 @@ function taCacheLabel(ta) {
 async function loadTokenTa(token) {
   if (!token?.pairAddress) return { ok: false, line: 'TA: unavailable', error: 'no pool' };
   const [pTf, cTf] = tfsForAge(token.ageH);
-  const pc = await fetchOhlcv(token.pairAddress, pTf);
-  const cc = await fetchOhlcv(token.pairAddress, cTf);
+  const pc = await fetchOhlcv(token.pairAddress, pTf, token.mint);
+  const cc = await fetchOhlcv(token.pairAddress, cTf, token.mint);
   const primary = analyzeStructure(pc, pTf);
   const confirm = analyzeStructure(cc, cTf);
   const signal = breakoutSignal(primary, confirm);
@@ -1605,7 +1606,7 @@ async function runAnalysis({ boosted = false } = {}) {
       const young = analyzed.filter(t => momentumGate(t, momAge) === null);
       for (let i = 0; i < young.length; i++) {
         setProgress(`1m candles ${i + 1}/${young.length}: ${young[i].symbol}…`);
-        try { young[i].momentum = momentumFromCandles(await fetchOhlcv(young[i].pairAddress, '1m')); }
+        try { young[i].momentum = momentumFromCandles(await fetchOhlcv(young[i].pairAddress, '1m', young[i].mint)); }
         catch (e) { young[i].momentum = { state: 'none', reason: e.message || '1m candles unavailable' }; }
       }
     }
@@ -2732,6 +2733,7 @@ async function openTrade(side, mint, { sol, pct } = {}) {
     } });
   M.timer = setInterval(() => { const el = $('tmAge'); if (el && qo) { const a = Math.round((Date.now() - qo.at) / 1000); el.textContent = a + 's' + (a > 30 ? ' (stale — will re-quote)' : ''); } }, 1000);
   doQuote();
+  return true;
 }
 
 /* ---------------- rendering: wallet card, header, cards ---------------- */
@@ -2768,31 +2770,17 @@ function hydrate() {
     const mint = el.dataset.mint; const t = tokenInfo(mint); const s = suggestedBuySol(t);
     const h = w.tokens?.get(mint); const hold = h && h.raw > 0n;
     const ok = t.verdict === 'Candidate';
-    const startAmt = s.sol ? (sizeStore === 'usd' && solPriceNow() ? (s.sol * solPriceNow()).toFixed(2) : s.sol) : '';
-    el.innerHTML = `<div class="rounded-xl bg-ink-900/70 border border-white/5 p-2.5">
-      <div class="flex items-center gap-1.5">
-        <input type="number" inputmode="decimal" min="0" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" value="${startAmt}" placeholder="${unitWord()}" class="buy-amt w-24 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in ${unitWord()}" />
-        <span class="buy-hint text-[11px] text-slate-400 whitespace-normal break-words">${esc(previewAmount(startAmt))}</span>
-        <button class="btn-buy flex-1 rounded-lg py-1.5 text-xs font-bold ${ok ? 'bg-emerald-500 hover:bg-emerald-400 text-ink-950' : 'bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200'}">Buy${ok ? '' : ' ⚠'}</button>
-      </div>
-      <div class="mt-1.5 flex flex-wrap gap-1">${[5, 10, 20].map(n => `<button type="button" data-chip="${n}" class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-300">$${n}</button>`).join('')}</div>
-      <div class="text-[10px] text-slate-500 mt-1">${esc(s.note)} · via ${esc(w.label)}</div>
-      <div class="flex items-center gap-1 mt-1.5 text-[11px]"><span class="text-slate-400 mr-auto">${w.pubkey ? `Hold: <b class="text-slate-200">${hold ? fmtTok(h.ui) : '0'}</b>` : 'Wallet not connected'}</span>
-        ${[25, 50, 100].map(p => `<button data-pct="${p}" class="btn-sell rounded-md px-2 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/20 disabled:opacity-30" ${hold ? '' : 'disabled'}>Sell ${p}%</button>`).join('')}</div>
-    </div>`;
-    const hint = el.querySelector('.buy-hint');
-    const amt = el.querySelector('.buy-amt');
-    amt.addEventListener('input', () => { hint.textContent = previewAmount(amt.value); });
-    el.querySelectorAll('[data-chip]').forEach(b => b.addEventListener('click', () => {
-      const usd = +b.dataset.chip;
-      const px = solPriceNow();
-      amt.value = sizeStore === 'usd' || !(px > 0) ? String(usd) : (usd / px).toFixed(4);
-      hint.textContent = previewAmount(amt.value);
-    }));
-    el.querySelector('.btn-buy').addEventListener('click', () => {
-      const spend = resolveTypedSpend(amt.value);
-      if (!spend.ok) return toast(spend.error, 'err', 8000);
-      openTrade('buy', mint, { sol: spend.sol });
+    const startAmt = s.sol ? (sizeStore === 'usd' && solPriceNow() ? (s.sol * solPriceNow()).toFixed(2) : String(s.sol)) : (sizeStore === 'usd' ? '5' : '0.05');
+    el.innerHTML = manualBuyHtml('scan', startAmt) + `<div class="mt-2 text-[11px] text-slate-500 whitespace-normal break-words">${esc(s.note)} · via ${esc(w.label)}</div>
+      <div class="flex flex-wrap items-center gap-1 mt-2 text-[12px]"><span class="text-slate-400 mr-auto">${w.pubkey ? `Hold: <b class="text-slate-200">${hold ? fmtTok(h.ui) : '0'}</b>` : 'Wallet not connected'}</span>
+        ${[25, 50, 100].map(p => `<button data-pct="${p}" class="btn-sell rounded-md px-2 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/20 disabled:opacity-30" ${hold ? '' : 'disabled'}>Sell ${p}%</button>`).join('')}</div>`;
+    wireManualBuy(el.querySelector('[data-manual-buy]'), isNum(w.sol) ? w.sol : null, async (spend) => {
+      const opened = await openTrade('buy', mint, { sol: spend.sol });
+      if (!opened) return;
+      await new Promise((resolve) => {
+        const prev = M.onClose;
+        M.onClose = () => { prev?.(); resolve(); };
+      });
     });
     el.querySelectorAll('.btn-sell').forEach(b => b.addEventListener('click', () => openTrade('sell', mint, { pct: +b.dataset.pct })));
   });
@@ -5292,12 +5280,12 @@ function renderSniper() {
 
 /* ---------------- My List (pasted watchlist, own entries and exits) ---------------- */
 const MYLIST_DEFAULTS = {
-  on: false, mode: 'zone', sizeMode: 'sol', sizePct: 10, stopPct: 15, stopPx: null,
+  on: false, mode: 'confluence', sizeMode: 'sol', sizePct: 10, stopPct: 15, stopPx: null,
   tps: [{ gainPct: 15, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: 10,
   timeStopMin: null, timeMinGain: 0, reentry: true, cooldownMin: 5, maxReentries: 3,
-  tf: '4h', earlyBreak: false, sizeSol: 5
+  tf: '4h', earlyBreak: false, sizeSol: 5, athEntry: 'retest', athHold: 2, athExpire: 12
 };
-const MYLIST_MODES = ['zone', 'momentum', 'range', 'now', 'trend', 'resist'];
+const MYLIST_MODES = ['confluence', 'ath', 'zone', 'momentum', 'range', 'now', 'trend', 'resist'];
 const LIST_TFS = ['1m', '5m', '15m', '1h', '4h'];
 const LIST_TF_MS = { '1m': 60e3, '5m': 300e3, '15m': 900e3, '1h': 3600e3, '4h': 14400e3 };
 const TF_MIN_BARS = 20;
@@ -5316,13 +5304,23 @@ function tfFallbackChoice(preferred, counts) {
   const last = chain[chain.length - 1];
   return { tf: last, note: last === chain[0] ? '' : 'TF ' + last + ' (' + chain[0] + ': not enough history)' };
 }
-async function resolveCandleTf(pool, preferred) {
+function priceNear(a, b) { return a > 0 && b > 0 && a / b > 0.2 && a / b < 5; }
+function alignCandlesToToken(candles, tokenPx) {
+  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0).map(c => ({ ...c }));
+  if (cs.length < 2 || !(tokenPx > 0)) return cs;
+  const close = cs[cs.length - 1].c;
+  if (!(close > 0) || priceNear(close, tokenPx)) return cs;
+  if (priceNear(1 / close, tokenPx)) return cs.map(c => ({ ...c, o: 1 / c.o, h: 1 / c.l, l: 1 / c.h, c: 1 / c.c }));
+  const ratio = tokenPx / close;
+  return cs.map(c => ({ ...c, o: c.o * ratio, h: c.h * ratio, l: c.l * ratio, c: c.c * ratio }));
+}
+async function resolveCandleTf(pool, preferred, token) {
   const chain = displayChain(preferred);
   const counts = {};
   const got = {};
   for (const tf of chain) {
     try {
-      const candles = await fetchOhlcv(pool, tf);
+      const candles = await fetchOhlcv(pool, tf, token);
       got[tf] = candles;
       counts[tf] = candles.length;
       if (candles.length >= TF_MIN_BARS) {
@@ -5335,7 +5333,7 @@ async function resolveCandleTf(pool, preferred) {
   return { tf: pick.tf, candles: got[pick.tf] || null, note: pick.note };
 }
 let MYLIST = loadMyList();
-if (MYLIST._tfMigrated || MYLIST._sizeMigrated) { delete MYLIST._tfMigrated; delete MYLIST._sizeMigrated; saveMyList(); }
+if (MYLIST._tfMigrated || MYLIST._sizeMigrated || MYLIST._modeMigrated) { delete MYLIST._tfMigrated; delete MYLIST._sizeMigrated; delete MYLIST._modeMigrated; saveMyList(); }
 let listTimer = null, listBusy = false;
 function parseTps(text) {
   const out = [];
@@ -5398,7 +5396,188 @@ function resistanceLevel(closed) {
   const under = ok.filter(h => h < prev).sort((a, b) => b - a);
   return under[0] || null;
 }
+function isBreakMode(mode) { return mode === 'trend' || mode === 'resist' || mode === 'confluence' || mode === 'ath'; }
+function descendingTrend(cs) {
+  if (!cs || cs.length < 15) return null;
+  const { highs } = swingPoints(cs, 2);
+  if (highs.length < 3) return null;
+  const anchors = highs.slice().sort((a, b) => b.price - a.price || a.i - b.i);
+  for (const origin of anchors) {
+    const later = highs.filter(h => h.i > origin.i + 1 && h.price < origin.price * 0.995);
+    if (later.length < 2) continue;
+    let best = null;
+    for (const end of later) {
+      if (!(end.i > origin.i)) continue;
+      const cuts = later.some(h => h.i <= end.i && h.price > lineAt(origin, end, h.i) * 1.02);
+      if (cuts) continue;
+      const touches = later.filter(h => {
+        if (h.i > end.i) return false;
+        const lv = lineAt(origin, end, h.i);
+        if (!(lv > 0)) return false;
+        const gap = (h.price - lv) / lv;
+        return gap <= 0.015 && gap >= -0.04;
+      });
+      if (touches.length < 2) continue;
+      const score = touches.length * 10 + end.i / cs.length;
+      if (!best || score > best.score) best = { a: origin, b: end, score };
+    }
+    if (best) return { a: best.a, b: best.b };
+  }
+  return null;
+}
+function keyBand(cs, trend) {
+  if (!cs || cs.length < 15) return null;
+  const { highs } = swingPoints(cs, 2);
+  const zones = [];
+  for (const h of highs) {
+    let z = zones.find(z => Math.abs(h.price - z.mid) / z.mid <= 0.02);
+    if (!z) { z = { lo: h.price, hi: h.price, mid: h.price, n: 0, sum: 0 }; zones.push(z); }
+    z.n++; z.sum += h.price; z.lo = Math.min(z.lo, h.price); z.hi = Math.max(z.hi, h.price); z.mid = z.sum / z.n;
+  }
+  const ready = zones.filter(z => z.n >= 2);
+  if (!ready.length) return null;
+  const last = cs[cs.length - 1].c;
+  let best = null, score = -1e9;
+  for (const z of ready) {
+    const at = trend ? lineAt(trend.a, trend.b, cs.length - 1) : last;
+    const dist = Math.abs((at || last) - z.mid) / z.mid;
+    const s = z.n * 5 - dist * 4 + (z.mid >= last * 0.98 ? 2 : 0);
+    if (s > score) { score = s; best = z; }
+  }
+  if (!best) return null;
+  let lo = best.lo, hi = best.hi;
+  if (!(hi > lo * 1.004)) { lo = best.mid * 0.985; hi = best.mid * 1.015; }
+  return { lo, hi, mid: (lo + hi) / 2, touches: best.n };
+}
+function athZone(cs) {
+  if (!cs || cs.length < 8) return null;
+  const peak = Math.max(...cs.map(c => c.h));
+  if (!(peak > 0)) return null;
+  const { highs } = swingPoints(cs, 2);
+  const sorted = (highs.length ? highs : [{ price: peak, i: cs.findIndex(c => c.h === peak) }]).slice().sort((a, b) => b.price - a.price || a.i - b.i);
+  let hi = sorted[0].price;
+  let mates = sorted.filter(h => h.price <= hi * 1.001 && h.price >= hi * 0.92);
+  for (const h of sorted) {
+    const group = sorted.filter(x => x.price <= h.price * 1.001 && x.price >= h.price * 0.92);
+    if (group.length >= 2) { hi = Math.max(...group.map(x => x.price)); mates = group; break; }
+  }
+  let lo = Math.min(...mates.map(h => h.price));
+  const closes = cs.map(c => c.c).filter(c => c <= hi && c >= hi * 0.92);
+  if (closes.length) lo = Math.min(lo, ...closes);
+  lo = Math.max(Math.min(lo, hi * 0.992), hi * 0.92);
+  if (!(hi > lo)) lo = hi * 0.96;
+  let athI = mates[0]?.i || 0;
+  let breakAt = cs.length;
+  for (let i = 0; i < cs.length; i++) if (cs[i].c > hi) { breakAt = i; break; }
+  return { lo, hi, mid: (lo + hi) / 2, ath: hi, touches: mates.length, athI, breakAt };
+}
+function chartGeometry(cs) {
+  const list = cs || [];
+  const trend = descendingTrend(list);
+  const band = keyBand(list, trend);
+  const ath = athZone(list);
+  let buy = null;
+  const zone = band || ath;
+  if (trend && zone && trend.b.i !== trend.a.i) {
+    const slope = (trend.b.price - trend.a.price) / (trend.b.i - trend.a.i);
+    if (slope < 0) {
+      const iCross = trend.a.i + (zone.hi - trend.a.price) / slope;
+      if (Number.isFinite(iCross)) buy = { i: Math.max(0, Math.min(list.length - 1, Math.round(iCross))), price: zone.hi, future: iCross >= list.length - 1 };
+    }
+  }
+  return { trend, band, ath, buy };
+}
+function athMeasured(cs, band) {
+  if (!band || !cs?.length) return null;
+  const end = Math.max(1, Math.min(cs.length, band.breakAt || cs.length));
+  const src = cs.slice(0, end);
+  const { lows } = swingPoints(src, 2);
+  const swingLow = lows.length ? lows[lows.length - 1].price : Math.min(...src.map(c => c.l));
+  const bandH = Math.max(band.hi - band.lo, band.hi * 0.01);
+  const prior = Math.max(band.hi - swingLow, bandH);
+  return band.hi + prior;
+}
+function athRead(candles, tf, px, now, opt) {
+  const nowMs = isNum(now) ? now : Date.now();
+  const opto = opt || {};
+  const entry = opto.entry === 'now' || opto.entry === 'hold' ? opto.entry : 'retest';
+  const holdN = opto.holdN > 0 ? Math.round(opto.holdN) : 2;
+  const expire = opto.expire > 0 ? Math.round(opto.expire) : 12;
+  const { closed, forming } = closedCandles(candles, tf, nowMs);
+  const src = closed.length >= 8 ? closed : (candles || []);
+  const band = athZone(src);
+  const base = { band, level: band?.hi ?? null, bandTop: band?.hi ?? null, early: false, status: 'no ATH yet', state: 'none', reason: 'no ATH yet' };
+  if (!band) return base;
+  const top = band.hi;
+  const last = src[src.length - 1];
+  const above = (c) => !!(c && c.c > top);
+  let streak = 0, breakIdx = -1;
+  for (let i = 0; i < src.length; i++) {
+    if (above(src[i])) { if (breakIdx < 0) breakIdx = i; streak++; }
+    else streak = 0;
+  }
+  const liveAbove = (isNum(px) && px > top) || (forming && forming.c > top);
+  const earlyHit = () => {
+    if (!(opto.early && (tf === '1h' || tf === '4h') && opto.m5)) return false;
+    const last5 = closedCandles(opto.m5, '5m', nowMs).closed.at(-1);
+    return !!(last5 && last5.c > top);
+  };
+  if (entry === 'now') {
+    if (above(last)) return { ...base, state: 'trigger', reason: tf + ' close above ATH', status: tf + ' close above ATH' };
+    if (earlyHit()) return { ...base, state: 'trigger', reason: '5m close above the ' + tf + ' ATH', status: '5m close above ATH', early: true };
+    if (liveAbove) return { ...base, state: 'waiting', reason: 'waiting for ' + tf + ' close', status: 'waiting for ' + tf + ' close' };
+    return { ...base, state: 'none', reason: 'price is under the ATH zone', status: 'under ATH' };
+  }
+  if (entry === 'hold') {
+    if (streak >= holdN && above(last)) return { ...base, state: 'trigger', reason: streak + ' closes above ATH', status: 'holding ' + streak + '/' + holdN };
+    if (streak > 0) return { ...base, state: 'waiting', reason: 'holding ' + streak + '/' + holdN, status: 'holding ' + streak + '/' + holdN };
+    if (liveAbove) return { ...base, state: 'waiting', reason: 'waiting for ' + tf + ' close', status: 'waiting for ' + tf + ' close' };
+    return { ...base, state: 'none', reason: 'price is under the ATH zone', status: 'under ATH' };
+  }
+  if (breakIdx < 0) {
+    if (liveAbove) return { ...base, state: 'waiting', reason: 'waiting for ' + tf + ' close', status: 'waiting for ' + tf + ' close' };
+    return { ...base, state: 'none', reason: 'price is under the ATH zone', status: 'under ATH' };
+  }
+  let bounce = -1;
+  const limit = breakIdx + expire;
+  for (let i = breakIdx + 1; i < src.length && i <= limit; i++) {
+    const c = src[i];
+    const near = c.l <= top * 1.03 && c.l >= top * 0.97;
+    const into = c.l <= top && c.l >= band.lo;
+    if ((near || into) && c.c >= c.o && c.c > top) { bounce = i; break; }
+  }
+  if (bounce >= 0 && above(last)) return { ...base, state: 'trigger', reason: 'retest bounce above ATH', status: 'retest bounce' };
+  if (bounce >= 0) return { ...base, state: 'none', reason: 'retest failed', status: 'retest failed' };
+  if (src.length - 1 > limit) return { ...base, state: 'none', reason: 'retest window expired', status: 'retest expired' };
+  return { ...base, state: 'waiting', reason: 'broken – waiting retest', status: 'broken – waiting retest' };
+}
+function confluenceRead(candles, tf, px, now, opt) {
+  const nowMs = isNum(now) ? now : Date.now();
+  const { closed, forming } = closedCandles(candles, tf, nowMs);
+  if (closed.length < 12) return { state: 'none', level: null, trendLevel: null, bandTop: null, reason: 'not enough ' + tf + ' candles', early: false };
+  const geo = chartGeometry(candles);
+  const zone = geo.band || geo.ath;
+  if (!geo.trend || !zone) return { state: 'none', level: null, trendLevel: null, bandTop: zone?.hi ?? null, reason: !geo.trend ? 'no descending trendline' : 'no resistance band', early: false };
+  const last = closed[closed.length - 1];
+  const lastT = candleMs(last);
+  let iClose = Math.max(0, candles.length - 1);
+  for (let i = candles.length - 1; i >= 0; i--) if (candleMs(candles[i]) === lastT) { iClose = i; break; }
+  const tl = lineAt(geo.trend.a, geo.trend.b, iClose);
+  const tlNow = lineAt(geo.trend.a, geo.trend.b, Math.max(0, candles.length - 1));
+  const top = zone.hi;
+  const pack = { level: Math.max(tlNow, top), trendLevel: tlNow, bandTop: top, early: false };
+  if (last.c > tl && last.c > top) return { state: 'trigger', ...pack, reason: tf + ' close above trendline and band' };
+  if (opt && opt.early && (tf === '1h' || tf === '4h') && opt.m5) {
+    const last5 = closedCandles(opt.m5, '5m', nowMs).closed.at(-1);
+    if (last5 && last5.c > tlNow && last5.c > top) return { state: 'trigger', ...pack, reason: '5m close above the ' + tf + ' confluence', early: true };
+  }
+  const live = (isNum(px) && px > tlNow && px > top) || (forming && forming.c > tlNow && forming.c > top);
+  if (live) return { state: 'waiting', ...pack, reason: 'waiting for ' + tf + ' close' };
+  return { state: 'none', ...pack, reason: 'price is under the confluence' };
+}
 function listBreakRead(candles, tf, kind, px, now, opt) {
+  if (kind === 'ath') return athRead(candles, tf, px, now, opt);
+  if (kind === 'confluence') return confluenceRead(candles, tf, px, now, opt);
   const nowMs = isNum(now) ? now : Date.now();
   const { closed, forming } = closedCandles(candles, tf, nowMs);
   if (closed.length < 12) return { state: 'none', level: null, reason: 'not enough ' + tf + ' candles', early: false };
@@ -5424,6 +5603,11 @@ function loadMyList() {
     if (!raw.tf || raw.tf === '5m') base.tf = '4h';
     base.tfDefault = '4h';
     base._tfMigrated = true;
+  }
+  if (raw.modeDefault !== 'confluence') {
+    if (!raw.mode || raw.mode === 'zone') base.mode = 'confluence';
+    base.modeDefault = 'confluence';
+    base._modeMigrated = true;
   }
   if (!base.sizeMigrated) {
     const missing = !(base.sizeSol > 0);
@@ -5465,6 +5649,12 @@ function sanitizeListRow(r) {
     breakLevel: Number.isFinite(+r.breakLevel) && +r.breakLevel > 0 ? +r.breakLevel : null,
     breakReason: r.breakReason ? String(r.breakReason).slice(0, 80) : '',
     breakEarly: !!r.breakEarly,
+    trendLevel: Number.isFinite(+r.trendLevel) && +r.trendLevel > 0 ? +r.trendLevel : null,
+    bandTop: Number.isFinite(+r.bandTop) && +r.bandTop > 0 ? +r.bandTop : null,
+    athEntry: r.athEntry === 'now' || r.athEntry === 'hold' || r.athEntry === 'retest' ? r.athEntry : '',
+    athHold: Number.isFinite(+r.athHold) && +r.athHold > 0 ? Math.round(+r.athHold) : null,
+    athExpire: Number.isFinite(+r.athExpire) && +r.athExpire > 0 ? Math.round(+r.athExpire) : null,
+    athStatus: r.athStatus ? String(r.athStatus).slice(0, 80) : '',
     lastTaAt: Number.isFinite(+r.lastTaAt) ? +r.lastTaAt : null,
     zone: r.zone && isNum(+r.zone.lo) ? { lo: +r.zone.lo, hi: +r.zone.hi, noAnchor: !!r.zone.noAnchor } : null,
     price: Number.isFinite(+r.price) ? +r.price : null,
@@ -5490,11 +5680,12 @@ function listStrategy(row) {
   const use = (k, fallback) => (row && row[k] != null && row[k] !== '') ? row[k] : (d[k] != null ? d[k] : fallback);
   const tps = row && Array.isArray(row.tps) && row.tps.length ? row.tps : d.tps;
   return {
-    mode: row && row.mode ? row.mode : (d.mode || 'zone'),
+    mode: row && row.mode ? row.mode : (d.mode || 'confluence'),
     sizeMode: row && row.sizeMode ? row.sizeMode : (d.sizeMode || 'sol'),
     sizeSol: (row && isNum(row.sizeSol) && row.sizeSol > 0) ? row.sizeSol : ((isNum(d.sizeSol) && d.sizeSol > 0) ? d.sizeSol : (sizeStore === 'usd' ? 5 : 0.05)),
     sizePct: (row && isNum(row.sizePct) && row.sizePct > 0) ? row.sizePct : ((isNum(d.sizePct) && d.sizePct > 0) ? d.sizePct : 10),
-    stopPct: use('stopPct', 15), stopPx: row && isNum(row.stopPx) ? row.stopPx : null,
+    stopPct: (row && isNum(row.stopPct) && row.stopPct > 0 && row.stopPct < 100) ? row.stopPct : ((isNum(d.stopPct) && d.stopPct > 0 && d.stopPct < 100) ? d.stopPct : 15),
+    stopPx: row && isNum(row.stopPx) && row.stopPx > 0 ? row.stopPx : null,
     tps: tps && tps.length ? tps : [{ gainPct: 15, sellPct: 100 }],
     beAtPct: row && row.beAtPct != null ? row.beAtPct : d.beAtPct,
     trailAtPct: row && row.trailAtPct != null ? row.trailAtPct : d.trailAtPct,
@@ -5506,7 +5697,11 @@ function listStrategy(row) {
     maxReentries: row && row.maxReentries != null ? row.maxReentries : (d.maxReentries ?? 3),
     rangeLo: row ? row.rangeLo : null, rangeHi: row ? row.rangeHi : null,
     tf: row && LIST_TFS.includes(row.tf) ? row.tf : (LIST_TFS.includes(d.tf) ? d.tf : '4h'),
-    earlyBreak: row && row.earlyBreak != null ? !!row.earlyBreak : !!d.earlyBreak
+    earlyBreak: row && row.earlyBreak != null ? !!row.earlyBreak : !!d.earlyBreak,
+    athEntry: row && (row.athEntry === 'now' || row.athEntry === 'hold' || row.athEntry === 'retest') ? row.athEntry : (d.athEntry === 'now' || d.athEntry === 'hold' ? d.athEntry : 'retest'),
+    athHold: row && row.athHold > 0 ? row.athHold : (d.athHold > 0 ? d.athHold : 2),
+    athExpire: row && row.athExpire > 0 ? row.athExpire : (d.athExpire > 0 ? d.athExpire : 12),
+    athUserStop: !!(row && isNum(row.stopPct) && row.stopPct > 0)
   };
 }
 function listEntryReady(spec, ctx) {
@@ -5521,7 +5716,7 @@ function listEntryReady(spec, ctx) {
   if (spec.mode === 'now') hit = true;
   else if (spec.mode === 'range') hit = isNum(ctx.price) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && spec.rangeLo <= ctx.price && ctx.price <= spec.rangeHi;
   else if (spec.mode === 'momentum') hit = ctx.momState === 'trigger' && !(ctx.taAgeMin >= 60);
-  else if (spec.mode === 'trend' || spec.mode === 'resist') hit = ctx.breakState === 'trigger' && isNum(ctx.taAgeMin) && ctx.taAgeMin < 60;
+  else if (isBreakMode(spec.mode)) hit = ctx.breakState === 'trigger' && isNum(ctx.taAgeMin) && ctx.taAgeMin < 60;
   else hit = !!ctx.inZone && !(ctx.taAgeMin >= 60);
   return { state: hit ? 'inzone' : 'waiting', ready: hit };
 }
@@ -5533,7 +5728,12 @@ function listDistance(spec, px, zone) {
     if (px > spec.rangeHi) return (px - spec.rangeHi) / px * 100;
     return 0;
   }
-  if ((spec.mode === 'trend' || spec.mode === 'resist') && isNum(spec.breakLevel)) return spec.breakLevel > 0 ? (px - spec.breakLevel) / spec.breakLevel * 100 : null;
+  if (spec.mode === 'confluence') {
+    const parts = [levelDist(spec.trendLevel, px), levelDist(spec.bandTop, px)].filter(isNum);
+    if (parts.length) return Math.min(...parts);
+  }
+  if (spec.mode === 'ath' && isNum(spec.bandTop)) return levelDist(spec.bandTop, px);
+  if (isBreakMode(spec.mode) && isNum(spec.breakLevel)) return spec.breakLevel > 0 ? (px - spec.breakLevel) / spec.breakLevel * 100 : null;
   if (zone && isNum(zone.lo) && isNum(zone.hi)) {
     const mid = (zone.lo + zone.hi) / 2;
     return mid > 0 ? (px - mid) / mid * 100 : null;
@@ -5610,6 +5810,106 @@ function listSolSize(spec) {
   const got = resolveListSpend(spec);
   return got.ok ? got.sol : 0;
 }
+function balanceLine(sol) {
+  if (!isNum(sol)) return 'Balance: unknown';
+  const px = solPriceNow();
+  return 'Balance: ' + sol.toFixed(3) + ' SOL' + (px > 0 ? ' ($' + (sol * px).toFixed(2) + ')' : '');
+}
+function maxBuyInput(solBal) {
+  const cap = solCap(S.maxSolPerTrade);
+  if (cap == null) return null;
+  let sol = cap;
+  if (isNum(solBal) && solBal >= 0) sol = Math.min(sol, solBal);
+  const px = solPriceNow();
+  if (sizeStore === 'usd') return px > 0 ? Math.floor(sol * px * 100) / 100 : null;
+  return Math.floor(sol * 10000) / 10000;
+}
+function buyButtonText(amount) {
+  const n = +amount;
+  if (!isNum(n) || !(n > 0)) return 'Buy';
+  const px = solPriceNow();
+  if (sizeStore === 'usd') {
+    const sol = px > 0 ? n / px : null;
+    return 'Buy $' + (+n).toFixed(2) + (sol == null ? '' : ' (≈' + sol.toFixed(2) + ' SOL)');
+  }
+  const usd = px > 0 ? n * px : null;
+  return 'Buy ' + (+n).toFixed(3) + ' SOL' + (usd == null ? '' : ' (≈$' + usd.toFixed(2) + ')');
+}
+function manualBuyHtml(id, value) {
+  const unit = unitWord();
+  return `<div class="manual-buy mt-3 rounded-2xl border border-white/10 bg-ink-900/60 p-3" data-manual-buy="${esc(id)}">
+    <div class="text-[12px] font-semibold text-slate-200">Manual buy</div>
+    <label class="relative mt-2 block">
+      <input type="text" inputmode="decimal" autocomplete="off" data-mb-amt value="${esc(value)}" aria-label="Buy amount in ${unit}" class="w-full rounded-xl bg-ink-800 border border-white/10 pl-3 pr-16 text-slate-100 font-mono" style="font-size:16px;min-height:48px" />
+      <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-slate-200">${unit}</span>
+    </label>
+    <div data-mb-conv class="mt-1.5 text-[13px] text-slate-300 whitespace-normal break-words"></div>
+    <div class="mt-2 grid grid-cols-4 gap-1.5">${[5, 10, 20, 50].map(n => `<button type="button" data-mb-chip="${n}" class="min-h-[36px] rounded-full border border-white/15 bg-white/5 text-[12px] text-slate-100">$${n}</button>`).join('')}</div>
+    <div class="mt-2 flex items-center justify-between gap-2">
+      <div data-mb-bal class="min-w-0 text-[12px] text-slate-400 whitespace-normal break-words"></div>
+      <button type="button" data-mb-max class="shrink-0 rounded-full border border-violet-400/40 px-3 text-[12px] text-violet-100" style="min-height:36px">Max</button>
+    </div>
+    <button type="button" data-mb-buy class="mt-3 w-full rounded-xl bg-emerald-500 font-bold text-ink-950 disabled:opacity-40" style="min-height:44px;font-size:16px">Buy</button>
+    <div data-mb-reason class="mt-1.5 text-[12px] text-rose-300 whitespace-normal break-words"></div>
+  </div>`;
+}
+function paintManualBuy(root, solBal) {
+  const input = root.querySelector('[data-mb-amt]');
+  const conv = root.querySelector('[data-mb-conv]');
+  const bal = root.querySelector('[data-mb-bal]');
+  const buy = root.querySelector('[data-mb-buy]');
+  const reason = root.querySelector('[data-mb-reason]');
+  if (!input || !buy) return;
+  const spend = resolveTypedSpend(input.value);
+  if (conv) conv.textContent = previewAmount(input.value) || 'Enter an amount';
+  if (bal) bal.textContent = balanceLine(solBal);
+  if (buy.dataset.loading === '1') return;
+  buy.textContent = buyButtonText(input.value);
+  buy.disabled = !spend.ok;
+  if (reason) reason.textContent = spend.ok ? '' : spend.error;
+}
+function wireManualBuy(root, solBal, onBuy) {
+  const input = root.querySelector('[data-mb-amt]');
+  const buy = root.querySelector('[data-mb-buy]');
+  if (!input || !buy) return;
+  const paint = () => paintManualBuy(root, solBal);
+  input.addEventListener('input', paint);
+  root.querySelectorAll('[data-mb-chip]').forEach(b => b.addEventListener('click', () => {
+    const usd = +b.dataset.mbChip;
+    const px = solPriceNow();
+    input.value = sizeStore === 'usd' || !(px > 0) ? String(usd) : (usd / px).toFixed(4);
+    paint();
+  }));
+  root.querySelector('[data-mb-max]')?.addEventListener('click', () => {
+    const max = maxBuyInput(solBal);
+    if (max == null) return toast('SOL price unavailable — can’t set Max', 'warn');
+    input.value = String(max);
+    paint();
+  });
+  buy.addEventListener('click', async () => {
+    const spend = resolveTypedSpend(input.value);
+    if (!spend.ok) { paint(); return; }
+    buy.dataset.loading = '1';
+    buy.disabled = true;
+    buy.textContent = 'Buying…';
+    try { await onBuy(spend); }
+    finally {
+      if (buy.isConnected) { delete buy.dataset.loading; paint(); }
+    }
+  });
+  paint();
+}
+function listPrefill(spec) {
+  if (spec.sizeMode === 'pct') {
+    const bal = burnerSolBal();
+    const sol = bal > 0 ? bal * (spec.sizePct > 0 ? spec.sizePct : 10) / 100 : null;
+    const px = solPriceNow();
+    if (sol && sizeStore === 'usd' && px > 0) return (sol * px).toFixed(2);
+    if (sol) return sol.toFixed(4);
+  }
+  const amt = spec.sizeSol > 0 ? spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05);
+  return sizeStore === 'usd' ? (+amt).toFixed(2) : (+amt).toFixed(4);
+}
 function listBuyBlocks(sol) {
   const errs = [];
   const spend = quoteSpend(sol);
@@ -5661,7 +5961,7 @@ function myListEffectiveStop(p, lp) {
   let reason = 'initial';
   const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
   if (isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
-  if (isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct > 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + spec.trailAtPct / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
+  if (isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
   const prev = autoStop[p.key];
   if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
   else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
@@ -5692,15 +5992,19 @@ function myListPlanHtml(p, pl) {
   if (!p?.plan?.myList || !pl) return '';
   const tps = (pl.tps || []).map(t => '+' + t.gainPct + '% sell ' + t.sellPct + '%').join(', ') || '—';
   const be = isNum(pl.beAtPct) && pl.beAtPct > 0 ? 'breakeven +' + pl.beAtPct + '%' : 'breakeven off';
-  const trail = isNum(pl.trailAtPct) && pl.trailAtPct > 0 ? 'trail ' + pl.trailPct + '% after +' + pl.trailAtPct + '%' : 'trail off';
+  const trail = isNum(pl.trailPct) && pl.trailPct > 0 && isNum(pl.trailAtPct) ? (pl.trailAtPct > 0 ? 'trail ' + pl.trailPct + '% after +' + pl.trailAtPct + '%' : 'trail ' + pl.trailPct + '% from the high') : 'trail off';
   return `<div class="mt-2 text-[11px] leading-snug text-slate-300 whitespace-normal break-words"><b class="text-slate-400">Exit plan</b> · stop ${price(pl.stop)} (${esc(pl.reason || 'initial')}) · ${esc(be)} · ${esc(trail)} · ${esc(tps)}</div>`;
 }
-function modeLabel(mode) { return { zone: 'S/R zone', momentum: 'Momentum', range: 'Price range', now: 'Buy now', trend: 'Trendline break', resist: 'Resistance break' }[mode] || mode; }
+function modeLabel(mode) { return { confluence: 'Trendline + Resistance break (confluence)', ath: 'ATH / range-high breakout', zone: 'S/R zone', momentum: 'Momentum', range: 'Price range', now: 'Buy now', trend: 'Trendline break', resist: 'Resistance break' }[mode] || mode; }
+function levelDist(level, px) { if (!(level > 0) || !(px > 0)) return null; return (px / level - 1) * 100; }
 function listTriggerLabel(row, spec, model) {
+  const tf = row.displayTf || spec.tf || '4h';
+  if (spec.mode === 'ath') return 'ATH ' + tf + ' @ ' + price(model.ath?.hi) + (model.athStatus ? ' · ' + model.athStatus : '');
+  if (spec.mode === 'confluence') return 'Confluence ' + tf + ' · trendline ' + price(model.trendLevel) + ' · band ' + price(model.bandTop);
   if (spec.mode === 'trend' || spec.mode === 'resist') {
     const name = spec.mode === 'trend' ? 'Trendline break' : 'Resistance break';
     const lv = isNum(row.breakLevel) ? row.breakLevel : model.trigger;
-    return name + ' ' + (row.displayTf || spec.tf || '4h') + ' @ ' + price(lv) + (row.breakEarly ? ' · early 5m' : '');
+    return name + ' ' + tf + ' @ ' + price(lv) + (row.breakEarly ? ' · early 5m' : '');
   }
   return price(model.trigger);
 }
@@ -5708,23 +6012,75 @@ function tfSelect(id, cur, blank) {
   const opts = (blank ? [`<option value="" ${cur ? '' : 'selected'}>List default</option>`] : []).concat(LIST_TFS.map(v => `<option value="${v}" ${cur === v ? 'selected' : ''}>${v}</option>`));
   return `<select id="${id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5">${opts.join('')}</select>`;
 }
-function listPlan(spec, entryPx) {
-  const stop = isNum(spec.stopPx) && entryPx && spec.stopPx < entryPx ? spec.stopPx : (entryPx ? entryPx * (1 - spec.stopPct / 100) : null);
-  return { myList: true, stop, strat: 'My List ' + spec.mode, exit: { stopPct: spec.stopPct, stopPx: spec.stopPx, tps: spec.tps, beAtPct: spec.beAtPct, trailAtPct: spec.trailAtPct, trailPct: spec.trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain } };
+function listPlan(spec, entryPx, model) {
+  const band = model?.ath;
+  let stop = isNum(spec.stopPx) && entryPx && spec.stopPx < entryPx ? spec.stopPx : (entryPx ? entryPx * (1 - spec.stopPct / 100) : null);
+  if (spec.mode === 'ath' && band && !(isNum(spec.stopPx) && spec.stopPx > 0 && (!entryPx || spec.stopPx < entryPx))) {
+    stop = spec.athUserStop && entryPx ? entryPx * (1 - (spec.stopPct > 0 ? spec.stopPct : 15) / 100) : band.lo * 0.99;
+    if (entryPx && entryPx > band.hi && stop >= entryPx) stop = Math.min(band.lo * 0.99, entryPx * 0.97);
+  }
+  let tps = spec.tps;
+  if (spec.mode === 'ath' && isNum(model?.measured) && entryPx && model.measured > entryPx) {
+    const gain = Math.round((model.measured / entryPx - 1) * 1000) / 10;
+    const sell = spec.tps?.[0]?.sellPct || 50;
+    tps = [{ gainPct: gain, sellPct: sell }];
+    if (spec.tps?.[1]) tps.push(spec.tps[1]);
+  }
+  const trailAtPct = spec.mode === 'ath' && !(spec.trailAtPct > 0) ? 0 : spec.trailAtPct;
+  const trailPct = spec.mode === 'ath' && !(spec.trailPct > 0) ? 10 : spec.trailPct;
+  const stopPx = spec.mode === 'ath' && isNum(stop) ? stop : spec.stopPx;
+  return { myList: true, stop, strat: 'My List ' + spec.mode, exit: { stopPct: spec.stopPct, stopPx, tps, beAtPct: spec.beAtPct, trailAtPct, trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain } };
 }
 let listSort = 'ready', listTable = false;
 const listChartMemo = {};
+function plannedStop(spec, px, zone, support) {
+  const pct = isNum(spec?.stopPct) && spec.stopPct > 0 && spec.stopPct < 100 ? spec.stopPct : 15;
+  const floors = [];
+  if (zone && !zone.noAnchor && isNum(zone.lo) && zone.lo > 0) floors.push(zone.lo);
+  if (support && isNum(support.lo) && support.lo > 0 && isNum(px) && support.lo < px && support.lo > px * 0.05) floors.push(support.lo);
+  let stop = isNum(spec?.stopPx) && spec.stopPx > 0 ? spec.stopPx : null;
+  if (!isNum(stop)) {
+    if (floors.length) stop = Math.min(...floors) * (1 - Math.min(pct, 8) / 100);
+    else if (isNum(px)) stop = px * (1 - pct / 100);
+  }
+  const ceilings = [px];
+  if (zone && !zone.noAnchor && isNum(zone.lo) && zone.lo > 0) ceilings.push(zone.lo);
+  const ceiling = ceilings.filter(v => isNum(v) && v > 0).reduce((m, v) => Math.min(m, v), Infinity);
+  if (isNum(stop) && ceiling < Infinity && stop >= ceiling * 0.999) stop = ceiling * (1 - pct / 100);
+  if (isNum(px) && isNum(stop) && stop >= px) stop = px * (1 - pct / 100);
+  return isNum(stop) && stop > 0 ? stop : null;
+}
+function roomStats(px, candles, tp1, ta) {
+  if (!(px > 0)) return null;
+  const cs = candles || [];
+  const swings = cs.length >= 8 ? swingPoints(cs, 2) : { highs: [], lows: [] };
+  const above = [...swings.highs.map(h => h.price), ta?.resist?.mid].filter(p => isNum(p) && p > px * 1.003).sort((a, b) => a - b);
+  const below = [...swings.lows.map(l => l.price), ta?.support?.mid].filter(p => isNum(p) && p < px * 0.997 && p > px * 0.05).sort((a, b) => b - a);
+  const resist = above[0] || null;
+  const support = below[0] || null;
+  let next = above[1] || null;
+  let nextKind = 'next resistance';
+  if (!next && isNum(resist) && isNum(support) && resist > support) { next = resist + (resist - support); nextKind = 'measured move'; }
+  if ((!next || next <= px) && isNum(tp1) && tp1 > px) { next = tp1; nextKind = 'TP target'; }
+  const toRes = isNum(resist) ? (resist / px - 1) * 100 : null;
+  const toSup = isNum(support) ? (1 - support / px) * 100 : null;
+  const up = isNum(next) ? (next / px - 1) * 100 : null;
+  const rr = isNum(up) && isNum(toSup) && toSup > 0.05 ? up / toSup : null;
+  return { resist, support, next, nextKind, toRes, toSup, up, rr };
+}
 function listChartModel(row, spec, px) {
-  const candles = (row.cache?.candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0);
-  let ta = null, mom = null, line = null;
+  const raw = (row.cache?.candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0);
+  const candles = alignCandlesToToken(raw, px);
+  const geo = chartGeometry(candles);
+  const tfKey = row.cache?.tf || spec.tf || '4h';
+  const athInfo = athRead(candles, tfKey, px, Date.now(), { entry: spec.athEntry, holdN: spec.athHold, expire: spec.athExpire, early: !!spec.earlyBreak });
+  let ta = null, mom = null;
   try {
-    if (candles.length >= 15) {
-      ta = analyzeStructure(candles, row.cache?.tf || '4h');
-      const { highs } = swingPoints(candles, 2);
-      for (let i = highs.length - 1; i >= 1; i--) if (highs[i].price < highs[i - 1].price) { line = [highs[i - 1], highs[i]]; break; }
-    }
+    if (candles.length >= 15) ta = analyzeStructure(candles, tfKey);
     if (spec.mode === 'momentum' && candles.length >= 20) mom = momentumFromCandles(candles);
   } catch { /* the card still renders without a drawing */ }
+  const trendLevel = geo.trend ? lineAt(geo.trend.a, geo.trend.b, Math.max(0, candles.length - 1)) : null;
+  const bandTop = geo.band?.hi ?? null;
   let trigger = null;
   if (spec.mode === 'now') trigger = isNum(px) ? px : null;
   else if (spec.mode === 'range' && isNum(spec.rangeLo) && isNum(spec.rangeHi)) {
@@ -5732,61 +6088,89 @@ function listChartModel(row, spec, px) {
     else if (px > spec.rangeHi) trigger = spec.rangeHi;
     else trigger = px;
   } else if (spec.mode === 'momentum') trigger = isNum(mom?.level) ? mom.level : null;
+  else if (spec.mode === 'ath') trigger = athInfo.band?.hi ?? null;
+  else if (spec.mode === 'confluence') trigger = isNum(trendLevel) && isNum(bandTop) ? Math.max(trendLevel, bandTop) : (isNum(row.breakLevel) ? row.breakLevel : null);
   else if (spec.mode === 'trend' || spec.mode === 'resist') trigger = isNum(row.breakLevel) ? row.breakLevel : null;
   else if (row.zone && isNum(row.zone.lo) && isNum(row.zone.hi) && !row.zone.noAnchor) trigger = (row.zone.lo + row.zone.hi) / 2;
   const entry = isNum(trigger) ? trigger : (isNum(px) ? px : null);
-  const stopPct = isNum(spec.stopPct) ? spec.stopPct : 15;
-  const stop = isNum(spec.stopPx) && isNum(entry) && spec.stopPx < entry ? spec.stopPx : (isNum(entry) ? entry * (1 - stopPct / 100) : null);
-  const tp1 = spec.tps?.[0] && isNum(entry) ? entry * (1 + spec.tps[0].gainPct / 100) : null;
-  const tp2 = spec.tps?.[1] && isNum(entry) ? entry * (1 + spec.tps[1].gainPct / 100) : null;
-  const risk = isNum(entry) && isNum(stop) && entry > stop ? entry - stop : null;
-  const reward = isNum(entry) && isNum(tp1) && tp1 > entry ? tp1 - entry : null;
+  const ref = (isNum(entry) && (!isNum(px) || entry < px * 0.999)) ? entry : px;
+  const measured = athMeasured(candles, geo.ath);
+  let tp1 = spec.mode === 'ath' && isNum(measured) ? measured : (spec.tps?.[0] && isNum(ref) ? ref * (1 + spec.tps[0].gainPct / 100) : null);
+  const tp2 = spec.tps?.[1] && isNum(ref) ? ref * (1 + spec.tps[1].gainPct / 100) : null;
+  let stop = plannedStop(spec, px, row.zone, ta?.support);
+  if (spec.mode === 'ath' && geo.ath && !(isNum(spec.stopPx) && spec.stopPx > 0)) {
+    stop = spec.athUserStop && isNum(px) ? px * (1 - (spec.stopPct > 0 ? spec.stopPct : 15) / 100) : geo.ath.lo * 0.99;
+    if (isNum(px) && px > geo.ath.hi && stop >= px) stop = Math.min(geo.ath.lo * 0.99, px * 0.97);
+  }
+  const room = roomStats(px, candles, tp1, ta);
+  const risk = isNum(stop) && isNum(px) && px > stop ? px - stop : null;
+  const reward = isNum(tp1) && isNum(px) && tp1 > px ? tp1 - px : null;
   return {
-    candles, ta, mom, line, trigger, entry, stop, tp1, tp2,
-    rr: risk && reward ? reward / risk : null,
+    candles, ta, mom, line: geo.trend ? [geo.trend.a, geo.trend.b] : null, trigger, entry, stop, tp1, tp2,
+    rr: room?.rr || (risk && reward ? reward / risk : null),
     scalp: !!(spec.tps?.length === 1 && spec.tps[0].sellPct >= 99),
     gain1: spec.tps?.[0]?.gainPct ?? null, gain2: spec.tps?.[1]?.gainPct ?? null,
     support: ta?.support || null, resist: ta?.resist || null, trend: ta?.trend || null,
-    zone: row.zone && isNum(row.zone.lo) ? row.zone : null
+    zone: row.zone && isNum(row.zone.lo) ? row.zone : null,
+    room, trendLine: geo.trend, srBand: geo.band, ath: geo.ath || athInfo.band, buyZone: geo.buy,
+    trendLevel, bandTop, measured, athStatus: athInfo.status
   };
 }
 function listChartSvg(model, opt) {
   const w = opt?.w || 320, h = opt?.h || 112;
-  const full = model?.candles || [];
-  const cs = full.slice(-80);
+  const cs = model?.candles || [];
   if (cs.length < 2) return { svg: '', empty: true };
   const minC = Math.min(...cs.map(c => c.l)), maxC = Math.max(...cs.map(c => c.h));
-  const span = (maxC - minC) || Math.abs(maxC) * 0.04 || 1;
-  const min = minC - span * 0.12, max = maxC + span * 0.12;
-  const y = (p) => (1 - (p - min) / (max - min)) * (h - 8) + 4;
-  const x = (i) => (i / (cs.length - 1)) * (w - 8) + 4;
-  const show = (p) => isNum(p) && p >= min && p <= max;
-  const start = full.length - cs.length;
-  const bw = Math.max(1, (w - 8) / cs.length * 0.62);
+  const log = minC > 0 && (maxC / minC >= 2.5 || maxC < 1);
+  const pad = 0.08;
+  let lo, hi, y;
+  if (log) {
+    const span = Math.log(maxC) - Math.log(minC) || 1;
+    lo = Math.log(minC) - span * pad; hi = Math.log(maxC) + span * pad;
+    y = (p) => (1 - (Math.log(Math.max(p, minC * 0.5)) - lo) / (hi - lo)) * (h - 10) + 4;
+  } else {
+    const span = (maxC - minC) || Math.abs(maxC) * 0.04 || 1;
+    lo = minC - span * pad; hi = maxC + span * pad;
+    y = (p) => (1 - (p - lo) / (hi - lo)) * (h - 10) + 4;
+  }
+  const x = (i) => cs.length < 2 ? 4 : (i / (cs.length - 1)) * (w - 8) + 4;
+  const show = (p) => isNum(p) && p > 0 && y(p) >= 2 && y(p) <= h - 2;
+  const bw = Math.max(0.8, (w - 8) / cs.length * 0.62);
   const bodies = cs.map((c, i) => {
     const open = isNum(c.o) ? c.o : c.c;
     const up = c.c >= open;
     const top = y(Math.max(open, c.c)), bot = y(Math.min(open, c.c));
     const col = up ? '#34d399' : '#fb7185';
-    return `<line x1="${x(i).toFixed(2)}" y1="${y(c.h).toFixed(2)}" x2="${x(i).toFixed(2)}" y2="${y(c.l).toFixed(2)}" stroke="${col}" stroke-width="1"/><rect x="${(x(i) - bw / 2).toFixed(2)}" y="${top.toFixed(2)}" width="${bw.toFixed(2)}" height="${Math.max(1, bot - top).toFixed(2)}" fill="${col}"/>`;
+    return `<line x1="${x(i).toFixed(2)}" y1="${y(c.h).toFixed(2)}" x2="${x(i).toFixed(2)}" y2="${y(c.l).toFixed(2)}" stroke="${col}" stroke-width="1"/><rect x="${(x(i) - bw / 2).toFixed(2)}" y="${Math.min(top, bot).toFixed(2)}" width="${bw.toFixed(2)}" height="${Math.max(1, Math.abs(bot - top)).toFixed(2)}" fill="${col}"/>`;
   }).join('');
-  const band = (lo, hi, fill) => {
-    if (!isNum(lo) || !isNum(hi)) return '';
-    const a = Math.max(min, Math.min(lo, hi)), b = Math.min(max, Math.max(lo, hi));
-    if (!(b > a)) return '';
-    return `<rect x="0" y="${y(b).toFixed(2)}" width="${w}" height="${Math.max(1, y(a) - y(b)).toFixed(2)}" fill="${fill}"/>`;
+  const band = (zone, fill) => {
+    if (!zone || !isNum(zone.lo) || !isNum(zone.hi) || !(zone.hi > zone.lo)) return '';
+    const y1 = y(zone.hi), y2 = y(zone.lo);
+    return `<rect x="0" y="${Math.min(y1, y2).toFixed(2)}" width="${w}" height="${Math.max(1.5, Math.abs(y2 - y1)).toFixed(2)}" fill="${fill}"/>`;
   };
-  const hline = (p, color, dash) => show(p) ? `<line x1="0" y1="${y(p).toFixed(2)}" x2="${w}" y2="${y(p).toFixed(2)}" stroke="${color}" stroke-width="1"${dash ? ` stroke-dasharray="${dash}"` : ''}/>` : '';
+  const hline = (p, color) => show(p) ? `<line x1="0" y1="${y(p).toFixed(2)}" x2="${w}" y2="${y(p).toFixed(2)}" stroke="${color}" stroke-width="0.7" stroke-dasharray="2 3" opacity="0.55"/>` : '';
   let tl = '';
-  if (model.line) {
-    const [a, b] = model.line;
-    const iEnd = full.length - 1, i0 = Math.max(a.i, start);
-    const p0 = lineAt(a, b, i0), pEnd = lineAt(a, b, iEnd);
-    if (isNum(p0) && isNum(pEnd)) tl = `<line x1="${x(i0 - start).toFixed(2)}" y1="${y(p0).toFixed(2)}" x2="${x(iEnd - start).toFixed(2)}" y2="${y(pEnd).toFixed(2)}" stroke="#fbbf24" stroke-width="1.25"/>`;
+  if (model.trendLine) {
+    const a = model.trendLine.a, b = model.trendLine.b;
+    const p0 = lineAt(a, b, a.i), pEnd = lineAt(a, b, cs.length - 1);
+    if (isNum(p0) && isNum(pEnd) && p0 > 0 && pEnd > 0) tl = `<line x1="${x(a.i).toFixed(2)}" y1="${y(p0).toFixed(2)}" x2="${x(cs.length - 1).toFixed(2)}" y2="${y(pEnd).toFixed(2)}" stroke="#f8fafc" stroke-width="2.2" stroke-linecap="round"/>`;
   }
-  const mark = show(model.trigger) ? `<circle cx="${x(cs.length - 1).toFixed(2)}" cy="${y(model.trigger).toFixed(2)}" r="3.2" fill="#fff" stroke="#7c3aed" stroke-width="1"/>` : '';
-  const svg = `<svg viewBox="0 0 ${w} ${h}" data-min="${min}" data-max="${max}" data-vh="${h}" class="w-full h-auto" role="img" aria-label="Price chart with trendline, support, resistance, trigger, stop and targets">${band(model.support?.lo, model.support?.hi, 'rgba(52,211,153,0.16)')}${band(model.resist?.lo, model.resist?.hi, 'rgba(251,113,133,0.14)')}${band(model.zone?.lo, model.zone?.hi, 'rgba(167,139,250,0.18)')}${bodies}${tl}${hline(model.stop, '#fb7185', '3 2')}${hline(model.tp1, '#34d399', '3 2')}${hline(model.tp2, '#6ee7b7', '2 3')}${hline(model.trigger, '#c4b5fd', '')}${mark}</svg>`;
-  return { svg, empty: false };
+  const distinct = model.srBand && model.ath && Math.abs(model.srBand.mid - model.ath.mid) / model.ath.mid > 0.1;
+  const labelSize = h >= 180 ? 11 : 8;
+  let athLabel = '';
+  if (model.ath) {
+    const yTop = y(model.ath.hi);
+    athLabel = `<text x="6" y="${Math.min(h - 4, Math.max(labelSize + 2, yTop + labelSize)).toFixed(2)}" fill="#f3e8ff" font-size="${labelSize}" font-weight="700">ATH zone</text>`;
+  }
+  let buy = '';
+  if (model.buyZone && (model.srBand || model.ath)) {
+    const zone = model.srBand || model.ath;
+    const x1 = x(model.buyZone.i);
+    const y1 = y(zone.hi), y2 = y(zone.lo);
+    buy = `<rect x="${x1.toFixed(2)}" y="${Math.min(y1, y2).toFixed(2)}" width="${Math.max(8, w - 4 - x1).toFixed(2)}" height="${Math.max(1.5, Math.abs(y2 - y1)).toFixed(2)}" fill="rgba(255,255,255,0.08)" stroke="#e9d5ff" stroke-width="0.6"/><text x="${Math.min(w - 52, x1 + 3).toFixed(2)}" y="${Math.min(h - 4, Math.max(labelSize, Math.min(y1, y2) + labelSize)).toFixed(2)}" fill="#f5f3ff" font-size="${labelSize}" font-weight="700">BUY ZONE</text>`;
+  }
+  const svg = `<svg viewBox="0 0 ${w} ${h}" data-log="${log ? 1 : 0}" data-lo="${lo}" data-hi="${hi}" data-vh="${h}" class="w-full h-auto" role="img" aria-label="Price chart with trendline, ATH zone, and buy zone">${band(model.ath, 'rgba(168,85,247,0.28)')}${distinct ? band(model.srBand, 'rgba(168,85,247,0.16)') : ''}${bodies}${tl}${hline(model.stop, '#fb7185')}${hline(model.tp1, '#34d399')}${athLabel}${buy}</svg>`;
+  return { svg, empty: false, bars: cs.length, log };
 }
 function listContext(row) {
   const spec = listStrategy(row);
@@ -5794,7 +6178,7 @@ function listContext(row) {
   const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
   const open = !!listPosition(row.mint);
   const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
-  const wantTf = spec.mode === 'momentum' ? '1m' : ((spec.mode === 'trend' || spec.mode === 'resist') ? spec.tf : '4h');
+  const wantTf = spec.mode === 'momentum' ? '1m' : (isBreakMode(spec.mode) ? spec.tf : '4h');
   const chartTf = row.displayTf || wantTf;
   const model = listChartModel(row.cache?.tf === chartTf ? row : { ...row, cache: null }, spec, px);
   let badge = 'Waiting', why = 'price is away from the trigger', ready = false;
@@ -5806,9 +6190,10 @@ function listContext(row) {
     else if (row.cooldownUntil && Date.now() < row.cooldownUntil) why = 'cooldown ' + Math.max(1, Math.ceil((row.cooldownUntil - Date.now()) / 60000)) + 'm left';
     else why = 'daily re-entry cap reached';
   } else if (!isNum(px)) why = 'no live price yet';
-  else if ((spec.mode === 'zone' || spec.mode === 'momentum' || spec.mode === 'trend' || spec.mode === 'resist') && (row.taStale || (isNum(taAge) && taAge >= 60))) why = 'chart data is stale';
-  else if ((spec.mode === 'trend' || spec.mode === 'resist') && !row.pool && !row.breakLevel) why = 'waiting for the pool';
-  else if (spec.mode === 'trend' || spec.mode === 'resist') why = row.breakReason || ('waiting for ' + spec.tf + ' close');
+  else if ((spec.mode === 'zone' || spec.mode === 'momentum' || isBreakMode(spec.mode)) && (row.taStale || (isNum(taAge) && taAge >= 60))) why = 'chart data is stale';
+  else if (isBreakMode(spec.mode) && !row.pool && !row.breakLevel && !model.ath) why = 'waiting for the pool';
+  else if (spec.mode === 'ath') why = model.athStatus || row.athStatus || row.breakReason || 'under ATH';
+  else if (isBreakMode(spec.mode)) why = row.breakReason || ('waiting for ' + spec.tf + ' close');
   else if (spec.mode === 'zone' && (!row.zone || row.zone.noAnchor)) why = zoneWaitReason(row.zone, model.support);
   else if (spec.mode === 'momentum' && row.momState !== 'trigger') why = model.mom?.reason || 'momentum trigger is not confirmed';
   else if (spec.mode === 'range' && !(isNum(spec.rangeLo) && isNum(spec.rangeHi))) why = 'set a price range';
@@ -5820,8 +6205,10 @@ function listContext(row) {
     else if (blocks.length) { badge = 'In zone'; why = blocks[0]; }
     else { badge = 'READY — entering'; why = ''; ready = true; }
   } else if (badge === 'Waiting' && (row.inZone || (spec.mode === 'momentum' && row.momState === 'trigger') || (spec.mode === 'range' && isNum(px) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && px >= spec.rangeLo && px <= spec.rangeHi))) badge = 'In zone';
-  const dist = listDistance({ ...spec, breakLevel: row.breakLevel }, px, row.zone);
-  return { spec, px, taAge, open, gate, model, badge, why, ready, dist };
+  const trendLevel = isNum(row.trendLevel) ? row.trendLevel : model.trendLevel;
+  const bandTop = spec.mode === 'ath' ? model.ath?.hi : (isNum(row.bandTop) ? row.bandTop : model.bandTop);
+  const dist = listDistance({ ...spec, breakLevel: row.breakLevel || model.trigger, trendLevel, bandTop }, px, row.zone);
+  return { spec, px, taAge, open, gate, model, badge, why, ready, dist, distTrend: levelDist(trendLevel, px), distBand: levelDist(bandTop, px) };
 }
 function listDistText(dist) {
   if (!isNum(dist)) return '—';
@@ -5839,7 +6226,7 @@ function listBadgeCls(badge) {
 function listDefaultChip() {
   const tp = formatTps(MYLIST.tps) || '15:100';
   const size = MYLIST.sizeMode === 'pct' ? (MYLIST.sizePct + '% of balance') : (sizeHint(MYLIST.sizeSol) || (MYLIST.sizeSol + ' ' + unitWord()));
-  const tfBit = (MYLIST.mode === 'trend' || MYLIST.mode === 'resist') ? ' · ' + (LIST_TFS.includes(MYLIST.tf) ? MYLIST.tf : '4h') + (MYLIST.earlyBreak ? ' · early 5m' : '') : '';
+  const tfBit = isBreakMode(MYLIST.mode) ? ' · ' + (LIST_TFS.includes(MYLIST.tf) ? MYLIST.tf : '4h') + (MYLIST.mode === 'ath' ? ' · ' + (MYLIST.athEntry || 'retest') : '') + (MYLIST.earlyBreak ? ' · early 5m' : '') : '';
   return modeLabel(MYLIST.mode || 'zone') + tfBit + ' · ' + size + ' · stop ' + MYLIST.stopPct + '%' + (isNum(MYLIST.stopPx) ? ' / ' + price(MYLIST.stopPx) : '') + ' · TP ' + tp;
 }
 function modalNum(id) { const el = $(id); if (!el || !String(el.value || '').trim()) return null; const n = +el.value; return Number.isFinite(n) ? n : null; }
@@ -5869,9 +6256,13 @@ function openListDefaults() {
       </div>
       <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdRe" type="checkbox" class="accent-violet-500" ${m.reentry !== false ? 'checked' : ''}/> Look for a new entry after a close</label>
       <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdEarly" type="checkbox" class="accent-violet-500" ${m.earlyBreak ? 'checked' : ''}/> Early trigger: 5m close above the 1h/4h level (off waits for that candle to close)</label>
-      <p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">Trendline break and resistance break use 1m, 5m, 15m, 1h, or 4h. A 1h or 4h break is the close of that candle. Until it closes, the card says waiting for that close.</p>`,
+      <div class="mt-2 grid grid-cols-2 gap-2">${listField('ATH entry', `<select id="mlEdAth" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="retest" ${m.athEntry !== 'now' && m.athEntry !== 'hold' ? 'selected' : ''}>Retest / pullback</option><option value="now" ${m.athEntry === 'now' ? 'selected' : ''}>Immediate close</option><option value="hold" ${m.athEntry === 'hold' ? 'selected' : ''}>Hold above</option></select>`)}
+      ${listField('Hold candles above ATH', listInp('mlEdAthHold', m.athHold ?? 2))}
+      ${listField('Retest window (candles)', listInp('mlEdAthExpire', m.athExpire ?? 12))}
+      </div>
+      <p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">ATH buys the range-high break. Retest waits for a pullback to the band. Hold waits for N closes above it. The stop sits under the band unless this token has its own stop %. The target is the measured move, then a trail.</p>`,
     onConfirm: async () => {
-      MYLIST.mode = MYLIST_MODES.includes($('mlEdMode')?.value) ? $('mlEdMode').value : 'zone';
+      MYLIST.mode = MYLIST_MODES.includes($('mlEdMode')?.value) ? $('mlEdMode').value : 'confluence';
       MYLIST.sizeMode = $('mlEdSize')?.value === 'pct' ? 'pct' : 'sol';
       MYLIST.sizeSol = modalNum('mlEdSizeSol') || 0.05;
       MYLIST.sizePct = modalNum('mlEdSizePct') || 10;
@@ -5889,6 +6280,9 @@ function openListDefaults() {
       MYLIST.reentry = !!$('mlEdRe')?.checked;
       MYLIST.tf = LIST_TFS.includes($('mlEdTf')?.value) ? $('mlEdTf').value : '4h';
       MYLIST.earlyBreak = !!$('mlEdEarly')?.checked;
+      MYLIST.athEntry = $('mlEdAth')?.value === 'now' || $('mlEdAth')?.value === 'hold' ? $('mlEdAth').value : 'retest';
+      MYLIST.athHold = modalNum('mlEdAthHold') || 2;
+      MYLIST.athExpire = modalNum('mlEdAthExpire') || 12;
       saveMyList(); toast('My List strategy saved', 'ok'); renderMyList();
     } });
   $('mlEdScalp')?.addEventListener('click', () => { const n = modalNum('mlEdScalpPct') || 15; if ($('mlEdTps')) $('mlEdTps').value = n + ':100'; });
@@ -5918,6 +6312,9 @@ function openListEditor(row) {
       ${listField('Max re-entries', listInp('mlEdReMax', row.maxReentries ?? '', 'default'))}
       ${listField('Re-entry', `<select id="mlEdRe" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${re ? '' : 'selected'}>Default</option><option value="yes" ${re === 'yes' ? 'selected' : ''}>On</option><option value="no" ${re === 'no' ? 'selected' : ''}>Off</option></select>`)}
       ${listField('Early 5m trigger', `<select id="mlEdEarly" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${row.earlyBreak == null ? 'selected' : ''}>Default</option><option value="yes" ${row.earlyBreak === true ? 'selected' : ''}>On</option><option value="no" ${row.earlyBreak === false ? 'selected' : ''}>Off</option></select>`)}
+      ${listField('ATH entry', `<select id="mlEdAth" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${row.athEntry ? '' : 'selected'}>Default</option><option value="retest" ${row.athEntry === 'retest' ? 'selected' : ''}>Retest / pullback</option><option value="now" ${row.athEntry === 'now' ? 'selected' : ''}>Immediate close</option><option value="hold" ${row.athEntry === 'hold' ? 'selected' : ''}>Hold above</option></select>`)}
+      ${listField('Hold candles', listInp('mlEdAthHold', row.athHold ?? '', 'default'))}
+      ${listField('Retest window', listInp('mlEdAthExpire', row.athExpire ?? '', 'default'))}
       </div>
       <p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">1h and 4h confirm on that candle’s close. Early trigger, off by default, accepts a 5m close above the higher-timeframe level.</p>`,
     onConfirm: async () => {
@@ -5941,6 +6338,9 @@ function openListEditor(row) {
       row.reentry = $('mlEdRe')?.value === '' ? null : $('mlEdRe').value === 'yes';
       row.tf = LIST_TFS.includes($('mlEdTf')?.value) ? $('mlEdTf').value : '';
       row.earlyBreak = $('mlEdEarly')?.value === '' ? null : $('mlEdEarly').value === 'yes';
+      row.athEntry = $('mlEdAth')?.value === 'now' || $('mlEdAth')?.value === 'hold' || $('mlEdAth')?.value === 'retest' ? $('mlEdAth').value : '';
+      row.athHold = modalNum('mlEdAthHold');
+      row.athExpire = modalNum('mlEdAthExpire');
       saveMyList(); renderMyList(); toast('Token strategy saved', 'ok');
     } });
 }
@@ -5953,10 +6353,12 @@ function bindChartRead(model) {
   const read = (ev) => {
     const r = svg.getBoundingClientRect();
     if (!(r.height > 0) || !(r.width > 0)) return;
-    const min = +svg.dataset.min, max = +svg.dataset.max, vh = +svg.dataset.vh || 220;
+    const lo = +svg.dataset.lo, hi = +svg.dataset.hi, vh = +svg.dataset.vh || 220, log = svg.dataset.log === '1';
     const yv = ((ev.clientY - r.top) / r.height) * vh;
-    const px = min + (1 - (yv - 4) / (vh - 8)) * (max - min);
-    const cs = (model.candles || []).slice(-80);
+    const t = 1 - (yv - 4) / (vh - 10);
+    const axis = lo + t * (hi - lo);
+    const px = log ? Math.exp(axis) : axis;
+    const cs = model.candles || [];
     const i = cs.length ? Math.max(0, Math.min(cs.length - 1, Math.round(((ev.clientX - r.left) / r.width) * (cs.length - 1)))) : 0;
     const c = cs[i];
     tip.textContent = price(px) + (c ? ' · O ' + price(c.o) + ' H ' + price(c.h) + ' L ' + price(c.l) + ' C ' + price(c.c) : '');
@@ -5976,13 +6378,13 @@ async function drawListChart(row, tf) {
   let err = '';
   if (row.pool) {
     try {
-      const resolved = await resolveCandleTf(row.pool, preferred);
+      const resolved = await resolveCandleTf(row.pool, preferred, row.mint);
       if (seq !== chartDrawSeq) return;
       candles = resolved.candles || [];
       useTf = resolved.tf || preferred;
       note = resolved.note || '';
       if (resolved.candles) {
-        row.cache = { at: Date.now(), tf: useTf, candles: resolved.candles.slice(-200) };
+        row.cache = { at: Date.now(), tf: useTf, candles: alignCandlesToToken(resolved.candles, row.price).slice(-200) };
         row.displayTf = useTf;
         row.tfNote = note;
         row.lastTaAt = Date.now();
@@ -6003,7 +6405,7 @@ async function drawListChart(row, tf) {
   const noteHtml = note ? `<p class="mt-1 text-[11px] text-amber-200 whitespace-normal break-words">${esc(note)}</p>` : '';
   box.innerHTML = chartTfButtons(useTf) + noteHtml + (drawn.empty
     ? `<p class="text-xs text-slate-400 whitespace-normal break-words">${esc(err || 'Candles are not here yet. The chart fills in on the next My List check.')}</p>`
-    : `<div style="touch-action:none">${drawn.svg.replace('<svg ', '<svg id="mlChartSvg" ')}<div id="mlChartTip" class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">Drag across the chart to read a price.</div><p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">Yellow trendline · green support · red resistance · violet entry zone · purple trigger · rose stop · green targets.</p></div>`);
+    : `<div style="touch-action:none">${drawn.svg.replace('<svg ', '<svg id="mlChartSvg" ')}<div id="mlChartTip" class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">Drag across the chart to read a price.</div><p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">White trendline extended to the right · purple ATH zone · BUY ZONE where the trendline meets the band · faint stop and measured target. Wide ranges use a log price scale.</p></div>`);
   box.querySelectorAll('[data-chart-tf]').forEach(b => b.addEventListener('click', () => { drawListChart(row, b.dataset.chartTf); }));
   bindChartRead(model);
 }
@@ -6015,7 +6417,7 @@ function openListChart(id) {
     html: '<div id="mlChartLive"></div>',
     onConfirm: async () => {} });
   const spec = listStrategy(row);
-  const start = row.chartTf || (spec.mode === 'momentum' ? '1m' : ((spec.mode === 'trend' || spec.mode === 'resist') ? spec.tf : '4h'));
+  const start = row.chartTf || (spec.mode === 'momentum' ? '1m' : (isBreakMode(spec.mode) ? spec.tf : '4h'));
   drawListChart(row, start);
 }
 function openScanChart(mint) {
@@ -6025,27 +6427,30 @@ function openScanChart(mint) {
   openModal({ title: (row.symbol || 'Token') + ' chart', confirmLabel: 'Close', html: '<div id="mlChartLive"></div>', onConfirm: async () => {} });
   drawListChart(row, '4h');
 }
-async function myListBuyNow(row, typed) {
-  if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+async function myListBuyNow(row, typed, onDone) {
+  if (!WALLETS.burner.kp) { toast('Unlock the burner first', 'warn'); onDone?.(); return; }
   const spec = listStrategy(row);
-  const spend = typed == null || String(typed).trim() === '' ? resolveListSpend(spec) : resolveTypedSpend(typed);
-  if (!spend.ok) return toast(spend.error, 'err', 8000);
+  const spend = typeof typed === 'number' ? capSpend(typed) : (typed == null || String(typed).trim() === '' ? resolveListSpend(spec) : resolveTypedSpend(typed));
+  if (!spend.ok) { toast(spend.error, 'err', 8000); onDone?.(); return; }
   const blocks = listBuyBlocks(spend.sol).filter(e => !/Amount too small|Above max per trade|SOL price unavailable|Burner balance/.test(e));
-  if (blocks.length) return toast(blocks[0], 'err', 8000);
+  if (blocks.length) { toast(blocks[0], 'err', 8000); onDone?.(); return; }
   const sol = spend.sol;
   resetModalButtons();
   openModal({ title: 'Buy ' + (row.symbol || short(row.mint)), confirmLabel: 'Buy', danger: true,
     html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Market buy <b>${esc(spend.label)}</b> of ${esc(row.symbol || short(row.mint))} (${spend.lamports.toLocaleString('en-US')} lamports) with this token’s stop and targets. The usual caps still apply.</p>`,
+    onClose: () => onDone?.(),
     onConfirm: async () => {
+      try {
       const again = quoteSpend(sol);
       if (!again.ok) throw new Error(again.error);
       const qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(again.lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
       if (!qo?.quote) throw new Error('no Jupiter route');
       const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
-      const plan = listPlan(spec, isNum(px) && px > 0 ? px : null);
+      const plan = listPlan(spec, isNum(px) && px > 0 ? px : null, listChartModel(row, spec, px));
       await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
       row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
-      saveMyList(); renderMyList(); toast('My List buy ' + (row.symbol || short(row.mint)), 'ok', 8000);
+      saveMyList(); renderMyList(); toast('Bought ' + (row.symbol || short(row.mint)) + ' · ' + again.label, 'ok', 8000);
+      } catch (e) { toast(e.message || String(e), 'err', 8000); throw e; }
     } });
 }
 function renderMyList() {
@@ -6065,7 +6470,22 @@ function renderMyList() {
     for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] - rb[i];
     return 0;
   });
-  const cell = (k, v) => `<div class="min-w-0"><div class="text-slate-500">${k}</div><div class="text-slate-100 whitespace-normal break-words">${v}</div></div>`;
+  const fact = (label, value) => {
+    if (value == null || value === '' || value === '—') return '';
+    return `<div class="flex items-baseline justify-between gap-3 py-0.5"><span class="text-[10px] uppercase tracking-wide text-slate-500 shrink-0">${label}</span><span class="text-right text-[12px] font-mono text-slate-100 whitespace-normal break-words">${value}</span></div>`;
+  };
+  const section = (title, body) => body ? `<div class="rounded-xl bg-ink-900/40 px-2.5 py-2"><div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5">${title}</div>${body}</div>` : '';
+  const roomBox = (room) => {
+    if (!room) return '';
+    const lines = [
+      isNum(room.toRes) && isNum(room.resist) ? `<div class="flex items-baseline justify-between gap-3"><span class="text-[10px] uppercase tracking-wide text-slate-500">To resistance</span><span class="font-mono text-[12px] text-right">${room.toRes.toFixed(1)}% · ${price(room.resist)}</span></div>` : '',
+      isNum(room.up) && isNum(room.next) ? `<div class="flex items-baseline justify-between gap-3"><span class="text-[10px] uppercase tracking-wide text-slate-500">If it breaks</span><span class="font-mono text-[12px] text-right text-emerald-200">+${room.up.toFixed(1)}% potential (${price(room.next)})</span></div>` : '',
+      isNum(room.toSup) && isNum(room.support) ? `<div class="flex items-baseline justify-between gap-3"><span class="text-[10px] uppercase tracking-wide text-slate-500">To support</span><span class="font-mono text-[12px] text-right text-rose-200">${room.toSup.toFixed(1)}% risk · ${price(room.support)}</span></div>` : '',
+      isNum(room.rr) ? `<div class="flex items-baseline justify-between gap-3"><span class="text-[10px] uppercase tracking-wide text-slate-500">R:R</span><span class="font-mono text-[12px] text-right">1 : ${room.rr.toFixed(2)}</span></div>` : ''
+    ].filter(Boolean);
+    if (!lines.length) return '';
+    return `<div class="rounded-xl border border-sky-400/20 bg-sky-500/5 px-2.5 py-2 space-y-1"><div class="text-[10px] font-semibold uppercase tracking-wide text-sky-200">Room to resistance</div>${lines.join('')}</div>`;
+  };
   const cards = views.map(v => {
     const row = v.row, pair = row.dexPair || {}, info = pair.info || {};
     const name = pair.baseToken?.name || '';
@@ -6073,12 +6493,26 @@ function renderMyList() {
     const h1 = pc.h1 != null ? +pc.h1 : null, h24 = pc.h24 != null ? +pc.h24 : null;
     const flags = (row.flags && row.flags.length ? row.flags : ((lastResult?.tokens || []).find(t => t.mint === row.mint)?.flags || []).map(f => f.text)).slice(0, 4);
     const drawn = listChartSvg(v.model, { w: 320, h: 108 });
-    const trend = v.model.trend === 'up' ? 'Up' : v.model.trend === 'down' ? 'Down' : v.model.trend === 'range' ? 'Range' : '—';
+    const sameUnit = (mid) => isNum(mid) && isNum(v.px) && mid > 0 && mid / v.px > 0.05 && mid / v.px < 20;
+    const trend = v.model.trend === 'up' ? 'Up' : v.model.trend === 'down' ? 'Down' : v.model.trend === 'range' ? 'Range' : '';
     const zone = v.model.zone && isNum(v.model.zone.lo) ? price(v.model.zone.lo) + '–' + price(v.model.zone.hi) : '';
-    const sup = v.model.support && isNum(v.model.support.mid) ? price(v.model.support.mid) + (v.model.support.touches ? ' ×' + v.model.support.touches : '') : (zone || '—');
-    const res = v.model.resist && isNum(v.model.resist.mid) ? price(v.model.resist.mid) + (v.model.resist.touches ? ' ×' + v.model.resist.touches : '') : '—';
-    const tp1 = isNum(v.model.tp1) ? price(v.model.tp1) + (v.model.scalp ? ' · scalp +' + v.model.gain1 + '%' : (isNum(v.model.gain1) ? ' +' + v.model.gain1 + '%' : '')) : '—';
-    const tp2 = v.model.scalp ? 'scalp closes the rest' : (isNum(v.model.tp2) ? price(v.model.tp2) + (isNum(v.model.gain2) ? ' +' + v.model.gain2 + '%' : '') : '—');
+    const sup = v.model.support && sameUnit(v.model.support.mid) ? price(v.model.support.mid) + (v.model.support.touches ? ' ×' + v.model.support.touches : '') : '';
+    const res = v.model.resist && sameUnit(v.model.resist.mid) ? price(v.model.resist.mid) + (v.model.resist.touches ? ' ×' + v.model.resist.touches : '') : '';
+    const tp1 = isNum(v.model.tp1) ? price(v.model.tp1) + (v.spec.mode === 'ath' ? ' · measured' : (v.model.scalp ? ' · scalp +' + v.model.gain1 + '%' : (isNum(v.model.gain1) ? ' +' + v.model.gain1 + '%' : ''))) : '';
+    const tp2 = v.model.scalp ? 'scalp closes the rest' : (isNum(v.model.tp2) ? price(v.model.tp2) + (isNum(v.model.gain2) ? ' +' + v.model.gain2 + '%' : '') : '');
+    const stopTxt = isNum(v.model.stop) && (v.spec.mode === 'ath' || !isNum(v.px) || v.model.stop < v.px) ? price(v.model.stop) : '';
+    const chg = (label, n) => isNum(n) ? `<span class="${n >= 0 ? 'text-emerald-300' : 'text-rose-300'}">${label} ${pct(n, 1)}</span>` : '';
+    const priceBody = [
+      fact('Live', isNum(v.px) ? price(v.px) : ''),
+      fact('Change', [chg('1h', h1), chg('24h', h24)].filter(Boolean).join(' · ')),
+      fact('Mcap', usd(pair.marketCap ?? pair.fdv)),
+      fact('Liq', usd(pair.liquidity?.usd))
+    ].join('');
+    const shown = (t) => t && t !== '—' ? t : '';
+    const levelsBody = [fact('Trend', trend), fact('Support', sup), fact('Resistance', res), fact('Zone', zone), fact('To trendline', v.spec.mode === 'confluence' ? shown(listDistText(v.distTrend)) : ''), fact('To band', v.spec.mode === 'confluence' ? shown(listDistText(v.distBand)) : ''), fact('ATH zone', v.model.ath ? price(v.model.ath.lo) + '–' + price(v.model.ath.hi) : ''), fact('To ATH', v.spec.mode === 'ath' ? shown(listDistText(v.distBand)) : ''), fact('Status', v.spec.mode === 'ath' ? (v.model.athStatus || '') : ''), fact('Trigger', esc(listTriggerLabel(row, v.spec, v.model)))].join('');
+    const planBody = [fact('Setup', esc(modeLabel(v.spec.mode) + (isBreakMode(v.spec.mode) ? ' ' + v.spec.tf : '') + (v.spec.mode === 'ath' ? ' · ' + (v.spec.athEntry === 'now' ? 'immediate' : v.spec.athEntry === 'hold' ? 'hold ' + v.spec.athHold : 'retest') : ''))), fact('Stop', stopTxt), fact('TP1', tp1), fact('TP2', tp2)].join('');
+    const distTxt = listDistText(v.dist);
+    const riskBody = [fact('To trigger', distTxt && distTxt !== '—' ? distTxt : ''), fact('R:R', !v.model.room?.rr && isNum(v.model.rr) ? '1 : ' + v.model.rr.toFixed(2) : '')].join('');
     const holders = holderLine(row.mint);
     const pos = listPosition(row.mint);
     let posHtml = '';
@@ -6099,33 +6533,24 @@ function renderMyList() {
         </div>
         <label class="flex items-center gap-1.5 text-[11px] text-slate-300 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
       </div>
-      <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        <div class="min-w-0"><div class="text-slate-500">Live</div><div class="font-mono text-slate-100 whitespace-normal break-words">${price(v.px)}</div><div class="whitespace-normal break-words ${!isNum(h1) ? 'text-slate-500' : (h1 >= 0 ? 'text-emerald-300' : 'text-rose-300')}">1h ${pct(h1, 1)} · 24h ${pct(h24, 1)}</div></div>
-        <div class="min-w-0 text-right"><div class="text-slate-500">Mcap / liq</div><div class="font-mono whitespace-normal break-words">${usd(pair.marketCap ?? pair.fdv)}</div><div class="text-slate-400 whitespace-normal break-words">liq ${usd(pair.liquidity?.usd)}</div></div>
-      </div>
       <button type="button" data-ml-chart="${esc(row.id)}" class="mt-3 block w-full rounded-xl border border-white/10 bg-ink-900/70 p-1.5 text-left" style="touch-action:manipulation" aria-label="Open chart">
         ${drawn.empty ? '<div class="h-16 grid place-items-center text-[11px] text-slate-500">Chart waiting for candles</div>' : drawn.svg}
-        <div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500"><span>trend</span><span>S/R</span><span>trigger</span><span>stop</span><span>TP</span></div>
+        <div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500"><span>trendline</span><span>ATH zone</span><span>buy zone</span></div>
       </button>
-      <div class="mt-1 text-[10px] whitespace-normal break-words ${row.tfNote ? 'text-amber-200' : 'text-slate-500'}">${esc(row.tfNote || ('TF ' + (v.spec.mode === 'momentum' ? '1m' : (row.displayTf || ((v.spec.mode === 'trend' || v.spec.mode === 'resist') ? v.spec.tf : '4h')))))}</div>
-      <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        ${cell('Trend', trend)}${cell('Support', sup + (zone && v.model.support ? '<div class="text-slate-400">zone ' + zone + '</div>' : ''))}
-        ${cell('Resistance', res)}${cell('Setup', esc(modeLabel(v.spec.mode) + ((v.spec.mode === 'trend' || v.spec.mode === 'resist') ? ' ' + v.spec.tf : '')))}
-        ${cell('Trigger', esc(listTriggerLabel(row, v.spec, v.model)))}${cell('To trigger', listDistText(v.dist))}
-        ${cell('Stop', price(v.model.stop))}${cell('TP1', tp1)}
-        ${cell('TP2', tp2)}${cell('R:R', isNum(v.model.rr) ? '1 : ' + v.model.rr.toFixed(2) : '—')}
+      <div class="mt-1 text-[10px] whitespace-normal break-words ${row.tfNote ? 'text-amber-200' : 'text-slate-500'}">${esc(row.tfNote || ('TF ' + (v.spec.mode === 'momentum' ? '1m' : (row.displayTf || (isBreakMode(v.spec.mode) ? v.spec.tf : '4h')))))}</div>
+      <div class="mt-3 space-y-2">
+        ${section('Price', priceBody)}
+        ${section('Levels', levelsBody)}
+        ${roomBox(v.model.room)}
+        ${section('Plan', planBody)}
+        ${section('Risk', riskBody)}
       </div>
       <div class="mt-2 flex items-center gap-2 text-[11px] whitespace-normal break-words ${holders.cls}" title="${esc(holders.tip || '')}"><span class="min-w-0">${esc(holders.text)}</span>${holders.spark}</div>
-      ${flags.length ? `<div class="mt-2 flex flex-wrap gap-1">${flags.map(f => `<span class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-300 whitespace-normal break-words">${esc(f)}</span>`).join('')}</div>` : ''}
-      <div class="mt-3 rounded-xl px-2.5 py-2 text-[12px] font-semibold whitespace-normal break-words ${v.ready ? 'bg-emerald-500/15 text-emerald-200' : 'bg-white/5 text-slate-400'}">${v.ready ? 'READY — entering' : 'Not ready: ' + esc(v.why)}${v.ready && !MYLIST.on ? '<span class="block text-[10px] font-normal text-slate-400">Auto-buy is off. Buy still uses the amount below.</span>' : ''}</div>
+      ${flags.length ? `<div class="mt-2 flex flex-wrap gap-1">${flags.map(f => `<span class="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-100 whitespace-normal break-words">${esc(f)}</span>`).join('')}</div>` : ''}
+      <div class="mt-3 flex items-start gap-2 rounded-xl px-2.5 py-2 ${v.ready ? 'bg-emerald-500/15 text-emerald-100' : 'bg-white/5 text-slate-200'}"><span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${v.ready ? 'bg-emerald-400' : 'bg-amber-400'}"></span><div class="min-w-0 text-[13px] font-semibold whitespace-normal break-words">${v.ready ? 'READY — entering' : 'Not ready: ' + esc(v.why)}${v.ready && !MYLIST.on ? '<span class="block text-[10px] font-normal text-slate-400">Auto-buy is off. Buy still uses the amount below.</span>' : ''}</div></div>
       ${posHtml}
-      <div class="mt-2 text-[11px] text-slate-300 whitespace-normal break-words">${esc(strategySizeText(v.spec))}</div>
-      <div class="mt-2 flex flex-wrap items-center gap-2">
-        <input type="number" inputmode="decimal" min="0" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" data-ml-amt="${esc(row.id)}" value="${esc((() => { if (v.spec.sizeMode === 'pct') { const bal = burnerSolBal(); const sol = bal > 0 ? bal * (v.spec.sizePct > 0 ? v.spec.sizePct : 10) / 100 : null; const px = solPriceNow(); if (sol && sizeStore === 'usd' && px > 0) return (sol * px).toFixed(2); if (sol) return sol.toFixed(4); } const amt = v.spec.sizeSol > 0 ? v.spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05); return sizeStore === 'usd' ? (+amt).toFixed(2) : (+amt).toFixed(4); })())}" class="w-24 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in ${unitWord()}" />
-        <span data-ml-hint="${esc(row.id)}" class="text-[10px] text-slate-400 whitespace-normal break-words">${esc(previewAmount((() => { const amt = v.spec.sizeSol > 0 ? v.spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05); return amt; })()))}</span>
-        <button type="button" data-ml-buy="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-emerald-500/15 text-emerald-200 border border-emerald-500/25">Buy</button>
-      </div>
-      <div class="mt-1.5 flex flex-wrap gap-1">${[5, 10, 20].map(n => `<button type="button" data-ml-chip="${n}" data-id="${esc(row.id)}" class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-300">$${n}</button>`).join('')}</div>
+      <div class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(strategySizeText(v.spec))}</div>
+      ${manualBuyHtml(row.id, listPrefill(v.spec))}
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button type="button" data-ml-edit="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Strategy</button>
         <button type="button" data-ml-del="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] text-rose-300 border border-rose-500/20">Remove</button>
@@ -6178,22 +6603,21 @@ function renderMyList() {
   box.querySelectorAll('[data-ml-edit]').forEach(el => el.addEventListener('click', () => {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlEdit); if (row) openListEditor(row);
   }));
-  box.querySelectorAll('[data-ml-amt]').forEach(input => {
-    const hint = box.querySelector('[data-ml-hint="' + input.dataset.mlAmt + '"]');
-    input.addEventListener('input', () => { if (hint) hint.textContent = previewAmount(input.value); });
+  box.querySelectorAll('[data-manual-buy]').forEach(block => {
+    const id = block.dataset.manualBuy;
+    wireManualBuy(block, burnerSolBal(), async (spend) => {
+      const row = MYLIST.rows.find(r => r.id === id);
+      if (!row) return;
+      await new Promise((resolve) => {
+        let settled = false;
+        const done = () => { if (!settled) { settled = true; resolve(); } };
+        myListBuyNow(row, spend.sol, done);
+      });
+    });
   });
-  box.querySelectorAll('[data-ml-chip]').forEach(b => b.addEventListener('click', () => {
-    const input = box.querySelector('[data-ml-amt="' + b.dataset.id + '"]');
-    if (!input) return;
-    const usd = +b.dataset.mlChip;
-    const px = solPriceNow();
-    input.value = sizeStore === 'usd' || !(px > 0) ? String(usd) : (usd / px).toFixed(4);
-    input.dispatchEvent(new Event('input'));
-  }));
-  box.querySelectorAll('[data-ml-buy]').forEach(el => el.addEventListener('click', () => {
+  box.querySelectorAll('td [data-ml-buy]').forEach(el => el.addEventListener('click', () => {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlBuy);
-    const input = el.closest('article')?.querySelector('[data-ml-amt]');
-    if (row) myListBuyNow(row, input ? input.value : null);
+    if (row) myListBuyNow(row, null);
   }));
   box.querySelectorAll('[data-ml-chart]').forEach(el => el.addEventListener('click', () => openListChart(el.dataset.mlChart)));
   box.querySelectorAll('[data-ml-pos]').forEach(el => el.addEventListener('click', () => { document.getElementById('sec-portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
@@ -6246,19 +6670,19 @@ async function myListTick() {
         row.cooldownUntil = Date.now() + (spec.cooldownMin || 0) * 60000;
       }
       row.inZone = false; row.momState = row.momState || 'none';
-      const breakMode = spec.mode === 'trend' || spec.mode === 'resist';
+      const breakMode = isBreakMode(spec.mode);
       if (row.pool) {
         const preferred = spec.mode === 'momentum' ? '1m' : (breakMode ? spec.tf : '4h');
         let candles = null;
         let tf = preferred;
         try {
           if (spec.mode === 'momentum') {
-            candles = await fetchOhlcv(row.pool, '1m');
+            candles = await fetchOhlcv(row.pool, '1m', row.mint);
             tf = '1m';
             row.displayTf = '1m';
             row.tfNote = '';
           } else {
-            const resolved = await resolveCandleTf(row.pool, preferred);
+            const resolved = await resolveCandleTf(row.pool, preferred, row.mint);
             candles = resolved.candles;
             tf = resolved.tf;
             row.displayTf = resolved.tf;
@@ -6270,7 +6694,7 @@ async function myListTick() {
           row.taStale = true;
           if (row.cache?.tf === preferred && row.lastTaAt && Date.now() - row.lastTaAt < 90 * 60e3) { candles = row.cache.candles; tf = preferred; }
         }
-        if (candles) row.cache = { at: row.lastTaAt || Date.now(), tf, candles: candles.slice(-200) };
+        if (candles) row.cache = { at: row.lastTaAt || Date.now(), tf, candles: alignCandlesToToken(candles, row.price).slice(-200) };
         try {
           if (spec.mode === 'momentum' && candles) row.momState = momentumFromCandles(candles).state;
           if (spec.mode === 'zone' && row.dexPair) {
@@ -6283,13 +6707,17 @@ async function myListTick() {
           if (breakMode && candles) {
             let m5 = null;
             if (spec.earlyBreak && (tf === '1h' || tf === '4h')) {
-              try { m5 = await fetchOhlcv(row.pool, '5m'); } catch { m5 = null; }
+              try { m5 = alignCandlesToToken(await fetchOhlcv(row.pool, '5m', row.mint), row.price); } catch { m5 = null; }
             }
-            const read = listBreakRead(candles, tf, spec.mode === 'resist' ? 'resist' : 'trend', row.price, Date.now(), { early: !!spec.earlyBreak, m5 });
+            const kind = spec.mode === 'resist' ? 'resist' : spec.mode === 'confluence' ? 'confluence' : spec.mode === 'ath' ? 'ath' : 'trend';
+            const read = listBreakRead(alignCandlesToToken(candles, row.price), tf, kind, row.price, Date.now(), { early: !!spec.earlyBreak, m5, entry: spec.athEntry, holdN: spec.athHold, expire: spec.athExpire });
             row.breakState = read.state;
             row.breakLevel = read.level;
             row.breakReason = read.reason;
             row.breakEarly = !!read.early;
+            if (isNum(read.trendLevel)) row.trendLevel = read.trendLevel;
+            if (isNum(read.bandTop)) row.bandTop = read.bandTop;
+            if (read.status) row.athStatus = read.status;
           }
         } catch { /* status stays waiting */ }
       }
@@ -6323,7 +6751,7 @@ async function myListBuys() {
     catch { continue; }
     if (!qo?.quote) continue;
     const entryPx = isNum(px) && px > 0 ? px : null;
-    const plan = listPlan(spec, entryPx);
+    const plan = listPlan(spec, entryPx, listChartModel(row, spec, entryPx));
     try {
       await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
       row.boughtOnce = true;
@@ -6506,7 +6934,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
