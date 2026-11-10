@@ -2314,6 +2314,13 @@ async function getFill(sig, owner, mint) {
 }
 
 /* ---------------- Jupiter ---------------- */
+function jupErrorText(j, status) {
+  if (!j) return 'HTTP ' + status;
+  const raw = j.error || j.message || j.errorCode || j.cause;
+  if (raw && typeof raw === 'object') return raw.message || raw.error || raw.code || JSON.stringify(raw);
+  if (raw) return String(raw);
+  return 'HTTP ' + status;
+}
 async function jup(path, opts = {}, preferBase) {
   const order = [preferBase || S.jupBase, ...JUP_BASES.filter(b => b !== (preferBase || S.jupBase))];
   let last;
@@ -2323,16 +2330,38 @@ async function jup(path, opts = {}, preferBase) {
       if (S.jupKey && base.startsWith('https://api.jup.ag')) headers['x-api-key'] = S.jupKey;
       const r = await fetch(base + path, { ...opts, headers });
       const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error((j && (j.error || j.message || j.errorCode)) || ('HTTP ' + r.status));
+      if (!r.ok) throw new Error(jupErrorText(j, r.status));
       return { data: j, base };
     } catch (e) { last = e; console.warn('jupiter', base, e.message); }
   }
   throw new Error('Jupiter: ' + (last?.message || 'failed'));
 }
+const MIN_BUY_SOL = 0.001;
+function quoteSpend(sol) {
+  const n = +sol;
+  const px = solPriceNow() || solUsd();
+  const usd = isNum(px) && px > 0 && isNum(n) ? n * px : null;
+  const lamports = isNum(n) ? Math.round(n * 1e9) : 0;
+  const solTxt = isNum(n) ? n.toFixed(6) : '0';
+  const usdTxt = usd == null ? '$?' : '$' + usd.toFixed(2);
+  const label = (isNum(n) ? n.toFixed(4) : '0') + ' SOL (' + usdTxt + ')';
+  if (!isNum(n) || !(n >= MIN_BUY_SOL) || lamports < Math.round(MIN_BUY_SOL * 1e9)) {
+    return { ok: false, sol: isNum(n) ? n : 0, usd, lamports, label, error: 'Amount too small: ' + solTxt + ' SOL (' + usdTxt + ') — set a bigger size' };
+  }
+  return { ok: true, sol: n, usd, lamports, label };
+}
 async function getQuote({ inputMint, outputMint, amountRaw, slippageBps }) {
-  const q = new URLSearchParams({ inputMint, outputMint, amount: String(amountRaw), slippageBps: String(slippageBps), restrictIntermediateTokens: 'true' });
-  const { data, base } = await jup('/quote?' + q.toString());
-  if (!data?.outAmount) throw new Error('No route / empty quote');
+  const raw = typeof amountRaw === 'bigint' ? amountRaw : BigInt(Math.round(+amountRaw || 0));
+  const buyingWithSol = inputMint === WSOL;
+  const solTxt = buyingWithSol ? (Number(raw) / 1e9).toFixed(6) + ' SOL' : raw.toString() + ' raw';
+  if (raw <= 0n || (buyingWithSol && raw < BigInt(Math.round(MIN_BUY_SOL * 1e9)))) {
+    throw new Error('Amount too small: ' + solTxt + ' (' + raw.toString() + ' lamports) — set a bigger size');
+  }
+  const q = new URLSearchParams({ inputMint, outputMint, amount: raw.toString(), slippageBps: String(slippageBps), restrictIntermediateTokens: 'true' });
+  let data, base;
+  try { ({ data, base } = await jup('/quote?' + q.toString())); }
+  catch (e) { throw new Error('Jupiter quote for ' + solTxt + ' (' + raw.toString() + (buyingWithSol ? ' lamports' : ' raw') + ') failed: ' + (e.message || e)); }
+  if (!data?.outAmount) throw new Error('Jupiter quote for ' + solTxt + ' returned no route');
   return { quote: data, base, at: Date.now() };
 }
 async function buildSwap(quoteObj, userPublicKey) {
@@ -2633,10 +2662,12 @@ async function openTrade(side, mint, { sol, pct } = {}) {
   const t = tokenInfo(mint); const isBuy = side === 'buy';
   let amountRaw, inMint, outMint, inLabel;
   if (isBuy) {
-    const errs = buyGuards(walletKey, mint, sol);
+    const spend = quoteSpend(sol);
+    if (!spend.ok) return toast(spend.error, 'err', 8000);
+    const errs = buyGuards(walletKey, mint, spend.sol);
     if (errs.length) { toast('Blocked by safety guard: ' + errs[0], 'err', 7000); return; }
     if ((t.flags || []).some(f => f.sev === 'critical')) return toast('Blocked: token has a CRITICAL flag (rugged).', 'err', 7000);
-    amountRaw = BigInt(Math.round(sol * 1e9)); inMint = WSOL; outMint = mint; inLabel = fmtSol(sol);
+    amountRaw = BigInt(spend.lamports); inMint = WSOL; outMint = mint; inLabel = spend.label;
   } else {
     if (!w.tokens.size && w.pubkey) await refreshBalances(walletKey);
     const h = w.tokens.get(mint); if (!h || h.raw === 0n) return toast(`No ${t.symbol} balance in ${w.label} wallet`, 'warn');
@@ -5504,7 +5535,11 @@ function listSolSize(spec) {
 }
 function listBuyBlocks(sol) {
   const errs = [];
-  if (!(sol >= 0.001)) errs.push('size too small');
+  const spend = quoteSpend(sol);
+  if (!spend.ok) {
+    if (sizeStore === 'usd' && !(solPriceNow() > 0)) errs.push('SOL price unavailable — can’t convert this USD size');
+    else errs.push(spend.error);
+  }
   const cap = burnerTradeCap();
   if (!cap.ok) errs.push(cap.err);
   else if (sol > cap.byPct + 1e-9) errs.push('above balance % cap');
@@ -5918,12 +5953,15 @@ async function myListBuyNow(row) {
   const spec = listStrategy(row);
   const sol = +listSolSize(spec).toFixed(6);
   const blocks = listBuyBlocks(sol);
-  if (blocks.length) return toast(blocks[0], 'warn');
+  if (blocks.length) return toast(blocks[0], 'err', 8000);
+  const spend = quoteSpend(sol);
   resetModalButtons();
   openModal({ title: 'Buy ' + (row.symbol || short(row.mint)), confirmLabel: 'Buy now', danger: true,
-    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Market buy about ${sol.toFixed(4)} SOL of ${esc(row.symbol || short(row.mint))} with this token’s stop and targets. The usual caps still apply.</p>`,
+    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Market buy <b>${esc(spend.label)}</b> of ${esc(row.symbol || short(row.mint))} (${spend.lamports.toLocaleString('en-US')} lamports) with this token’s stop and targets. The usual caps still apply.</p>`,
     onConfirm: async () => {
-      const qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
+      const again = quoteSpend(sol);
+      if (!again.ok) throw new Error(again.error);
+      const qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(again.lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
       if (!qo?.quote) throw new Error('no Jupiter route');
       const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
       const plan = listPlan(spec, isNum(px) && px > 0 ? px : null);
@@ -6177,9 +6215,10 @@ async function myListBuys() {
     if (!gate.ready) continue;
     if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) continue;
     const sol = +listSolSize(spec).toFixed(6);
-    if (listBuyBlocks(sol).length) continue;
+    const blocks = listBuyBlocks(sol);
+    if (blocks.length) continue;
     let qo;
-    try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) }); }
+      try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(quoteSpend(sol).lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) }); }
     catch { continue; }
     if (!qo?.quote) continue;
     const entryPx = isNum(px) && px > 0 ? px : null;
@@ -6366,7 +6405,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, openScanChart, tfFallbackChoice, get mylist() { return MYLIST; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, openScanChart, tfFallbackChoice, quoteSpend, get mylist() { return MYLIST; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
