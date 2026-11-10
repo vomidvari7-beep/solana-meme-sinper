@@ -1988,7 +1988,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20, srcBoost: true, srcTrend: true, srcVolume: true, srcNew: true };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20, srcBoost: true, srcTrend: true, srcVolume: true, srcNew: true, scaleIn: true, starterPct: 30, dontMiss: true, dontMissPct: 5, dontMissBars: 6 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -2025,6 +2025,11 @@ function sanitizeSettings() {
   A.dexPauseBelow = Math.min(100, Math.max(0, Number.isFinite(+A.dexPauseBelow) ? +A.dexPauseBelow : 25));
   A.breakoutOnly = !!A.breakoutOnly;
   A.momentumOn = !!A.momentumOn;
+  A.scaleIn = A.scaleIn !== false;
+  A.dontMiss = A.dontMiss !== false;
+  { const n = +A.starterPct; A.starterPct = Number.isFinite(n) ? Math.min(80, Math.max(10, n)) : 30; }
+  { const n = +A.dontMissPct; A.dontMissPct = Number.isFinite(n) ? Math.min(30, Math.max(1, n)) : 5; }
+  { const n = Math.round(+A.dontMissBars); A.dontMissBars = Number.isFinite(n) ? Math.min(48, Math.max(1, n)) : 6; }
   { const n = +A.momentumMaxAgeH; A.momentumMaxAgeH = Number.isFinite(n) ? Math.min(48, Math.max(0.5, n)) : 6; }
   { const n = Math.round(+A.deepN); A.deepN = Number.isFinite(n) ? Math.min(30, Math.max(5, n)) : 20; }
   { const n = Math.round(+A.insiderBlockAt); A.insiderBlockAt = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : 20; }
@@ -2453,7 +2458,7 @@ let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
 function blankPos(k, r) {
-  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, closed: false };
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null };
 }
 function profileStopPct() {
   let pct = 20;
@@ -2496,6 +2501,8 @@ function positions() {
       if (r.sniper) p.sniper = true;
       if (r.myList || r.plan?.myList) p.myList = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
+      if (r.scale && r.scale.i) { p.scaleI = Math.max(p.scaleI || 0, +r.scale.i || 0); p.scaleOf = r.scale.of || p.scaleOf || 3; }
+      if (isNum(r.priceUsd) && r.priceUsd > 0) p.lastBuyPx = r.priceUsd;
     } else {
       p.sold += r.tokenAmount || 0;
       if (r.exitTag === 'tp1') p.tp1Done = true;
@@ -3564,7 +3571,7 @@ function posCard(p) {
     </div>
     <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
       <div class="min-w-0"><div class="text-slate-500">Live</div><div class="font-mono whitespace-normal break-words text-slate-100">${price(lp)}</div></div>
-      <div class="min-w-0"><div class="text-slate-500">Entry</div><div class="font-mono whitespace-normal break-words">${price(entry)}</div></div>
+      <div class="min-w-0"><div class="text-slate-500">Entry</div><div class="font-mono whitespace-normal break-words">${price(entry)}${p.scaleOf ? `<span class="block text-[10px] text-sky-200">${p.scaleI}/${p.scaleOf} filled</span>` : ''}</div></div>
       <div class="min-w-0"><div class="text-slate-500">Size</div><div class="font-mono whitespace-normal break-words">${fmtSol(m.costSolLeft)}<span class="block text-slate-400">${isNum(m.valueUsd) ? usd(m.valueUsd, 2) : '—'}</span></div></div>
       <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words ${stopOut && isNum(stopOut.usd) ? pnlColor(stopOut.usd) : 'text-rose-300'}">${price(stop)}<span class="block">${stopOut ? esc(pnlPhrase(stopOut)) : ''}</span>${stopOut && isNum(stopOut.sol) ? `<span class="block text-[10px] text-slate-400">${esc(fmtPnlSol(stopOut.sol))}</span>` : ''}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
     </div>
@@ -3803,7 +3810,7 @@ function renderPortfolio() {
       <td class="pr-2 ${s.cls}">${s.label}</td>
       <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}<button type="button" data-edit-stop="${esc(p.key)}" class="block mt-1 text-[10px] text-violet-300">Edit stop</button></td></tr>`; }).join('');
   const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
-      <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
+      <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}${r.entryReason ? ' · ' + esc(r.entryReason) : ''}</div></td>
       <td class="pr-2 font-mono whitespace-normal break-words">${solWithUsd(r.solAmount, r.solUsd)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
       <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
       <td class="font-mono"><a class="text-violet-300 hover:underline" target="_blank" rel="noopener" href="${solscanTx(r.signature)}">${esc(short(r.signature))} ↗</a></td></tr>`).join('');
@@ -4075,6 +4082,8 @@ function renderBurner() {
         <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan selected sources every interval</label>
         <label class="mt-1 flex items-center gap-2"><input id="aBrk" type="checkbox" ${A.breakoutOnly ? 'checked' : ''} class="accent-violet-500" /> Auto-buy only BREAKOUT-confirmed tokens</label>
         <label class="mt-1 flex items-center gap-2"><input id="aMom" type="checkbox" ${A.momentumOn ? 'checked' : ''} class="accent-violet-500" /> Momentum breakout (new tokens)</label>
+        <label class="mt-1 flex items-center gap-2"><input id="aScale" type="checkbox" ${A.scaleIn !== false ? 'checked' : ''} class="accent-violet-500" /> Scale in on strong tokens (starter ${A.starterPct || 30}%, then pullback or breakout)</label>
+        <label class="mt-1 flex items-center gap-2"><input id="aMiss" type="checkbox" ${A.dontMiss !== false ? 'checked' : ''} class="accent-violet-500" /> Don't miss: small buy if price runs ${A.dontMissPct || 5}% past the trigger with no retest in ${A.dontMissBars || 6} candles</label>
         <p class="text-[10px] text-slate-500 mt-1 whitespace-normal break-words">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${esc(sizeHint(S.maxSolPerTrade) || S.maxSolPerTrade + ' ' + unitWord())}/trade &amp; ${esc(sizeHint(S.dailyMaxSol) || S.dailyMaxSol + ' ' + unitWord())}/day.</p>
         <div class="flex gap-2 mt-2"><button id="aSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save caps</button>
           ${A.on ? `<button id="aKill" class="flex-[2] rounded-lg py-2 font-extrabold bg-rose-600 hover:bg-rose-500 text-white">⛔ KILL SWITCH</button>` : `<button id="aOn" class="flex-[2] rounded-lg py-2 font-bold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-40" ${b.kp ? '' : 'disabled title="Unlock burner first"'}>Auto-trade ON</button>`}</div>
@@ -4102,6 +4111,7 @@ function readAutoInputs() {
     moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow,
     beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct,
     momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH, deepN: $('aDeep') ? +$('aDeep').value : A.deepN, insiderBlockAt: $('aInsider') ? +$('aInsider').value : A.insiderBlockAt,
+    scaleIn: $('aScale') ? $('aScale').checked : A.scaleIn !== false, dontMiss: $('aMiss') ? $('aMiss').checked : A.dontMiss !== false,
     srcBoost: $('srcBoost') ? $('srcBoost').checked : A.srcBoost !== false, srcTrend: $('srcTrend') ? $('srcTrend').checked : A.srcTrend !== false, srcVolume: $('srcVolume') ? $('srcVolume').checked : A.srcVolume !== false, srcNew: $('srcNew') ? $('srcNew').checked : A.srcNew !== false });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
@@ -4313,6 +4323,69 @@ function armedEntries() {
 function inZone(t, px) { const e = t.entry; if (!isNum(px) || !e || e.noAnchor) return false;
   if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= (e.anchor === 'swing' ? e.zoneHi : e.zoneHi * 1.03);
   return px <= e.zoneHi && px > e.stop; }
+function emaLast(values, n) {
+  if (!values || values.length < n) return null;
+  const k = 2 / (n + 1);
+  let e = 0;
+  for (let i = 0; i < n; i++) e += values[i];
+  e /= n;
+  for (let i = n; i < values.length; i++) e = values[i] * k + e * (1 - k);
+  return e;
+}
+function strongRead(o) {
+  const reasons = [];
+  const cs = (o?.candles || []).filter(c => c && c.c > 0);
+  const closes = cs.map(c => c.c);
+  const px = o?.px > 0 ? o.px : (closes.length ? closes[closes.length - 1] : null);
+  let volUp = false;
+  if (cs.length >= 12) {
+    const recent = cs.slice(-6).reduce((s, c) => s + (c.v || 0), 0);
+    const prior = cs.slice(-12, -6).reduce((s, c) => s + (c.v || 0), 0);
+    if (recent > prior * 1.15 && recent > 0) volUp = true;
+  }
+  if (!volUp && isNum(o?.volH1) && isNum(o?.volH24) && o.volH24 > 0 && o.volH1 > o.volH24 / 18) volUp = true;
+  if (volUp) reasons.push('rising volume');
+  if (o?.holdersUp) reasons.push('rising holders');
+  let aboveEma = false;
+  if (closes.length >= 21 && px > 0) {
+    const e9 = emaLast(closes, 9), e21 = emaLast(closes, 21);
+    if (isNum(e9) && isNum(e21) && px > e9 && px > e21) { aboveEma = true; reasons.push('above EMAs'); }
+  }
+  let hh = !!o?.trendUp;
+  if (cs.length >= 15) {
+    const { highs } = swingPoints(cs, 2);
+    if (highs.length >= 2 && highs[highs.length - 1].price > highs[highs.length - 2].price) hh = true;
+  }
+  if (hh) reasons.push('higher highs');
+  const strong = (volUp || !!o?.holdersUp) && (aboveEma || hh);
+  return { strong, reasons };
+}
+function dontMissRead(cs, trigger, px, opt) {
+  const run = opt?.runPct > 0 ? opt.runPct : 5;
+  const need = opt?.bars > 0 ? Math.round(opt.bars) : 6;
+  if (!(trigger > 0) || !(px > 0)) return { fire: false };
+  const src = cs || [];
+  let broke = -1;
+  for (let i = 0; i < src.length; i++) if (src[i].c > trigger) { broke = i; break; }
+  const ext = (px / trigger - 1) * 100;
+  if (broke < 0) return { fire: false, ext };
+  let retest = false;
+  for (let i = broke + 1; i < src.length; i++) {
+    const c = src[i];
+    if (c.l <= trigger * 1.03 && c.l >= trigger * 0.97) retest = true;
+  }
+  const since = src.length - 1 - broke;
+  if (retest || since < need || ext < run) return { fire: false, ext, since, retest };
+  const low = src[broke].l;
+  let stop = px * 0.9;
+  if (isNum(low) && low < px && low > px * 0.9) stop = low * 0.995;
+  if (!(stop < px)) stop = px * 0.9;
+  return { fire: true, ext, since, stop, reason: "don't miss: +" + ext.toFixed(1) + '% in ' + since + ' candles without a retest' };
+}
+function trancheSol(full, pct) {
+  const sol = +((+full || 0) * (pct > 0 ? pct : 0) / 100).toFixed(6);
+  return sol > 0 ? sol : 0;
+}
 function priceExit(p, lp) {
   if (p?.plan?.myList) return myListExit(p, lp);
   if (!isNum(lp)) return null;
@@ -4382,13 +4455,43 @@ async function momentumTick(b, solGate, held, recent) {
     if (imp > A.maxImpact) { autoLog(`${t.symbol}: momentum price impact ${imp.toFixed(2)}% > ${A.maxImpact}% — skipped`, 'warn'); continue; }
     if (!A.on) return;
     try {
-      const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan } });
-      autoLog(`BUY ${t.symbol} ${sol} SOL momentum @ ${price(r.rec.priceUsd)} (impact ${imp.toFixed(2)}%)`, 'ok', { sig: r.sig });
+      const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan, entryReason: 'starter 1/3 · ' + m.reason, scale: { i: 1, of: 3, kind: 'starter' } } });
+      autoLog(`BUY ${t.symbol} ${sol} SOL momentum @ ${price(r.rec.priceUsd)} — starter 1/3 · ${m.reason}`, 'ok', { sig: r.sig });
       toast(`⚡ Momentum buy ${t.symbol} (${sol} SOL)`, 'ok', 8000);
     } catch (e) { autoLog(`${t.symbol}: momentum buy failed — ${e.message}`, 'err'); }
     break;
   }
   if (changed && lastResult) render(lastResult);
+}
+const chaseBars = new Map();
+async function cappedBuy(opt) {
+  const t = opt.t;
+  let sol = +opt.sol;
+  if (!(sol > 0)) return 'skip';
+  if (opt.halve) sol = +(sol / 2).toFixed(6);
+  const sized = clampAutoBuy(sol);
+  if (sized.err) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' blocked — ' + sized.err, 'warn'); return 'block'; }
+  sol = +sized.sol.toFixed(6);
+  const spend = quoteSpend(sol);
+  if (!spend.ok) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' — ' + spend.error, 'warn'); return 'skip'; }
+  const errs = opt.myList ? listBuyBlocks(sol) : buyGuards('burner', t.mint, sol, { auto: true });
+  if (errs.length) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' blocked — ' + errs[0], 'warn'); return 'block'; }
+  const slip = Math.min(15, opt.myList ? S.slippagePct : A.slipCap);
+  let qo;
+  try { qo = await getQuote({ inputMint: WSOL, outputMint: t.mint, amountRaw: BigInt(spend.lamports), slippageBps: Math.round(slip * 100) }); }
+  catch (e) { autoLog((t.symbol || 'token') + ': quote failed — ' + e.message, 'err'); return 'skip'; }
+  const imp = impactPct(qo.quote);
+  const maxImp = opt.myList ? 15 : A.maxImpact;
+  if (imp > maxImp) { autoLog((t.symbol || 'token') + ': price impact ' + imp.toFixed(2) + '% > ' + maxImp + '% — skipped', 'warn'); return 'skip'; }
+  const recPlan = opt.plan || null;
+  try {
+    const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan: recPlan, myList: !!opt.myList, entryReason: opt.reason, scale: opt.scale || null } });
+    autoLog('BUY ' + (t.symbol || '') + ' ' + sol + ' SOL @ ' + price(r.rec.priceUsd) + ' — ' + opt.reason, 'ok', { sig: r.sig });
+    return 'bought';
+  } catch (e) {
+    autoLog((t.symbol || 'token') + ': ' + opt.reason + ' failed — ' + (e.message || e), 'err');
+    return 'skip';
+  }
 }
 async function autoTick() {
   if (!A.on || autoBusy) return; const b = WALLETS.burner;
@@ -4407,29 +4510,59 @@ async function autoTick() {
     const solGate = solFilterState();
     noteSolFilter(solGate, autoLog);
     if (solGate.action === 'pause') return;
-    const held = new Set(openPositions().map(p => p.mint));
-    const recent = new Set(LOG.filter(r => r.auto && r.side === 'buy' && Date.now() - r.ts < 24 * 3.6e6).map(r => r.mint));
+    const openNow = openPositions().filter(p => p.wallet === 'burner');
+    const held = new Set(openNow.map(p => p.mint));
+    const recent = new Set(LOG.filter(r => r.auto && r.side === 'buy' && r.status !== 'failed' && Date.now() - r.ts < 24 * 3.6e6 && !r.scale).map(r => r.mint));
     let boughtThisTick = false;
-    for (const t of armedEntries().sort((a, b) => b.conviction - a.conviction)) {
+    const sizedFull = (t) => {
+      const s = suggestedBuySol(t);
+      const sized = clampAutoBuy(s.sol);
+      return { sol: sized.sol, err: sized.err };
+    };
+    for (const p of openNow) {
+      if (boughtThisTick || !A.scaleIn || !p.scaleOf || p.scaleI >= p.scaleOf) continue;
+      const t = tokenInfo(p.mint);
+      const px = livePrices.get(p.mint)?.price;
+      const zone = t.entry;
+      const inZ = zone && isNum(px) && isNum(zone.zoneLo) && px >= zone.zoneLo * 0.99 && px <= zone.zoneHi * 1.02;
+      const broke = isNum(px) && isNum(p.lastBuyPx) && px > p.lastBuyPx * 1.015 && (t.ta?.signal === 'breakout' || (zone && px > zone.zoneHi));
+      let add = null;
+      if (p.scaleI === 1 && inZ) add = { i: 2, pct: 35, reason: 'add 2/3 · pullback to zone' };
+      else if (p.scaleI < 3 && broke) add = { i: p.scaleI + 1, pct: 35, reason: 'add ' + (p.scaleI + 1) + '/3 · breakout confirmation' };
+      if (!add) continue;
+      const full = sizedFull(t);
+      if (full.err || !(full.sol > 0)) continue;
+      const sol = trancheSol(full.sol, add.pct);
+      const plan = planOf(t);
+      const hit = await cappedBuy({ t, sol, reason: add.reason, scale: { i: add.i, of: 3, kind: add.i === 2 ? 'pullback' : 'breakout' }, plan, halve: solGate.action === 'halve' });
+      if (hit === 'bought') { boughtThisTick = true; toast('🤖 Added to ' + t.symbol + ' (' + add.i + '/3)', 'ok', 8000); }
+      if (hit === 'block') break;
+    }
+    if (!boughtThisTick) for (const t of armedEntries().sort((a, b) => b.conviction - a.conviction)) {
       if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) continue;
       const px = livePrices.get(t.mint)?.price;
-      if (!inZone(t, px)) continue;
-      const s = suggestedBuySol(t); const sized = clampAutoBuy(s.sol);
-      if (sized.err) { autoLog(`${t.symbol}: buy blocked — ${sized.err}`, 'warn'); break; }
-      let sol = sized.sol;
-      if (solGate.action === 'halve') sol = +(sol / 2).toFixed(6);
-      if (sized.clamped) autoLog(`${t.symbol}: size clamped to ${sol.toFixed(4)} SOL (min of auto cap, global ${S.maxSolPerTrade} SOL, ${A.balancePct}% of ${sized.bal.toFixed(4)} SOL${sized.stale ? ' last known' : ''})`, 'info');
-      if (!(sol >= 0.001)) { autoLog(`${t.symbol}: in zone but size ${sol} SOL too small — skipped`, 'warn'); continue; }
-      const errs = buyGuards('burner', t.mint, sol, { auto: true }); if (errs.length) { autoLog(`${t.symbol}: buy blocked — ${errs[0]}`, 'warn'); break; }
-      autoLog(`${t.symbol}: price ${price(px)} in entry zone (${t.entry.strat}) → quoting ${sol} SOL`, 'info');
-      const slip = Math.min(S.slippagePct, A.slipCap);
-      let qo; try { qo = await getQuote({ inputMint: WSOL, outputMint: t.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); } catch (e) { autoLog(`${t.symbol}: quote failed — ${e.message}`, 'err'); continue; }
-      const imp = impactPct(qo.quote); if (imp > A.maxImpact) { autoLog(`${t.symbol}: price impact ${imp.toFixed(2)}% > ${A.maxImpact}% — skipped`, 'warn'); continue; }
-      if (!A.on) return;
-      try { const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true });
-        autoLog(`BUY ${t.symbol} ${sol} SOL @ ${price(r.rec.priceUsd)} (impact ${imp.toFixed(2)}%)`, 'ok', { sig: r.sig }); toast(`🤖 Auto-bought ${t.symbol} (${sol} SOL)`, 'ok', 8000); boughtThisTick = true; }
-      catch (e) { autoLog(`${t.symbol}: buy failed — ${e.message}`, 'err'); }
-      break;
+      const full = sizedFull(t);
+      if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
+      const zoneNow = inZone(t, px);
+      const strong = strongRead({ px, holdersUp: isNum(holderTrend(t.mint)?.p1h) && holderTrend(t.mint).p1h > 0.4, volH1: t.vol?.h1, volH24: t.vol?.h24, trendUp: t.ta?.primary?.trend === 'up' || t.ta?.primary?.hLabel === 'HH' });
+      let sol = full.sol, reason = 'in entry zone · ' + (t.entry?.strat || 'zone'), scale = null, plan = planOf(t);
+      if (A.scaleIn && strong.strong) {
+        sol = trancheSol(full.sol, A.starterPct);
+        reason = 'starter ' + A.starterPct + '% · strong: ' + strong.reasons.join(', ');
+        scale = { i: 1, of: 3, kind: 'starter' };
+      } else if (!zoneNow && A.dontMiss && isNum(px) && t.entry?.zoneHi) {
+        const ext = (px / t.entry.zoneHi - 1) * 100;
+        const bars = ext >= A.dontMissPct ? (chaseBars.get(t.mint) || 0) + 1 : 0;
+        if (bars) chaseBars.set(t.mint, bars); else chaseBars.delete(t.mint);
+        if (!(ext >= A.dontMissPct && bars >= A.dontMissBars)) continue;
+        sol = trancheSol(full.sol, 20);
+        reason = "don't miss: +" + ext.toFixed(1) + '% past the zone without a retest';
+        scale = { i: 1, of: 3, kind: 'dontmiss' };
+        plan = { ...(plan || {}), stop: px * 0.9, strat: (t.entry?.strat || 'Entry') + " · don't miss" };
+      } else if (!zoneNow) continue;
+      const hit = await cappedBuy({ t, sol, reason, scale, plan, halve: solGate.action === 'halve' });
+      if (hit === 'bought') { boughtThisTick = true; toast(`🤖 Auto-bought ${t.symbol}`, 'ok', 8000); }
+      if (hit === 'block' || hit === 'bought') break;
     }
     if (!boughtThisTick && A.momentumOn && lastResult?.tokens) await momentumTick(b, solGate, held, recent);
   } catch (e) { autoLog('Tick error: ' + e.message, 'err'); }
@@ -5283,7 +5416,8 @@ const MYLIST_DEFAULTS = {
   on: false, mode: 'confluence', sizeMode: 'sol', sizePct: 10, stopPct: 15, stopPx: null,
   tps: [{ gainPct: 15, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: 10,
   timeStopMin: null, timeMinGain: 0, reentry: true, cooldownMin: 5, maxReentries: 3,
-  tf: '4h', earlyBreak: false, sizeSol: 5, athEntry: 'retest', athHold: 2, athExpire: 12
+  tf: '4h', earlyBreak: false, sizeSol: 5, athEntry: 'retest', athHold: 2, athExpire: 12,
+  scaleIn: true, starterPct: 30, dontMiss: true, dontMissPct: 5, dontMissBars: 6
 };
 const MYLIST_MODES = ['confluence', 'ath', 'zone', 'momentum', 'range', 'now', 'trend', 'resist'];
 const LIST_TFS = ['1m', '5m', '15m', '1h', '4h'];
@@ -6276,6 +6410,8 @@ function openListDefaults() {
       </div>
       <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdRe" type="checkbox" class="accent-violet-500" ${m.reentry !== false ? 'checked' : ''}/> Look for a new entry after a close</label>
       <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdEarly" type="checkbox" class="accent-violet-500" ${m.earlyBreak ? 'checked' : ''}/> Early trigger: 5m close above the 1h/4h level (off waits for that candle to close)</label>
+      <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdScale" type="checkbox" class="accent-violet-500" ${m.scaleIn !== false ? 'checked' : ''}/> Scale in: starter ${m.starterPct || 30}% when the token is strong, then add on a pullback or the next breakout</label>
+      <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdMiss" type="checkbox" class="accent-violet-500" ${m.dontMiss !== false ? 'checked' : ''}/> Don't miss: small buy if price runs ${m.dontMissPct || 5}% past the trigger with no retest in ${m.dontMissBars || 6} candles</label>
       <div class="mt-2 grid grid-cols-2 gap-2">${listField('ATH entry', `<select id="mlEdAth" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="retest" ${m.athEntry !== 'now' && m.athEntry !== 'hold' ? 'selected' : ''}>Retest / pullback</option><option value="now" ${m.athEntry === 'now' ? 'selected' : ''}>Immediate close</option><option value="hold" ${m.athEntry === 'hold' ? 'selected' : ''}>Hold above</option></select>`)}
       ${listField('Hold candles above ATH', listInp('mlEdAthHold', m.athHold ?? 2))}
       ${listField('Retest window (candles)', listInp('mlEdAthExpire', m.athExpire ?? 12))}
@@ -6300,6 +6436,8 @@ function openListDefaults() {
       MYLIST.reentry = !!$('mlEdRe')?.checked;
       MYLIST.tf = LIST_TFS.includes($('mlEdTf')?.value) ? $('mlEdTf').value : '4h';
       MYLIST.earlyBreak = !!$('mlEdEarly')?.checked;
+      MYLIST.scaleIn = !!$('mlEdScale')?.checked;
+      MYLIST.dontMiss = !!$('mlEdMiss')?.checked;
       MYLIST.athEntry = $('mlEdAth')?.value === 'now' || $('mlEdAth')?.value === 'hold' ? $('mlEdAth').value : 'retest';
       MYLIST.athHold = modalNum('mlEdAthHold') || 2;
       MYLIST.athExpire = modalNum('mlEdAthExpire') || 12;
@@ -6785,31 +6923,57 @@ async function myListBuys() {
     if (!MYLIST.on) return;
     const spec = listStrategy(row);
     const px = row.price;
-    const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
-    const open = !!listPosition(row.mint);
-    const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
-    if (!gate.ready) continue;
+    if (!row.enabled || !(px > 0)) continue;
     if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) continue;
+    const pos = listPosition(row.mint);
+    const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
+    const gate = listEntryReady(spec, { enabled: row.enabled, open: !!pos, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
+    if (gate.state === 'disabled' || gate.state === 'cooldown') continue;
+    const model = listChartModel(row, spec, px);
+    const candles = model.candles || [];
+    const hg = holderTrend(row.mint);
+    const strong = strongRead({ candles, px, holdersUp: isNum(hg?.p1h) && hg.p1h > 0.4, volH1: row.dexPair?.volume?.h1, volH24: row.dexPair?.volume?.h24 });
     const resolved = resolveListSpend(spec);
-    autoLog('My List ' + (row.symbol || short(row.mint)) + ' auto size ' + (resolved.text || '') + (resolved.ok ? '' : ' — ' + resolved.error), resolved.ok ? 'info' : 'warn');
-    if (!resolved.ok) continue;
-    const sol = +resolved.sol.toFixed(6);
-    const blocks = listBuyBlocks(sol);
-    if (blocks.length) { autoLog('My List ' + (row.symbol || short(row.mint)) + ' blocked — ' + blocks[0], 'warn'); continue; }
-    let qo;
-    try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(quoteSpend(sol).lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) }); }
-    catch { continue; }
-    if (!qo?.quote) continue;
-    const entryPx = isNum(px) && px > 0 ? px : null;
-    const plan = listPlan(spec, entryPx, listChartModel(row, spec, entryPx));
+    if (!resolved.ok) { autoLog('My List ' + (row.symbol || short(row.mint)) + ' — ' + resolved.error, 'warn'); continue; }
+    const full = resolved.sol;
+    let plan = listPlan(spec, px, model);
+    const t = { mint: row.mint, symbol: row.symbol || short(row.mint) };
+    let sol = null, reason = '', scale = null;
+    if (pos && MYLIST.scaleIn !== false && pos.scaleOf && pos.scaleI > 0 && pos.scaleI < pos.scaleOf) {
+      const closes = candles.map(c => c.c);
+      const e21 = emaLast(closes, 21);
+      const pull = (row.zone && px >= row.zone.lo && px <= row.zone.hi) || (isNum(e21) && px <= e21 * 1.01 && px >= e21 * 0.97);
+      const broke = row.breakState === 'trigger' || row.momState === 'trigger';
+      if (pos.scaleI === 1 && pull) { sol = trancheSol(full, 35); reason = 'add 2/3 · pullback to zone'; scale = { i: 2, of: 3, kind: 'pullback' }; }
+      else if (broke) { sol = trancheSol(full, 35); reason = 'add ' + (pos.scaleI + 1) + '/3 · breakout confirmation'; scale = { i: pos.scaleI + 1, of: 3, kind: 'breakout' }; }
+    } else if (!pos && gate.state !== 'bought') {
+      if (MYLIST.scaleIn !== false && strong.strong) {
+        sol = trancheSol(full, MYLIST.starterPct || 30);
+        reason = 'starter ' + (MYLIST.starterPct || 30) + '% · strong: ' + strong.reasons.join(', ');
+        scale = { i: 1, of: 3, kind: 'starter' };
+      } else if (gate.ready) {
+        sol = full;
+        reason = 'trigger · ' + (row.breakReason || spec.mode);
+      } else if (MYLIST.dontMiss !== false && isNum(model.trigger)) {
+        const dm = dontMissRead(candles, model.trigger, px, { runPct: MYLIST.dontMissPct || 5, bars: MYLIST.dontMissBars || 6 });
+        if (dm.fire) {
+          sol = trancheSol(full, 20);
+          reason = dm.reason;
+          scale = { i: 1, of: 3, kind: 'dontmiss' };
+          plan = { ...plan, stop: dm.stop, strat: plan.strat + " · don't miss" };
+        }
+      }
+    }
+    if (!(sol > 0)) continue;
     try {
-      await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
-      row.boughtOnce = true;
-      row.dayKey = todayKey();
-      row.buysToday = (row.buysToday || 0) + 1;
-      toast('My List buy ' + (row.symbol || short(row.mint)), 'ok', 8000);
+      const hit = await cappedBuy({ t, sol, reason, scale, plan, myList: true });
+      if (hit === 'bought') {
+        row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
+        toast('My List buy ' + t.symbol + ' — ' + reason, 'ok', 8000);
+        break;
+      }
+      if (hit === 'block') break;
     } catch { /* trade log records the failure */ }
-    break;
   }
 }
 async function myListExits() {
@@ -6984,7 +7148,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
