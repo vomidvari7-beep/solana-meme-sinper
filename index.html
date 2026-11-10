@@ -3189,25 +3189,84 @@ function clampBarPrice(kind, px, ctx) {
   }
   return px;
 }
-function dragTip(kind, px, entry) {
-  const name = kind === 'stop' ? 'Stop' : kind === 'tp1' ? 'TP1' : 'TP2';
-  const ch = entry > 0 ? (px / entry - 1) * 100 : null;
-  return name + ' ' + price(px) + (isNum(ch) ? ' · ' + (ch > 0 ? '+' : '') + ch.toFixed(1) + '%' : '');
+function fmtPnlUsd(n) {
+  if (!isNum(n)) return '—';
+  const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toFixed(2);
 }
-function labelShift(pct) {
-  if (pct < 14) return 'translateX(0)';
-  if (pct > 86) return 'translateX(-100%)';
+function fmtPnlSol(n) {
+  if (!isNum(n)) return '';
+  const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  const dec = a >= 1 ? 3 : a >= 0.01 ? 4 : 5;
+  return sign + a.toFixed(dec) + ' SOL';
+}
+function pnlColor(n) { return !isNum(n) ? 'text-slate-400' : n > 0 ? 'text-emerald-300' : n < 0 ? 'text-rose-300' : 'text-slate-300'; }
+function tp1SellFrac(p, pl) {
+  const tps = pl?.tps || p?.plan?.exit?.tps;
+  if (Array.isArray(tps) && tps.length && isNum(+tps[0].sellPct)) return Math.min(1, Math.max(0.01, +tps[0].sellPct / 100));
+  return 0.5;
+}
+function levelOutcome(kind, px, ctx) {
+  const entry = +ctx.entry, qty = +ctx.qty;
+  if (!(px > 0) || !(entry > 0) || !(qty > 0)) return null;
+  if (kind !== 'stop' && kind !== 'tp1' && kind !== 'tp2') return null;
+  const frac = isNum(+ctx.frac) ? Math.min(1, Math.max(0, +ctx.frac)) : 0.5;
+  const ch = (px / entry - 1) * 100;
+  const tp1 = +ctx.tp1;
+  let usd = null, note = '';
+  if (kind === 'stop') usd = qty * (px - entry);
+  else if (kind === 'tp1') {
+    if (ctx.tp1Done) return { hit: true, ch };
+    usd = qty * frac * (px - entry);
+  } else {
+    const sold = isNum(+ctx.sold) ? +ctx.sold : 0;
+    if (ctx.tp1Done) usd = (isNum(tp1) && sold > 0 ? sold * (tp1 - entry) : 0) + qty * (px - entry);
+    else if (isNum(tp1)) usd = qty * frac * (tp1 - entry) + qty * (1 - frac) * (px - entry);
+    else usd = qty * (px - entry);
+    note = 'total if TP2';
+  }
+  const sol = +ctx.sol > 0 && isNum(usd) ? usd / +ctx.sol : null;
+  return { usd, ch, sol, note };
+}
+function pnlPhrase(o) {
+  if (!o) return '';
+  if (o.hit) return 'hit';
+  const pctTxt = isNum(o.ch) ? ' (' + (o.ch > 0 ? '+' : '') + o.ch.toFixed(1) + '%)' : '';
+  return fmtPnlUsd(o.usd) + pctTxt + (o.note ? ' · ' + o.note : '');
+}
+function dragTip(kind, px, ctx) {
+  const name = kind === 'stop' ? 'Stop' : kind === 'tp1' ? 'TP1' : 'TP2';
+  const o = levelOutcome(kind, px, ctx);
+  const sol = o && isNum(o.sol) ? ' · ' + fmtPnlSol(o.sol) : '';
+  return name + ' ' + price(px) + (o ? ' · ' + pnlPhrase(o) + sol : '');
+}
+function labelShift(pct, half) {
+  const h = isNum(half) ? half : 12;
+  if (pct - h < 1) return 'translateX(0)';
+  if (pct + h > 99) return 'translateX(-100%)';
   return 'translateX(-50%)';
 }
+function labelSpan(pct, half) {
+  const shift = labelShift(pct, half);
+  if (shift === 'translateX(0)') return [pct, pct + half * 2];
+  if (shift === 'translateX(-100%)') return [pct - half * 2, pct];
+  return [pct - half, pct + half];
+}
+function spansHit(a, b) {
+  const as = labelSpan(a.pct, a.half), bs = labelSpan(b.pct, b.half);
+  return as[0] < bs[1] + 2 && bs[0] < as[1] + 2;
+}
 function barLanes(items) {
-  const placed = [];
+  const lanes = [];
   items.slice().sort((a, b) => a.pct - b.pct).forEach(it => {
-    let lane = 'below';
-    if (placed.some(p => p.lane === lane && Math.abs(p.pct - it.pct) < 16)) lane = 'above';
-    const still = placed.some(p => p.lane === lane && Math.abs(p.pct - it.pct) < 16);
+    let lane = 0;
+    while (lane < 8 && (lanes[lane] || []).some(p => spansHit(p, it))) lane++;
+    if (!lanes[lane]) lanes[lane] = [];
+    lanes[lane].push(it);
     it.lane = lane;
-    it.short = still;
-    placed.push(it);
+    it.side = lane % 2 === 0 ? 'below' : 'above';
+    it.row = Math.floor(lane / 2);
   });
 }
 let posDragging = false;
@@ -3240,7 +3299,7 @@ function placePosBar(bar) {
     if (!isNum(v)) return;
     const p = pctOf(v);
     el.style.left = p + '%';
-    el.style.transform = labelShift(p);
+    el.style.transform = labelShift(p, +el.dataset.half);
   });
   const fill = bar.querySelector('.pos-fill');
   const live = +bar.dataset.live;
@@ -3264,6 +3323,24 @@ function commitBarDrag(key, kind, px) {
     savePosLevels();
     renderPortfolio();
   });
+}
+function paintBarLabel(bar, kind, px) {
+  const el = bar.querySelector('[data-lab="' + kind + '"]');
+  if (!el) return;
+  const ctx = { entry: +bar.dataset.entry, qty: +bar.dataset.qty, tp1: +bar.dataset.tp1, frac: +bar.dataset.tp1frac, sol: +bar.dataset.sol, tp1Done: bar.dataset.tp1done === '1', sold: +bar.dataset.sold };
+  const o = levelOutcome(kind, px, ctx);
+  const main = el.querySelector('.bar-main');
+  const name = kind === 'stop' ? 'stop' : kind === 'tp1' ? 'TP1' : 'TP2';
+  if (main) {
+    main.textContent = name + ' ' + price(px) + (o ? ' · ' + pnlPhrase(o) : '');
+    main.className = 'bar-main block whitespace-nowrap ' + (o && !o.hit ? pnlColor(o.usd) : 'text-slate-300');
+  }
+  const sol = el.querySelector('.bar-sol');
+  if (sol) sol.textContent = o && isNum(o.sol) ? fmtPnlSol(o.sol) : '';
+  if (kind === 'tp1') {
+    const tp2 = +bar.dataset.tp2;
+    if (isNum(tp2) && tp2 > 0) paintBarLabel(bar, 'tp2', tp2);
+  }
 }
 function bindPosBars(root) {
   root.querySelectorAll('[data-drag]').forEach(handle => {
@@ -3295,11 +3372,13 @@ function bindPosBars(root) {
         bar.dataset[kind] = String(px);
         placePosBar(bar);
         if (tip) {
-          tip.textContent = dragTip(kind, px, +bar.dataset.entry);
-          const shown = Math.max(8, Math.min(92, ((px - lo) / (hi - lo)) * 100));
+          const ctx = { entry: +bar.dataset.entry, qty: +bar.dataset.qty, tp1: +bar.dataset.tp1, frac: +bar.dataset.tp1frac, sol: +bar.dataset.sol, tp1Done: bar.dataset.tp1done === '1', sold: +bar.dataset.sold };
+          tip.textContent = dragTip(kind, px, ctx);
+          const shown = Math.max(8, Math.min(92, ((px - (+bar.dataset.lo)) / ((+bar.dataset.hi) - (+bar.dataset.lo))) * 100));
           tip.style.left = shown + '%';
-          tip.style.transform = labelShift(shown);
+          tip.style.transform = 'translateX(-50%)';
           tip.classList.remove('hidden');
+          paintBarLabel(bar, kind, px);
         }
       };
       const up = (ev) => {
@@ -3361,8 +3440,21 @@ function posCard(p) {
   const stop = pl.stop, tp1 = pl.tp1, tp2 = pl.tp2, entry = p.avgUsd;
   const tp1Hit = p.tp1Done || (isNum(lp) && isNum(tp1) && lp >= tp1);
   const tp2Hit = p.tp2Done || (isNum(lp) && isNum(tp2) && lp >= tp2);
-  const chip = (label, on) => `<span class="rounded-full border px-2 py-0.5 text-[10px] whitespace-normal break-words ${on ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-400'}">${label}</span>`;
+  const frac = tp1SellFrac(p, pl);
+  const solPx = solUsd();
+  const pnlCtx = { entry, qty: p.qty, tp1, frac, sol: solPx, tp1Done: !!p.tp1Done, sold: Math.max(0, (p.bought || 0) - (p.qty || 0)) };
+  const outcome = (kind, px) => levelOutcome(kind, px, pnlCtx);
+  const moneyChip = (kind, px, hit) => {
+    const o = outcome(kind, px);
+    const phrase = o ? pnlPhrase(o) : '';
+    const name = kind === 'stop' ? 'stop' : kind === 'tp1' ? 'TP1' : 'TP2';
+    const state = kind === 'stop' || (o && o.hit) ? '' : (hit ? ' · hit' : ' · pending');
+    const cls = o && !o.hit && isNum(o.usd) && o.usd < 0 ? 'border-rose-400/40 bg-rose-500/10 text-rose-200' : (o && isNum(o.usd) && o.usd > 0 ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-300');
+    const sol = o && isNum(o.sol) ? `<span class="block text-[9px] text-slate-400">${fmtPnlSol(o.sol)}</span>` : '';
+    return `<span class="rounded-full border px-2 py-0.5 text-[10px] leading-snug whitespace-normal break-words ${cls}">${esc(name + ' ' + price(px) + (phrase ? ' · ' + phrase : '') + state)}${sol}</span>`;
+  };
   const reason = pl.reason || 'initial';
+  const stopOut = outcome('stop', stop);
   let bar = '';
   if (isNum(entry) && entry > 0 && isNum(stop) && isNum(tp1)) {
     let lo = Math.min(stop, entry, isNum(lp) ? lp : entry);
@@ -3370,17 +3462,27 @@ function posCard(p) {
     const pad = (hi - lo) * 0.08 || entry * 0.05;
     lo -= pad; hi += pad;
     const pctOf = (v) => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+    const lineOf = (id, px) => {
+      const o = id === 'entry' || id === 'live' ? null : outcome(id, px);
+      const name = id === 'tp1' ? 'TP1' : id === 'tp2' ? 'TP2' : id;
+      const text = name + ' ' + price(px) + (o ? ' · ' + pnlPhrase(o) : '');
+      const sol = o && isNum(o.sol) ? fmtPnlSol(o.sol) : '';
+      return { text, sol, cls: o && !o.hit ? pnlColor(o.usd) : (id === 'entry' ? 'text-amber-200' : id === 'live' ? 'text-slate-100' : 'text-slate-300') };
+    };
     const marks = [
-      { id: 'stop', pct: pctOf(stop), name: 'stop', px: price(stop), cls: 'text-rose-300' },
-      { id: 'entry', pct: pctOf(entry), name: 'entry', px: price(entry), cls: 'text-amber-200' },
-      ...(isNum(lp) ? [{ id: 'live', pct: pctOf(lp), name: 'live', px: price(lp), cls: 'text-slate-100' }] : []),
-      { id: 'tp1', pct: pctOf(tp1), name: 'TP1', px: price(tp1), cls: 'text-emerald-200' },
-      ...(isNum(tp2) ? [{ id: 'tp2', pct: pctOf(tp2), name: 'TP2', px: price(tp2), cls: 'text-emerald-300' }] : [])
+      { id: 'stop', pct: pctOf(stop), ...lineOf('stop', stop) },
+      { id: 'entry', pct: pctOf(entry), ...lineOf('entry', entry) },
+      ...(isNum(lp) ? [{ id: 'live', pct: pctOf(lp), ...lineOf('live', lp) }] : []),
+      { id: 'tp1', pct: pctOf(tp1), ...lineOf('tp1', tp1) },
+      ...(isNum(tp2) ? [{ id: 'tp2', pct: pctOf(tp2), ...lineOf('tp2', tp2) }] : [])
     ];
+    marks.forEach(it => { it.half = Math.max(12, (Math.max(it.text.length, (it.sol || '').length) * 5.2) / 250 * 100 / 2); });
     barLanes(marks);
-    const lab = (it) => `<div data-lab="${it.id}" class="absolute ${it.lane === 'above' ? 'bottom-0' : 'top-0'} text-[9px] leading-tight whitespace-nowrap ${it.cls}" style="left:${it.pct}%;transform:${labelShift(it.pct)}"><span class="block">${it.short ? it.name : it.name + ' ' + it.px}</span></div>`;
-    bar = `<div class="posbar relative mt-1 select-none" data-posbar data-key="${esc(p.key)}" data-lo="${lo}" data-hi="${hi}" data-entry="${entry}" data-live="${isNum(lp) ? lp : ''}" data-stop="${stop}" data-tp1="${tp1}" data-tp2="${isNum(tp2) ? tp2 : ''}" style="touch-action:none">
-      <div class="relative h-4">${marks.filter(it => it.lane === 'above').map(lab).join('')}</div>
+    const rowH = solPx > 0 ? 34 : 16;
+    const rows = (side) => marks.filter(it => it.side === side).reduce((n, it) => Math.max(n, it.row + 1), 0);
+    const lab = (it) => `<div data-lab="${it.id}" data-half="${it.half.toFixed(2)}" class="absolute text-[9px] leading-tight" style="left:${it.pct}%;top:${it.side === 'above' ? (rows('above') - 1 - it.row) * rowH : it.row * rowH}px;transform:${labelShift(it.pct, it.half)}"><span class="bar-main block whitespace-nowrap ${it.cls}">${esc(it.text)}</span>${it.sol ? `<span class="bar-sol block whitespace-nowrap text-[8px] text-slate-400">${esc(it.sol)}</span>` : ''}</div>`;
+    bar = `<div class="posbar relative mt-1 select-none" data-posbar data-key="${esc(p.key)}" data-lo="${lo}" data-hi="${hi}" data-entry="${entry}" data-live="${isNum(lp) ? lp : ''}" data-stop="${stop}" data-tp1="${tp1}" data-tp2="${isNum(tp2) ? tp2 : ''}" data-qty="${p.qty || 0}" data-tp1frac="${frac}" data-sol="${solPx || ''}" data-tp1done="${p.tp1Done ? '1' : '0'}" data-sold="${Math.max(0, (p.bought || 0) - (p.qty || 0))}" style="touch-action:none">
+      <div class="relative" style="height:${rows('above') * rowH}px">${marks.filter(it => it.side === 'above').map(lab).join('')}</div>
       <div class="pos-track relative h-8">
         <div class="absolute left-0 right-0 top-3 h-2 rounded-full bg-gradient-to-r from-rose-500/40 via-slate-600/40 to-emerald-500/50"></div>
         ${isNum(lp) ? `<div class="pos-fill absolute left-0 top-3 h-2 rounded-full bg-gradient-to-r from-rose-400/80 to-white/70" style="width:${pctOf(lp)}%"></div>` : ''}
@@ -3391,7 +3493,7 @@ function posCard(p) {
         ${isNum(tp2) ? `<button type="button" data-drag="tp2" data-at="tp2" class="absolute top-1.5 z-20 h-5 w-4 -ml-2 rounded-sm bg-emerald-300 border-2 border-emerald-950 shadow cursor-grab" style="left:${pctOf(tp2)}%;touch-action:none" aria-label="Drag TP2"></button>` : ''}
         <div class="pos-tip hidden absolute z-30 -top-1 -translate-y-full rounded bg-ink-950/95 border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-100 whitespace-nowrap pointer-events-none"></div>
       </div>
-      <div class="relative h-4">${marks.filter(it => it.lane !== 'above').map(lab).join('')}</div>
+      <div class="relative" style="height:${Math.max(rows('below'), 1) * rowH}px">${marks.filter(it => it.side === 'below').map(lab).join('')}</div>
       <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
         <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-full bg-rose-500"></i>stop</span>
         <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 bg-amber-300"></i>entry</span>
@@ -3416,10 +3518,10 @@ function posCard(p) {
       <div class="min-w-0"><div class="text-slate-500">Live</div><div class="font-mono whitespace-normal break-words text-slate-100">${price(lp)}</div></div>
       <div class="min-w-0"><div class="text-slate-500">Entry</div><div class="font-mono whitespace-normal break-words">${price(entry)}</div></div>
       <div class="min-w-0"><div class="text-slate-500">Size</div><div class="font-mono whitespace-normal break-words">${fmtSol(m.costSolLeft)}<span class="block text-slate-400">${isNum(m.valueUsd) ? usd(m.valueUsd, 2) : '—'}</span></div></div>
-      <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words text-rose-300">${price(stop)}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
+      <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words ${stopOut && isNum(stopOut.usd) ? pnlColor(stopOut.usd) : 'text-rose-300'}">${price(stop)}<span class="block">${stopOut ? esc(pnlPhrase(stopOut)) : ''}</span>${stopOut && isNum(stopOut.sol) ? `<span class="block text-[10px] text-slate-400">${esc(fmtPnlSol(stopOut.sol))}</span>` : ''}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
     </div>
     ${bar}
-    <div class="mt-2 flex flex-wrap gap-1.5">${chip('TP1 ' + price(tp1) + ' · ' + (tp1Hit ? 'hit' : 'pending'), tp1Hit)}${chip('TP2 ' + price(tp2) + ' · ' + (tp2Hit ? 'hit' : 'pending'), tp2Hit)}</div>
+    <div class="mt-2 flex flex-wrap gap-1.5">${isNum(stop) ? moneyChip('stop', stop, false) : ''}${isNum(tp1) ? moneyChip('tp1', tp1, tp1Hit) : ''}${isNum(tp2) ? moneyChip('tp2', tp2, tp2Hit) : ''}</div>
     <button type="button" data-edit-stop="${esc(p.key)}" class="mt-2 text-[11px] text-violet-300 hover:underline">✏️ Edit stop</button>
     ${typeof myListPlanHtml === 'function' ? myListPlanHtml(p, pl) : ''}
     ${posEditHtml(p)}
