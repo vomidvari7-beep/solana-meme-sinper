@@ -79,6 +79,19 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   </div>
 </header>
 
+<section id="readyNow" class="max-w-7xl mx-auto px-4 pt-4">
+  <div class="glass rounded-2xl p-4 sm:p-5">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <h2 class="font-bold text-base">Ready now 🟢</h2>
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <label class="flex items-center gap-1.5 text-slate-300"><input id="readyAlertOn" type="checkbox" class="accent-emerald-500" checked /> Sound and alerts</label>
+        <button id="readyNotify" type="button" class="rounded-lg px-2 py-1 bg-ink-700 hover:bg-ink-600 border border-white/10">Enable notifications</button>
+      </div>
+    </div>
+    <div id="readyRows" class="text-sm text-slate-400">No token in entry zone right now</div>
+  </div>
+</section>
+
 <main class="max-w-7xl mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
   <section class="lg:col-span-4 space-y-4">
     <div class="glass rounded-2xl p-4 sm:p-5">
@@ -1534,6 +1547,7 @@ function render(R) {
   if (brkOnly) brkOnly.addEventListener('change', () => { breakoutOnlyView = brkOnly.checked; render(R); });
   el.querySelectorAll('.copy-addr').forEach(b => b.addEventListener('click', async () => { if (await copyText(b.dataset.addr)) toast('Mint address copied', 'ok', 1800); }));
   if (window.SMS_TRADE) window.SMS_TRADE.hydrate();
+  if (typeof window.__smsReady === 'function') window.__smsReady();
 }
 </script>
 <script>
@@ -2318,16 +2332,19 @@ function hydrate() {
 /* ---------------- portfolio: positions + trade log ---------------- */
 const livePrices = new Map(); let alerted = load(LS.alerts, {});
 async function refreshPrices() {
-  const mints = [...new Set([...openPositions().map(p => p.mint), ...armedEntries().map(t => t.mint)])];
-  if (!mints.length) return;
-  for (let i = 0; i < mints.length; i += 30) {
-    try { const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.slice(i, i + 30).join(','));
-      const best = new Map(); for (const p of arr || []) { const m = p.baseToken?.address; if (!m) continue; if (!best.has(m) || (p.liquidity?.usd || 0) > (best.get(m).liquidity?.usd || 0)) best.set(m, p); }
-      for (const [m, p] of best) livePrices.set(m, { price: +p.priceUsd, liq: p.liquidity?.usd ?? null, at: Date.now() }); }
-    catch (e) { console.warn('price refresh', e); }
+  const scanMints = (lastResult?.tokens || []).filter(t => t.verdict === 'Candidate').map(t => t.mint);
+  const mints = [...new Set([...openPositions().map(p => p.mint), ...armedEntries().map(t => t.mint), ...scanMints])];
+  if (mints.length) {
+    for (let i = 0; i < mints.length; i += 30) {
+      try { const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.slice(i, i + 30).join(','));
+        const best = new Map(); for (const p of arr || []) { const m = p.baseToken?.address; if (!m) continue; if (!best.has(m) || (p.liquidity?.usd || 0) > (best.get(m).liquidity?.usd || 0)) best.set(m, p); }
+        for (const [m, p] of best) livePrices.set(m, { price: +p.priceUsd, liq: p.liquidity?.usd ?? null, at: Date.now() }); }
+      catch (e) { console.warn('price refresh', e); }
+    }
+    try { const c = await fetchSolContext(); if (isNum(c.price)) { T_state.solPrice = c.price; renderTicker(c); } } catch { }
+    checkAlerts(); renderPortfolio();
   }
-  try { const c = await fetchSolContext(); if (isNum(c.price)) { T_state.solPrice = c.price; renderTicker(c); } } catch { }
-  checkAlerts(); renderPortfolio();
+  renderReadyNow();
 }
 function levelState(p) {
   const lp = livePrices.get(p.mint)?.price; const eff = effectiveStop(p, lp);
@@ -3804,13 +3821,115 @@ $('risk').addEventListener('change', () => { $('setMaxPos').textContent = maxPos
 $('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('tradeCard').scrollIntoView({ behavior: 'smooth' }); else connectPhantom(false); });
 
 /* ---------------- init ---------------- */
-fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderPortfolio(); hydrate();
+const READY_LS = 'sms:readyalert';
+let readyAudio = null;
+let readyPrimed = false;
+let readyShown = new Set();
+function readyAlertsOn() {
+  try { const v = JSON.parse(localStorage.getItem(READY_LS) || 'null'); if (v && typeof v.on === 'boolean') return v.on; } catch { /* default on */ }
+  return true;
+}
+function saveReadyAlerts(on) { try { localStorage.setItem(READY_LS, JSON.stringify({ on: !!on })); } catch { /* ignore */ } }
+function playReadyChime() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!readyAudio) readyAudio = new AC();
+    if (readyAudio.state === 'suspended') readyAudio.resume();
+    const o = readyAudio.createOscillator();
+    const g = readyAudio.createGain();
+    o.type = 'sine';
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, readyAudio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.06, readyAudio.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, readyAudio.currentTime + 0.16);
+    o.connect(g); g.connect(readyAudio.destination);
+    o.start();
+    o.stop(readyAudio.currentTime + 0.18);
+  } catch { /* sound unavailable */ }
+}
+function announceReady(t, px) {
+  if (!readyAlertsOn()) return;
+  playReadyChime();
+  const body = `${t.symbol} is in the entry zone at ${price(px)}`;
+  let notified = false;
+  try {
+    if (typeof Notification === 'function' && Notification.permission === 'granted') {
+      new Notification('Ready now', { body });
+      notified = true;
+    }
+  } catch { notified = false; }
+  if (!notified) toast('🟢 ' + body, 'ok', 8000);
+}
+function readyTokens() {
+  if (!lastResult?.tokens || Date.now() - lastResult.ts > 60 * 60e3) return [];
+  const minC = A.minConviction;
+  return lastResult.tokens.filter(t => {
+    if (t.verdict !== 'Candidate') return false;
+    if (!(t.conviction >= minC)) return false;
+    if ((t.flags || []).some(f => f.sev === 'critical' || f.sev === 'high' || f.sev === 'med')) return false;
+    if (t.entry?.noAnchor) return false;
+    if (t.ta?.cached && isNum(t.ta.cachedAt) && Date.now() - t.ta.cachedAt >= 60 * 60e3) return false;
+    const px = livePrices.get(t.mint)?.price ?? t.priceUsd;
+    return inZone(t, px);
+  }).sort((a, b) => b.conviction - a.conviction);
+}
+function renderReadyNow() {
+  const box = $('readyRows'); if (!box) return;
+  const rows = readyTokens();
+  const next = new Set(rows.map(t => t.mint));
+  if (readyPrimed) for (const t of rows) if (!readyShown.has(t.mint)) announceReady(t, livePrices.get(t.mint)?.price ?? t.priceUsd);
+  readyShown = next;
+  readyPrimed = true;
+  if (!rows.length) { box.className = 'text-sm text-slate-400'; box.textContent = 'No token in entry zone right now'; return; }
+  box.className = 'space-y-1.5';
+  box.innerHTML = rows.map(t => {
+    const e = t.entry || {};
+    const px = livePrices.get(t.mint)?.price ?? t.priceUsd;
+    const mid = isNum(e.zoneLo) && isNum(e.zoneHi) ? (e.zoneLo + e.zoneHi) / 2 : null;
+    const tp1 = isNum(t.exit?.tp1) ? t.exit.tp1 : (isNum(mid) ? mid * 1.5 : null);
+    const stopDist = isNum(px) && isNum(e.stop) && px ? (e.stop - px) / px * 100 : null;
+    const tpDist = isNum(px) && isNum(tp1) && px ? (tp1 - px) / px * 100 : null;
+    const sug = suggestedBuySol(t);
+    const sol = sug.sol > 0 ? sug.sol : 0.05;
+    return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-ink-850 border border-white/5 px-3 py-2 text-xs">
+      <b class="text-sm text-slate-100">${esc(t.symbol)}</b>
+      <span class="font-mono">${price(px)}</span>
+      <span class="text-slate-400">Zone <span class="font-mono text-slate-200">${price(e.zoneLo)}–${price(e.zoneHi)}</span></span>
+      <span class="text-slate-400">Stop <span class="font-mono text-rose-300">${price(e.stop)} (${pct(stopDist)})</span></span>
+      <span class="text-slate-400">TP1 <span class="font-mono text-emerald-300">${price(tp1)} (${pct(tpDist)})</span></span>
+      <span class="text-slate-300">${esc(e.strat || '')}</span>
+      <span class="font-mono text-slate-200">${t.conviction}</span>
+      <span class="ml-auto flex items-center gap-2">
+        <button type="button" class="ready-buy rounded-lg px-2 py-1 font-bold bg-emerald-500 hover:bg-emerald-400 text-ink-950" data-mint="${esc(t.mint)}" data-sol="${sol}">Buy</button>
+        <a href="${safeUrl(t.url)}" target="_blank" rel="noopener" class="text-violet-300 hover:underline">DexScreener</a>
+      </span>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.ready-buy').forEach(b => b.addEventListener('click', () => openTrade('buy', b.dataset.mint, { sol: +b.dataset.sol })));
+}
+function wireReadyNow() {
+  const box = $('readyAlertOn');
+  if (box) { box.checked = readyAlertsOn(); box.addEventListener('change', () => saveReadyAlerts(box.checked)); }
+  $('readyNotify')?.addEventListener('click', async () => {
+    if (typeof Notification !== 'function') { toast('This browser cannot show notifications. Sound and an on-page alert will be used instead.', 'warn', 7000); return; }
+    try {
+      const perm = await Notification.requestPermission();
+      toast(perm === 'granted' ? 'Notifications enabled' : 'Notifications blocked — using on-page alerts', perm === 'granted' ? 'ok' : 'warn');
+    } catch { toast('This browser cannot show notifications. Sound and an on-page alert will be used instead.', 'warn', 7000); }
+  });
+  renderReadyNow();
+}
+window.__smsReady = renderReadyNow;
+
+fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderPortfolio(); hydrate(); wireReadyNow();
 if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
 try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
 updateSolFilterBadge();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
 if (WALLETS.burner.pubkey) refreshBalances('burner');
 setInterval(() => { if (openPositions().length && !A.on) refreshPrices(); }, 60000);
+setInterval(() => { if (!A.on) refreshPrices(); }, 30000);
 if (openPositions().length) setTimeout(refreshPrices, 1500);
 
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
