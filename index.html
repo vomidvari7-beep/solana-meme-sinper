@@ -141,12 +141,21 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
         <span class="text-xs text-slate-400">Additional notes <span class="text-slate-600">(optional)</span></span>
         <textarea id="notes" rows="2" placeholder="e.g. avoid AI narrative, already holding X…" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"></textarea>
       </label>
+      <div class="mt-3">
+        <div class="text-xs text-slate-400 mb-1">Sources</div>
+        <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-300">
+          <label class="flex items-center gap-1.5"><input id="srcBoost" type="checkbox" class="accent-violet-500" checked /> Boosted</label>
+          <label class="flex items-center gap-1.5"><input id="srcTrend" type="checkbox" class="accent-violet-500" checked /> Trending</label>
+          <label class="flex items-center gap-1.5"><input id="srcVolume" type="checkbox" class="accent-violet-500" checked /> Top volume</label>
+          <label class="flex items-center gap-1.5"><input id="srcNew" type="checkbox" class="accent-violet-500" checked /> New pools</label>
+        </div>
+      </div>
       <label class="mt-3 flex items-center gap-2 text-xs text-slate-400 select-none">
         <input id="useRug" type="checkbox" checked class="accent-violet-500 w-4 h-4" /> Verify with RugCheck (deep-check list, slower)
       </label>
       <div class="mt-4 grid grid-cols-2 gap-2">
         <button id="btnAnalyze" class="col-span-2 btn-primary rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 transition disabled:opacity-60"><span id="analyzeLabel">⚡ Analyze</span></button>
-        <button id="btnBoosted" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition disabled:opacity-50">🚀 Scan latest boosted</button>
+        <button id="btnBoosted" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition disabled:opacity-50">🚀 Scan sources</button>
         <button id="btnDemo" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">🧪 Demo data</button>
         <button id="btnCopy" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">📋 Copy Results</button>
         <button id="btnPrompt" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">🤖 Copy as AI prompt</button>
@@ -210,7 +219,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     <div id="emptyState" class="glass rounded-2xl p-8 text-center">
       <div class="text-4xl mb-3">🎯</div>
       <h3 class="font-bold text-lg">No analysis yet</h3>
-      <p class="text-sm text-slate-400 mt-1">Paste tokens and hit <b>Analyze</b>, load <b>Demo data</b>, or <b>Scan latest boosted</b> Solana tokens.</p>
+      <p class="text-sm text-slate-400 mt-1">Paste tokens and hit <b>Analyze</b>, load <b>Demo data</b>, or <b>Scan sources</b> (boosted, trending, top volume, and new pools).</p>
       <p class="fa text-xs text-slate-500 mt-2">برای شروع، «Demo data» یا «Scan latest boosted» را بزن.</p>
       <div class="mt-5 grid sm:grid-cols-3 gap-3 text-left text-xs">
         <div class="rounded-xl bg-ink-800 p-3 border border-white/5"><div class="text-emerald-300 font-semibold">1 · Filter</div><div class="text-slate-400 mt-1">Risk-based filters + red-flag scan kill rugs first.</div></div>
@@ -319,7 +328,8 @@ function toast(msg, type = 'info', ms = 4200) {
 }
 const paceState = {
   gecko: { gap: 2500, next: 0, tail: Promise.resolve() },
-  rug: { gap: 1500, next: 0, tail: Promise.resolve() }
+  rug: { gap: 1500, next: 0, tail: Promise.resolve() },
+  dex: { gap: 450, next: 0, tail: Promise.resolve() }
 };
 function paceHost(kind, fn) {
   const slot = paceState[kind];
@@ -336,6 +346,7 @@ function paceHost(kind, fn) {
 function paceKind(url) {
   if (/geckoterminal\.com/i.test(url)) return 'gecko';
   if (/rugcheck\.xyz/i.test(url)) return 'rug';
+  if (/dexscreener\.com/i.test(url)) return 'dex';
   return '';
 }
 async function fetchJSONOnce(url, { timeout = 12000 } = {}) {
@@ -426,17 +437,147 @@ async function fetchPairs(pairAddrs) {
   }
   return out;
 }
-async function fetchBoostedMints() {
-  const lists = await Promise.allSettled([
-    fetchJSON('https://api.dexscreener.com/token-boosts/latest/v1'),
-    fetchJSON('https://api.dexscreener.com/token-boosts/top/v1'),
-    fetchJSON('https://api.dexscreener.com/token-profiles/latest/v1')
-  ]);
-  const seen = new Set();
-  for (const l of lists) if (l.status === 'fulfilled' && Array.isArray(l.value))
-    for (const t of l.value) if (t.chainId === 'solana' && t.tokenAddress && !IGNORE.has(t.tokenAddress)) seen.add(t.tokenAddress);
-  if (!seen.size) throw new Error('No Solana boosted tokens returned by DexScreener');
-  return [...seen].slice(0, 60);
+function geckoListMint(row) {
+  const QUOTES = new Set([SOL_MINT, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB']);
+  const idOf = (rel) => String(rel?.data?.id || '').replace(/^solana_/, '');
+  let mint = idOf(row?.relationships?.base_token);
+  const quote = idOf(row?.relationships?.quote_token);
+  if (QUOTES.has(mint)) mint = quote;
+  if (!mint || mint.length < 32 || IGNORE.has(mint)) return null;
+  return mint;
+}
+function scanSourceFlags() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {}; } catch { saved = {}; }
+  const box = (id, key) => { const el = document.getElementById(id); return el ? el.checked : saved[key] !== false; };
+  return { boosted: box('srcBoost', 'srcBoost'), trending: box('srcTrend', 'srcTrend'), volume: box('srcVolume', 'srcVolume'), fresh: box('srcNew', 'srcNew') };
+}
+function loadSourceBoxes() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {}; } catch { saved = {}; }
+  [['srcBoost', 'srcBoost'], ['srcTrend', 'srcTrend'], ['srcVolume', 'srcVolume'], ['srcNew', 'srcNew']].forEach(([id, key]) => {
+    const el = document.getElementById(id); if (el) el.checked = saved[key] !== false;
+  });
+}
+function persistSourceBoxes() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {}; } catch { saved = {}; }
+  saved.srcBoost = !!document.getElementById('srcBoost')?.checked;
+  saved.srcTrend = !!document.getElementById('srcTrend')?.checked;
+  saved.srcVolume = !!document.getElementById('srcVolume')?.checked;
+  saved.srcNew = !!document.getElementById('srcNew')?.checked;
+  try { localStorage.setItem('sms:autocfg', JSON.stringify(saved)); } catch { /* keep the in-memory copy */ }
+  try {
+    const A = window.SMS_TRADE && SMS_TRADE.auto;
+    if (A) { A.srcBoost = saved.srcBoost; A.srcTrend = saved.srcTrend; A.srcVolume = saved.srcVolume; A.srcNew = saved.srcNew; }
+  } catch { /* trading module not ready */ }
+}
+function capDiscovery(items, max) {
+  if (items.length <= max) return items;
+  const buckets = new Map();
+  for (const item of items) {
+    const key = item.sources[0] || 'Boosted';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(item);
+  }
+  const out = [];
+  const keys = [...buckets.keys()];
+  while (out.length < max) {
+    let added = false;
+    for (const key of keys) {
+      const bucket = buckets.get(key);
+      if (!bucket.length) continue;
+      out.push(bucket.shift());
+      added = true;
+      if (out.length >= max) break;
+    }
+    if (!added) break;
+  }
+  return out;
+}
+async function discoverCandidates() {
+  const src = scanSourceFlags();
+  const byMint = new Map();
+  const warnings = [];
+  const add = (mint, label) => {
+    if (!mint || IGNORE.has(mint)) return;
+    if (!byMint.has(mint)) byMint.set(mint, []);
+    const list = byMint.get(mint);
+    if (!list.includes(label)) list.push(label);
+  };
+  const pull = async (label, url, take) => {
+    try {
+      const data = await fetchJSON(url);
+      const n = take(data) || 0;
+      if (!n) warnings.push(label + ': no Solana tokens');
+      return true;
+    } catch (e) {
+      warnings.push(label + ': ' + (e.message || 'failed'));
+      return false;
+    }
+  };
+  if (!src.boosted && !src.trending && !src.volume && !src.fresh) {
+    return { list: [], warnings: ['No discovery source is selected.'], anyOk: false };
+  }
+  if (src.boosted) {
+    const feeds = [
+      ['Boosted latest', 'https://api.dexscreener.com/token-boosts/latest/v1'],
+      ['Boosted top', 'https://api.dexscreener.com/token-boosts/top/v1'],
+      ['Boosted profiles', 'https://api.dexscreener.com/token-profiles/latest/v1']
+    ];
+    for (const [label, url] of feeds) {
+      setProgress('Fetching ' + label + '…');
+      await pull(label, url, (data) => {
+        if (!Array.isArray(data)) return 0;
+        let n = 0;
+        for (const t of data) if (t.chainId === 'solana' && t.tokenAddress) { add(t.tokenAddress, 'Boosted'); n++; }
+        return n;
+      });
+    }
+  }
+  if (src.volume) {
+    for (const q of ['pumpswap', 'raydium', 'meteora']) {
+      setProgress('Searching DexScreener ' + q + '…');
+      await pull('Dex search ' + q, 'https://api.dexscreener.com/latest/dex/search?q=' + q, (data) => {
+        const pairs = (data?.pairs || []).filter(p => p.chainId === 'solana' && p.baseToken?.address);
+        const wanted = q === 'raydium' ? 'raydium' : q;
+        const matched = pairs.filter(p => (p.dexId || '').toLowerCase().includes(wanted));
+        const use = (matched.length ? matched : pairs).slice().sort((a, b) => ((b.volume?.h24 || 0) - (a.volume?.h24 || 0)) || (((b.txns?.h24?.buys || 0) + (b.txns?.h24?.sells || 0)) - ((a.txns?.h24?.buys || 0) + (a.txns?.h24?.sells || 0))));
+        use.slice(0, 12).forEach(p => add(p.baseToken.address, 'Top volume'));
+        return Math.min(12, use.length);
+      });
+    }
+    for (const page of [1, 2]) {
+      setProgress('Fetching top volume page ' + page + '…');
+      await pull('Top volume page ' + page, 'https://api.geckoterminal.com/api/v2/networks/solana/pools?page=' + page + '&sort=h24_volume_usd_desc', (data) => {
+        let n = 0;
+        for (const row of data?.data || []) { const mint = geckoListMint(row); if (mint) { add(mint, 'Top volume'); n++; } }
+        return n;
+      });
+    }
+  }
+  if (src.trending) {
+    for (const page of [1, 2]) {
+      setProgress('Fetching trending page ' + page + '…');
+      await pull('Trending page ' + page, 'https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=' + page, (data) => {
+        let n = 0;
+        for (const row of data?.data || []) { const mint = geckoListMint(row); if (mint) { add(mint, 'Trending'); n++; } }
+        return n;
+      });
+    }
+  }
+  if (src.fresh) {
+    for (const page of [1, 2]) {
+      setProgress('Fetching new pools page ' + page + '…');
+      await pull('New pools page ' + page, 'https://api.geckoterminal.com/api/v2/networks/solana/new_pools?page=' + page, (data) => {
+        let n = 0;
+        for (const row of data?.data || []) { const mint = geckoListMint(row); if (mint) { add(mint, 'New pools'); n++; } }
+        return n;
+      });
+    }
+  }
+  const list = capDiscovery([...byMint.entries()].map(([mint, sources]) => ({ mint, sources })), 90);
+  return { list, warnings, anyOk: list.length > 0 };
 }
 async function fetchRugReport(mint) {
   try { return { ok: true, data: await fetchJSON(`https://api.rugcheck.xyz/v1/tokens/${mint}/report`, { timeout: 15000 }) }; }
@@ -1242,12 +1383,22 @@ async function runAnalysis({ boosted = false } = {}) {
     toast('No Solana addresses or pair URLs found. Paste tokens, load Demo data, or use "Scan latest boosted".', 'warn', 6000);
     $('btnBoosted').classList.add('ring-2', 'ring-violet-400'); setTimeout(() => $('btnBoosted').classList.remove('ring-2', 'ring-violet-400'), 2500); return;
   }
-  setBusy(true, boosted ? 'Scanning boosted…' : 'Analyzing…');
+  setBusy(true, boosted ? 'Scanning sources…' : 'Analyzing…');
   const warnings = [];
+  let sourceByMint = null;
+  let discoverySources = [];
   try {
     setProgress('Fetching SOL market context…');
     const solP = fetchSolContext();
-    if (boosted) { setProgress('Fetching latest boosted Solana tokens…'); mints = await fetchBoostedMints(); pairs = []; }
+    if (boosted) {
+      const found = await discoverCandidates();
+      warnings.push(...found.warnings);
+      sourceByMint = new Map(found.list.map(x => [x.mint, x.sources]));
+      discoverySources = [...new Set(found.list.flatMap(x => x.sources))];
+      if (!found.list.length) throw new Error(found.warnings[0] || 'No tokens from the selected sources.');
+      mints = found.list.map(x => x.mint);
+      pairs = [];
+    }
     const tokP = mints.length ? fetchTokenPairs(mints).catch(e => { warnings.push('DexScreener tokens API failed: ' + e.message); return []; }) : Promise.resolve([]);
     const [sol, tokPairs] = await Promise.all([solP, tokP]);
     renderTicker(sol); if (!isNum(sol.price)) warnings.push('SOL market context unavailable' + (sol.error ? ': ' + sol.error : '') + ' — regime treated as Unknown.');
@@ -1268,6 +1419,7 @@ async function runAnalysis({ boosted = false } = {}) {
     const best = bestPairsByToken(allPairs, new Set(mints));
     if (!best.length) throw new Error('No live DEX data found for the provided input.');
     const toks = best.map(normalizePair);
+    if (sourceByMint) toks.forEach(t => { t.sources = sourceByMint.get(t.mint) || []; });
     try { recordDexMood(toks); } catch (e) { console.warn('dex mood', e); }
 
     // Market regime
@@ -1295,7 +1447,7 @@ async function runAnalysis({ boosted = false } = {}) {
       return analyzed;
     };
     const publish = (tokens, deepProgress) => {
-      lastResult = { ts: Date.now(), inputs, sol, regime, tokens, warnings: warnings.slice(), boosted, deepProgress: deepProgress || '' };
+      lastResult = { ts: Date.now(), inputs, sol, regime, tokens, warnings: warnings.slice(), boosted, discoverySources, deepProgress: deepProgress || '' };
       render(lastResult);
     };
     if (!inputs.useRug) warnings.push('RugCheck verification disabled — LP / mint / holder checks are Unknown.');
@@ -1346,7 +1498,7 @@ async function runAnalysis({ boosted = false } = {}) {
       }
     }
 
-    lastResult = { ts: Date.now(), inputs, sol, regime, tokens: analyzed, warnings, boosted, deepProgress: targets.length ? `Deep checks ${targets.length}/${targets.length}` : '' };
+    lastResult = { ts: Date.now(), inputs, sol, regime, tokens: analyzed, warnings, boosted, discoverySources, deepProgress: targets.length ? `Deep checks ${targets.length}/${targets.length}` : '' };
     render(lastResult);
     try { localStorage.setItem('sms:last', JSON.stringify(lastResult)); } catch (e) { toast('Could not save locally: ' + e.message, 'warn'); }
     updateLastIndicator();
@@ -1406,7 +1558,7 @@ function render(R) {
     <span class="px-2 py-1 rounded-lg bg-white/5">🕒 ${esc(fmtTime(R.ts))}</span>
     <span class="px-2 py-1 rounded-lg bg-white/5">Risk: <b class="text-slate-200">${esc(R.inputs.risk)}</b></span>
     <span class="px-2 py-1 rounded-lg bg-white/5">Focus: <b class="text-slate-200">${esc(R.inputs.focus)}</b></span>
-    <span class="px-2 py-1 rounded-lg bg-white/5">Source: ${esc(R.inputs.source)}${R.boosted ? ' · latest boosted' : ''}</span>
+    <span class="px-2 py-1 rounded-lg bg-white/5">Source: ${esc(R.inputs.source)}${R.boosted ? ' · ' + esc((R.discoverySources || []).join(' · ') || 'sources') : ''}</span>
     <span class="px-2 py-1 rounded-lg bg-white/5">${toks.length} analyzed · <span class="text-emerald-300">${cands.length} candidate</span> · <span class="text-amber-300">${watch.length} watch</span> · <span class="text-rose-300">${rej.length} rejected</span></span>
     ${R.deepProgress ? `<span class="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-200 border border-amber-500/20">${esc(R.deepProgress)}</span>` : ''}
   </div>`;
@@ -1435,7 +1587,7 @@ function render(R) {
       <div class="flex items-start gap-3">
         ${t.image ? `<img src="${safeUrl(t.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs shrink-0">${esc(t.symbol.slice(0,3))}</div>`}
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span>${momentumLabel(t) ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border ${t.momentum.state === 'trigger' ? 'border-amber-400/40 bg-amber-500/15 text-amber-200' : 'border-white/15 text-slate-300'}" title="${esc(t.momentum.reason || '')}">${momentumLabel(t)}</span>` : ''}</div>
+          <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span>${(t.sources || []).map(s => `<span class="text-[10px] px-1.5 py-0.5 rounded-md border border-violet-400/30 bg-violet-500/10 text-violet-200">${esc(s)}</span>`).join('')}${momentumLabel(t) ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border ${t.momentum.state === 'trigger' ? 'border-amber-400/40 bg-amber-500/15 text-amber-200' : 'border-white/15 text-slate-300'}" title="${esc(t.momentum.reason || '')}">${momentumLabel(t)}</span>` : ''}</div>
           <div class="text-xs text-slate-400 truncate">${esc(t.name)} · ${esc(t.dexId)}</div>
           <button class="copy-addr mt-0.5 text-[11px] font-mono text-slate-500 hover:text-violet-300" data-addr="${esc(t.mint)}" title="Copy mint address">${esc(short(t.mint))} ⧉</button>
         </div>
@@ -1672,6 +1824,8 @@ function saveInputsDraft() { try { localStorage.setItem('sms:inputs', JSON.strin
 
 $('btnAnalyze').addEventListener('click', () => runAnalysis());
 $('btnBoosted').addEventListener('click', () => runAnalysis({ boosted: true }));
+loadSourceBoxes();
+['srcBoost', 'srcTrend', 'srcVolume', 'srcNew'].forEach(id => document.getElementById(id)?.addEventListener('change', persistSourceBoxes));
 $('btnDemo').addEventListener('click', () => {
   $('pasted').value = `# DEMO DATA — sample Solana mints from an earlier scan (live data is fetched on Analyze)\n${DEMO_MINTS.join('\n')}`;
   if (!$('notes').value) $('notes').value = 'Demo run — sample tokens';
@@ -1717,7 +1871,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20 };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20, srcBoost: true, srcTrend: true, srcVolume: true, srcNew: true };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -1758,6 +1912,7 @@ function sanitizeSettings() {
   { const n = Math.round(+A.deepN); A.deepN = Number.isFinite(n) ? Math.min(30, Math.max(5, n)) : 20; }
   { const n = Math.round(+A.insiderBlockAt); A.insiderBlockAt = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : 20; }
   const pctOr = (v, d, lo, hi) => { const n = +v; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  ['srcBoost', 'srcTrend', 'srcVolume', 'srcNew'].forEach(k => { A[k] = A[k] !== false; });
   A.beAtPct = pctOr(A.beAtPct, 25, 0, 500);
   A.earlyAtPct = pctOr(A.earlyAtPct, 40, 0, 500);
   A.earlyTrailPct = pctOr(A.earlyTrailPct, 18, 1, 90);
@@ -3143,7 +3298,7 @@ function renderBurner() {
           <div id="solFilterBadge" class="text-[11px] text-slate-400">${esc(solFilterState().badge)}</div>
         </div>
         <label class="mt-2 flex items-center gap-2"><input id="aExit" type="checkbox" ${A.autoExit ? 'checked' : ''} class="accent-violet-500" /> Auto-exit: sell at stop, sell 50% at +50%, 50% of rest at +100%, trail rest</label>
-        <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan "latest boosted" every interval</label>
+        <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan selected sources every interval</label>
         <label class="mt-1 flex items-center gap-2"><input id="aBrk" type="checkbox" ${A.breakoutOnly ? 'checked' : ''} class="accent-violet-500" /> Auto-buy only BREAKOUT-confirmed tokens</label>
         <label class="mt-1 flex items-center gap-2"><input id="aMom" type="checkbox" ${A.momentumOn ? 'checked' : ''} class="accent-violet-500" /> Momentum breakout (new tokens)</label>
         <p class="text-[10px] text-slate-500 mt-1">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${S.maxSolPerTrade} SOL/trade &amp; ${S.dailyMaxSol} SOL/day.</p>
@@ -3171,7 +3326,8 @@ function readAutoInputs() {
     solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, solMode: $('aSolMode')?.value || A.solMode,
     moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow,
     beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct,
-    momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH, deepN: $('aDeep') ? +$('aDeep').value : A.deepN, insiderBlockAt: $('aInsider') ? +$('aInsider').value : A.insiderBlockAt });
+    momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH, deepN: $('aDeep') ? +$('aDeep').value : A.deepN, insiderBlockAt: $('aInsider') ? +$('aInsider').value : A.insiderBlockAt,
+    srcBoost: $('srcBoost') ? $('srcBoost').checked : A.srcBoost !== false, srcTrend: $('srcTrend') ? $('srcTrend').checked : A.srcTrend !== false, srcVolume: $('srcVolume') ? $('srcVolume').checked : A.srcVolume !== false, srcNew: $('srcNew') ? $('srcNew').checked : A.srcNew !== false });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
   if (A.on) startTimers();
@@ -3517,7 +3673,7 @@ async function autoSell(p, pctSell, tag, lp, extra) {
 async function autoScan() {
   if (!A.on || !A.autoScan) return;
   if (busy) { queuedAutoScan = true; autoLog('Scan queued — the previous scan is still running', 'info'); return; }
-  lastScan = Date.now(); autoLog('Auto-scan: Scan latest boosted…', 'info');
+  lastScan = Date.now(); autoLog('Auto-scan: selected discovery sources…', 'info');
   await runAnalysis({ boosted: true });
   autoLog(`Auto-scan done: ${armedEntries().length} armed entr${armedEntries().length === 1 ? 'y' : 'ies'}`, 'info'); autoTick();
 }
