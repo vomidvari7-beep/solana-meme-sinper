@@ -1006,8 +1006,10 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
     if (rug.freezeRevoked === false) add('high', 'Freeze authority ACTIVE — wallets can be frozen');
     if (!onCurve && isNum(rug.lpLockedPct) && rug.lpLockedPct < prof.minLpLock) add(rug.lpLockedPct < 50 ? 'high' : 'med', `LP only ${rug.lpLockedPct.toFixed(0)}% locked/burned (need ≥${prof.minLpLock}%)`);
     if (isNum(rug.top10) && rug.top10 > prof.maxTop10) add(rug.top10 > 50 ? 'high' : 'med', `Top-10 holders ${rug.top10.toFixed(1)}% (> ${prof.maxTop10}%)`);
+    const insiderAt = insiderBlockAt();
     if (isNum(rug.insiders) && rug.insiders >= 25) add('high', `Large insider network (${rug.insiders} linked wallets) — coordinated dump risk`);
-    else if (isNum(rug.insiders) && rug.insiders >= 10) add('med', `Insider network detected (${rug.insiders} linked wallets)`);
+    else if (isNum(rug.insiders) && rug.insiders >= insiderAt) add('med', `Insider network detected (${rug.insiders} linked wallets)`);
+    else if (isNum(rug.insiders) && rug.insiders >= 10) add('low', `Insider network detected (${rug.insiders} linked wallets)`);
     else if (isNum(rug.insiders) && rug.insiders > 0) add('low', `Small insider network (${rug.insiders} wallets)`);
     for (const r of rug.risks) if (r.level.toLowerCase() === 'danger' && !/mint authority|freeze authority|top 10|lp unlocked|amount of lp/i.test(r.name)) add('med', `RugCheck: ${r.name}${r.value ? ' (' + r.value + ')' : ''}`);
   }
@@ -1023,7 +1025,7 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
     if (rug.mintRevoked === false) safety -= 40; if (rug.freezeRevoked === false) safety -= 40;
     if (!onCurve && isNum(rug.lpLockedPct)) safety -= rug.lpLockedPct < 50 ? 45 : rug.lpLockedPct < 90 ? 25 : 0;
     if (isNum(rug.top10)) safety -= rug.top10 > 50 ? 40 : rug.top10 > 30 ? 25 : rug.top10 > 20 ? 10 : 0;
-    if (isNum(rug.insiders)) safety -= rug.insiders >= 25 ? 20 : rug.insiders >= 10 ? 12 : rug.insiders > 0 ? 4 : 0;
+    if (isNum(rug.insiders)) safety -= rug.insiders >= 25 ? 20 : rug.insiders >= insiderBlockAt() ? 12 : rug.insiders > 0 ? 4 : 0;
     if (rug.rugged) safety = 0;
     if (rug.summaryOnly) { safety = Math.min(safety, 75); safetyNote = 'RugCheck summary only (no holder data)'; } else safetyNote = 'RugCheck full report';
     safety = clamp(safety);
@@ -1186,6 +1188,18 @@ function analyzeToken(t, rug, prof, focus, regime, ta) {
 'use strict';
 /* ============================ MAIN FLOW ============================ */
 let busy = false; let lastResult = null; let breakoutOnlyView = false; let queuedAutoScan = false;
+function insiderBlockAt() {
+  let n = 20;
+  try {
+    const live = window.SMS_TRADE?.auto?.insiderBlockAt;
+    if (Number.isFinite(+live)) n = +live;
+    else {
+      const a = JSON.parse(localStorage.getItem('sms:autocfg') || 'null') || {};
+      if (Number.isFinite(+a.insiderBlockAt)) n = +a.insiderBlockAt;
+    }
+  } catch { /* default */ }
+  return Math.min(100, Math.max(1, Math.round(n) || 20));
+}
 function deepCheckN() {
   let n = 20;
   try {
@@ -1685,7 +1699,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20 };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -1724,6 +1738,7 @@ function sanitizeSettings() {
   A.momentumOn = !!A.momentumOn;
   { const n = +A.momentumMaxAgeH; A.momentumMaxAgeH = Number.isFinite(n) ? Math.min(48, Math.max(0.5, n)) : 6; }
   { const n = Math.round(+A.deepN); A.deepN = Number.isFinite(n) ? Math.min(30, Math.max(5, n)) : 20; }
+  { const n = Math.round(+A.insiderBlockAt); A.insiderBlockAt = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : 20; }
   const pctOr = (v, d, lo, hi) => { const n = +v; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
   A.beAtPct = pctOr(A.beAtPct, 25, 0, 500);
   A.earlyAtPct = pctOr(A.earlyAtPct, 40, 0, 500);
@@ -2523,6 +2538,7 @@ function renderBurner() {
           ${num('aEarlyTr', A.earlyTrailPct, '1', 'Early trail %', 'min="1" max="90"')}
           ${num('aMomAge', A.momentumMaxAgeH, '0.5', 'Momentum max age (h)', 'min="0.5" max="48"')}
           ${num('aDeep', A.deepN, '1', 'Deep-check top N', 'min="5" max="30"')}
+          ${num('aInsider', A.insiderBlockAt, '1', 'Insider block at', 'min="1" max="100"')}
         </div>
         <div class="mt-2 rounded-lg border border-white/10 p-2 space-y-2">
           <label class="flex items-center gap-2"><input id="aSolOn" type="checkbox" ${A.solFilter ? 'checked' : ''} class="accent-violet-500" /> Pause auto-buys on mood</label>
@@ -2574,7 +2590,7 @@ function readAutoInputs() {
     solFilter: $('aSolOn') ? $('aSolOn').checked : !!A.solFilter, solMode: $('aSolMode')?.value || A.solMode,
     moodSource: $('aMoodSrc')?.value || A.moodSource, solPauseBelow: $('aSolBelow') ? +$('aSolBelow').value : A.solPauseBelow, dexPauseBelow: $('aDexBelow') ? +$('aDexBelow').value : A.dexPauseBelow,
     beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct,
-    momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH, deepN: $('aDeep') ? +$('aDeep').value : A.deepN });
+    momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH, deepN: $('aDeep') ? +$('aDeep').value : A.deepN, insiderBlockAt: $('aInsider') ? +$('aInsider').value : A.insiderBlockAt });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
   if (A.on) startTimers();
