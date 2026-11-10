@@ -2008,24 +2008,62 @@ function updateTrade(id, patch) { const r = LOG.find(x => x.id === id); if (r) {
 let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
+function blankPos(k, r) {
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false, copy: false, copyState: null, sniper: false, closed: false };
+}
+function freshStop(p) {
+  const avg = p.avgUsd;
+  const planStop = p.plan?.stop;
+  if (isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) return planStop;
+  let pct = 20;
+  try {
+    const prof = effectiveProfile($('risk')?.value || 'Balanced', collectInputs());
+    if (isNum(prof?.stopPct)) pct = prof.stopPct;
+  } catch { /* profile inputs not ready */ }
+  if (isNum(avg) && avg > 0) return avg * (1 - pct / 100);
+  return isNum(planStop) ? planStop : null;
+}
 function positions() {
   const by = new Map();
   for (const r of LOG) {
     if (r.status !== 'confirmed') continue;
-    const k = r.wallet + ':' + r.mint; let p = by.get(k);
-    if (!p) { p = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false, copy: false, copyState: null, sniper: false }; by.set(k, p); }
-    if (r.side === 'buy') { p.bought += r.tokenAmount || 0; p.costUsd += (r.tokenAmount || 0) * (r.priceUsd || 0); p.costSol += r.solAmount || 0; if (r.plan) p.plan = r.plan; if (r.auto) p.auto = true; if (r.sniper) p.sniper = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
-    else { p.sold += r.tokenAmount || 0; if (r.exitTag === 'tp1') p.tp1Done = true; if (r.exitTag === 'tp2') p.tp2Done = true; if (r.sniper) p.sniper = true; if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; } }
+    const k = r.wallet + ':' + r.mint;
+    let p = by.get(k);
+    let restart = false;
+    if (p?.closed && r.side === 'buy') { restart = true; p = null; }
+    if (!p) { p = blankPos(k, r); if (restart) p.reentry = true; by.set(k, p); }
+    if (r.side === 'buy') {
+      const qty = r.tokenAmount || 0;
+      const px = r.priceUsd || 0;
+      if (qty > 0 && px > 0) { p.bought += qty; p.costUsd += qty * px; }
+      p.costSol += r.solAmount || 0;
+      if (r.plan) p.plan = r.plan;
+      if (r.auto) p.auto = true;
+      if (r.sniper) p.sniper = true;
+      if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
+    } else {
+      p.sold += r.tokenAmount || 0;
+      if (r.exitTag === 'tp1') p.tp1Done = true;
+      if (r.exitTag === 'tp2') p.tp2Done = true;
+      if (r.sniper) p.sniper = true;
+      if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
+    }
     p.symbol = r.symbol || p.symbol;
+    const remain = p.bought - p.sold;
+    p.closed = p.bought > 0 && remain <= p.bought * 0.001;
   }
   const out = [];
   for (const p of by.values()) {
-    p.avgUsd = p.bought ? p.costUsd / p.bought : null;
+    p.avgUsd = p.bought > 0 ? p.costUsd / p.bought : null;
+    p.initialStop = p.closed ? null : freshStop(p);
     p.onchain = WALLETS[p.wallet]?.tokens?.get(p.mint)?.ui ?? null;
-    p.qty = p.onchain != null ? p.onchain : Math.max(0, p.bought - p.sold);
-    p.open = p.qty > 0 && (p.bought === 0 || p.qty > p.bought * 0.001);
+    const logQty = Math.max(0, p.bought - p.sold);
+    if (p.closed) { p.qty = 0; p.open = false; }
+    else if (p.onchain > 0) { p.qty = p.onchain; p.open = p.bought === 0 || p.qty > p.bought * 0.001; }
+    else { p.qty = logQty; p.open = logQty > 0 && (p.bought === 0 || logQty > p.bought * 0.001); }
     out.push(p);
   }
+  notePositionCycles(out);
   return out;
 }
 const openPositions = () => positions().filter(p => p.open);
@@ -2039,7 +2077,8 @@ function tokenInfo(mint) {
 function planOf(t) { if (!t?.entry) return null; return { stop: t.entry.stop, zoneLo: t.entry.zoneLo, zoneHi: t.entry.zoneHi, tp1: t.exit?.tp1, tp2: t.exit?.tp2, tp3: t.exit?.tp3, trail: t.exit?.trail, timeStopH: t.exit?.timeStopH, strat: t.entry.strat, conviction: t.conviction }; }
 function positionTargets(p) {
   const entry = p?.avgUsd; const pl = p?.plan || {};
-  return { stop: pl.stop, trail: pl.trail, timeStopH: pl.timeStopH, tp3: pl.tp3, tp1: isNum(entry) && entry > 0 ? entry * 1.5 : null, tp2: isNum(entry) && entry > 0 ? entry * 2 : null };
+  const stop = isNum(p?.initialStop) ? p.initialStop : pl.stop;
+  return { stop, trail: pl.trail, timeStopH: pl.timeStopH, tp3: pl.tp3, tp1: isNum(entry) && entry > 0 ? entry * 1.5 : null, tp2: isNum(entry) && entry > 0 ? entry * 2 : null };
 }
 function riskIssues(t) {
   const out = [];
@@ -2706,6 +2745,47 @@ window.__smsSolBadge = updateSolFilterBadge;
 /* ---------------- auto-trading engine (burner only) ---------------- */
 let tickTimer = null, scanTimer = null, autoBusy = false, lastTick = null, lastScan = null;
 const sellFails = {}; const momSeen = {}; let autoHigh = load('sms:autohigh', {}); let autoStop = load('sms:autostop', {});
+let posCycle = load('sms:poscycle', {});
+let sniperHighRef = null;
+function clearPosRuntime(key) {
+  const dirty = { h: false, s: false, n: false, a: false };
+  if (autoHigh[key] != null) { delete autoHigh[key]; dirty.h = true; }
+  if (autoStop[key] != null) { delete autoStop[key]; dirty.s = true; }
+  if (sniperHighRef && sniperHighRef[key] != null) { delete sniperHighRef[key]; dirty.n = true; }
+  if (sellFails[key]) delete sellFails[key];
+  const pref = key + ':';
+  for (const k of Object.keys(alerted || {})) if (k === key || k.startsWith(pref)) { delete alerted[k]; dirty.a = true; }
+  if (dirty.h) save('sms:autohigh', autoHigh);
+  if (dirty.s) save('sms:autostop', autoStop);
+  if (dirty.n && sniperHighRef) save('sms:sniperhigh', sniperHighRef);
+  if (dirty.a) save(LS.alerts, alerted);
+  return dirty.h || dirty.s || dirty.n || dirty.a;
+}
+function notePositionCycles(list) {
+  let cycleDirty = false;
+  const openCopy = new Set();
+  for (const p of list || []) {
+    if (p.open && p.copy) openCopy.add(p.mint);
+    if (!p.open) {
+      const cleared = clearPosRuntime(p.key);
+      if (cleared || posCycle[p.key]) { delete posCycle[p.key]; cycleDirty = true; }
+      continue;
+    }
+    if (!posCycle[p.key]) {
+      if (p.reentry) clearPosRuntime(p.key);
+      posCycle[p.key] = p.firstTs;
+      cycleDirty = true;
+    } else if (posCycle[p.key] !== p.firstTs) {
+      clearPosRuntime(p.key);
+      posCycle[p.key] = p.firstTs;
+      cycleDirty = true;
+    }
+  }
+  if (cycleDirty) save('sms:poscycle', posCycle);
+  try {
+    if (copyBooks) for (const mint of [...copyBooks.keys()]) if (!openCopy.has(mint)) copyBooks.delete(mint);
+  } catch { /* copy books not ready */ }
+}
 function effectiveStop(p, lp) {
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
     const pl = positionTargets(p);
@@ -2939,7 +3019,10 @@ let copyBooks = new Map();
 let copyTimer = null, copyBusy = false, rpcGap = 450;
 function loadCopyBooks() {
   copyBooks = new Map();
-  for (const r of LOG) if (r && r.copy && r.copyState && r.mint) copyBooks.set(r.mint, r.copyState);
+  const open = new Set(openPositions().filter(p => p.open && p.copy).map(p => p.mint));
+  for (const r of [...LOG].reverse()) {
+    if (r && r.copy && r.copyState && r.mint && open.has(r.mint) && !copyBooks.has(r.mint)) copyBooks.set(r.mint, r.copyState);
+  }
 }
 function whaleBounds(w) {
   const tier = w?.tier === 'core' ? 'core' : 'confirm';
@@ -3390,6 +3473,7 @@ let sniperVol = {};
 let sniperSafetyMemo = {};
 let sniperTimer = null, sniperExitTimer = null, sniperBusy = false;
 const sniperHigh = load('sms:sniperhigh', {});
+sniperHighRef = sniperHigh;
 function saveSniper() { const { on, ...rest } = SNIPER; save('sms:sniper', { ...rest, on: false }); }
 const sniperSaid = {};
 function sniperNote(msg, level = 'info') {
