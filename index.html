@@ -193,8 +193,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           </label>
           <div class="grid grid-cols-2 gap-2">
             <label class="block"><span class="text-slate-400">Slippage % <span class="text-slate-600">(max 15)</span></span><input id="setSlip" type="number" min="0.1" max="15" step="0.1" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
-            <label class="block"><span class="text-slate-400">Max SOL / trade</span><input id="setMaxTrade" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
-            <label class="block"><span class="text-slate-400">Daily max spend (SOL)</span><input id="setDaily" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">Max / trade <span id="setMaxTradeUnit"></span></span><input id="setMaxTrade" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /><div id="setMaxTradeHint" class="text-[10px] text-slate-500 mt-0.5 whitespace-normal break-words"></div></label>
+            <label class="block"><span class="text-slate-400">Daily max <span id="setDailyUnit"></span></span><input id="setDaily" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /><div id="setDailyHint" class="text-[10px] text-slate-500 mt-0.5 whitespace-normal break-words"></div></label>
             <label class="block"><span class="text-slate-400">SOL reserve for fees</span><input id="setReserve" type="number" min="0.002" step="0.001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
             <label class="block"><span class="text-slate-400">Priority fee level</span><select id="setPrioLevel" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5"><option value="medium">Medium</option><option value="high">High</option><option value="veryHigh">Very high</option></select></label>
             <label class="block"><span class="text-slate-400">Max priority fee (SOL)</span><input id="setPrioMax" type="number" min="0" max="0.01" step="0.0001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
@@ -205,6 +205,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
               <option value="https://api.jup.ag/swap/v1">api.jup.ag/swap/v1 (optional API key)</option>
             </select></label>
           <label class="block"><span class="text-slate-400">Jupiter API key <span class="text-slate-600">(optional, stored only in this browser)</span></span><input id="setJupKey" type="password" autocomplete="off" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+          <div class="rounded-lg bg-ink-800 px-2.5 py-2" id="sizeToggleSettings"></div>
           <div class="flex items-center justify-between rounded-lg bg-ink-800 px-2.5 py-2"><span class="text-slate-400">Max open positions <span class="text-slate-600">(hard cap)</span></span><b id="setMaxPos" class="font-mono text-slate-200">2</b></div>
           <label class="flex items-center gap-2 rounded-lg bg-ink-800 px-2.5 py-2"><input type="checkbox" checked disabled class="accent-emerald-500 w-4 h-4" /><span class="text-slate-300">Confirm every trade <span class="text-slate-500">(always on, can't be disabled)</span></span></label>
           <div class="flex gap-2"><button id="btnSaveSettings" class="flex-1 rounded-lg py-2 font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save settings</button><button id="btnResetSettings" class="rounded-lg px-3 py-2 bg-ink-700 hover:bg-ink-600 border border-white/10">Defaults</button></div>
@@ -411,7 +412,7 @@ async function fetchSolContext() {
   return ctx;
 }
 function renderTicker(ctx) {
-  if (ctx) { if (!ctx.at) ctx.at = Date.now(); window.__SMS_SOL = ctx; }
+  if (ctx) { if (!ctx.at) ctx.at = Date.now(); window.__SMS_SOL = ctx; if (typeof window.__smsSizePrice === 'function') window.__smsSizePrice(); }
   if (!ctx || !isNum(ctx.price)) { $('solPrice').textContent = '—'; $('solChg').textContent = 'unavailable'; if (typeof window.__smsSolBadge === 'function') window.__smsSolBadge(); return; }
   $('solPrice').textContent = '$' + ctx.price.toFixed(2);
   $('solChg').className = 'font-mono text-xs ' + pctCls(ctx.h24); $('solChg').textContent = pct(ctx.h24) + ' 24h';
@@ -2096,6 +2097,118 @@ const solscanTx = (sig) => `https://solscan.io/tx/${sig}`;
 const solscanAcc = (a) => `https://solscan.io/account/${a}`;
 const todayKey = () => new Date().toDateString();
 const solUsd = () => (lastResult?.sol?.price) || T_state.solPrice || null;
+let sizeUnit = 'usd';
+let sizeStore = 'sol';
+function solPriceNow() {
+  const c = window.__SMS_SOL;
+  if (isNum(+c?.price) && +c.price > 0) return +c.price;
+  if (isNum(T_state.solPrice) && T_state.solPrice > 0) return T_state.solPrice;
+  if (isNum(lastResult?.sol?.price) && lastResult.sol.price > 0) return lastResult.sol.price;
+  return null;
+}
+function initSizeUnit() {
+  let pref = '';
+  let store = '';
+  try { pref = localStorage.getItem('sms:sizeunit') || ''; store = localStorage.getItem('sms:sizestore') || ''; } catch { /* default */ }
+  sizeUnit = pref === 'sol' || pref === 'usd' ? pref : 'usd';
+  sizeStore = store === 'sol' || store === 'usd' ? store : 'sol';
+}
+function persistSizeUnit() {
+  try { localStorage.setItem('sms:sizeunit', sizeUnit); localStorage.setItem('sms:sizestore', sizeStore); } catch { /* ignore */ }
+}
+function convAmt(n, from, to, px) {
+  const x = +n;
+  if (!isNum(x) || from === to) return isNum(x) ? x : n;
+  if (!(px > 0)) return n;
+  if (from === 'sol' && to === 'usd') return Math.round(x * px * 100) / 100;
+  if (from === 'usd' && to === 'sol') return Math.round((x / px) * 1e6) / 1e6;
+  return x;
+}
+function convertStoredSizes(from, to, px) {
+  if (from === to || !(px > 0)) return;
+  const one = (v) => (v === '' || v == null || v === undefined) ? v : convAmt(v, from, to, px);
+  S.maxSolPerTrade = one(S.maxSolPerTrade);
+  S.dailyMaxSol = one(S.dailyMaxSol);
+  A.maxSolPerTrade = one(A.maxSolPerTrade);
+  A.dailyCap = one(A.dailyCap);
+  if (typeof SNIPER !== 'undefined') { SNIPER.sizeSol = one(SNIPER.sizeSol); SNIPER.dailySol = one(SNIPER.dailySol); }
+  if (typeof COPY !== 'undefined') { COPY.tranche1Sol = one(COPY.tranche1Sol); COPY.tranche2Sol = one(COPY.tranche2Sol); }
+  if (typeof MYLIST !== 'undefined') {
+    MYLIST.sizeSol = one(MYLIST.sizeSol);
+    (MYLIST.rows || []).forEach(r => { if (r.sizeSol != null) r.sizeSol = one(r.sizeSol); });
+  }
+}
+function saveSizeConfigs() {
+  save(LS.settings, S);
+  const { on, _solBadge, ...persist } = A; save(LS.auto, persist);
+  if (typeof saveSniper === 'function') saveSniper();
+  if (typeof COPY !== 'undefined') { const { on, armBaseline, ...rest } = COPY; save(LS.copy, rest); }
+  if (typeof saveMyList === 'function') saveMyList();
+}
+function refreshSizePanels() {
+  try { fillSettings(); } catch { /* settings not drawn yet */ }
+  try { renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderMyList(); renderPortfolio(); hydrate(); } catch { /* panels not ready */ }
+}
+function maybeLockSizeUnit() {
+  if (sizeStore === sizeUnit) return;
+  const px = solPriceNow();
+  if (!(px > 0)) return;
+  convertStoredSizes(sizeStore, sizeUnit, px);
+  sizeStore = sizeUnit;
+  persistSizeUnit();
+  saveSizeConfigs();
+  refreshSizePanels();
+}
+function setSizeUnit(next) {
+  if (next !== 'usd' && next !== 'sol') return;
+  if (next === sizeUnit && next === sizeStore) return;
+  if (sizeStore !== next) {
+    const px = solPriceNow();
+    if (!(px > 0)) { toast('SOL price unavailable — can’t convert sizes yet', 'warn'); return; }
+    convertStoredSizes(sizeStore, next, px);
+    sizeStore = next;
+  }
+  sizeUnit = next;
+  persistSizeUnit();
+  saveSizeConfigs();
+  refreshSizePanels();
+}
+function solCap(amount) {
+  const n = +amount;
+  if (!isNum(n)) return null;
+  if (sizeStore !== 'usd') return n;
+  const px = solPriceNow();
+  if (!(px > 0)) return null;
+  return n / px;
+}
+function sizeHint(amount) {
+  const n = +amount;
+  if (!isNum(n)) return '';
+  const px = solPriceNow();
+  if (!(px > 0)) return 'SOL price unavailable';
+  if (sizeStore === 'usd') return '$' + n.toFixed(2) + ' ≈ ' + (n / px).toFixed(3) + ' SOL';
+  return (+n).toFixed(3) + ' SOL ≈ $' + (n * px).toFixed(2);
+}
+function unitWord() { return sizeStore === 'usd' ? 'USD' : 'SOL'; }
+function sizeNum(id, v, label, extra = '') {
+  const step = sizeStore === 'usd' ? '0.01' : '0.001';
+  return `<label class="block min-w-0"><span class="text-slate-400">${label} (${unitWord()})</span><input id="${id}" type="number" step="${step}" value="${v === '' || v == null ? '' : v}" ${extra} class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /><div class="text-[10px] text-slate-500 mt-0.5 whitespace-normal break-words">${esc(sizeHint(v))}</div></label>`;
+}
+function sizeToggleHtml() {
+  const on = (u) => (sizeUnit === u ? 'bg-white/10 text-slate-100' : 'text-slate-400');
+  return `<div class="flex flex-wrap items-center justify-between gap-2"><span class="text-slate-300">Size unit</span><div class="flex rounded-lg border border-white/10 overflow-hidden text-[11px]"><button type="button" data-size-unit="sol" class="px-2.5 py-1 ${on('sol')}">SOL</button><button type="button" data-size-unit="usd" class="px-2.5 py-1 ${on('usd')}">USD</button></div></div>`;
+}
+function wireSizeToggle(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-size-unit]').forEach(b => b.addEventListener('click', () => setSizeUnit(b.dataset.sizeUnit)));
+}
+function solWithUsd(sol, px) {
+  if (!isNum(+sol)) return '—';
+  const p = isNum(+px) && +px > 0 ? +px : solPriceNow();
+  return fmtSol(+sol) + (isNum(p) ? ' · $' + (+sol * p).toFixed(2) : '');
+}
+window.__smsSizePrice = maybeLockSizeUnit;
+initSizeUnit();
 const T_state = { solPrice: null };
 
 /* ---------------- RPC ---------------- */
@@ -2391,7 +2504,10 @@ function suggestedBuySol(t) {
   if (!acctUsd) return { sol: 0, note: 'Set account size or connect a wallet for sizing' };
   const sizePct = Math.min(100, t.entry.notionalPct);
   const fullUsd = acctUsd * sizePct / 100, trancheUsd = fullUsd * 0.4;
-  const raw = trancheUsd / sp; const cap = activeKey === 'burner' && A.on ? Math.min(S.maxSolPerTrade, A.maxSolPerTrade) : S.maxSolPerTrade;
+  const raw = trancheUsd / sp;
+  const tradeCap = solCap(S.maxSolPerTrade), autoCap = solCap(A.maxSolPerTrade);
+  const cap = activeKey === 'burner' && A.on && tradeCap != null && autoCap != null ? Math.min(tradeCap, autoCap) : tradeCap;
+  if (cap == null) return { sol: 0, note: 'SOL price unavailable — USD sizes can’t be converted' };
   const sol = Math.max(0, Math.min(raw, cap));
   return { sol: +sol.toFixed(4), note: `Tranche 1/3 (40%) of ${sizePct.toFixed(1)}% size on ${usd(acctUsd)}${raw > cap ? ` · capped at ${cap} SOL` : ''}` };
 }
@@ -2429,7 +2545,9 @@ function burnerTradeCap() {
 function clampAutoBuy(requested) {
   const bc = burnerTradeCap();
   if (!bc.ok) return { sol: 0, err: bc.err, clamped: false };
-  const sol = Math.min(+requested || 0, A.maxSolPerTrade, S.maxSolPerTrade, bc.byPct);
+  const autoCap = solCap(A.maxSolPerTrade), globalCap = solCap(S.maxSolPerTrade);
+  if (autoCap == null || globalCap == null) return { sol: 0, err: 'SOL price unavailable — USD sizes can’t be converted', clamped: false };
+  const sol = Math.min(+requested || 0, autoCap, globalCap, bc.byPct);
   return { sol, err: null, clamped: (+requested || 0) > sol + 1e-9, byPct: bc.byPct, stale: bc.stale, bal: bc.sol };
 }
 function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
@@ -2437,15 +2555,20 @@ function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
   if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
   if (walletKey === 'burner' && !w.kp) errs.push('Burner wallet is locked — unlock it first');
   if (!(sol > 0)) errs.push('Amount must be > 0');
-  const cap = auto ? Math.min(S.maxSolPerTrade, A.maxSolPerTrade) : S.maxSolPerTrade;
-  if (sol > cap + 1e-9) errs.push(`Exceeds max ${cap} SOL per ${auto ? 'auto ' : ''}trade (Settings)`);
+  const tradeCap = solCap(S.maxSolPerTrade), autoCap = solCap(A.maxSolPerTrade);
+  if (tradeCap == null || (auto && autoCap == null)) errs.push('SOL price unavailable — USD sizes can’t be converted. Switch Size unit to SOL to trade manually.');
+  const cap = auto && tradeCap != null && autoCap != null ? Math.min(tradeCap, autoCap) : tradeCap;
+  if (cap != null && sol > cap + 1e-9) errs.push(`Exceeds max ${cap.toFixed(4)} SOL per ${auto ? 'auto ' : ''}trade`);
   if (walletKey === 'burner') {
     const bc = burnerTradeCap();
     if (!bc.ok) errs.push(bc.err);
     else if (!auto && sol > bc.byPct + 1e-9) errs.push(`Exceeds max ${A.balancePct}% of burner balance: ${sol} > ${bc.byPct.toFixed(4)} SOL (${bc.sol.toFixed(4)} SOL${bc.stale ? ' last known' : ''} × ${A.balancePct}%)`);
   }
-  const spent = spentToday(); if (spent + sol > S.dailyMaxSol + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${S.dailyMaxSol} SOL`);
-  if (auto) { const as = spentToday(r => r.auto); if (as + sol > A.dailyCap + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${A.dailyCap} SOL`); }
+  const spent = spentToday();
+  const dailyCap = solCap(S.dailyMaxSol);
+  if (dailyCap == null) errs.push('SOL price unavailable — USD daily cap can’t be converted');
+  else if (spent + sol > dailyCap + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${dailyCap.toFixed(4)} SOL`);
+  if (auto) { const as = spentToday(r => r.auto); const autoDaily = solCap(A.dailyCap); if (autoDaily == null) errs.push('SOL price unavailable — USD auto cap can’t be converted'); else if (as + sol > autoDaily + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${autoDaily.toFixed(4)} SOL`); }
   const open = openPositions(); const held = open.some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
   if (!held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
   if (isNum(w.sol) && sol + S.reserveSol > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${S.reserveSol} reserve`);
@@ -2579,7 +2702,7 @@ function renderWallet() {
         : `<div class="mt-1 text-[11px] text-slate-500">Not created yet — see Burner wallet below.</div>`}
     </div>`;
   $('walletInfo').innerHTML = `<div class="space-y-2">${wRow(ph)}${wRow(bu)}</div>
-    ${anyConn ? `<div class="mt-2 flex items-center justify-between text-[11px]"><span>Today: <b class="text-slate-200">${spentToday().toFixed(3)}</b> / ${S.dailyMaxSol} SOL spent · max ${S.maxSolPerTrade} SOL/trade</span><button data-act="refresh" class="text-violet-300 hover:underline">↻ Balances</button></div>` : ''}`;
+    ${anyConn ? `<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]"><span class="whitespace-normal break-words">Today: <b class="text-slate-200">${solWithUsd(spentToday())}</b> / ${esc(sizeHint(S.dailyMaxSol) || (S.dailyMaxSol + ' ' + unitWord()))} · max ${esc(sizeHint(S.maxSolPerTrade) || (S.maxSolPerTrade + ' ' + unitWord()))}</span><button data-act="refresh" class="text-violet-300 hover:underline">↻ Balances</button></div>` : ''}`;
   $('walletInfo').querySelectorAll('input[name=activeW]').forEach(r => r.addEventListener('change', () => setActive(r.value)));
   $('walletInfo').querySelector('[data-act=connect]')?.addEventListener('click', () => connectPhantom(false));
   $('walletInfo').querySelector('[data-act=disconnect]')?.addEventListener('click', () => disconnectPhantom(false));
@@ -2597,15 +2720,20 @@ function hydrate() {
     const ok = t.verdict === 'Candidate';
     el.innerHTML = `<div class="rounded-xl bg-ink-900/70 border border-white/5 p-2.5">
       <div class="flex items-center gap-1.5">
-        <input type="number" min="0" step="0.001" value="${s.sol || ''}" placeholder="SOL" class="buy-amt w-20 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in SOL" />
-        <span class="text-[11px] text-slate-500">SOL</span>
+        <input type="number" min="0" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" value="${s.sol ? (sizeStore === 'usd' && solPriceNow() ? (s.sol * solPriceNow()).toFixed(2) : s.sol) : ''}" placeholder="${unitWord()}" class="buy-amt w-24 rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5 text-xs font-mono" aria-label="Buy amount in ${unitWord()}" />
+        <span class="text-[11px] text-slate-500 whitespace-normal break-words">${unitWord()}${s.sol && solPriceNow() ? ' · ' + esc(sizeHint(sizeStore === 'usd' ? s.sol * solPriceNow() : s.sol)) : ''}</span>
         <button class="btn-buy flex-1 rounded-lg py-1.5 text-xs font-bold ${ok ? 'bg-emerald-500 hover:bg-emerald-400 text-ink-950' : 'bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200'}">Buy${ok ? '' : ' ⚠'}</button>
       </div>
       <div class="text-[10px] text-slate-500 mt-1">${esc(s.note)} · via ${esc(w.label)}</div>
       <div class="flex items-center gap-1 mt-1.5 text-[11px]"><span class="text-slate-400 mr-auto">${w.pubkey ? `Hold: <b class="text-slate-200">${hold ? fmtTok(h.ui) : '0'}</b>` : 'Wallet not connected'}</span>
         ${[25, 50, 100].map(p => `<button data-pct="${p}" class="btn-sell rounded-md px-2 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/20 disabled:opacity-30" ${hold ? '' : 'disabled'}>Sell ${p}%</button>`).join('')}</div>
     </div>`;
-    el.querySelector('.btn-buy').addEventListener('click', () => openTrade('buy', mint, { sol: +el.querySelector('.buy-amt').value }));
+    el.querySelector('.btn-buy').addEventListener('click', () => {
+      const raw = +el.querySelector('.buy-amt').value;
+      const sol = solCap(raw);
+      if (sol == null) return toast('SOL price unavailable — switch Size unit to SOL to buy manually.', 'err', 7000);
+      openTrade('buy', mint, { sol });
+    });
     el.querySelectorAll('.btn-sell').forEach(b => b.addEventListener('click', () => openTrade('sell', mint, { pct: +b.dataset.pct })));
   });
 }
@@ -3154,7 +3282,7 @@ function renderPortfolio() {
       <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}<button type="button" data-edit-stop="${esc(p.key)}" class="block mt-1 text-[10px] text-violet-300">Edit stop</button></td></tr>`; }).join('');
   const logRows = [...LOG].reverse().slice(0, 40).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
       <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}</div></td>
-      <td class="pr-2 font-mono">${fmtSol(r.solAmount)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
+      <td class="pr-2 font-mono whitespace-normal break-words">${solWithUsd(r.solAmount, r.solUsd)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
       <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
       <td class="font-mono"><a class="text-violet-300 hover:underline" target="_blank" rel="noopener" href="${solscanTx(r.signature)}">${esc(short(r.signature))} ↗</a></td></tr>`).join('');
   const cards = open.map(posCard).join('');
@@ -3162,7 +3290,7 @@ function renderPortfolio() {
   el.innerHTML = `<section id="sec-portfolio" class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
       <div class="flex flex-wrap gap-2 text-[11px]"><button id="pfView" class="text-violet-300 hover:underline">${posTableView ? 'Cards' : 'Table view'}</button><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
-    <div class="text-[11px] text-slate-500 mb-2 whitespace-normal break-words">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
+    <div class="text-[11px] text-slate-500 mb-2 whitespace-normal break-words">Open positions ${open.length}/${maxPos()} · spent today ${solWithUsd(spentToday())} / ${esc(sizeHint(S.dailyMaxSol) || S.dailyMaxSol + ' ' + unitWord())} (auto ${solWithUsd(spentToday(r => r.auto))} / ${esc(sizeHint(A.dailyCap) || A.dailyCap + ' ' + unitWord())}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
     ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
     ${equityCardHtml()}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
@@ -3381,13 +3509,15 @@ function renderBurner() {
       </div>`}
       <div class="border-t border-white/5 pt-2.5">
         <div class="font-semibold text-slate-200 mb-1.5">🤖 Auto-trade hard caps</div>
+        ${sizeToggleHtml()}
+        <div class="text-[10px] text-slate-500 whitespace-normal break-words">${sizeStore === sizeUnit ? 'Amounts stay in ' + unitWord() + ' and do not drift with the SOL price.' : 'Waiting for the SOL price to convert saved SOL amounts into USD once.'}</div>
         <div class="grid grid-cols-2 gap-2">
-          ${num('gDaily', S.dailyMaxSol, 'any', 'Global daily max (SOL, manual+auto)', 'min="0"')}
-          ${num('gMaxTrade', S.maxSolPerTrade, 'any', 'Global max SOL per trade', 'min="0"')}
+          ${sizeNum('gDaily', S.dailyMaxSol, 'Global daily max', 'min="0"')}
+          ${sizeNum('gMaxTrade', S.maxSolPerTrade, 'Global max per trade', 'min="0"')}
           ${num('aMaxPos', maxPos(), '1', 'Max open positions', 'min="1" max="20"')}
           ${num('aBalPct', A.balancePct, '1', 'Max % of balance per trade', 'min="1" max="100"')}
-          ${num('aMaxTrade', A.maxSolPerTrade, '0.01', 'Max SOL / auto trade', 'min="0.001"')}
-          ${num('aDaily', A.dailyCap, '0.01', 'Auto daily cap (SOL)', 'min="0.001"')}
+          ${sizeNum('aMaxTrade', A.maxSolPerTrade, 'Max per auto trade', 'min="0"')}
+          ${sizeNum('aDaily', A.dailyCap, 'Auto daily cap', 'min="0"')}
           ${num('aMinConv', A.minConviction, '1', 'Min conviction', 'min="50" max="100"')}
           ${num('aImpact', A.maxImpact, '0.1', 'Max price impact % (≤5)', 'min="0.1" max="5"')}
           ${num('aSlip', A.slipCap, '0.1', 'Slippage cap % (≤15)', 'min="0.1" max="15"')}
@@ -3424,7 +3554,7 @@ function renderBurner() {
         <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan selected sources every interval</label>
         <label class="mt-1 flex items-center gap-2"><input id="aBrk" type="checkbox" ${A.breakoutOnly ? 'checked' : ''} class="accent-violet-500" /> Auto-buy only BREAKOUT-confirmed tokens</label>
         <label class="mt-1 flex items-center gap-2"><input id="aMom" type="checkbox" ${A.momentumOn ? 'checked' : ''} class="accent-violet-500" /> Momentum breakout (new tokens)</label>
-        <p class="text-[10px] text-slate-500 mt-1">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${S.maxSolPerTrade} SOL/trade &amp; ${S.dailyMaxSol} SOL/day.</p>
+        <p class="text-[10px] text-slate-500 mt-1 whitespace-normal break-words">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${esc(sizeHint(S.maxSolPerTrade) || S.maxSolPerTrade + ' ' + unitWord())}/trade &amp; ${esc(sizeHint(S.dailyMaxSol) || S.dailyMaxSol + ' ' + unitWord())}/day.</p>
         <div class="flex gap-2 mt-2"><button id="aSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save caps</button>
           ${A.on ? `<button id="aKill" class="flex-[2] rounded-lg py-2 font-extrabold bg-rose-600 hover:bg-rose-500 text-white">⛔ KILL SWITCH</button>` : `<button id="aOn" class="flex-[2] rounded-lg py-2 font-bold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-40" ${b.kp ? '' : 'disabled title="Unlock burner first"'}>Auto-trade ON</button>`}</div>
         <div id="autoStatus" class="mt-1.5 text-[10px] text-slate-500">${esc(autoStatusText())}</div>
@@ -3436,6 +3566,7 @@ function renderBurner() {
   on('bCopy', async () => { if (await copyText(rec.pub)) toast('Burner address copied', 'ok', 1500); });
   on('aSave', () => { readAutoInputs(); toast('Auto caps saved', 'ok'); renderBurner(); });
   on('aOn', enableAuto); on('aKill', () => killSwitch('manual'));
+  wireSizeToggle($('burnerBox'));
   if (rec) renderQR(rec.pub);
   renderKillFab();
 }
@@ -4120,7 +4251,11 @@ async function handleWhaleEvent(ev) {
   const cap = positionCapSol();
   if (cap.err) { whaleLog({ mint: ev.mint, whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: cap.err }); return; }
   const reduced = screen.decision === 'reduced';
-  const plan = planTranches({ cap: cap.cap, globalMax: S.maxSolPerTrade, reduced, tranche1: COPY.tranche1Sol, tranche2: COPY.tranche2Sol });
+  const globalMax = solCap(S.maxSolPerTrade);
+  const t1 = COPY.tranche1Sol === '' || COPY.tranche1Sol == null ? '' : solCap(COPY.tranche1Sol);
+  const t2 = COPY.tranche2Sol === '' || COPY.tranche2Sol == null ? '' : solCap(COPY.tranche2Sol);
+  if (globalMax == null || t1 == null || t2 == null) { whaleLog({ mint: ev.mint, whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: 'SOL price unavailable — USD sizes can’t be converted' }); return; }
+  const plan = planTranches({ cap: cap.cap, globalMax, reduced, tranche1: t1, tranche2: t2 });
   if (!(plan.t1 >= 0.001)) { whaleLog({ mint: ev.mint, whale: whale.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: 'tranche 1 below 0.001 SOL' }); return; }
   const book = { mint: ev.mint, symbol: ev.symbol || short(ev.mint), whales: trig.wallets.map(w => ({ wallet: w, label: (WHALES.find(x => x.wallet === w) || whale).label, fullyExited: false })), fullSol: plan.full, t1Sol: plan.t1, t2Sol: plan.t2, t1Px: nowPx || whalePx, t1Ts: Date.now(), tranche2Done: false, trigger: trig.id, soft: screen.soft || [], clamped: plan.clamped, reduced };
   if (!book.whales.some(w => w.wallet === ev.wallet)) book.whales.push({ wallet: ev.wallet, label: whale.label, fullyExited: false });
@@ -4245,8 +4380,8 @@ function renderWhale() {
         ${num('cChase', COPY.maxChasePct, '1', 'Max chase %', 'min="0"')}
         ${num('cT2min', COPY.tranche2Min, '1', 'Tranche 2 after (min)', 'min="1"')}
         ${num('cMinLiq', COPY.minLiqUsd, '1000', 'Min liquidity (USD)', 'min="0"')}
-        ${num('cTr1', COPY.tranche1Sol, '0.01', 'Copy tranche 1 (SOL)', 'min="0" placeholder="percent"')}
-        ${num('cTr2', COPY.tranche2Sol, '0.01', 'Copy tranche 2 (SOL)', 'min="0" placeholder="percent"')}
+        ${sizeNum('cTr1', COPY.tranche1Sol, 'Copy tranche 1', 'min="0" placeholder="percent"')}
+        ${sizeNum('cTr2', COPY.tranche2Sol, 'Copy tranche 2', 'min="0" placeholder="percent"')}
       </div>
       <label class="block"><span class="text-slate-400">Custom RPC URL <span class="text-slate-600">(optional, used for every RPC call when set)</span></span><input id="cRpc" type="url" value="${esc(COPY.customRpc || '')}" placeholder="https://mainnet.helius-rpc.com/?api-key=…" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" /></label>
       <div id="whaleList">${group('core', 'Core')}${group('confirm', 'Confirm')}</div>
@@ -4418,7 +4553,8 @@ async function sniperSafety(p) {
   const checks = [];
   const slip = Math.round(Math.min(S.slippagePct, A.slipCap) * 100);
   try {
-    await getQuote({ inputMint: WSOL, outputMint: p.mint, amountRaw: BigInt(Math.max(1, Math.round(SNIPER.sizeSol * 1e9))), slippageBps: slip });
+    const probe = solCap(SNIPER.sizeSol);
+    await getQuote({ inputMint: WSOL, outputMint: p.mint, amountRaw: BigInt(Math.max(1, Math.round((probe || 0.01) * 1e9))), slippageBps: slip });
     checks.push({ name: 'jupiter', ok: true, detail: 'route' });
   } catch { checks.push({ name: 'jupiter', ok: false, detail: 'no route' }); return cacheSafety(p.mint, checks); }
   let decimals = 6;
@@ -4490,12 +4626,15 @@ async function sniperPoll() {
       const openSnipes = openPositions().filter(x => x.sniper).length;
       if (openSnipes >= SNIPER.maxOpen) { sniperNote('max concurrent snipes ' + openSnipes + '/' + SNIPER.maxOpen, 'warn'); break; }
       const spent = spentToday(r => r.sniper);
-      let sol = SNIPER.sizeSol;
+      let sol = solCap(SNIPER.sizeSol);
+      const sniperDaily = solCap(SNIPER.dailySol);
+      const globalMax = solCap(S.maxSolPerTrade);
+      if (sol == null || sniperDaily == null || globalMax == null) { sniperNote('SOL price unavailable — USD snipe size can’t be converted', 'warn'); break; }
       if (gate.action === 'halve') sol = +(sol / 2).toFixed(6);
-      if (spent + sol > SNIPER.dailySol + 1e-9) { sniperNote('sniper daily cap ' + spent.toFixed(3) + '/' + SNIPER.dailySol + ' SOL', 'warn'); break; }
+      if (spent + sol > sniperDaily + 1e-9) { sniperNote('sniper daily cap ' + spent.toFixed(3) + ' / ' + sniperDaily.toFixed(3) + ' SOL', 'warn'); break; }
       const bc = burnerTradeCap();
       if (!bc.ok) { sniperNote(bc.err, 'warn'); break; }
-      sol = Math.min(sol, S.maxSolPerTrade, bc.byPct);
+      sol = Math.min(sol, globalMax, bc.byPct);
       sol = +sol.toFixed(6);
       if (!(sol >= 0.001)) { sniperNote(p.symbol + ' size too small after caps', 'warn'); continue; }
       const errs = buyGuards('burner', p.mint, sol);
@@ -4593,15 +4732,15 @@ function renderSniper() {
         ${num('sAgeMax', SNIPER.maxAgeMin, '1', 'Max pool age (min)', 'min="1"')}
         ${num('sLiq', SNIPER.minLiq, '100', 'Min liquidity USD', 'min="0"')}
         ${num('sMcap', SNIPER.maxMcap, '1000', 'Max mcap USD', 'min="1000"')}
-        ${num('sSize', SNIPER.sizeSol, '0.01', 'SOL per snipe', 'min="0.001"')}
-        ${num('sDaily', SNIPER.dailySol, '0.01', 'Sniper daily cap (SOL)', 'min="0.001"')}
+        ${sizeNum('sSize', SNIPER.sizeSol, 'Per snipe', 'min="0"')}
+        ${sizeNum('sDaily', SNIPER.dailySol, 'Sniper daily cap', 'min="0"')}
         ${num('sOpen', SNIPER.maxOpen, '1', 'Max concurrent snipes', 'min="1" max="10"')}
       </div>
       <div class="flex gap-2">
         <button id="sSave" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save sniper</button>
         ${SNIPER.on ? `<button id="sOff" class="flex-1 rounded-lg py-1.5 font-bold bg-rose-600 hover:bg-rose-500 text-white">Sniper OFF</button>` : `<button id="sOn" class="flex-1 rounded-lg py-1.5 font-bold bg-amber-400 hover:bg-amber-300 text-ink-900">Sniper ON</button>`}
       </div>
-      <div class="text-[11px] text-slate-500">Candidates ${sniperRows.length} · sniped today ${spentToday(r => r.sniper).toFixed(3)}/${SNIPER.dailySol} SOL</div>
+      <div class="text-[11px] text-slate-500 whitespace-normal break-words">Candidates ${sniperRows.length} · sniped today ${solWithUsd(spentToday(r => r.sniper))} / ${esc(sizeHint(SNIPER.dailySol) || SNIPER.dailySol + ' ' + unitWord())}</div>
       <ul class="max-h-40 overflow-y-auto scroll-thin font-mono text-[11px]">${rows || '<li class="text-slate-500">No pools seen yet.</li>'}</ul>
       <ul id="sniperFeed" class="space-y-0.5 max-h-36 overflow-y-auto scroll-thin font-mono text-[11px]">${sniperFeedHtml()}</ul>
     </div></details>`;
@@ -4749,10 +4888,13 @@ function listDistance(spec, px, zone) {
 }
 function listSolSize(spec) {
   const bal = isNum(WALLETS.burner.sol) ? WALLETS.burner.sol : WALLETS.burner.lastSol;
-  let sol = spec.sizeMode === 'pct' && isNum(spec.sizePct) && isNum(bal) ? bal * spec.sizePct / 100 : +spec.sizeSol || 0;
+  let sol = spec.sizeMode === 'pct' && isNum(spec.sizePct) && isNum(bal) ? bal * spec.sizePct / 100 : solCap(spec.sizeSol);
+  if (sol == null) return 0;
   const cap = burnerTradeCap();
+  const maxTrade = solCap(S.maxSolPerTrade);
   if (cap.ok) sol = Math.min(sol, cap.byPct);
-  sol = Math.min(sol, S.maxSolPerTrade);
+  if (maxTrade == null) return 0;
+  sol = Math.min(sol, maxTrade);
   return sol;
 }
 function listBuyBlocks(sol) {
@@ -4761,8 +4903,12 @@ function listBuyBlocks(sol) {
   const cap = burnerTradeCap();
   if (!cap.ok) errs.push(cap.err);
   else if (sol > cap.byPct + 1e-9) errs.push('above balance % cap');
-  if (sol > S.maxSolPerTrade + 1e-9) errs.push('above max per trade');
-  if (spentToday() + sol > S.dailyMaxSol + 1e-9) errs.push('above daily cap');
+  const maxTrade = solCap(S.maxSolPerTrade), daily = solCap(S.dailyMaxSol);
+  if (maxTrade == null || daily == null) errs.push('SOL price unavailable — USD sizes can’t be converted');
+  else {
+    if (sol > maxTrade + 1e-9) errs.push('above max per trade');
+    if (spentToday() + sol > daily + 1e-9) errs.push('above daily cap');
+  }
   if (openPositions().filter(p => p.open).length >= maxPos()) errs.push('max positions');
   return errs;
 }
@@ -4878,7 +5024,7 @@ function renderMyList() {
       <div class="grid grid-cols-2 gap-2 text-[11px]">
         <label>Default entry<select id="mlMode" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1">${MYLIST_MODES.map(v => `<option value="${v}" ${MYLIST.mode === v ? 'selected' : ''}>${modeLabel(v)}</option>`).join('')}</select></label>
         <label>Size<select id="mlSizeMode" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1"><option value="sol" ${MYLIST.sizeMode !== 'pct' ? 'selected' : ''}>SOL amount</option><option value="pct" ${MYLIST.sizeMode === 'pct' ? 'selected' : ''}>% of balance</option></select></label>
-        <label>SOL<input id="mlSizeSol" type="number" step="0.01" min="0.001" value="${MYLIST.sizeSol}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Size (${unitWord()})<input id="mlSizeSol" type="number" step="${sizeStore === 'usd' ? '0.01' : '0.001'}" min="0" value="${MYLIST.sizeSol}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /><span class="block text-[10px] text-slate-500 whitespace-normal break-words">${esc(sizeHint(MYLIST.sizeSol))}</span></label>
         <label>% balance<input id="mlSizePct" type="number" step="1" min="1" max="100" value="${MYLIST.sizePct}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
         <label>Stop % below entry<input id="mlStop" type="number" step="1" min="1" max="90" value="${MYLIST.stopPct}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
         <label>Stop price (optional)<input id="mlStopPx" value="${MYLIST.stopPx ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
@@ -5097,6 +5243,12 @@ $('btnSaveList')?.addEventListener('click', () => {
 function fillSettings() {
   $('setRpc').value = S.rpc; $('setSlip').value = S.slippagePct; $('setMaxTrade').value = S.maxSolPerTrade; $('setDaily').value = S.dailyMaxSol; $('setReserve').value = S.reserveSol;
   $('setPrioLevel').value = S.prioLevel; $('setPrioMax').value = S.prioMaxSol; $('setJup').value = S.jupBase; $('setJupKey').value = S.jupKey || ''; $('setMaxPos').textContent = maxPos();
+  if ($('setMaxTradeUnit')) $('setMaxTradeUnit').textContent = '(' + unitWord() + ')';
+  if ($('setDailyUnit')) $('setDailyUnit').textContent = '(' + unitWord() + ')';
+  if ($('setMaxTradeHint')) $('setMaxTradeHint').textContent = sizeHint(S.maxSolPerTrade);
+  if ($('setDailyHint')) $('setDailyHint').textContent = sizeHint(S.dailyMaxSol);
+  const tog = $('sizeToggleSettings');
+  if (tog) { tog.innerHTML = sizeToggleHtml(); wireSizeToggle(tog); }
 }
 $('setRpcPreset').addEventListener('change', (e) => { if (e.target.value) $('setRpc').value = e.target.value; e.target.value = ''; });
 $('btnSaveSettings').addEventListener('click', () => {
@@ -5211,6 +5363,7 @@ function wireReadyNow() {
 window.__smsReady = renderReadyNow;
 
 fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
+maybeLockSizeUnit();
 setInterval(() => { refreshHolderWatch(); }, 60 * 1000);
 setTimeout(() => { refreshHolderWatch(); }, 20000);
 if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);

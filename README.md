@@ -34,6 +34,7 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
 ## Trading features
 - **Phantom:** connect/disconnect, address, SOL balance, and token balances for the analysed tokens. Every trade opens a confirmation window (amount in/out, minimum received, price impact, slippage, route, priority fee, quote age) and then **you sign it in Phantom**. The page then shows the Solscan link and polls until the trade is confirmed.
 - **Per card:** Buy (SOL amount pre-filled from the position size: risk % ÷ stop distance, first tranche 40%, capped) and Sell 25 / 50 / 100%.
+- **Size unit** (Auto-trade hard caps, and the safety settings): **USD** or **SOL**, saved in `sms:sizeunit`. USD is the default. Amounts are stored in the unit you typed, so a $25 cap stays $25. Existing SOL caps are converted once, at the current SOL price, when the unit changes. Percent-of-balance fields stay percents. If the SOL price is missing, USD-sized auto buys stop with a clear message; SOL sizes can still be used manually.
 - **Safety guards:**
   - global max SOL per trade (default 0.1) and global daily max (default 0.3 SOL, manual + auto), both editable under Auto-trade hard caps with no upper limit;
   - the separate auto daily cap is not clamped to 0.3;
