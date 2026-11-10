@@ -2003,6 +2003,7 @@ async function refreshBalances(which) {
   await Promise.all(keys.map(async k => { const w = WALLETS[k]; if (!w.pubkey) return;
     try { const b = await getBalances(w.pubkey); w.sol = b.sol; w.tokens = b.tokens; w.err = null; if (k === 'burner') rememberBurnerSol(b.sol); }
     catch (e) { w.err = e.message; } }));
+  if (!which || which === 'burner') recordEquity(false);
   renderWallet(); hydrate(); renderPortfolio(); renderBurner();
 }
 async function signAndSend(walletKey, tx) {
@@ -2020,8 +2021,8 @@ async function signAndSend(walletKey, tx) {
 /* ---------------- trade log & positions ---------------- */
 let LOG = load(LS.log, []);
 const saveLog = () => { LOG = LOG.slice(-500); save(LS.log, LOG); };
-function logTrade(rec) { LOG.push(rec); saveLog(); renderPortfolio(); return rec; }
-function updateTrade(id, patch) { const r = LOG.find(x => x.id === id); if (r) { Object.assign(r, patch); saveLog(); renderPortfolio(); } return r; }
+function logTrade(rec) { LOG.push(rec); saveLog(); noteTradeForEquity(rec); renderPortfolio(); return rec; }
+function updateTrade(id, patch) { const r = LOG.find(x => x.id === id); if (r) { Object.assign(r, patch); saveLog(); noteTradeForEquity(r); renderPortfolio(); } return r; }
 let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
@@ -2394,32 +2395,310 @@ function posMoney(p, lp) {
   const pnlSol = isNum(valueSol) ? valueSol - costSolLeft : null;
   return { pnl, pnlUsd, pnlSol, valueUsd, valueSol, costSolLeft };
 }
-function wealthHtml(open) {
-  let usdSum = 0, solSum = 0, usdKnown = false, solKnown = false;
-  for (const p of open) {
-    const lp = livePrices.get(p.mint)?.price;
-    const m = posMoney(p, lp);
-    if (isNum(m.pnlUsd)) { usdSum += m.pnlUsd; usdKnown = true; }
-    if (isNum(m.pnlSol)) { solSum += m.pnlSol; solKnown = true; }
+const TEHRAN_MS = 3.5 * 60 * 60 * 1000;
+const EQUITY_YEAR = 365 * 24 * 3600e3;
+let equityMem = null;
+let equityRange = 'day';
+try { const r = localStorage.getItem('sms:equityrange'); if (r === 'day' || r === 'week' || r === 'month' || r === 'all') equityRange = r; } catch { /* day */ }
+function pad2(n) { return String(n).padStart(2, '0'); }
+function tehranParts(ts) {
+  const d = new Date(ts + TEHRAN_MS);
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, day: d.getUTCDate(), h: d.getUTCHours(), min: d.getUTCMinutes() };
+}
+function tehranDayKey(ts) { const p = tehranParts(ts); return p.y + '-' + pad2(p.m) + '-' + pad2(p.day); }
+function tehranDayStart(ts) { const p = tehranParts(ts); return Date.UTC(p.y, p.m - 1, p.day) - TEHRAN_MS; }
+function fmtEquity(n, unit, signed) {
+  if (!isNum(n)) return '—';
+  const sign = signed ? (n > 0 ? '+' : n < 0 ? '−' : '') : (n < 0 ? '−' : '');
+  const a = Math.abs(n);
+  if (unit === 'sol') return sign + a.toFixed(4) + ' SOL';
+  return sign + '$' + a.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function equityStep(age) {
+  if (age < 24 * 3600e3) return 0;
+  if (age < 7 * 24 * 3600e3) return 30 * 60e3;
+  if (age < 30 * 24 * 3600e3) return 2 * 3600e3;
+  return 24 * 3600e3;
+}
+function downsampleEquity(points) {
+  const now = Date.now();
+  const sorted = points.slice().sort((a, b) => a.t - b.t);
+  const out = [];
+  let prev = '';
+  for (const p of sorted) {
+    if (!p || !isNum(p.t) || p.t < now - EQUITY_YEAR || p.t > now + 60000) continue;
+    if (!isNum(p.sol) && !isNum(p.usd)) continue;
+    const step = equityStep(Math.max(0, now - p.t));
+    const key = step ? step + ':' + Math.floor(p.t / step) : 't:' + p.t;
+    const row = { t: p.t, sol: isNum(p.sol) ? p.sol : null, usd: isNum(p.usd) ? p.usd : null };
+    if (step && key === prev) out[out.length - 1] = row;
+    else { out.push(row); prev = key; }
   }
-  const useSol = wealthUnit === 'sol';
-  const n = useSol ? solSum : usdSum;
-  const known = useSol ? solKnown : usdKnown;
-  const up = known && n >= 0;
-  const glow = !known ? '' : up ? 'shadow-[0_0_28px_rgba(34,197,94,0.16)]' : 'shadow-[0_0_28px_rgba(244,63,94,0.16)]';
-  const shown = !known ? '—' : (useSol ? ((n >= 0 ? '+' : '') + n.toFixed(4) + ' SOL') : ((n >= 0 ? '+' : '') + usd(usdSum, 2)));
-  return `<div class="glass rounded-2xl p-4 mb-3 ${glow}">
-    <div class="flex flex-wrap items-center justify-between gap-2">
+  return out.slice(-4000);
+}
+function loadEquity() {
+  if (equityMem) return equityMem;
+  let raw = [];
+  try { raw = JSON.parse(localStorage.getItem('sms:equity') || '[]'); } catch { raw = []; }
+  if (!Array.isArray(raw)) raw = [];
+  const clean = downsampleEquity(raw);
+  equityMem = clean;
+  if (JSON.stringify(clean) !== JSON.stringify(raw)) {
+    try { localStorage.setItem('sms:equity', JSON.stringify(clean)); } catch { /* quota */ }
+  }
+  return equityMem;
+}
+function saveEquity(pts) {
+  equityMem = downsampleEquity(pts);
+  const write = (rows) => localStorage.setItem('sms:equity', JSON.stringify(rows));
+  try { write(equityMem); }
+  catch { equityMem = equityMem.slice(-Math.ceil(equityMem.length / 2) || 1); try { write(equityMem); } catch { /* keep memory */ } }
+}
+function burnerEquity() {
+  const w = WALLETS.burner;
+  if (!w?.pubkey) return null;
+  const bal = isNum(w.sol) ? w.sol : (isNum(w.lastSol) ? w.lastSol : null);
+  if (!isNum(bal)) return null;
+  const px = solUsd();
+  let posUsd = 0;
+  for (const p of positions()) {
+    if (p.wallet !== 'burner' || !p.open) continue;
+    const lp = livePrices.get(p.mint)?.price;
+    if (!isNum(lp) || !(p.qty > 0)) return null;
+    posUsd += p.qty * lp;
+  }
+  if (posUsd > 0 && !(isNum(px) && px > 0)) return null;
+  const sol = bal + (posUsd > 0 ? posUsd / px : 0);
+  const usd = isNum(px) && px > 0 ? bal * px + posUsd : null;
+  return { t: Date.now(), sol, usd };
+}
+function recordEquity(force) {
+  const snap = burnerEquity();
+  if (!snap) return false;
+  const pts = loadEquity();
+  const last = pts[pts.length - 1];
+  if (!force && last && snap.t - last.t < 4.5 * 60e3) return false;
+  pts.push({ t: snap.t, sol: snap.sol, usd: snap.usd });
+  saveEquity(pts);
+  return true;
+}
+function logStillOpen(wallet, mint) {
+  let bought = 0, qty = 0;
+  for (const r of LOG) {
+    if (r.status !== 'confirmed' || r.wallet !== wallet || r.mint !== mint) continue;
+    if (r.side === 'buy') {
+      if (bought > 0 && qty <= bought * 0.001) { bought = 0; qty = 0; }
+      const q = r.tokenAmount || 0;
+      bought += q; qty += q;
+    } else {
+      qty = Math.max(0, qty - (r.tokenAmount || 0));
+    }
+  }
+  return bought > 0 && qty > bought * 0.001;
+}
+function noteTradeForEquity(rec) {
+  if (!rec || rec.wallet !== 'burner' || rec.status !== 'confirmed' || rec.side !== 'sell') return;
+  if (logStillOpen('burner', rec.mint)) return;
+  if (!LOG.some(r => r.status === 'confirmed' && r.wallet === 'burner' && r.mint === rec.mint && r.side === 'buy')) return;
+  recordEquity(true);
+}
+function rangeStart(range) {
+  const now = Date.now();
+  if (range === 'week') return now - 7 * 86400000;
+  if (range === 'month') return now - 30 * 86400000;
+  if (range === 'all') return 0;
+  return now - 86400000;
+}
+function equityValue(p, unit) { const n = unit === 'sol' ? p?.sol : p?.usd; return isNum(n) ? n : null; }
+function currentEquity(unit) {
+  const live = burnerEquity();
+  const liveV = equityValue(live, unit);
+  if (isNum(liveV)) return liveV;
+  const pts = loadEquity();
+  for (let i = pts.length - 1; i >= 0; i--) { const n = equityValue(pts[i], unit); if (isNum(n)) return n; }
+  return null;
+}
+function rangeGrace(range) {
+  if (range === 'week') return 86400000;
+  if (range === 'month') return 2 * 86400000;
+  if (range === 'all') return Infinity;
+  return 6 * 3600e3;
+}
+function viewSeries(range, unit) {
+  const pts = loadEquity().slice();
+  const live = burnerEquity();
+  if (live && isNum(equityValue(live, unit))) pts.push({ t: live.t, sol: live.sol, usd: live.usd });
+  const start = rangeStart(range);
+  const grace = rangeGrace(range);
+  let prior = null;
+  const inside = [];
+  for (const p of pts) {
+    if (!isNum(equityValue(p, unit))) continue;
+    if (p.t < start) prior = p; else inside.push(p);
+  }
+  const closePrior = prior && start - prior.t <= grace;
+  return closePrior ? [prior, ...inside] : inside;
+}
+function periodStats(fromTs, unit) {
+  const by = new Map();
+  let realizedUsd = 0, realizedSol = 0, trades = 0, wins = 0;
+  const daily = new Map();
+  for (const r of LOG) {
+    if (r.status !== 'confirmed' || r.wallet !== 'burner') continue;
+    let c = by.get(r.mint);
+    if (!c || c.closed) c = { qty: 0, bought: 0, costUsd: 0, costSol: 0, pnlUsd: 0, pnlSol: 0, closed: false };
+    if (r.side === 'buy') {
+      const q = r.tokenAmount || 0, px = r.priceUsd || 0;
+      if (q > 0 && px > 0) { c.qty += q; c.bought += q; c.costUsd += q * px; }
+      c.costSol += r.solAmount || 0;
+      c.closed = false;
+    } else if (r.side === 'sell') {
+      const sold = r.tokenAmount || 0;
+      const avgUsd = c.qty > 0 ? c.costUsd / c.qty : 0;
+      const avgSol = c.qty > 0 ? c.costSol / c.qty : 0;
+      const pnlUsd = sold * (r.priceUsd || 0) - avgUsd * sold;
+      const pnlSol = (r.solAmount || 0) - avgSol * sold;
+      if (c.qty > 0 && sold > 0) {
+        const left = Math.max(0, c.qty - sold);
+        const keep = left / c.qty;
+        c.costUsd *= keep; c.costSol *= keep; c.qty = left;
+      }
+      c.pnlUsd += pnlUsd; c.pnlSol += pnlSol;
+      const inPeriod = isNum(r.ts) && r.ts >= fromTs;
+      if (inPeriod) {
+        realizedUsd += pnlUsd; realizedSol += pnlSol;
+        const key = tehranDayKey(r.ts);
+        const bucket = daily.get(key) || { usd: 0, sol: 0 };
+        bucket.usd += pnlUsd; bucket.sol += pnlSol;
+        daily.set(key, bucket);
+      }
+      if (c.bought > 0 && c.qty <= c.bought * 0.001) {
+        if (inPeriod) { trades++; if ((unit === 'sol' ? c.pnlSol : c.pnlUsd) > 0) wins++; }
+        c.closed = true;
+      }
+    }
+    by.set(r.mint, c);
+  }
+  return { realizedUsd, realizedSol, trades, wins, winRate: trades ? wins / trades * 100 : null, daily };
+}
+function smoothLine(pts) {
+  if (pts.length < 2) return '';
+  let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+function tehranAxis(ts, series) {
+  const p = tehranParts(ts);
+  const span = series.length > 1 ? series[series.length - 1].t - series[0].t : 0;
+  const hm = pad2(p.h) + ':' + pad2(p.min);
+  if (span < 36 * 3600e3) return hm;
+  if (span > 120 * 86400000) return p.y + '-' + pad2(p.m) + '-' + pad2(p.day);
+  return pad2(p.m) + '/' + pad2(p.day) + ' ' + hm;
+}
+function equityChart(series, unit, up) {
+  const VB_W = 320, VB_H = 112, padT = 10, padB = 8;
+  const vals = series.map(p => equityValue(p, unit));
+  if (!vals.length) return '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No snapshots yet. Burner equity (SOL balance + open positions) is saved every 5 minutes while this page is open, and when a trade closes.</p>';
+  let min = Math.min(...vals), max = Math.max(...vals);
+  const pad = (max - min) * 0.12 || Math.abs(max) * 0.02 || 1;
+  min -= pad; max += pad;
+  const xy = series.map((p, i) => {
+    const v = equityValue(p, unit);
+    const x = series.length === 1 ? VB_W / 2 : (i / (series.length - 1)) * VB_W;
+    const t = max === min ? 0.5 : (v - min) / (max - min);
+    const y = padT + (1 - t) * (VB_H - padT - padB);
+    return { x, y };
+  });
+  const stroke = up == null ? '#a78bfa' : up ? '#34d399' : '#fb7185';
+  const line = smoothLine(xy);
+  const area = line ? `${line} L ${xy[xy.length - 1].x.toFixed(2)} ${VB_H} L ${xy[0].x.toFixed(2)} ${VB_H} Z` : '';
+  const dot = xy.length === 1 ? `<circle cx="${xy[0].x.toFixed(2)}" cy="${xy[0].y.toFixed(2)}" r="3.5" fill="${stroke}"/>` : '';
+  const picks = series.length === 1 ? [series[0]] : [series[0], series[Math.floor((series.length - 1) / 2)], series[series.length - 1]];
+  return `<div class="text-[10px] text-slate-500 whitespace-normal break-words">High ${fmtEquity(Math.max(...vals), unit, false)} · Low ${fmtEquity(Math.min(...vals), unit, false)}</div>
+    <svg viewBox="0 0 ${VB_W} ${VB_H}" class="mt-1 w-full h-auto" role="img" aria-label="Equity curve">
+      <defs><linearGradient id="eqFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${stroke}" stop-opacity="0.35"/><stop offset="100%" stop-color="${stroke}" stop-opacity="0"/></linearGradient></defs>
+      <line x1="0" y1="${(padT + (VB_H - padB)) / 2}" x2="${VB_W}" y2="${(padT + (VB_H - padB)) / 2}" stroke="rgba(255,255,255,0.08)"/>
+      ${area ? `<path d="${area}" fill="url(#eqFill)"/>` : ''}${line ? `<path d="${line}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}${dot}
+    </svg>
+    <div class="mt-1 flex justify-between gap-2 text-[10px] leading-snug text-slate-500">${picks.map(p => `<span class="min-w-0 whitespace-normal break-words">${esc(tehranAxis(p.t, series))}</span>`).join('')}</div>
+    <div class="text-[10px] text-slate-600">Tehran time (UTC+3:30)</div>`;
+}
+function dailyBars(stats, fromTs, unit) {
+  const keys = [];
+  let t = tehranDayStart(Math.max(fromTs, Date.now() - 31 * 86400000));
+  const end = tehranDayStart(Date.now());
+  for (let i = 0; t <= end && i < 32; i++, t += 86400000) keys.push(tehranDayKey(t));
+  if (keys.length < 2) return '';
+  const rows = keys.map(k => ({ k, v: unit === 'sol' ? (stats.daily.get(k)?.sol || 0) : (stats.daily.get(k)?.usd || 0) }));
+  const max = Math.max(...rows.map(r => Math.abs(r.v)), 1e-9);
+  const W = 320, H = 56, mid = 28, gap = 2;
+  const bw = Math.max(1, (W - gap * (rows.length - 1)) / rows.length);
+  const rects = rows.map((r, i) => {
+    const h = Math.max(Math.abs(r.v) / max * (mid - 3), r.v === 0 ? 1 : 1.5);
+    const x = i * (bw + gap);
+    const y = r.v >= 0 ? mid - h : mid;
+    const p = tehranParts(tehranDayStartFromKey(r.k));
+    const label = pad2(p.m) + '/' + pad2(p.day) + ' ' + fmtEquity(r.v, unit, true);
+    return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" rx="1" fill="${r.v > 0 ? '#34d399' : r.v < 0 ? '#fb7185' : 'rgba(148,163,184,0.45)'}"><title>${esc(label)}</title></rect>`;
+  }).join('');
+  const picks = [rows[0], rows[Math.floor((rows.length - 1) / 2)], rows[rows.length - 1]];
+  let best = rows[0], worst = rows[0];
+  for (const r of rows) { if (r.v > best.v) best = r; if (r.v < worst.v) worst = r; }
+  return `<div class="mt-3">
+      <div class="text-[10px] uppercase tracking-wide text-slate-500">Daily realized P&amp;L</div>
+      <svg viewBox="0 0 ${W} ${H}" class="mt-1 w-full h-auto" role="img" aria-label="Daily realized P and L">${rects}<line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="rgba(255,255,255,0.12)"/></svg>
+      <div class="mt-1 flex justify-between gap-2 text-[10px] leading-snug text-slate-500">${picks.map(r => { const p = tehranParts(tehranDayStartFromKey(r.k)); return `<span class="min-w-0 whitespace-normal break-words">${pad2(p.m)}/${pad2(p.day)}</span>`; }).join('')}</div>
+      <div class="text-[11px] text-slate-400 whitespace-normal break-words">Best ${fmtEquity(best.v, unit, true)} · Worst ${fmtEquity(worst.v, unit, true)}</div>
+    </div>`;
+}
+function tehranDayStartFromKey(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return Date.UTC(y, m - 1, d) - TEHRAN_MS;
+}
+function equityCardHtml() {
+  const unit = wealthUnit === 'sol' ? 'sol' : 'usd';
+  const cur = currentEquity(unit);
+  const from = rangeStart(equityRange);
+  const series = viewSeries(equityRange, unit);
+  const basePt = series[0];
+  const base = basePt ? equityValue(basePt, unit) : null;
+  const end = series.length ? equityValue(series[series.length - 1], unit) : cur;
+  const change = isNum(end) && isNum(base) ? end - base : null;
+  const changePct = isNum(change) && isNum(base) && base !== 0 ? change / base * 100 : null;
+  const up = !isNum(change) ? null : change >= 0;
+  const stats = periodStats(from, unit);
+  const realized = unit === 'sol' ? stats.realizedSol : stats.realizedUsd;
+  const rangeLabel = { day: '24h', week: '7d', month: '30d', all: 'all' }[equityRange];
+  const names = [['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['all', 'All']];
+  const glow = up == null ? '' : up ? 'shadow-[0_0_28px_rgba(34,197,94,0.14)]' : 'shadow-[0_0_28px_rgba(244,63,94,0.14)]';
+  const seg = (on) => on ? 'bg-white/10 text-slate-100' : 'text-slate-400';
+  return `<div id="equityCard" class="rounded-2xl bg-ink-850/80 border border-white/10 p-3.5 mt-3 ${glow}">
+    <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
         <div class="text-[10px] uppercase tracking-wide text-slate-500">Wealth growth</div>
-        <div class="mt-1 font-mono text-2xl sm:text-3xl whitespace-normal break-words ${!known ? 'text-slate-400' : up ? 'text-emerald-300' : 'text-rose-300'}">${shown}</div>
-        <div class="text-[11px] text-slate-500 mt-0.5">Open positions, unrealized</div>
+        <div class="mt-1 font-mono text-2xl sm:text-3xl whitespace-normal break-words text-slate-100">${fmtEquity(cur, unit, false)}</div>
+        <div class="mt-1 font-mono text-sm whitespace-normal break-words ${up == null ? 'text-slate-400' : up ? 'text-emerald-300' : 'text-rose-300'}">${fmtEquity(change, unit, true)}${isNum(changePct) ? ' · ' + pct(changePct) : ''} <span class="text-slate-500">${rangeLabel}</span></div>
       </div>
-      <div class="flex rounded-lg border border-white/10 overflow-hidden text-[11px]">
-        <button type="button" id="wealthUsd" class="px-2.5 py-1 ${wealthUnit !== 'sol' ? 'bg-white/10 text-slate-100' : 'text-slate-400'}">USD</button>
-        <button type="button" id="wealthSol" class="px-2.5 py-1 ${wealthUnit === 'sol' ? 'bg-white/10 text-slate-100' : 'text-slate-400'}">SOL</button>
+      <div class="flex flex-wrap gap-2">
+        <div class="flex rounded-lg border border-white/10 overflow-hidden text-[11px]">${names.map(([k, lab]) => `<button type="button" data-eqrange="${k}" class="px-2 py-1 ${seg(equityRange === k)}">${lab}</button>`).join('')}</div>
+        <div class="flex rounded-lg border border-white/10 overflow-hidden text-[11px]">
+          <button type="button" id="wealthUsd" class="px-2.5 py-1 ${seg(unit !== 'sol')}">USD</button>
+          <button type="button" id="wealthSol" class="px-2.5 py-1 ${seg(unit === 'sol')}">SOL</button>
+        </div>
       </div>
     </div>
+    <div class="mt-3 grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 text-[11px]">
+      <div class="min-w-0"><div class="text-slate-500">Realized P&amp;L</div><div class="font-mono whitespace-normal break-words ${!isNum(realized) ? 'text-slate-400' : realized >= 0 ? 'text-emerald-300' : 'text-rose-300'}">${fmtEquity(realized, unit, true)}</div></div>
+      <div class="min-w-0"><div class="text-slate-500">Win rate</div><div class="font-mono whitespace-normal break-words">${stats.trades ? stats.winRate.toFixed(0) + '%' : '—'}</div></div>
+      <div class="min-w-0"><div class="text-slate-500">Trades</div><div class="font-mono whitespace-normal break-words">${stats.trades}</div></div>
+    </div>
+    <div class="mt-3">${equityChart(series, unit, up)}</div>
+    ${equityRange === 'week' || equityRange === 'month' ? dailyBars(stats, from, unit) : ''}
   </div>`;
 }
 function posCard(p) {
@@ -2484,7 +2763,7 @@ function upClass(n) { return n >= 0 ? 'text-emerald-300' : 'text-rose-300'; }
 function renderPortfolio() {
   const el = $('portfolio'); if (!el) return;
   const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
-  if (!LOG.length && !anyW && !AUTOLOG.length) { el.classList.add('hidden'); return; }
+  if (!LOG.length && !anyW && !AUTOLOG.length && !loadEquity().length) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const m = posMoney(p, lp); const s = levelState(p); const pl = s.eff || effectiveStop(p, lp);
     const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
@@ -2506,7 +2785,8 @@ function renderPortfolio() {
     <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
       <div class="flex flex-wrap gap-2 text-[11px]"><button id="pfView" class="text-violet-300 hover:underline">${posTableView ? 'Cards' : 'Table view'}</button><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
     <div class="text-[11px] text-slate-500 mb-2 whitespace-normal break-words">Open positions ${open.length}/${maxPos()} · spent today ${spentToday().toFixed(3)}/${S.dailyMaxSol} SOL (auto ${spentToday(r => r.auto).toFixed(3)}/${A.dailyCap}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
-    ${open.length ? wealthHtml(open) + (posTableView ? table : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
+    ${open.length ? (posTableView ? table : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
+    ${equityCardHtml()}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
   </section>`;
@@ -2517,6 +2797,7 @@ function renderPortfolio() {
   });
   $('wealthUsd')?.addEventListener('click', () => { wealthUnit = 'usd'; try { localStorage.setItem('sms:wealthunit', 'usd'); } catch { /* ignore */ } renderPortfolio(); });
   $('wealthSol')?.addEventListener('click', () => { wealthUnit = 'sol'; try { localStorage.setItem('sms:wealthunit', 'sol'); } catch { /* ignore */ } renderPortfolio(); });
+  el.querySelectorAll('[data-eqrange]').forEach(b => b.addEventListener('click', () => { equityRange = b.dataset.eqrange; try { localStorage.setItem('sms:equityrange', equityRange); } catch { /* ignore */ } renderPortfolio(); }));
   $('pfView')?.addEventListener('click', () => { posTableView = !posTableView; try { localStorage.setItem('sms:posview', posTableView ? 'table' : 'cards'); } catch { /* ignore */ } renderPortfolio(); });
   el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.sell, { pct: +b.dataset.pct })));
   $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
@@ -4061,11 +4342,13 @@ if (WALLETS.burner.pubkey) refreshBalances('burner');
 setInterval(() => { if (openPositions().length && !A.on) refreshPrices(); }, 60000);
 setInterval(() => { if (!A.on) refreshPrices(); }, 30000);
 if (openPositions().length) setTimeout(refreshPrices, 1500);
+setInterval(() => { if (recordEquity(false)) renderPortfolio(); }, 5 * 60 * 1000);
+setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper,
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity,
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;

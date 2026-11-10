@@ -48,6 +48,8 @@ On top of that it can **trade for real**: Jupiter swaps signed in **Phantom**, p
   - shows average entry (the on-chain fill when available), live PnL, the effective stop and why it is there (initial, break-even, early trail, or trail), and TP1/TP2 at +50% / +100% of that entry;
   - highlights STOP HIT / TP hit as **alerts only**;
   - exports to CSV.
+  - Open positions are cards (table view still available): source badge, live P&amp;L, a stop-to-target bar, and sell buttons.
+  - **Wealth growth** charts burner equity (SOL balance + open positions, in SOL and USD). Snapshots land in `sms:equity` about every 5 minutes while the page is open and whenever a burner trade closes. Old points are downsampled and kept for about a year. Day / Week / Month / All use Tehran time (UTC+3:30). The unit defaults to USD and is remembered. Week and month also show daily realized P&amp;L.
 
 ## Burner wallet + auto-trading (optional)
 - The keypair is generated in the browser. The secret key is encrypted with your passphrase (PBKDF2-SHA256 310k → AES-GCM-256) and stored **only in this browser's localStorage**. It is never sent anywhere.
