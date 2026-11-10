@@ -8,7 +8,7 @@ Times are Unix milliseconds. The panel ignores a plan older than 2 hours or past
 
 ## candidates.json
 
-Hunter output. An array.
+Hunter output. Either a bare array, or an object `{ updated_utc, updated_tehran, candidates: [ ... ] }`. `ts` on each row may be Unix milliseconds or an ISO time.
 
 | Field | Meaning |
 | --- | --- |

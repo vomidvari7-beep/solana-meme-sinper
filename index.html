@@ -7075,16 +7075,25 @@ function tehranClock(ts) {
   return pad2(p.m) + '/' + pad2(p.day) + ' ' + pad2(p.h) + ':' + pad2(p.min);
 }
 function agentNum(v) { const n = +v; return Number.isFinite(n) ? n : null; }
+function agentTime(v) {
+  if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
+  if (typeof v === 'string' && v.trim()) {
+    const parsed = Date.parse(v);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  const n = +v;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 function planFresh(p, now) {
   const t = now || Date.now();
-  const ts = agentNum(p?.ts);
+  const ts = agentTime(p?.ts);
   if (!(ts > 0) || t - ts > 2 * 3600e3) return false;
   const exp = agentNum(p?.expires);
   if (exp > 0 && t > exp) return false;
   return true;
 }
 function riskFresh(ts, now) {
-  const n = agentNum(ts);
+  const n = agentTime(ts);
   return n > 0 && (now || Date.now()) - n <= 30 * 60e3;
 }
 function agentPlanFor(mint) { return AG.plans.get(mint) || null; }
@@ -7206,7 +7215,7 @@ function renderAgentPicks() {
   const box = $('agentPicks'); if (!box) return;
   const stamp = (name, rows) => {
     let max = AG.fetched[name] || 0;
-    (rows || []).forEach(r => { const t = agentNum(r?.ts) || agentNum(r?.addedTs); if (t > max) max = t; });
+    (rows || []).forEach(r => { const t = agentTime(r?.ts) || agentTime(r?.addedTs); if (t > max) max = t; });
     return tehranClock(max);
   };
   const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} · plans ${stamp('plans', [...AG.plans.values()])} · risk ${stamp('risk', AG.risk.positions)} · list file ${stamp('mylist', AG.listFile || [])} · config ${tehranClock(AG.fetched.config)}</div>`;
@@ -7253,7 +7262,11 @@ async function refreshAgents() {
       const data = await res.json();
       AG.fetched[name] = Date.now();
       AG.errors[name] = '';
-      if (name === 'candidates') AG.candidates = Array.isArray(data) ? data : [];
+      if (name === 'candidates') {
+        AG.candidates = Array.isArray(data) ? data : (Array.isArray(data?.candidates) ? data.candidates : []);
+        const written = agentTime(data?.updated_utc) || agentTime(data?.ts);
+        if (written) AG.fetched.candidates = written;
+      }
       if (name === 'mylist') AG.listFile = Array.isArray(data) ? data : [];
       if (name === 'plans') {
         AG.plans = new Map();
