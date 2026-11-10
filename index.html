@@ -839,8 +839,8 @@ function bestPairsByToken(pairs, wantedMints) {
 const OHLCV_TF = {
   '5m':  { path: 'minute', aggregate: 5, limit: 120 },
   '15m': { path: 'minute', aggregate: 15, limit: 120 },
-  '1h':  { path: 'hour', aggregate: 1, limit: 120 },
-  '4h':  { path: 'hour', aggregate: 4, limit: 80 },
+  '1h':  { path: 'hour', aggregate: 1, limit: 200 },
+  '4h':  { path: 'hour', aggregate: 4, limit: 200 },
   '1m':  { path: 'minute', aggregate: 1, limit: 60 }
 };
 const ohlcvCache = new Map();
@@ -1165,10 +1165,15 @@ function formatTa(primary, confirm, signal) {
   if (primary.patterns?.length) bits.push(primary.patterns.join(', '));
   return `TA ${primary.tf}/${confirm.tf}: ${bits.join(' · ')} · ${primary.tf} ${primary.trend} · ${confirm.tf} ${confirm.trend}`;
 }
+function ohlcvTtl(tfKey) {
+  if (tfKey === '4h') return 15 * 60e3;
+  if (tfKey === '1h') return 5 * 60e3;
+  return 4 * 60e3;
+}
 async function fetchOhlcv(pool, tfKey) {
   const key = pool + '|' + tfKey;
   const hit = ohlcvCache.get(key);
-  if (hit && Date.now() - hit.at < 4 * 60e3) return hit.candles;
+  if (hit && Date.now() - hit.at < ohlcvTtl(tfKey)) return hit.candles;
   const spec = OHLCV_TF[tfKey];
   const url = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=${spec.limit}&currency=usd`;
   const j = await fetchJSON(url, { timeout: 12000 });
@@ -5026,9 +5031,12 @@ function renderSniper() {
 const MYLIST_DEFAULTS = {
   on: false, mode: 'zone', sizeMode: 'sol', sizeSol: 0.05, sizePct: 10, stopPct: 15, stopPx: null,
   tps: [{ gainPct: 15, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: 10,
-  timeStopMin: null, timeMinGain: 0, reentry: true, cooldownMin: 5, maxReentries: 3
+  timeStopMin: null, timeMinGain: 0, reentry: true, cooldownMin: 5, maxReentries: 3,
+  tf: '5m', earlyBreak: false
 };
-const MYLIST_MODES = ['zone', 'momentum', 'range', 'now'];
+const MYLIST_MODES = ['zone', 'momentum', 'range', 'now', 'trend', 'resist'];
+const LIST_TFS = ['1m', '5m', '15m', '1h', '4h'];
+const LIST_TF_MS = { '1m': 60e3, '5m': 300e3, '15m': 900e3, '1h': 3600e3, '4h': 14400e3 };
 let MYLIST = loadMyList();
 let listTimer = null, listBusy = false;
 function parseTps(text) {
@@ -5049,8 +5057,66 @@ function cleanTps(v) {
 function numOr(v, d) { const n = +v; return Number.isFinite(n) ? n : d; }
 function mapListMode(m) {
   if (m === 'manual') return 'range';
-  if (m === 'trend' || m === 'resist') return 'zone';
   return MYLIST_MODES.includes(m) ? m : '';
+}
+function candleMs(c) {
+  const t = +c?.t;
+  if (!isNum(t)) return null;
+  return t < 1e12 ? t * 1000 : t;
+}
+function closedCandles(candles, tf, now) {
+  const dur = LIST_TF_MS[tf] || 60e3;
+  const cs = (candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.c > 0).slice().sort((a, b) => (candleMs(a) || 0) - (candleMs(b) || 0));
+  if (!cs.length) return { closed: [], forming: null };
+  const last = cs[cs.length - 1];
+  const open = candleMs(last);
+  const forming = isNum(open) && now < open + dur;
+  return { closed: forming ? cs.slice(0, -1) : cs.slice(), forming: forming ? last : null };
+}
+function trendlineLevel(closed) {
+  if (closed.length < 12) return null;
+  const base = closed.slice(0, -1);
+  const { highs } = swingPoints(base, 2);
+  let pair = null;
+  for (let i = highs.length - 1; i >= 1; i--) if (highs[i].price < highs[i - 1].price) { pair = [highs[i - 1], highs[i]]; break; }
+  if (!pair) return null;
+  return lineAt(pair[0], pair[1], closed.length - 1);
+}
+function resistanceLevel(closed) {
+  if (closed.length < 12) return null;
+  const base = closed.slice(0, -1);
+  const prev = base[base.length - 1].c;
+  const levels = [];
+  if (base.length >= 15) {
+    const ta = analyzeStructure(base, 'x');
+    if (ta?.resist && isNum(ta.resist.hi)) levels.push(ta.resist.hi);
+    if (isNum(ta?.lastHigh)) levels.push(ta.lastHigh);
+    if (isNum(ta?.lastLH)) levels.push(ta.lastLH);
+  }
+  swingPoints(base, 2).highs.forEach(h => levels.push(h.price));
+  const ok = levels.filter(h => isNum(h) && h > 0);
+  const overhead = ok.filter(h => h >= prev * 0.995).sort((a, b) => a - b);
+  if (overhead.length) return overhead[0];
+  const under = ok.filter(h => h < prev).sort((a, b) => b - a);
+  return under[0] || null;
+}
+function listBreakRead(candles, tf, kind, px, now, opt) {
+  const nowMs = isNum(now) ? now : Date.now();
+  const { closed, forming } = closedCandles(candles, tf, nowMs);
+  if (closed.length < 12) return { state: 'none', level: null, reason: 'not enough ' + tf + ' candles', early: false };
+  const level = kind === 'resist' ? resistanceLevel(closed) : trendlineLevel(closed);
+  if (!(level > 0)) return { state: 'none', level: null, reason: kind === 'resist' ? 'no resistance level' : 'no descending trendline', early: false };
+  const last = closed[closed.length - 1];
+  const closedAbove = last.c > level;
+  if (closedAbove) return { state: 'trigger', level, reason: tf + ' close above', early: false };
+  if (opt && opt.early && (tf === '1h' || tf === '4h') && opt.m5) {
+    const c5 = closedCandles(opt.m5, '5m', nowMs).closed;
+    const last5 = c5[c5.length - 1];
+    if (last5 && last5.c > level) return { state: 'trigger', level, reason: '5m close above the ' + tf + ' level', early: true };
+  }
+  const liveAbove = (isNum(px) && px > level) || (forming && forming.c > level);
+  if (liveAbove) return { state: 'waiting', level, reason: 'waiting for ' + tf + ' close', early: false };
+  return { state: 'none', level, reason: kind === 'resist' ? 'price is under the resistance' : 'price is under the trendline', early: false };
 }
 function loadMyList() {
   const raw = load('sms:mylist', {});
@@ -5081,6 +5147,12 @@ function sanitizeListRow(r) {
     cooldownMin: Number.isFinite(+r.cooldownMin) ? +r.cooldownMin : null,
     maxReentries: Number.isFinite(+r.maxReentries) ? +r.maxReentries : null,
     flags: Array.isArray(r.flags) ? r.flags.slice(0, 4).map(x => String(x).slice(0, 80)) : [],
+    tf: LIST_TFS.includes(r.tf) ? r.tf : '',
+    earlyBreak: r.earlyBreak == null ? null : !!r.earlyBreak,
+    breakState: r.breakState === 'trigger' || r.breakState === 'waiting' || r.breakState === 'none' ? r.breakState : '',
+    breakLevel: Number.isFinite(+r.breakLevel) && +r.breakLevel > 0 ? +r.breakLevel : null,
+    breakReason: r.breakReason ? String(r.breakReason).slice(0, 80) : '',
+    breakEarly: !!r.breakEarly,
     lastTaAt: Number.isFinite(+r.lastTaAt) ? +r.lastTaAt : null,
     zone: r.zone && isNum(+r.zone.lo) ? { lo: +r.zone.lo, hi: +r.zone.hi, noAnchor: !!r.zone.noAnchor } : null,
     price: Number.isFinite(+r.price) ? +r.price : null,
@@ -5119,7 +5191,9 @@ function listStrategy(row) {
     reentry: row && row.reentry != null ? !!row.reentry : d.reentry !== false,
     cooldownMin: row && row.cooldownMin != null ? row.cooldownMin : (d.cooldownMin || 0),
     maxReentries: row && row.maxReentries != null ? row.maxReentries : (d.maxReentries ?? 3),
-    rangeLo: row ? row.rangeLo : null, rangeHi: row ? row.rangeHi : null
+    rangeLo: row ? row.rangeLo : null, rangeHi: row ? row.rangeHi : null,
+    tf: row && LIST_TFS.includes(row.tf) ? row.tf : (LIST_TFS.includes(d.tf) ? d.tf : '5m'),
+    earlyBreak: row && row.earlyBreak != null ? !!row.earlyBreak : !!d.earlyBreak
   };
 }
 function listEntryReady(spec, ctx) {
@@ -5134,6 +5208,7 @@ function listEntryReady(spec, ctx) {
   if (spec.mode === 'now') hit = true;
   else if (spec.mode === 'range') hit = isNum(ctx.price) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && spec.rangeLo <= ctx.price && ctx.price <= spec.rangeHi;
   else if (spec.mode === 'momentum') hit = ctx.momState === 'trigger' && !(ctx.taAgeMin >= 60);
+  else if (spec.mode === 'trend' || spec.mode === 'resist') hit = ctx.breakState === 'trigger' && isNum(ctx.taAgeMin) && ctx.taAgeMin < 60;
   else hit = !!ctx.inZone && !(ctx.taAgeMin >= 60);
   return { state: hit ? 'inzone' : 'waiting', ready: hit };
 }
@@ -5145,6 +5220,7 @@ function listDistance(spec, px, zone) {
     if (px > spec.rangeHi) return (px - spec.rangeHi) / px * 100;
     return 0;
   }
+  if ((spec.mode === 'trend' || spec.mode === 'resist') && isNum(spec.breakLevel)) return spec.breakLevel > 0 ? (px - spec.breakLevel) / spec.breakLevel * 100 : null;
   if (zone && isNum(zone.lo) && isNum(zone.hi)) {
     const mid = (zone.lo + zone.hi) / 2;
     return mid > 0 ? (px - mid) / mid * 100 : null;
@@ -5243,7 +5319,19 @@ function myListPlanHtml(p, pl) {
   const trail = isNum(pl.trailAtPct) && pl.trailAtPct > 0 ? 'trail ' + pl.trailPct + '% after +' + pl.trailAtPct + '%' : 'trail off';
   return `<div class="mt-2 text-[11px] leading-snug text-slate-300 whitespace-normal break-words"><b class="text-slate-400">Exit plan</b> · stop ${price(pl.stop)} (${esc(pl.reason || 'initial')}) · ${esc(be)} · ${esc(trail)} · ${esc(tps)}</div>`;
 }
-function modeLabel(mode) { return { zone: 'S/R zone', momentum: 'Momentum', range: 'Price range', now: 'Buy now' }[mode] || mode; }
+function modeLabel(mode) { return { zone: 'S/R zone', momentum: 'Momentum', range: 'Price range', now: 'Buy now', trend: 'Trendline break', resist: 'Resistance break' }[mode] || mode; }
+function listTriggerLabel(row, spec, model) {
+  if (spec.mode === 'trend' || spec.mode === 'resist') {
+    const name = spec.mode === 'trend' ? 'Trendline break' : 'Resistance break';
+    const lv = isNum(row.breakLevel) ? row.breakLevel : model.trigger;
+    return name + ' ' + (spec.tf || '5m') + ' @ ' + price(lv) + (row.breakEarly ? ' · early 5m' : '');
+  }
+  return price(model.trigger);
+}
+function tfSelect(id, cur, blank) {
+  const opts = (blank ? [`<option value="" ${cur ? '' : 'selected'}>List default</option>`] : []).concat(LIST_TFS.map(v => `<option value="${v}" ${cur === v ? 'selected' : ''}>${v}</option>`));
+  return `<select id="${id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5">${opts.join('')}</select>`;
+}
 function listPlan(spec, entryPx) {
   const stop = isNum(spec.stopPx) && entryPx && spec.stopPx < entryPx ? spec.stopPx : (entryPx ? entryPx * (1 - spec.stopPct / 100) : null);
   return { myList: true, stop, strat: 'My List ' + spec.mode, exit: { stopPct: spec.stopPct, stopPx: spec.stopPx, tps: spec.tps, beAtPct: spec.beAtPct, trailAtPct: spec.trailAtPct, trailPct: spec.trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain } };
@@ -5268,6 +5356,7 @@ function listChartModel(row, spec, px) {
     else if (px > spec.rangeHi) trigger = spec.rangeHi;
     else trigger = px;
   } else if (spec.mode === 'momentum') trigger = isNum(mom?.level) ? mom.level : null;
+  else if (spec.mode === 'trend' || spec.mode === 'resist') trigger = isNum(row.breakLevel) ? row.breakLevel : null;
   else if (row.zone && isNum(row.zone.lo) && isNum(row.zone.hi) && !row.zone.noAnchor) trigger = (row.zone.lo + row.zone.hi) / 2;
   const entry = isNum(trigger) ? trigger : (isNum(px) ? px : null);
   const stopPct = isNum(spec.stopPct) ? spec.stopPct : 15;
@@ -5328,7 +5417,7 @@ function listContext(row) {
   const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
   const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
   const open = !!listPosition(row.mint);
-  const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
+  const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
   const model = listChartModel(row, spec, px);
   let badge = 'Waiting', why = 'price is away from the trigger', ready = false;
   if (!row.enabled || gate.state === 'disabled') { badge = 'Disabled'; why = 'token is switched off'; }
@@ -5339,7 +5428,9 @@ function listContext(row) {
     else if (row.cooldownUntil && Date.now() < row.cooldownUntil) why = 'cooldown ' + Math.max(1, Math.ceil((row.cooldownUntil - Date.now()) / 60000)) + 'm left';
     else why = 'daily re-entry cap reached';
   } else if (!isNum(px)) why = 'no live price yet';
-  else if ((spec.mode === 'zone' || spec.mode === 'momentum') && (row.taStale || (isNum(taAge) && taAge >= 60))) why = 'chart data is stale';
+  else if ((spec.mode === 'zone' || spec.mode === 'momentum' || spec.mode === 'trend' || spec.mode === 'resist') && (row.taStale || (isNum(taAge) && taAge >= 60))) why = 'chart data is stale';
+  else if ((spec.mode === 'trend' || spec.mode === 'resist') && !row.pool && !row.breakLevel) why = 'waiting for the pool';
+  else if (spec.mode === 'trend' || spec.mode === 'resist') why = row.breakReason || ('waiting for ' + spec.tf + ' close');
   else if (spec.mode === 'zone' && (!row.zone || row.zone.noAnchor)) why = 'no support zone yet';
   else if (spec.mode === 'momentum' && row.momState !== 'trigger') why = model.mom?.reason || 'momentum trigger is not confirmed';
   else if (spec.mode === 'range' && !(isNum(spec.rangeLo) && isNum(spec.rangeHi))) why = 'set a price range';
@@ -5351,7 +5442,7 @@ function listContext(row) {
     else if (blocks.length) { badge = 'In zone'; why = blocks[0]; }
     else { badge = 'READY — entering'; why = ''; ready = true; }
   } else if (badge === 'Waiting' && (row.inZone || (spec.mode === 'momentum' && row.momState === 'trigger') || (spec.mode === 'range' && isNum(px) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && px >= spec.rangeLo && px <= spec.rangeHi))) badge = 'In zone';
-  const dist = listDistance(spec, px, row.zone);
+  const dist = listDistance({ ...spec, breakLevel: row.breakLevel }, px, row.zone);
   return { spec, px, taAge, open, gate, model, badge, why, ready, dist };
 }
 function listDistText(dist) {
@@ -5370,7 +5461,8 @@ function listBadgeCls(badge) {
 function listDefaultChip() {
   const tp = formatTps(MYLIST.tps) || '15:100';
   const size = MYLIST.sizeMode === 'pct' ? (MYLIST.sizePct + '% of balance') : (sizeHint(MYLIST.sizeSol) || (MYLIST.sizeSol + ' ' + unitWord()));
-  return modeLabel(MYLIST.mode || 'zone') + ' · ' + size + ' · stop ' + MYLIST.stopPct + '%' + (isNum(MYLIST.stopPx) ? ' / ' + price(MYLIST.stopPx) : '') + ' · TP ' + tp;
+  const tfBit = (MYLIST.mode === 'trend' || MYLIST.mode === 'resist') ? ' · ' + (LIST_TFS.includes(MYLIST.tf) ? MYLIST.tf : '5m') + (MYLIST.earlyBreak ? ' · early 5m' : '') : '';
+  return modeLabel(MYLIST.mode || 'zone') + tfBit + ' · ' + size + ' · stop ' + MYLIST.stopPct + '%' + (isNum(MYLIST.stopPx) ? ' / ' + price(MYLIST.stopPx) : '') + ' · TP ' + tp;
 }
 function modalNum(id) { const el = $(id); if (!el || !String(el.value || '').trim()) return null; const n = +el.value; return Number.isFinite(n) ? n : null; }
 function listField(label, inner) { return `<label class="block min-w-0 text-[11px] text-slate-400">${label}${inner}</label>`; }
@@ -5381,6 +5473,7 @@ function openListDefaults() {
   openModal({ title: 'Default My List strategy', confirmLabel: 'Save strategy',
     html: `<p class="text-[11px] text-slate-400 whitespace-normal break-words">New tokens use this until you set a token strategy. Auto-buy still turns off on reload.</p>
       <div class="mt-2 grid grid-cols-2 gap-2">${listField('Entry', `<select id="mlEdMode" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5">${MYLIST_MODES.map(v => `<option value="${v}" ${m.mode === v ? 'selected' : ''}>${modeLabel(v)}</option>`).join('')}</select>`)}
+      ${listField('Break timeframe', tfSelect('mlEdTf', LIST_TFS.includes(m.tf) ? m.tf : '5m', false))}
       ${listField('Size', `<select id="mlEdSize" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="sol" ${m.sizeMode !== 'pct' ? 'selected' : ''}>${unitWord()} amount</option><option value="pct" ${m.sizeMode === 'pct' ? 'selected' : ''}>% of balance</option></select>`)}
       ${listField('Size (' + unitWord() + ')', listInp('mlEdSizeSol', m.sizeSol) + `<span class="block text-[10px] text-slate-500 whitespace-normal break-words">${esc(sizeHint(m.sizeSol))}</span>`)}
       ${listField('% of balance', listInp('mlEdSizePct', m.sizePct))}
@@ -5396,7 +5489,9 @@ function openListDefaults() {
       ${listField('Cooldown minutes', listInp('mlEdCool', m.cooldownMin))}
       ${listField('Max re-entries / day', listInp('mlEdReMax', m.maxReentries))}
       </div>
-      <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdRe" type="checkbox" class="accent-violet-500" ${m.reentry !== false ? 'checked' : ''}/> Look for a new entry after a close</label>`,
+      <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdRe" type="checkbox" class="accent-violet-500" ${m.reentry !== false ? 'checked' : ''}/> Look for a new entry after a close</label>
+      <label class="mt-2 flex items-center gap-2 text-[11px] text-slate-300"><input id="mlEdEarly" type="checkbox" class="accent-violet-500" ${m.earlyBreak ? 'checked' : ''}/> Early trigger: 5m close above the 1h/4h level (off waits for that candle to close)</label>
+      <p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">Trendline break and resistance break use 1m, 5m, 15m, 1h, or 4h. A 1h or 4h break is the close of that candle. Until it closes, the card says waiting for that close.</p>`,
     onConfirm: async () => {
       MYLIST.mode = MYLIST_MODES.includes($('mlEdMode')?.value) ? $('mlEdMode').value : 'zone';
       MYLIST.sizeMode = $('mlEdSize')?.value === 'pct' ? 'pct' : 'sol';
@@ -5414,6 +5509,8 @@ function openListDefaults() {
       MYLIST.cooldownMin = modalNum('mlEdCool') || 0;
       MYLIST.maxReentries = modalNum('mlEdReMax') ?? 3;
       MYLIST.reentry = !!$('mlEdRe')?.checked;
+      MYLIST.tf = LIST_TFS.includes($('mlEdTf')?.value) ? $('mlEdTf').value : '5m';
+      MYLIST.earlyBreak = !!$('mlEdEarly')?.checked;
       saveMyList(); toast('My List strategy saved', 'ok'); renderMyList();
     } });
   $('mlEdScalp')?.addEventListener('click', () => { const n = modalNum('mlEdScalpPct') || 15; if ($('mlEdTps')) $('mlEdTps').value = n + ':100'; });
@@ -5425,6 +5522,7 @@ function openListEditor(row) {
   openModal({ title: 'Strategy · ' + (row.symbol || short(row.mint)), confirmLabel: 'Save token',
     html: `<p class="text-[11px] text-slate-400 whitespace-normal break-words">Blank fields keep the list default. Saved on this token only.</p>
       <div class="mt-2 grid grid-cols-2 gap-2">${listField('Entry', `<select id="mlEdMode" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${cur ? '' : 'selected'}>List default</option>${MYLIST_MODES.map(v => `<option value="${v}" ${cur === v ? 'selected' : ''}>${modeLabel(v)}</option>`).join('')}</select>`)}
+      ${listField('Break timeframe', tfSelect('mlEdTf', row.tf || '', true))}
       ${listField('Size', `<select id="mlEdSize" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${row.sizeMode ? '' : 'selected'}>Default</option><option value="sol" ${row.sizeMode === 'sol' ? 'selected' : ''}>${unitWord()}</option><option value="pct" ${row.sizeMode === 'pct' ? 'selected' : ''}>% balance</option></select>`)}
       ${listField('Size (' + unitWord() + ')', listInp('mlEdSizeSol', row.sizeSol ?? '', 'default'))}
       ${listField('% of balance', listInp('mlEdSizePct', row.sizePct ?? '', 'default'))}
@@ -5441,7 +5539,9 @@ function openListEditor(row) {
       ${listField('Cooldown minutes', listInp('mlEdCool', row.cooldownMin ?? '', 'default'))}
       ${listField('Max re-entries', listInp('mlEdReMax', row.maxReentries ?? '', 'default'))}
       ${listField('Re-entry', `<select id="mlEdRe" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${re ? '' : 'selected'}>Default</option><option value="yes" ${re === 'yes' ? 'selected' : ''}>On</option><option value="no" ${re === 'no' ? 'selected' : ''}>Off</option></select>`)}
-      </div>`,
+      ${listField('Early 5m trigger', `<select id="mlEdEarly" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5"><option value="" ${row.earlyBreak == null ? 'selected' : ''}>Default</option><option value="yes" ${row.earlyBreak === true ? 'selected' : ''}>On</option><option value="no" ${row.earlyBreak === false ? 'selected' : ''}>Off</option></select>`)}
+      </div>
+      <p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">1h and 4h confirm on that candle’s close. Early trigger, off by default, accepts a 5m close above the higher-timeframe level.</p>`,
     onConfirm: async () => {
       row.mode = mapListMode($('mlEdMode')?.value);
       const sm = $('mlEdSize')?.value;
@@ -5461,33 +5561,67 @@ function openListEditor(row) {
       row.cooldownMin = modalNum('mlEdCool');
       row.maxReentries = modalNum('mlEdReMax');
       row.reentry = $('mlEdRe')?.value === '' ? null : $('mlEdRe').value === 'yes';
+      row.tf = LIST_TFS.includes($('mlEdTf')?.value) ? $('mlEdTf').value : '';
+      row.earlyBreak = $('mlEdEarly')?.value === '' ? null : $('mlEdEarly').value === 'yes';
       saveMyList(); renderMyList(); toast('Token strategy saved', 'ok');
     } });
 }
-function openListChart(id) {
-  const row = MYLIST.rows.find(r => r.id === id);
-  const model = listChartMemo[id];
-  if (!row || !model) return;
-  const drawn = listChartSvg(model, { w: 360, h: 220 });
-  resetModalButtons();
-  openModal({ title: (row.symbol || short(row.mint)) + ' chart', confirmLabel: 'Close',
-    html: drawn.empty ? '<p class="text-xs text-slate-400 whitespace-normal break-words">Candles are not here yet. The chart fills in on the next My List check.</p>' : `<div style="touch-action:none">${drawn.svg.replace('<svg ', '<svg id="mlChartSvg" ')}<div id="mlChartTip" class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">Drag across the chart to read a price.</div><p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">Yellow trendline · green support · red resistance · violet entry zone · purple trigger · rose stop · green targets.</p></div>`,
-    onConfirm: async () => {} });
+function chartTfButtons(active) {
+  return `<div class="mb-2 flex flex-wrap gap-1">${LIST_TFS.map(tf => `<button type="button" data-chart-tf="${tf}" class="rounded-full border px-2 py-0.5 text-[11px] ${tf === active ? 'border-violet-400/50 bg-violet-500/20 text-violet-100' : 'border-white/10 text-slate-400'}">${tf}</button>`).join('')}</div>`;
+}
+function bindChartRead(model) {
   const svg = $('mlChartSvg'), tip = $('mlChartTip');
   if (!svg || !tip) return;
   const read = (ev) => {
     const r = svg.getBoundingClientRect();
-    if (!(r.height > 0)) return;
+    if (!(r.height > 0) || !(r.width > 0)) return;
     const min = +svg.dataset.min, max = +svg.dataset.max, vh = +svg.dataset.vh || 220;
     const yv = ((ev.clientY - r.top) / r.height) * vh;
     const px = min + (1 - (yv - 4) / (vh - 8)) * (max - min);
     const cs = (model.candles || []).slice(-80);
-    const i = Math.max(0, Math.min(cs.length - 1, Math.round(((ev.clientX - r.left) / r.width) * (cs.length - 1))));
+    const i = cs.length ? Math.max(0, Math.min(cs.length - 1, Math.round(((ev.clientX - r.left) / r.width) * (cs.length - 1)))) : 0;
     const c = cs[i];
     tip.textContent = price(px) + (c ? ' · O ' + price(c.o) + ' H ' + price(c.h) + ' L ' + price(c.l) + ' C ' + price(c.c) : '');
   };
   svg.addEventListener('pointerdown', (ev) => { try { svg.setPointerCapture(ev.pointerId); } catch { /* move still arrives */ } read(ev); });
   svg.addEventListener('pointermove', read);
+}
+let chartDrawSeq = 0;
+async function drawListChart(row, tf) {
+  const box = $('mlChartLive');
+  if (!box) return;
+  const seq = ++chartDrawSeq;
+  const useTf = LIST_TFS.includes(tf) ? tf : '5m';
+  let candles = row.cache?.tf === useTf ? row.cache.candles : null;
+  let err = '';
+  if (row.pool) {
+    try {
+      candles = await fetchOhlcv(row.pool, useTf);
+      row.cache = { at: Date.now(), tf: useTf, candles: candles.slice(-200) };
+      row.lastTaAt = Date.now();
+      row.taStale = false;
+    } catch (e) { err = e.message || 'candles unavailable'; if (!candles) candles = []; }
+  } else if (!candles) err = 'No pool yet, so this timeframe has no candles.';
+  if (seq !== chartDrawSeq) return;
+  row.chartTf = useTf;
+  const spec = listStrategy(row);
+  const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
+  const model = listChartModel({ ...row, cache: { tf: useTf, candles: candles || [] } }, spec, px);
+  const drawn = listChartSvg(model, { w: 360, h: 220 });
+  box.innerHTML = chartTfButtons(useTf) + (drawn.empty
+    ? `<p class="text-xs text-slate-400 whitespace-normal break-words">${esc(err || 'Candles are not here yet. The chart fills in on the next My List check.')}</p>`
+    : `<div style="touch-action:none">${drawn.svg.replace('<svg ', '<svg id="mlChartSvg" ')}<div id="mlChartTip" class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">Drag across the chart to read a price.</div><p class="mt-1 text-[10px] text-slate-500 whitespace-normal break-words">Yellow trendline · green support · red resistance · violet entry zone · purple trigger · rose stop · green targets.</p></div>`);
+  box.querySelectorAll('[data-chart-tf]').forEach(b => b.addEventListener('click', () => { drawListChart(row, b.dataset.chartTf); }));
+  bindChartRead(model);
+}
+function openListChart(id) {
+  const row = MYLIST.rows.find(r => r.id === id);
+  if (!row) return;
+  resetModalButtons();
+  openModal({ title: (row.symbol || short(row.mint)) + ' chart', confirmLabel: 'Close',
+    html: '<div id="mlChartLive"></div>',
+    onConfirm: async () => {} });
+  drawListChart(row, row.chartTf || row.cache?.tf || listStrategy(row).tf || '5m');
 }
 async function myListBuyNow(row) {
   if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
@@ -5569,8 +5703,8 @@ function renderMyList() {
       </button>
       <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
         ${cell('Trend', trend)}${cell('Support', sup + (zone && v.model.support ? '<div class="text-slate-400">zone ' + zone + '</div>' : ''))}
-        ${cell('Resistance', res)}${cell('Setup', esc(modeLabel(v.spec.mode)))}
-        ${cell('Trigger', price(v.model.trigger))}${cell('To trigger', listDistText(v.dist))}
+        ${cell('Resistance', res)}${cell('Setup', esc(modeLabel(v.spec.mode) + ((v.spec.mode === 'trend' || v.spec.mode === 'resist') ? ' ' + v.spec.tf : '')))}
+        ${cell('Trigger', esc(listTriggerLabel(row, v.spec, v.model)))}${cell('To trigger', listDistText(v.dist))}
         ${cell('Stop', price(v.model.stop))}${cell('TP1', tp1)}
         ${cell('TP2', tp2)}${cell('R:R', isNum(v.model.rr) ? '1 : ' + v.model.rr.toFixed(2) : '—')}
       </div>
@@ -5685,15 +5819,16 @@ async function myListTick() {
         row.cooldownUntil = Date.now() + (spec.cooldownMin || 0) * 60000;
       }
       row.inZone = false; row.momState = row.momState || 'none';
-      if ((spec.mode === 'zone' || spec.mode === 'momentum') && row.pool) {
-        const tf = spec.mode === 'momentum' ? '1m' : '5m';
+      const breakMode = spec.mode === 'trend' || spec.mode === 'resist';
+      if ((spec.mode === 'zone' || spec.mode === 'momentum' || breakMode) && row.pool) {
+        const tf = breakMode ? spec.tf : (spec.mode === 'momentum' ? '1m' : '5m');
         let candles = null;
         try { candles = await fetchOhlcv(row.pool, tf); row.lastTaAt = Date.now(); row.taStale = false; }
         catch (e) {
           row.taStale = true;
           if (row.cache?.tf === tf && row.lastTaAt && Date.now() - row.lastTaAt < 90 * 60e3) candles = row.cache.candles;
         }
-        if (candles) row.cache = { at: row.lastTaAt || Date.now(), tf, candles: candles.slice(-80) };
+        if (candles) row.cache = { at: row.lastTaAt || Date.now(), tf, candles: candles.slice(-200) };
         try {
           if (spec.mode === 'momentum' && candles) row.momState = momentumFromCandles(candles).state;
           if (spec.mode === 'zone' && row.dexPair) {
@@ -5702,6 +5837,17 @@ async function myListTick() {
             row.zone = analyzed?.entry ? { lo: analyzed.entry.zoneLo, hi: analyzed.entry.zoneHi, noAnchor: !!analyzed.entry.noAnchor } : row.zone;
             row.flags = (analyzed?.flags || []).map(f => f.text).slice(0, 4);
             row.inZone = !!(analyzed && !analyzed.entry?.noAnchor && inZone(analyzed, row.price));
+          }
+          if (breakMode && candles) {
+            let m5 = null;
+            if (spec.earlyBreak && (tf === '1h' || tf === '4h')) {
+              try { m5 = await fetchOhlcv(row.pool, '5m'); } catch { m5 = null; }
+            }
+            const read = listBreakRead(candles, tf, spec.mode === 'resist' ? 'resist' : 'trend', row.price, Date.now(), { early: !!spec.earlyBreak, m5 });
+            row.breakState = read.state;
+            row.breakLevel = read.level;
+            row.breakReason = read.reason;
+            row.breakEarly = !!read.early;
           }
         } catch { /* status stays waiting */ }
       }
@@ -5721,7 +5867,7 @@ async function myListBuys() {
     const px = row.price;
     const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
     const open = !!listPosition(row.mint);
-    const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
+    const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
     if (!gate.ready) continue;
     if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) continue;
     const sol = +listSolSize(spec).toFixed(6);
@@ -5914,7 +6060,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, get mylist() { return MYLIST; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, get mylist() { return MYLIST; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
