@@ -1390,6 +1390,8 @@ function bar(label, val, weight, contrib, color) {
   <div class="h-2 rounded-full bg-white/5 overflow-hidden"><div class="h-full rounded-full ${color}" style="width:${clamp(val)}%"></div></div></div>`;
 }
 function stat(label, value, cls = '') { return `<div class="rounded-lg bg-ink-900/60 px-2.5 py-1.5 min-w-0"><div class="text-[10px] uppercase tracking-wide text-slate-500">${label}</div><div class="font-mono text-sm truncate ${cls}">${value}</div></div>`; }
+function statWrap(label, valueHtml, cls = '') { return `<div class="rounded-lg bg-ink-900/60 px-2.5 py-1.5 min-w-0"><div class="text-[10px] uppercase tracking-wide text-slate-500">${label}</div><div class="font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-sm ${cls}">${valueHtml}</div></div>`; }
+function zoneRangeHtml(lo, hi) { return `<span class="block">from ${price(lo)}</span><span class="block">to ${price(hi)}</span>`; }
 
 function render(R) {
   $('emptyState').classList.add('hidden'); const el = $('results'); el.classList.remove('hidden');
@@ -1447,7 +1449,8 @@ function render(R) {
       </div>
       ${t.ta?.line ? `<div class="mt-2 text-[11px] leading-snug ${t.ta.ok ? 'text-slate-300' : 'text-slate-500'}">${esc(t.ta.line)}</div>` : ''}
       ${taCacheLabel(t.ta) ? `<div class="mt-1 text-[11px] text-amber-200">${esc(taCacheLabel(t.ta))}</div>` : ''}
-      ${zoneAnchorLabel(t.entry) ? `<div class="mt-1 text-[11px] ${t.entry.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(t.entry))}</div>` : ''}
+      ${t.entry ? `<div class="mt-2 font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-xs text-slate-300"><span class="text-slate-500">${t.entry.strat && String(t.entry.strat).startsWith('Break') ? 'Trigger zone' : 'Entry zone'}</span><span class="block">from ${price(t.entry.zoneLo)}</span><span class="block">to ${price(t.entry.zoneHi)}</span><span class="block text-rose-300">stop ${price(t.entry.stop)}</span></div>` : ''}
+      ${zoneAnchorLabel(t.entry) ? `<div class="mt-1 text-[11px] whitespace-normal break-words ${t.entry.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(t.entry))}</div>` : ''}
       ${t.flags.length ? `<div class="flex flex-wrap gap-1 mt-3">${t.flags.slice(0, 4).map(f => `<span class="text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}" title="${esc(f.text)}">${esc(f.text.split(' — ')[0])}</span>`).join('')}${t.flags.length > 4 ? `<span class="text-[10px] text-slate-500 self-center">+${t.flags.length - 4} more</span>` : ''}</div>` : '<div class="text-[11px] text-emerald-300 mt-3">✔ No red flags detected</div>'}
       ${t.fails.length ? `<div class="text-[10px] text-rose-300/80 mt-2">Filter fail: ${esc(t.fails.join(' · '))}</div>` : ''}
       <div class="trade-row mt-3" data-mint="${esc(t.mint)}"></div>
@@ -1504,8 +1507,8 @@ function render(R) {
         <div class="flex flex-wrap items-center gap-2"><b>${esc(t.symbol)}</b><span class="text-[11px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-200 border border-violet-500/30">${esc(e.strat)}</span>${t.verdict === 'Rejected' ? '<span class="text-[11px] text-rose-300">✖ Do not enter</span>' : t.verdict === 'Watchlist' ? '<span class="text-[11px] text-amber-300">Watch only — no position until it qualifies</span>' : '<span class="text-[11px] text-emerald-300">✔ Tradeable setup</span>'}</div>
         <p class="text-xs text-slate-400 mt-1">${esc(e.reason)}</p>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-2">
-          ${stat(e.strat.startsWith('Break') ? 'Trigger zone' : 'Entry zone', `${price(e.zoneLo)} – ${price(e.zoneHi)}`)}
-          ${stat('Invalidation stop', `${price(e.stop)} <span class="text-[10px] text-slate-500">(−${e.stopPct.toFixed(0)}%)</span>`, 'text-rose-300')}
+          ${statWrap(e.strat.startsWith('Break') ? 'Trigger zone' : 'Entry zone', zoneRangeHtml(e.zoneLo, e.zoneHi))}
+          ${statWrap('Invalidation stop', `<span class="block">${price(e.stop)}</span><span class="block text-[10px] text-slate-500">(−${isNum(e.stopPct) ? e.stopPct.toFixed(0) : '—'}%)</span>`, 'text-rose-300')}
           ${stat('Risk / token', e.riskPct ? e.riskPct.toFixed(2) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.riskPct / 100)}</span>` : '') : '0 — no trade')}
           ${stat('Position size', e.notionalPct ? e.notionalPct.toFixed(1) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.notionalPct / 100)}</span>` : '') : '—')}
         </div>
@@ -2252,7 +2255,7 @@ async function openTrade(side, mint, { sol, pct } = {}) {
       ${imp != null && imp > 5 ? `<label class="mt-3 flex gap-2 items-start rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-200"><input id="tmImpOk" type="checkbox" class="mt-0.5 accent-rose-500" /> <span>Price impact is <b>${imp.toFixed(2)}%</b> (&gt; 5%). I understand I will get a much worse price and still want to proceed.</span></label>` : ''}
       ${issues.length ? `<div class="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-200"><b>⚠ Red flags / checklist fails:</b><ul class="list-disc pl-4 mt-1 space-y-0.5">${issues.slice(0, 6).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
         <label class="mt-2 flex gap-2 items-start"><input id="tmFlagOk" type="checkbox" class="mt-0.5 accent-amber-500" /> <span>I reviewed these red flags and accept the extra risk.</span></label></div>` : ''}
-      ${t.entry && isBuy ? `<div class="mt-3 text-[11px] text-slate-400">Plan: ${esc(t.entry.strat)} · zone ${price(t.entry.zoneLo)}–${price(t.entry.zoneHi)} · stop ${price(t.entry.stop)} · TP1 ${price(t.exit?.tp1)}</div>` : ''}
+      ${t.entry && isBuy ? `<div class="mt-3 text-[11px] leading-snug text-slate-400 whitespace-normal break-words">Plan: ${esc(t.entry.strat)}<span class="block">from ${price(t.entry.zoneLo)}</span><span class="block">to ${price(t.entry.zoneHi)}</span><span class="block">stop ${price(t.entry.stop)} · TP1 ${price(t.exit?.tp1)}</span></div>` : ''}
       <p class="mt-3 text-[10px] text-slate-500">This is a real, irreversible on-chain swap routed by Jupiter. ${walletKey === 'phantom' ? 'Phantom will show the transaction — check it before approving.' : 'The burner key signs locally in this browser.'} Not financial advice.</p>`;
   };
   const doQuote = async () => {
@@ -3892,11 +3895,11 @@ function renderReadyNow() {
     const tpDist = isNum(px) && isNum(tp1) && px ? (tp1 - px) / px * 100 : null;
     const sug = suggestedBuySol(t);
     const sol = sug.sol > 0 ? sug.sol : 0.05;
-    return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-ink-850 border border-white/5 px-3 py-2 text-xs">
+    return `<div class="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl bg-ink-850 border border-white/5 px-3 py-2 text-[11px] sm:text-xs">
       <b class="text-sm text-slate-100">${esc(t.symbol)}</b>
-      <span class="font-mono">${price(px)}</span>
-      <span class="text-slate-400">Zone <span class="font-mono text-slate-200">${price(e.zoneLo)}–${price(e.zoneHi)}</span></span>
-      <span class="text-slate-400">Stop <span class="font-mono text-rose-300">${price(e.stop)} (${pct(stopDist)})</span></span>
+      <span class="font-mono whitespace-normal break-words">${price(px)}</span>
+      <span class="min-w-0 text-slate-400 whitespace-normal break-words leading-snug">Zone <span class="font-mono text-slate-200"><span class="block">from ${price(e.zoneLo)}</span><span class="block">to ${price(e.zoneHi)}</span></span></span>
+      <span class="min-w-0 text-slate-400 whitespace-normal break-words leading-snug">Stop <span class="block font-mono text-rose-300">${price(e.stop)} (${pct(stopDist)})</span></span>
       <span class="text-slate-400">TP1 <span class="font-mono text-emerald-300">${price(tp1)} (${pct(tpDist)})</span></span>
       <span class="text-slate-300">${esc(e.strat || '')}</span>
       <span class="font-mono text-slate-200">${t.conviction}</span>
