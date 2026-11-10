@@ -167,6 +167,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       <div id="burnerBox" class="mt-3"></div>
       <div id="whaleBox" class="mt-3"></div>
       <div id="sniperBox" class="mt-3"></div>
+      <div id="myListBox" class="mt-3"></div>
       <details id="settingsBox" class="mt-3 rounded-xl bg-ink-850 border border-white/5">
         <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white">⚙️ Safety guards &amp; settings</summary>
         <div class="px-3 pb-3 space-y-2.5 text-xs">
@@ -3424,20 +3425,24 @@ function killSwitch(reason = 'manual') {
   if (wasC) stopCopy(reason, { quiet: true });
   const wasS = !!(typeof SNIPER !== 'undefined' && SNIPER.on);
   if (wasS) stopSniper(reason, { quiet: true });
+  const wasL = !!(typeof MYLIST !== 'undefined' && MYLIST.on);
+  if (wasL) stopMyList(reason, { quiet: true });
   if (was) { autoLog(`⛔ KILL SWITCH (${reason}) — auto-trading stopped`, 'err'); toast('⛔ Auto-trading stopped', 'err'); }
   else if (wasC) toast('⛔ Copy mode stopped', 'err');
   else if (wasS) toast('⛔ Launch sniper stopped', 'err');
+  else if (wasL) toast('⛔ My List stopped', 'err');
   renderBurner(); if (typeof renderWhale === 'function') renderWhale(); if (typeof renderSniper === 'function') renderSniper(); renderPortfolio();
 }
 function renderKillFab() {
   let f = $('killFab');
   const copyOn = typeof COPY !== 'undefined' && COPY.on;
   const sniperOn = typeof SNIPER !== 'undefined' && SNIPER.on;
-  if (!A.on && !copyOn && !sniperOn) { f?.remove(); return; }
+  const listOn = typeof MYLIST !== 'undefined' && MYLIST.on;
+  if (!A.on && !copyOn && !sniperOn && !listOn) { f?.remove(); return; }
   if (!f) { f = document.createElement('button'); f.id = 'killFab'; f.className = 'fixed bottom-4 left-4 z-50 rounded-full px-4 py-3 font-extrabold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-2xl animate-pulse'; f.addEventListener('click', () => killSwitch('fab')); document.body.appendChild(f); }
-  f.textContent = (A.on ? '🤖 AUTO ON' : copyOn ? '🐋 COPY ON' : '🎯 SNIPE ON') + ' · ⛔ KILL';
+  f.textContent = (A.on ? '🤖 AUTO ON' : copyOn ? '🐋 COPY ON' : sniperOn ? '🎯 SNIPE ON' : '📋 LIST ON') + ' · ⛔ KILL';
 }
-window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on)) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
+window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on)) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
 
 
 /* ---------------- whale copy-trade ---------------- */
@@ -4216,6 +4221,582 @@ function renderSniper() {
   });
 }
 
+/* ---------------- My List (personal entries + chart) ---------------- */
+const MYLIST_DEFAULTS = { on: false, sizeSol: 0.05, pollSec: 30, confirm: 'close', chasePct: 10, tf: '5m' };
+const MYLIST_MODES = ['zone', 'manual', 'trend', 'resist'];
+const MYLIST_TFS = ['1m', '5m', '15m', '1h'];
+let MYLIST = loadMyList();
+let listTimer = null, listBusy = false;
+const listOpen = new Set();
+const listView = {};
+function loadMyList() {
+  const raw = load('sms:mylist', {});
+  const rows = Array.isArray(raw.rows) ? raw.rows.slice(0, 30) : [];
+  return { ...MYLIST_DEFAULTS, ...raw, on: false, rows: rows.map(sanitizeListRow).filter(Boolean) };
+}
+function sanitizeListRow(r) {
+  if (!r || !isAddr(r.mint)) return null;
+  const mode = MYLIST_MODES.includes(r.mode) ? r.mode : 'trend';
+  const tf = MYLIST_TFS.includes(r.tf) ? r.tf : '5m';
+  const confirm = ['close', 'two', 'retest'].includes(r.confirm) ? r.confirm : '';
+  const num = (v) => { const n = +v; return Number.isFinite(n) && n > 0 ? n : null; };
+  return {
+    id: String(r.id || ('ml' + Date.now() + Math.random().toString(36).slice(2, 6))),
+    mint: r.mint, symbol: String(r.symbol || '').slice(0, 16), pool: r.pool || '',
+    mode, tf, confirm, stopPx: num(r.stopPx), triggerPx: num(r.triggerPx),
+    chasePct: num(r.chasePct), cache: r.cache && Array.isArray(r.cache.candles) ? { at: +r.cache.at || 0, tf: r.cache.tf || tf, stale: !!r.cache.stale, candles: r.cache.candles.slice(-80) } : null
+  };
+}
+function saveMyList() {
+  const rows = MYLIST.rows.map(r => ({ ...r, cache: r.cache ? { at: r.cache.at, tf: r.cache.tf, stale: !!r.cache.stale, candles: (r.cache.candles || []).slice(-80) } : null }));
+  save('sms:mylist', { ...MYLIST, on: false, rows });
+}
+function stopMyList(reason, opts) {
+  const was = MYLIST.on; MYLIST.on = false; saveMyList();
+  if (was && !opts?.quiet) toast('⛔ My List auto-buy stopped', 'err');
+  renderKillFab();
+  if (!opts?.quiet) renderMyList();
+}
+function listConfirm(row) { return row.confirm || MYLIST.confirm || 'close'; }
+function listChase(row) { return isNum(row.chasePct) ? row.chasePct : (isNum(+MYLIST.chasePct) ? +MYLIST.chasePct : 10); }
+function fitSwingLine(points, dir) {
+  if (!points || points.length < 2) return null;
+  let best = null;
+  for (let i = 0; i < points.length; i++) {
+    const chain = [points[i]];
+    for (let j = i + 1; j < points.length; j++) {
+      const prev = chain[chain.length - 1];
+      if (dir < 0 ? points[j].price < prev.price : points[j].price > prev.price) chain.push(points[j]);
+    }
+    if (chain.length < 2) continue;
+    const end = chain[chain.length - 1].i, bestEnd = best ? best[best.length - 1].i : -1;
+    if (!best || end > bestEnd || (end === bestEnd && chain.length > best.length)) best = chain;
+  }
+  if (!best) return null;
+  const use = best.slice(-3);
+  return { a: use[0], b: use[use.length - 1], touches: use.length };
+}
+function listStructure(cs) {
+  const { highs, lows } = swingPoints(cs, 2);
+  const pivots = [...highs.map(h => ({ ...h, kind: 'H' })), ...lows.map(l => ({ ...l, kind: 'L' }))].sort((a, b) => a.price - b.price);
+  const zones = [];
+  for (const pt of pivots) {
+    let z = zones.find(z => z.mid > 0 && Math.abs(pt.price - z.mid) / z.mid <= 0.015);
+    if (!z) { z = { lo: pt.price, hi: pt.price, mid: pt.price, sum: 0, touches: 0, highTouches: 0, lowTouches: 0 }; zones.push(z); }
+    z.touches++; z.sum += pt.price; z.lo = Math.min(z.lo, pt.price); z.hi = Math.max(z.hi, pt.price); z.mid = z.sum / z.touches;
+    if (pt.kind === 'H') z.highTouches++; else z.lowTouches++;
+  }
+  const hLabel = highs.length >= 2 ? (highs.at(-1).price > highs.at(-2).price ? 'HH' : 'LH') : null;
+  const lLabel = lows.length >= 2 ? (lows.at(-1).price > lows.at(-2).price ? 'HL' : 'LL') : null;
+  let trend = 'range';
+  if (hLabel === 'HH' && lLabel === 'HL') trend = 'up';
+  else if (hLabel === 'LH' && lLabel === 'LL') trend = 'down';
+  return { highs, lows, zones, trend, down: fitSwingLine(highs, -1), up: fitSwingLine(lows, 1) };
+}
+function breakConfirm(cs, levelAt, confirm) {
+  const last = cs.length - 1;
+  const broke = (i) => {
+    const lv = levelAt(i);
+    const avg = avgVol(cs, i, 20);
+    return isNum(lv) && lv > 0 && cs[i].c > lv && avg > 0 && cs[i].v > avg;
+  };
+  let breakAt = -1;
+  for (let i = Math.max(2, cs.length - 8); i < cs.length; i++) if (broke(i)) breakAt = i;
+  const lvLast = levelAt(last);
+  const above = isNum(lvLast) && cs[last].c > lvLast;
+  if (!(breakAt >= 0) || !above) {
+    return { phase: 'waiting', ready: false, breakAt, reason: above ? 'volume is not above the recent average' : 'close still under the level' };
+  }
+  if (confirm === 'two') {
+    const a = last - 1;
+    const two = a >= 0 && cs[a].c > levelAt(a) && cs[last].c > lvLast;
+    return two ? { phase: 'broken', ready: true, breakAt, reason: '2 closes above + volume' } : { phase: 'broken', ready: false, breakAt, reason: 'waiting for 2 closes above' };
+  }
+  if (confirm === 'retest') {
+    let held = false;
+    for (let i = breakAt + 1; i < cs.length; i++) {
+      const lv = levelAt(i);
+      if (isNum(lv) && cs[i].l <= lv * 1.01 && cs[i].l >= lv * 0.98 && cs[i].c > lv) held = true;
+    }
+    if (held) return { phase: 'retest', ready: true, breakAt, reason: 'retest hold + volume' };
+    return { phase: 'broken', ready: false, breakAt, reason: 'waiting for retest hold' };
+  }
+  return { phase: 'broken', ready: true, breakAt, reason: 'close above + volume' };
+}
+function blankPlan(reason) {
+  return { ok: false, ready: false, state: 'waiting', trend: 'range', reason, trigger: null, triggerLabel: '—', setup: '—', confirmText: '', entry: null, plannedEntry: null, stop: null, tp1: null, tp2: null, rr: null, support: null, resist: null, zones: [], down: null, up: null, breakAt: -1, fillPx: null };
+}
+function withTargets(plan, entry, stop) {
+  plan.entry = entry; plan.plannedEntry = entry; plan.stop = stop;
+  plan.tp1 = isNum(entry) ? entry * 1.5 : null;
+  plan.tp2 = isNum(entry) ? entry * 2 : null;
+  plan.rr = isNum(entry) && isNum(stop) && entry > stop && isNum(plan.tp1) ? (plan.tp1 - entry) / (entry - stop) : null;
+  return plan;
+}
+function buildListPlan(candles, opts) {
+  const o = opts || {};
+  const cs = (candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.c > 0 && c.h > 0);
+  if (cs.length < 15) return blankPlan('not enough candles');
+  const st = listStructure(cs);
+  const last = cs.length - 1;
+  const px = cs[last].c;
+  const mode = MYLIST_MODES.includes(o.mode) ? o.mode : 'trend';
+  const confirm = ['close', 'two', 'retest'].includes(o.confirm) ? o.confirm : 'close';
+  const supports = st.zones.filter(z => z.lowTouches >= 1 && z.mid <= px * 1.01).sort((a, b) => (b.lowTouches >= 2) - (a.lowTouches >= 2) || b.mid - a.mid);
+  const resists = st.zones.filter(z => z.highTouches >= 1).sort((a, b) => (b.highTouches >= 2) - (a.highTouches >= 2) || a.mid - b.mid);
+  const support = supports.find(z => z.lowTouches >= 2) || supports[0] || null;
+  const resistAbove = resists.filter(z => z.lo > px).sort((a, b) => a.lo - b.lo);
+  const resist = (resistAbove.find(z => z.highTouches >= 2) || resistAbove[0] || resists.find(z => z.highTouches >= 2) || resists[0] || null);
+  const setup = { trend: 'Trendline break', resist: 'Resistance break', zone: 'Support zone', manual: 'Manual price' }[mode];
+  const plan = { ok: true, ready: false, state: 'waiting', trend: st.trend, reason: '', trigger: null, triggerLabel: '', setup, confirmText: confirm === 'two' ? '2 closes above + volume' : confirm === 'retest' ? 'retest hold + volume' : 'close above + volume', entry: null, plannedEntry: null, stop: null, tp1: null, tp2: null, rr: null, support, resist, zones: st.zones, down: st.down, up: st.up, breakAt: -1, fillPx: null, highs: st.highs, lows: st.lows };
+  const userStop = isNum(o.stopPx) && o.stopPx > 0 ? o.stopPx : null;
+  const applyStop = (auto) => userStop || auto;
+  if (mode === 'manual') {
+    if (!(isNum(o.triggerPx) && o.triggerPx > 0)) return Object.assign(plan, blankPlan('set a trigger price'), { ok: true, trend: st.trend, support, resist, zones: st.zones, down: st.down, up: st.up, setup });
+    const level = o.triggerPx;
+    const conf = breakConfirm(cs, () => level, confirm);
+    plan.trigger = level; plan.triggerLabel = 'Manual price'; plan.breakAt = conf.breakAt; plan.state = conf.phase; plan.ready = conf.ready; plan.reason = conf.reason;
+    const swing = st.lows.length ? st.lows.at(-1).price : level * 0.98;
+    withTargets(plan, conf.ready ? px : level, applyStop(Math.min(level * 0.995, swing)));
+    return plan;
+  }
+  if (mode === 'zone') {
+    const z = supports.find(z => z.lowTouches >= 2 && z.hi <= px * 1.25) || supports.find(z => z.hi <= px * 1.25) || null;
+    if (!z) { plan.reason = 'no support zone in range'; return plan; }
+    const inside = px <= z.hi * 1.01 && px >= z.lo * 0.99;
+    plan.trigger = z.mid; plan.triggerLabel = 'S/R zone'; plan.reason = inside ? 'price is inside support' : 'waiting for price to reach support';
+    plan.state = inside ? 'retest' : 'waiting'; plan.ready = inside;
+    withTargets(plan, inside ? px : z.mid, applyStop(z.lo * 0.995));
+    return plan;
+  }
+  if (mode === 'trend') {
+    if (!st.down || st.down.touches < 2) { plan.reason = 'need 2 lower swing highs'; return plan; }
+    const levelAt = (i) => lineAt(st.down.a, st.down.b, i);
+    const level = levelAt(last);
+    const conf = breakConfirm(cs, levelAt, confirm);
+    plan.trigger = level; plan.triggerLabel = 'Trendline break'; plan.breakAt = conf.breakAt; plan.state = conf.phase; plan.ready = conf.ready; plan.reason = conf.reason;
+    const brLow = conf.breakAt >= 0 ? cs[conf.breakAt].l : cs[last].l;
+    const swing = st.lows.length ? st.lows.at(-1).price : brLow;
+    withTargets(plan, conf.ready ? px : level, applyStop(Math.min(brLow, swing) * 0.995));
+    return plan;
+  }
+  const pool = resists.filter(z => z.highTouches >= 2);
+  const use = pool.length ? pool : resists;
+  let broken = null;
+  for (const z of use) {
+    let did = false;
+    for (let i = Math.max(2, cs.length - 8); i < cs.length; i++) {
+      const avg = avgVol(cs, i, 20);
+      if (cs[i].c > z.hi && avg > 0 && cs[i].v > avg) did = true;
+    }
+    if (did && (!broken || z.hi > broken.hi)) broken = z;
+  }
+  const levelZone = broken || use.filter(z => z.lo > px).sort((a, b) => a.lo - b.lo)[0] || null;
+  if (!levelZone) { plan.reason = 'no resistance level'; return plan; }
+  const level = levelZone.hi;
+  plan.trigger = level; plan.triggerLabel = 'Resistance break';
+  if (!broken) { plan.reason = 'close still under resistance'; plan.state = 'waiting'; withTargets(plan, level, applyStop(level * 0.995)); return plan; }
+  const conf = breakConfirm(cs, () => level, confirm);
+  plan.breakAt = conf.breakAt; plan.state = conf.phase; plan.ready = conf.ready; plan.reason = conf.reason;
+  const chase = isNum(o.chasePct) ? o.chasePct : 10;
+  if (px > level * (1 + chase / 100)) { plan.ready = false; plan.reason = 'price is ' + ((px / level - 1) * 100).toFixed(0) + '% above the level (max chase ' + chase + '%)'; }
+  withTargets(plan, plan.ready ? px : level, applyStop(level * 0.995));
+  return plan;
+}
+function listShouldBuy(plan, armed) { return !!(armed && plan?.ready && plan.state !== 'bought'); }
+function listPosition(mint) { return openPositions().find(p => p.wallet === 'burner' && p.mint === mint && p.open) || null; }
+function presentPlan(row) {
+  const cache = row.cache;
+  const age = cache ? Date.now() - (cache.at || 0) : Infinity;
+  let plan = (!cache || cache.tf !== row.tf || age >= 90 * 60e3) ? blankPlan(cache ? 'cached TA older than 90 min' : 'waiting for candles') : buildListPlan(cache.candles, { mode: row.mode, confirm: listConfirm(row), chasePct: listChase(row), stopPx: row.stopPx, triggerPx: row.triggerPx });
+  if (plan.ready && isNum(plan.stop) && isNum(plan.plannedEntry) && plan.stop >= plan.plannedEntry) { plan.ready = false; plan.reason = 'stop is not below entry'; }
+  if (cache?.stale) plan.cached = true, plan.cachedAt = cache.at;
+  if (age >= 60 * 60e3) { plan.ready = false; if (plan.ok) plan.reason = 'cached TA older than 60 min'; }
+  const pos = listPosition(row.mint);
+  if (pos) {
+    plan.state = 'bought'; plan.ready = false;
+    plan.fillPx = pos.avgUsd;
+    if (isNum(pos.avgUsd)) { plan.tp1 = pos.avgUsd * 1.5; plan.tp2 = pos.avgUsd * 2; }
+  }
+  plan.row = row;
+  return plan;
+}
+function listMarkers(row, candles, plan) {
+  const out = [];
+  const toMs = (t) => t < 1e12 ? t * 1000 : t;
+  const nearest = (ts) => {
+    let best = -1, dist = Infinity;
+    candles.forEach((c, i) => { const d = Math.abs(toMs(c.t) - ts); if (d < dist) { dist = d; best = i; } });
+    return best;
+  };
+  for (const r of LOG) {
+    if (r.mint !== row.mint || r.status !== 'confirmed') continue;
+    const i = nearest(r.ts);
+    if (i >= 0) out.push({ i, kind: r.side === 'sell' ? 'sell' : 'buy', price: r.priceUsd || candles[i].c });
+  }
+  if (plan?.breakAt >= 0) out.push({ i: plan.breakAt, kind: 'break', price: candles[plan.breakAt]?.c });
+  if (isNum(plan?.plannedEntry)) out.push({ i: candles.length - 1, kind: 'entry', price: plan.plannedEntry });
+  if (isNum(plan?.fillPx)) out.push({ i: nearest(listPosition(row.mint)?.firstTs || Date.now()), kind: 'fill', price: plan.fillPx });
+  return out;
+}
+function paintListChart(canvas, candles, plan, markers, opt) {
+  if (!canvas) return;
+  const mini = !!opt?.mini;
+  const cssW = canvas.clientWidth || (mini ? 144 : 320);
+  const cssH = canvas.clientHeight || (mini ? 96 : 256);
+  if (cssW < 8 || cssH < 8) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.fillStyle = '#0c1018'; ctx.fillRect(0, 0, cssW, cssH);
+  const cs = candles || [];
+  if (cs.length < 2) { ctx.fillStyle = '#64748b'; ctx.font = '11px sans-serif'; ctx.fillText('No candles yet', 8, 18); return; }
+  const count = Math.min(cs.length, opt?.count || (mini ? 60 : 80));
+  const maxStart = Math.max(0, cs.length - count);
+  let start = mini ? maxStart : Math.max(0, Math.min(maxStart, opt?.start ?? maxStart));
+  const view = cs.slice(start, start + count);
+  const volH = Math.round(cssH * (mini ? 0.18 : 0.22));
+  const padT = mini ? 4 : 8, padB = volH + 4, padL = 2, padR = mini ? 2 : 54;
+  const plotW = Math.max(10, cssW - padL - padR), plotH = Math.max(10, cssH - padT - padB);
+  const prices = [];
+  view.forEach(c => prices.push(c.h, c.l));
+  const extra = [plan?.trigger, plan?.stop, plan?.tp1, plan?.tp2, plan?.plannedEntry, plan?.fillPx, plan?.support?.mid, plan?.resist?.mid];
+  extra.forEach(n => { if (isNum(n)) prices.push(n); });
+  let min = Math.min(...prices), max = Math.max(...prices);
+  if (!(max > min)) { min *= 0.99; max *= 1.01; }
+  const pad = (max - min) * 0.08; min -= pad; max += pad;
+  const yAt = (p) => padT + (1 - (p - min) / (max - min)) * plotH;
+  const priceAt = (y) => min + (1 - (y - padT) / plotH) * (max - min);
+  const slot = plotW / view.length;
+  const xAt = (i) => padL + (i - start + 0.5) * slot;
+  const vmax = Math.max(...view.map(c => c.v || 0), 1);
+  view.forEach((c, k) => {
+    const i = start + k;
+    const x = xAt(i), up = c.c >= c.o;
+    ctx.globalAlpha = 0.45; ctx.fillStyle = up ? '#34d399' : '#fb7185';
+    const vh = Math.max(1, (c.v || 0) / vmax * (volH - 4));
+    ctx.fillRect(x - Math.max(1, slot * 0.3), cssH - vh, Math.max(1, slot * 0.6), vh);
+    ctx.globalAlpha = 1; ctx.strokeStyle = up ? '#34d399' : '#fb7185'; ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath(); ctx.moveTo(x, yAt(c.h)); ctx.lineTo(x, yAt(c.l)); ctx.stroke();
+    const top = yAt(Math.max(c.o, c.c)), bot = yAt(Math.min(c.o, c.c));
+    ctx.fillRect(x - Math.max(1, slot * 0.28), top, Math.max(1.5, slot * 0.56), Math.max(1, bot - top));
+  });
+  const hLine = (p, color, label, dash) => {
+    if (!isNum(p)) return;
+    const y = yAt(p); if (y < padT - 2 || y > padT + plotH + 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke(); ctx.restore();
+    if (!mini && label) { ctx.fillStyle = color; ctx.font = '10px sans-serif'; ctx.fillText(label, padL + plotW + 3, y + 3); }
+  };
+  (plan?.zones || []).forEach(z => {
+    if (z.lowTouches) hLine(z.mid, 'rgba(56,189,248,0.7)', 'S ×' + z.touches, [3, 3]);
+    if (z.highTouches && z !== plan.support) hLine(z.hi, 'rgba(251,113,133,0.55)', 'R ×' + z.highTouches, [3, 3]);
+  });
+  const drawLine = (ln, color) => {
+    if (!ln) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = mini ? 1 : 1.5; ctx.beginPath();
+    ctx.moveTo(xAt(ln.a.i), yAt(lineAt(ln.a, ln.b, ln.a.i)));
+    ctx.lineTo(xAt(Math.min(cs.length - 1, Math.max(ln.b.i, cs.length - 1))), yAt(lineAt(ln.a, ln.b, cs.length - 1)));
+    ctx.stroke(); ctx.restore();
+  };
+  drawLine(plan?.up, '#38bdf8');
+  drawLine(plan?.down, '#fbbf24');
+  hLine(plan?.trigger, '#c4b5fd', 'TRIGGER');
+  hLine(plan?.stop, '#fb7185', 'STOP', [4, 3]);
+  hLine(plan?.tp1, '#34d399', 'TP1', [4, 3]);
+  hLine(plan?.tp2, '#6ee7b7', 'TP2', [2, 3]);
+  const arrow = (i, price, color, dir) => {
+    if (!isNum(price) || i < start || i >= start + count) return;
+    const x = xAt(i), y = yAt(price);
+    ctx.fillStyle = color; ctx.beginPath();
+    if (dir < 0) { ctx.moveTo(x, y - 7); ctx.lineTo(x - 4, y - 1); ctx.lineTo(x + 4, y - 1); }
+    else { ctx.moveTo(x, y + 7); ctx.lineTo(x - 4, y + 1); ctx.lineTo(x + 4, y + 1); }
+    ctx.fill();
+  };
+  (markers || []).forEach(m => {
+    if (m.kind === 'entry') arrow(m.i, m.price, '#f8fafc', -1);
+    else if (m.kind === 'fill') arrow(m.i, m.price, '#a78bfa', 1);
+    else if (m.kind === 'buy') arrow(m.i, m.price, '#34d399', 1);
+    else if (m.kind === 'sell') arrow(m.i, m.price, '#fb7185', -1);
+    else if (m.kind === 'break') { ctx.fillStyle = '#fbbf24'; ctx.fillRect(xAt(m.i) - 2, yAt(m.price) - 2, 4, 4); }
+  });
+  canvas._scale = { yAt, priceAt, padT, plotH, start, count, cssW };
+}
+function verdictOf(plan, armed) {
+  if (plan.state === 'bought') return { cls: 'text-emerald-300', text: 'Bought' };
+  if (plan.ready && armed) return { cls: 'text-emerald-300', text: 'READY — entering' };
+  if (plan.ready) return { cls: 'text-emerald-300', text: 'READY — auto-buy is off' };
+  return { cls: 'text-amber-200', text: 'NOT READY — waiting: ' + (plan.reason || 'setup') };
+}
+function listBlurb(plan) {
+  const bits = ['Trigger: ' + (plan.triggerLabel || '—') + ' @ ' + price(plan.trigger) + (plan.confirmText ? ' (' + plan.confirmText + ')' : ''), 'Stop: ' + price(plan.stop), 'TP: ' + price(plan.tp1) + ' / ' + price(plan.tp2), plan.state === 'bought' ? 'Bought' : (plan.ready ? 'Ready' : 'Waiting')];
+  if (plan.cached) bits.push('TA cached (' + Math.max(0, Math.round((Date.now() - plan.cachedAt) / 60000)) + ' min ago)');
+  return bits.join(' · ');
+}
+function renderMyList() {
+  const box = $('myListBox'); if (!box) return;
+  const focus = document.activeElement;
+  const typing = focus && box.contains(focus) && /^(INPUT|SELECT|TEXTAREA)$/.test(focus.tagName);
+  if (typing && box.dataset.built === String(MYLIST.rows.length) + ':' + [...listOpen].sort().join()) { paintListCanvases(); refreshListCopy(); return; }
+  const stateName = { waiting: 'Waiting break', broken: 'Broken', retest: 'Retest', bought: 'Bought' };
+  const opt = (arr, cur, labels) => arr.map(v => `<option value="${v}" ${v === cur ? 'selected' : ''}>${labels ? labels[v] : v}</option>`).join('');
+  const rows = MYLIST.rows.map(row => {
+    const plan = presentPlan(row);
+    const v = verdictOf(plan, MYLIST.on);
+    const open = listOpen.has(row.id);
+    const rr = isNum(plan.rr) ? plan.rr.toFixed(2) : '—';
+    return `<article class="rounded-xl border border-white/10 bg-ink-900/40 p-2.5" data-row="${row.id}">
+      <div class="flex flex-wrap gap-2 items-start">
+        <button type="button" data-open="${row.id}" class="shrink-0 w-36 h-24 rounded-lg overflow-hidden border border-white/10 bg-ink-900" aria-label="Open chart for ${esc(row.symbol || row.mint)}"><canvas data-chart="${row.id}" data-kind="mini" class="w-full h-full block"></canvas></button>
+        <div class="min-w-0 flex-1 basis-40" data-copy="${row.id}">
+          <div class="flex flex-wrap items-center gap-1.5"><b class="break-words">${esc(row.symbol || short(row.mint))}</b><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px]">${esc(stateName[plan.state] || 'Waiting break')}</span></div>
+          <div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words leading-snug">Trend ${esc(plan.trend)} · S ${price(plan.support?.mid)} ×${plan.support?.touches || 0} · R ${price(plan.resist?.mid)} ×${plan.resist?.highTouches || plan.resist?.touches || 0}</div>
+          <div class="text-[11px] text-slate-300 whitespace-normal break-words leading-snug">${esc(plan.setup)} · entry ${price(plan.plannedEntry)} · stop ${price(plan.stop)} · TP ${price(plan.tp1)} / ${price(plan.tp2)} · R:R ${rr}</div>
+          <div class="mt-1 text-[11px] font-semibold whitespace-normal break-words ${v.cls}">${esc(v.text)}</div>
+        </div>
+      </div>
+      <div class="${open ? '' : 'hidden'} mt-2" data-full="${row.id}">
+        <div class="flex flex-wrap gap-1 mb-1">${MYLIST_TFS.map(tf => `<button type="button" data-tf="${row.id}" data-v="${tf}" class="rounded px-2 py-0.5 text-[10px] border ${row.tf === tf ? 'border-violet-400 text-violet-200' : 'border-white/10 text-slate-400'}">${tf}</button>`).join('')}</div>
+        <canvas data-chart="${row.id}" data-kind="full" class="w-full h-64 rounded-lg border border-white/10" style="touch-action:none"></canvas>
+        <p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(listBlurb(plan))}${row.mode === 'manual' ? ' · Tap or drag the chart to set the manual trigger.' : ''}</p>
+      </div>
+      <div class="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+        <label>Mode<select data-field="mode" data-id="${row.id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1">${opt(MYLIST_MODES, row.mode, { zone: 'Support zone', manual: 'Manual price', trend: 'Trendline break', resist: 'Resistance break' })}</select></label>
+        <label>Timeframe<select data-field="tf" data-id="${row.id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1">${opt(MYLIST_TFS, row.tf)}</select></label>
+        <label>Confirm<select data-field="confirm" data-id="${row.id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1"><option value="" ${row.confirm ? '' : 'selected'}>Default</option><option value="close" ${row.confirm === 'close' ? 'selected' : ''}>1 close</option><option value="two" ${row.confirm === 'two' ? 'selected' : ''}>2 closes</option><option value="retest" ${row.confirm === 'retest' ? 'selected' : ''}>Retest hold</option></select></label>
+        <label>Stop override<input data-field="stopPx" data-id="${row.id}" value="${row.stopPx ?? ''}" placeholder="auto" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+        <label>Manual trigger<input data-field="triggerPx" data-id="${row.id}" value="${row.triggerPx ?? ''}" placeholder="tap chart" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+        <label>Max chase %<input data-field="chasePct" data-id="${row.id}" value="${row.chasePct ?? ''}" placeholder="${MYLIST.chasePct}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      </div>
+      <button type="button" data-del="${row.id}" class="mt-2 text-[11px] text-rose-300">Remove</button>
+    </article>`;
+  }).join('');
+  box.innerHTML = `<details id="myListDetails" class="rounded-xl bg-ink-850 border ${MYLIST.on ? 'border-emerald-400/40' : 'border-white/5'}" open>
+    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-between"><span>My List</span>${MYLIST.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-400 text-ink-900">LIST ON</span>' : '<span class="text-[10px] text-slate-500">off</span>'}</summary>
+    <div class="px-3 pb-3 text-xs space-y-2">
+      <p class="text-[11px] text-slate-400 whitespace-normal break-words">Tokens you pick, with their own entry. Auto-buy fires only when that row's trigger confirms, then uses your size, stop, and the panel TPs (+50% / +100%). Off on reload. Nothing is sent while a row is waiting.</p>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="block"><span class="text-slate-400">SOL per buy</span><input id="mlSize" type="number" min="0.001" step="0.01" value="${MYLIST.sizeSol}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+        <label class="block"><span class="text-slate-400">Refresh seconds</span><input id="mlPoll" type="number" min="15" max="120" step="1" value="${MYLIST.pollSec}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+        <label class="block"><span class="text-slate-400">Confirm</span><select id="mlConfirm" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5"><option value="close" ${MYLIST.confirm === 'close' ? 'selected' : ''}>1 close + volume</option><option value="two" ${MYLIST.confirm === 'two' ? 'selected' : ''}>2 closes above</option><option value="retest" ${MYLIST.confirm === 'retest' ? 'selected' : ''}>Retest hold</option></select></label>
+        <label class="block"><span class="text-slate-400">Resistance max chase %</span><input id="mlChase" type="number" min="1" max="50" step="1" value="${MYLIST.chasePct}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+      </div>
+      <div class="flex gap-2"><input id="mlMint" placeholder="Mint address" class="flex-1 min-w-0 rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" /><button id="mlAdd" type="button" class="rounded-lg px-3 py-1.5 bg-ink-700 border border-white/10">Add</button></div>
+      <div class="flex gap-2">
+        <button id="mlSave" type="button" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save list</button>
+        ${MYLIST.on ? '<button id="mlOff" type="button" class="flex-1 rounded-lg py-1.5 font-bold bg-rose-600 text-white">List OFF</button>' : '<button id="mlOn" type="button" class="flex-1 rounded-lg py-1.5 font-bold bg-emerald-500 text-ink-900">List ON</button>'}
+      </div>
+      <div class="space-y-2">${rows || '<p class="text-slate-500">No tokens yet.</p>'}</div>
+    </div></details>`;
+  box.dataset.built = String(MYLIST.rows.length) + ':' + [...listOpen].sort().join();
+  $('mlAdd')?.addEventListener('click', () => {
+    const mint = $('mlMint').value.trim();
+    if (!isAddr(mint)) return toast('Paste a Solana mint address', 'warn');
+    if (MYLIST.rows.some(r => r.mint === mint)) return toast('Already on My List', 'info');
+    MYLIST.rows.push(sanitizeListRow({ id: 'ml' + Date.now(), mint, mode: 'trend', tf: '5m' }));
+    $('mlMint').value = ''; saveMyList(); renderMyList(); myListTick();
+  });
+  $('mlSave')?.addEventListener('click', () => { readMyListForm(); saveMyList(); toast('My List saved', 'ok'); renderMyList(); startMyList(); });
+  $('mlOff')?.addEventListener('click', () => stopMyList('manual'));
+  $('mlOn')?.addEventListener('click', () => {
+    if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+    readMyListForm();
+    resetModalButtons();
+    openModal({ title: 'Turn My List ON', confirmLabel: 'Start My List', danger: true,
+      html: `<p class="text-xs text-slate-300">The burner will market-buy a listed token only after its trigger confirms (${MYLIST.sizeSol} SOL, still inside the global caps). It turns off on reload.</p><label class="mt-3 flex gap-2 items-start text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
+      validate: () => $('mlAck')?.checked,
+      onConfirm: async () => { MYLIST.on = true; saveMyList(); startMyList(); renderMyList(); renderKillFab(); toast('My List auto-buy ON', 'warn', 6000); myListTick(); } });
+  });
+  box.querySelectorAll('[data-field]').forEach(el => el.addEventListener('change', () => { readMyListForm(); saveMyList(); renderMyList(); }));
+  box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { MYLIST.rows = MYLIST.rows.filter(r => r.id !== b.dataset.del); listOpen.delete(b.dataset.del); saveMyList(); renderMyList(); }));
+  box.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => { const id = b.dataset.open; if (listOpen.has(id)) listOpen.delete(id); else listOpen.add(id); renderMyList(); }));
+  box.querySelectorAll('[data-tf]').forEach(b => b.addEventListener('click', () => { const row = MYLIST.rows.find(r => r.id === b.dataset.tf); if (!row) return; row.tf = b.dataset.v; saveMyList(); renderMyList(); myListTick(); }));
+  paintListCanvases();
+}
+function readMyListForm() {
+  const n = (id, d, lo, hi) => { const x = +$(id)?.value; return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
+  if ($('mlSize')) {
+    MYLIST.sizeSol = n('mlSize', 0.05, 0.001, 100);
+    MYLIST.pollSec = Math.round(n('mlPoll', 30, 15, 120));
+    MYLIST.chasePct = n('mlChase', 10, 1, 50);
+    const c = $('mlConfirm')?.value; MYLIST.confirm = ['close', 'two', 'retest'].includes(c) ? c : 'close';
+  }
+  document.querySelectorAll('#myListBox [data-field]').forEach(el => {
+    const row = MYLIST.rows.find(r => r.id === el.dataset.id); if (!row) return;
+    const f = el.dataset.field;
+    if (f === 'mode') row.mode = MYLIST_MODES.includes(el.value) ? el.value : row.mode;
+    else if (f === 'tf') row.tf = MYLIST_TFS.includes(el.value) ? el.value : row.tf;
+    else if (f === 'confirm') row.confirm = ['close', 'two', 'retest'].includes(el.value) ? el.value : '';
+    else { const v = +el.value; row[f] = Number.isFinite(v) && v > 0 ? v : null; }
+  });
+}
+function paintListCanvases() {
+  document.querySelectorAll('#myListBox canvas[data-chart]').forEach(canvas => {
+    const row = MYLIST.rows.find(r => r.id === canvas.dataset.chart); if (!row) return;
+    const plan = presentPlan(row);
+    const cs = row.cache?.tf === row.tf ? (row.cache.candles || []) : [];
+    const mini = canvas.dataset.kind === 'mini';
+    const view = listView[row.id] || { start: Math.max(0, cs.length - 80), count: 80 };
+    paintListChart(canvas, cs, plan, listMarkers(row, cs, plan), mini ? { mini: true } : view);
+    if (!mini) bindFullChart(canvas, row);
+  });
+}
+function refreshListCopy() {
+  MYLIST.rows.forEach(row => {
+    const el = document.querySelector(`[data-copy="${row.id}"]`); if (!el) return;
+    const plan = presentPlan(row);
+    const v = verdictOf(plan, MYLIST.on);
+    const rr = isNum(plan.rr) ? plan.rr.toFixed(2) : '—';
+    const stateName = { waiting: 'Waiting break', broken: 'Broken', retest: 'Retest', bought: 'Bought' };
+    el.innerHTML = `<div class="flex flex-wrap items-center gap-1.5"><b class="break-words">${esc(row.symbol || short(row.mint))}</b><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px]">${esc(stateName[plan.state] || 'Waiting break')}</span></div>
+      <div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words leading-snug">Trend ${esc(plan.trend)} · S ${price(plan.support?.mid)} ×${plan.support?.touches || 0} · R ${price(plan.resist?.mid)} ×${plan.resist?.highTouches || plan.resist?.touches || 0}</div>
+      <div class="text-[11px] text-slate-300 whitespace-normal break-words leading-snug">${esc(plan.setup)} · entry ${price(plan.plannedEntry)} · stop ${price(plan.stop)} · TP ${price(plan.tp1)} / ${price(plan.tp2)} · R:R ${rr}</div>
+      <div class="mt-1 text-[11px] font-semibold whitespace-normal break-words ${v.cls}">${esc(v.text)}</div>`;
+  });
+}
+function bindFullChart(canvas, row) {
+  if (canvas.dataset.bound) return;
+  canvas.dataset.bound = '1';
+  let drag = null, moved = 0;
+  const pointers = new Map();
+  const applyTrigger = (y, commit) => {
+    const sc = canvas._scale; if (!sc) return;
+    const px = sc.priceAt(y);
+    if (!(px > 0)) return;
+    row.mode = 'manual'; row.triggerPx = +px.toPrecision(6);
+    if (commit) { saveMyList(); renderMyList(); }
+    else { paintListCanvases(); refreshListCopy(); }
+  };
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture?.(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const sc = canvas._scale;
+    const near = row.mode === 'manual' && sc && isNum(row.triggerPx) && Math.abs(e.offsetY - sc.yAt(row.triggerPx)) < 12;
+    drag = { x: e.clientX, y: e.clientY, start: (listView[row.id] || sc || {}).start || 0, trigger: near };
+    moved = 0;
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const prev = canvas._pinch || dist;
+      const view = listView[row.id] || { start: canvas._scale?.start || 0, count: canvas._scale?.count || 80 };
+      view.count = Math.max(20, Math.min((row.cache?.candles || []).length || 80, Math.round(view.count * (prev / dist))));
+      listView[row.id] = view; canvas._pinch = dist; paintListCanvases(); return;
+    }
+    if (!drag) return;
+    moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
+    if (drag.trigger) { applyTrigger(e.offsetY, false); drag.y = e.clientY; return; }
+    const sc = canvas._scale; if (!sc) return;
+    const dx = e.clientX - drag.x;
+    const bars = Math.round(-dx / Math.max(4, (sc.cssW || 300) / (sc.count || 80)));
+    if (bars) {
+      const len = (row.cache?.candles || []).length;
+      const count = (listView[row.id] || sc).count || sc.count;
+      listView[row.id] = { count, start: Math.max(0, Math.min(Math.max(0, len - count), drag.start + bars)) };
+      paintListCanvases();
+    }
+  });
+  const end = (e) => {
+    pointers.delete(e.pointerId); canvas._pinch = null;
+    if (drag && moved < 5 && (drag.trigger || row.mode === 'manual')) applyTrigger(e.offsetY, true);
+    else if (drag?.trigger) { saveMyList(); renderMyList(); }
+    if (pointers.size === 0) drag = null;
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const len = (row.cache?.candles || []).length || 80;
+    const view = listView[row.id] || { start: Math.max(0, len - 80), count: Math.min(80, len) };
+    const next = Math.max(20, Math.min(len, view.count + (e.deltaY > 0 ? 8 : -8)));
+    const shift = Math.round((view.count - next) / 2);
+    view.start = Math.max(0, Math.min(Math.max(0, len - next), view.start + shift));
+    view.count = next; listView[row.id] = view; paintListCanvases();
+  }, { passive: false });
+}
+async function resolveListPool(row) {
+  const j = await fetchJSON('https://api.dexscreener.com/latest/dex/tokens/' + row.mint, { timeout: 12000 });
+  const pairs = (j?.pairs || []).filter(p => p.chainId === 'solana' && p.baseToken?.address === row.mint);
+  pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+  const p = pairs[0]; if (!p?.pairAddress) return false;
+  row.pool = p.pairAddress; if (!row.symbol) row.symbol = p.baseToken?.symbol || row.symbol;
+  if (isNum(+p.priceUsd)) livePrices.set(row.mint, { price: +p.priceUsd, at: Date.now() });
+  return true;
+}
+async function myListTick() {
+  if (listBusy || !MYLIST.rows.length) return;
+  listBusy = true;
+  try {
+    for (const row of MYLIST.rows) {
+      try {
+        if (!row.pool) await resolveListPool(row);
+        if (!row.pool) continue;
+        const candles = await fetchOhlcv(row.pool, row.tf);
+        row.cache = { at: Date.now(), tf: row.tf, stale: false, candles: candles.slice(-80) };
+        const last = candles[candles.length - 1];
+        if (isNum(last?.c)) livePrices.set(row.mint, { price: last.c, at: Date.now() });
+        row.error = '';
+      } catch (e) {
+        if (row.cache) row.cache.stale = true;
+        row.error = e.message || 'candles unavailable';
+      }
+    }
+    saveMyList();
+    renderMyList();
+    if (MYLIST.on) await myListBuys();
+    if (MYLIST.on) await myListExits();
+  } catch (e) { /* keep the list on screen */ }
+  finally { listBusy = false; }
+}
+async function myListBuys() {
+  if (!MYLIST.on || !WALLETS.burner.kp) return;
+  await ensureSolMarket().catch(() => null);
+  const gate = solFilterState();
+  if (gate.action === 'pause') return;
+  for (const row of MYLIST.rows) {
+    if (!MYLIST.on) return;
+    const plan = presentPlan(row);
+    if (!listShouldBuy(plan, true)) continue;
+    if (listPosition(row.mint) || WALLETS.burner.tokens?.get(row.mint)?.raw > 0n) continue;
+    let sol = MYLIST.sizeSol;
+    if (gate.action === 'halve') sol = sol / 2;
+    const sized = clampAutoBuy(sol);
+    if (sized.err || !(sized.sol >= 0.001)) continue;
+    sol = +sized.sol.toFixed(6);
+    const errs = buyGuards('burner', row.mint, sol, { auto: true });
+    if (errs.length) continue;
+    const slip = Math.min(S.slippagePct, A.slipCap);
+    let qo;
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
+    catch { continue; }
+    if (impactPct(qo.quote) > A.maxImpact) continue;
+    if (!MYLIST.on || !presentPlan(row).ready) continue;
+    const tradePlan = { stop: plan.stop, zoneLo: plan.trigger, zoneHi: plan.trigger, tp1: plan.tp1, tp2: plan.tp2, trail: 25, timeStopH: 24, strat: plan.setup, myList: true };
+    try {
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan: tradePlan, myList: true } });
+      toast('My List buy ' + (row.symbol || short(row.mint)), 'ok', 8000);
+    } catch { /* the trade log records the failure */ }
+    break;
+  }
+}
+async function myListExits() {
+  if (!MYLIST.on || (A.on && A.autoExit)) return;
+  for (const p of openPositions()) {
+    if (!p.plan?.myList || p.wallet !== 'burner') continue;
+    const lp = livePrices.get(p.mint)?.price;
+    const ex = priceExit(p, lp);
+    if (ex) await autoSell(p, ex.pctSell, ex.tag, lp);
+  }
+}
+function startMyList() {
+  clearInterval(listTimer);
+  listTimer = setInterval(() => { myListTick(); }, Math.round(MYLIST.pollSec || 30) * 1000);
+}
+
 /* ---------------- settings wiring ---------------- */
 function fillSettings() {
   $('setRpc').value = S.rpc; $('setSlip').value = S.slippagePct; $('setMaxTrade').value = S.maxSolPerTrade; $('setDaily').value = S.dailyMaxSol; $('setReserve').value = S.reserveSol;
@@ -4333,7 +4914,7 @@ function wireReadyNow() {
 }
 window.__smsReady = renderReadyNow;
 
-fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderPortfolio(); hydrate(); wireReadyNow();
+fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
 if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
 try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
 updateSolFilterBadge();
@@ -4348,7 +4929,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity,
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, buildListPlan, listShouldBuy, renderMyList,
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
