@@ -22,7 +22,7 @@ Hunter output. Either a bare array, or an object `{ updated_utc, updated_tehran,
 
 ## mylist.json
 
-Watchlist the agents share. An array of `{mint, symbol, addedTs}`. The panel does not import this file by itself. Use **Copy My List for agents** in settings to produce the same shape from the browser list.
+Watchlist written by the panel when a GitHub token is saved. The current shape is `{ updatedAt, source: "panel", tokens: [{ mint, symbol, name, addedAt, note?, manualStop?, manualTp? }] }`. A bare array of `{ mint, symbol, addedTs }` is still read. The file has no wallet data and no keys. **Copy My List for agents** remains a manual fallback.
 
 ## plans.json
 

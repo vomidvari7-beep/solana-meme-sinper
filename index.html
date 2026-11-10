@@ -208,16 +208,28 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           <div class="rounded-lg bg-ink-800 px-2.5 py-2" id="sizeToggleSettings"></div>
           <div class="flex items-center justify-between rounded-lg bg-ink-800 px-2.5 py-2"><span class="text-slate-400">Max open positions <span class="text-slate-600">(hard cap)</span></span><b id="setMaxPos" class="font-mono text-slate-200">2</b></div>
           <label class="flex items-center gap-2 rounded-lg bg-ink-800 px-2.5 py-2"><input type="checkbox" checked disabled class="accent-emerald-500 w-4 h-4" /><span class="text-slate-300">Confirm every trade <span class="text-slate-500">(always on, can't be disabled)</span></span></label>
-          <div class="rounded-lg border border-white/10 p-2 space-y-2">
-            <div class="text-[11px] font-semibold text-slate-300">Agents</div>
-            <label class="flex items-center gap-2"><input id="agentUse" type="checkbox" class="accent-violet-500" checked /> Use agent plans</label>
-            <label class="flex items-center gap-2"><input id="agentExits" type="checkbox" class="accent-violet-500" /> Agent exits <span class="text-slate-500">(off: alert only)</span></label>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" id="agentCopyList" class="rounded-lg px-2 py-1.5 bg-ink-700 border border-white/10">Copy My List for agents</button>
-              <button type="button" id="agentCopyBurner" class="rounded-lg px-2 py-1.5 bg-ink-700 border border-white/10">Copy burner public address</button>
-            </div>
-          </div>
           <div class="flex gap-2"><button id="btnSaveSettings" class="flex-1 rounded-lg py-2 font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save settings</button><button id="btnResetSettings" class="rounded-lg px-3 py-2 bg-ink-700 hover:bg-ink-600 border border-white/10">Defaults</button></div>
+        </div>
+      </details>
+      <details id="agentSettings" open class="mt-3 rounded-xl border border-violet-400/40 bg-ink-850">
+        <summary class="cursor-pointer px-3 py-3 text-sm font-bold text-white">Agents / ایجنت‌ها</summary>
+        <div class="px-3 pb-3 space-y-2.5 text-xs">
+          <label class="flex items-center gap-2"><input id="agentUse" type="checkbox" class="accent-violet-500" checked /> Use agent plans</label>
+          <label class="flex items-center gap-2"><input id="agentExits" type="checkbox" class="accent-violet-500" /> Agent exits <span class="text-slate-500">(off: alert only)</span></label>
+          <label class="block"><span class="text-slate-300">GitHub sync token</span>
+            <span class="block text-[10px] text-slate-500">Fine-grained PAT with Contents read and write on this repo only. Saved in this browser. Never shown again.</span>
+            <input id="agentGhToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 text-slate-100" style="font-size:16px;min-height:44px" />
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="agentSaveToken" class="rounded-lg px-3 font-semibold bg-violet-600 text-white" style="min-height:44px">Save token</button>
+            <button type="button" id="agentClearToken" class="rounded-lg px-3 bg-ink-700 border border-white/10" style="min-height:44px">Clear</button>
+            <button type="button" id="agentSyncNow" class="rounded-lg px-3 font-semibold bg-emerald-500 text-ink-950" style="min-height:44px">Sync now</button>
+          </div>
+          <p id="agentSyncStatus" class="text-[12px] text-slate-300 whitespace-normal break-words">My List sync: no token saved</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="agentCopyList" class="rounded-lg px-2 py-2 bg-ink-700 border border-white/10" style="min-height:44px">Copy My List for agents</button>
+            <button type="button" id="agentCopyBurner" class="rounded-lg px-2 py-2 bg-ink-700 border border-white/10" style="min-height:44px">Copy burner public address</button>
+          </div>
         </div>
       </details>
       <p class="mt-3 text-[10px] leading-relaxed text-rose-200/70">🔐 No private keys, no auto-trading. Every trade is shown in a confirmation window and must be signed by you in Phantom. Swaps are routed by Jupiter. Meme coins can go to zero within minutes.
@@ -5822,6 +5834,8 @@ function sanitizeListRow(r) {
     athExpire: Number.isFinite(+r.athExpire) && +r.athExpire > 0 ? Math.round(+r.athExpire) : null,
     athStatus: r.athStatus ? String(r.athStatus).slice(0, 80) : '',
     detailsOpen: !!r.detailsOpen,
+    addedAt: typeof r.addedAt === 'string' ? r.addedAt.slice(0, 40) : (typeof r.addedTs === 'string' ? String(r.addedTs).slice(0, 40) : ''),
+    note: r.note ? String(r.note).slice(0, 200) : '',
     lastTaAt: Number.isFinite(+r.lastTaAt) ? +r.lastTaAt : null,
     zone: r.zone && isNum(+r.zone.lo) ? { lo: +r.zone.lo, hi: +r.zone.hi, noAnchor: !!r.zone.noAnchor } : null,
     price: Number.isFinite(+r.price) ? +r.price : null,
@@ -5834,6 +5848,7 @@ function sanitizeListRow(r) {
 function saveMyList() {
   const rows = MYLIST.rows.map(r => { const { dexPair, ...rest } = r; return rest; });
   save('sms:mylist', { ...MYLIST, on: false, rows });
+  if (typeof scheduleMyListSync === 'function') scheduleMyListSync();
 }
 function listPosition(mint) { return openPositions().find(p => p.wallet === 'burner' && p.mint === mint && p.open) || null; }
 function stopMyList(reason, opts) {
@@ -6847,7 +6862,7 @@ function addMintsToList(addrs) {
   let n = 0;
   for (const mint of addrs) {
     if (!isAddr(mint) || IGNORE.has(mint) || MYLIST.rows.some(r => r.mint === mint)) continue;
-    MYLIST.rows.push(sanitizeListRow({ id: 'ml' + Date.now() + n, mint, enabled: true }));
+    MYLIST.rows.push(sanitizeListRow({ id: 'ml' + Date.now() + n, mint, enabled: true, addedAt: new Date().toISOString() }));
     n++;
   }
   if (!n) { toast('No new mints to add', 'warn'); return; }
@@ -7268,7 +7283,11 @@ async function refreshAgents() {
         const written = agentTime(data?.updated_utc) || agentTime(data?.ts);
         if (written) AG.fetched.candidates = written;
       }
-      if (name === 'mylist') AG.listFile = Array.isArray(data) ? data : [];
+      if (name === 'mylist') {
+        AG.listFile = Array.isArray(data) ? data : (Array.isArray(data?.tokens) ? data.tokens : []);
+        const written = agentTime(data?.updatedAt);
+        if (written) AG.fetched.mylist = written;
+      }
       if (name === 'plans') {
         const list = Array.isArray(data) ? data : (Array.isArray(data?.plans) ? data.plans : []);
         AG.plans = new Map();
@@ -7292,6 +7311,129 @@ function startAgents() {
   clearInterval(AG.timer);
   refreshAgents();
   AG.timer = setInterval(refreshAgents, 150000);
+  setInterval(() => { if (ghToken()) pushMyListSync(); }, 10 * 60 * 1000);
+}
+const GH_TOKEN_LS = 'sms:ghtoken';
+const GH_SYNC_LS = 'sms:ghsync';
+const GH_REPO = 'vomidvari7-beep/solana-meme-sinper';
+const GH_PATH = 'agents/mylist.json';
+let myListSyncTimer = null;
+let myListSyncing = false;
+let myListSyncQueued = false;
+function ghToken() {
+  try {
+    const v = JSON.parse(localStorage.getItem(GH_TOKEN_LS) || 'null');
+    return typeof v === 'string' ? v.trim() : '';
+  } catch { return ''; }
+}
+function ghSyncMeta() {
+  try { const v = JSON.parse(localStorage.getItem(GH_SYNC_LS) || 'null'); if (v && typeof v === 'object') return { at: +v.at || 0, error: String(v.error || '').slice(0, 180), key: typeof v.key === 'string' ? v.key : '' }; } catch { /* empty */ }
+  return { at: 0, error: '', key: '' };
+}
+function saveGhSyncMeta(meta) { try { localStorage.setItem(GH_SYNC_LS, JSON.stringify({ at: meta.at || 0, error: String(meta.error || '').slice(0, 180), key: meta.key || '' })); } catch { /* ignore */ } }
+function hideGhToken(text, token) {
+  let s = String(text || '').slice(0, 180);
+  if (token && s.includes(token)) s = s.split(token).join('***');
+  return s;
+}
+function paintGhSyncStatus() {
+  const el = $('agentSyncStatus'); if (!el) return;
+  const meta = ghSyncMeta();
+  const saved = !!ghToken();
+  if (!saved) { el.textContent = 'My List sync: no token saved'; el.className = 'text-[12px] text-slate-300 whitespace-normal break-words'; return; }
+  if (meta.error) { el.textContent = 'My List sync: ' + meta.error; el.className = 'text-[12px] text-rose-300 whitespace-normal break-words'; return; }
+  el.textContent = meta.at ? 'My List sync: last pushed ' + tehranClock(meta.at) + ' Tehran' : 'My List sync: token saved, not pushed yet';
+  el.className = 'text-[12px] text-emerald-200 whitespace-normal break-words';
+}
+function myListSyncTokens() {
+  return (MYLIST?.rows || []).filter(r => isAddr(r.mint)).map(r => {
+    const token = { mint: r.mint, symbol: r.symbol || '', name: r.dexPair?.baseToken?.name || r.name || '', addedAt: r.addedAt || null };
+    if (r.note) token.note = String(r.note).slice(0, 200);
+    if (isNum(r.stopPx) && r.stopPx > 0) token.manualStop = r.stopPx;
+    else if (isNum(r.stopPct) && r.stopPct > 0) token.manualStop = r.stopPct + '%';
+    if (Array.isArray(r.tps) && r.tps.length) token.manualTp = r.tps.map(t => t.gainPct + ':' + t.sellPct).join(', ');
+    return token;
+  });
+}
+function myListSyncKey(tokens) { return JSON.stringify(tokens); }
+function utf8ToB64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function b64ToUtf8(b64) {
+  const bin = atob(String(b64 || '').replace(/\s/g, ''));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+async function ghContents(method, token, body) {
+  const res = await fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_PATH, {
+    method,
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { message: text.slice(0, 120) }; }
+  return { ok: res.ok, status: res.status, data };
+}
+function remoteTokenKey(data) {
+  let parsed = data;
+  if (data && data.content && data.encoding === 'base64') {
+    try { parsed = JSON.parse(b64ToUtf8(data.content)); } catch { return null; }
+  }
+  const tokens = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.tokens) ? parsed.tokens : null);
+  return tokens ? myListSyncKey(tokens.map(t => {
+    const o = { mint: t.mint, symbol: t.symbol || '', name: t.name || '', addedAt: t.addedAt || t.addedTs || null };
+    if (t.note) o.note = t.note;
+    if (t.manualStop != null) o.manualStop = t.manualStop;
+    if (t.manualTp != null) o.manualTp = t.manualTp;
+    return o;
+  })) : null;
+}
+async function pushMyListOnce(token, force) {
+  const tokens = myListSyncTokens();
+  const key = myListSyncKey(tokens);
+  if (!force && ghSyncMeta().key === key && !ghSyncMeta().error) { paintGhSyncStatus(); return; }
+  let got = await ghContents('GET', token);
+  if (got.status === 401 || got.status === 403) throw new Error('GitHub rejected the token');
+  if (!got.ok && got.status !== 404) throw new Error('GitHub ' + got.status + (got.data?.message ? ': ' + got.data.message : ''));
+  let sha = got.status === 404 ? '' : (got.data?.sha || '');
+  if (got.ok && remoteTokenKey(got.data) === key) {
+    saveGhSyncMeta({ at: ghSyncMeta().at || Date.now(), error: '', key });
+    paintGhSyncStatus();
+    return;
+  }
+  const payload = JSON.stringify({ updatedAt: new Date().toISOString(), source: 'panel', tokens }, null, 2) + '\n';
+  const put = (useSha) => ghContents('PUT', token, { message: 'panel: sync mylist', content: utf8ToB64(payload), ...(useSha ? { sha: useSha } : {}) });
+  let sent = await put(sha);
+  if (sent.status === 409 || sent.status === 422) {
+    got = await ghContents('GET', token);
+    sha = got.data?.sha || '';
+    if (got.ok && remoteTokenKey(got.data) === key) { saveGhSyncMeta({ at: ghSyncMeta().at || Date.now(), error: '', key }); paintGhSyncStatus(); return; }
+    sent = await put(sha);
+  }
+  if (!sent.ok) throw new Error('GitHub ' + sent.status + (sent.data?.message ? ': ' + sent.data.message : ''));
+  saveGhSyncMeta({ at: Date.now(), error: '', key });
+  paintGhSyncStatus();
+}
+async function pushMyListSync(force) {
+  const token = ghToken();
+  if (!token) { paintGhSyncStatus(); return; }
+  if (myListSyncing) { myListSyncQueued = true; return; }
+  myListSyncing = true;
+  try { await pushMyListOnce(token, !!force); }
+  catch (e) { saveGhSyncMeta({ at: ghSyncMeta().at, error: hideGhToken(e.message || 'sync failed', token), key: ghSyncMeta().key }); paintGhSyncStatus(); }
+  finally {
+    myListSyncing = false;
+    if (myListSyncQueued) { myListSyncQueued = false; pushMyListSync(); }
+  }
+}
+function scheduleMyListSync() {
+  if (!ghToken()) return;
+  clearTimeout(myListSyncTimer);
+  myListSyncTimer = setTimeout(() => { pushMyListSync(); }, 10000);
 }
 function wireAgentSettings() {
   $('agentUse')?.addEventListener('change', () => { saveAgentCfg({ usePlans: $('agentUse').checked }); renderAgentPicks(); });
@@ -7307,6 +7449,30 @@ function wireAgentSettings() {
     const ok = await copyText(pub);
     toast(ok ? 'Burner public address copied' : 'Copy failed', ok ? 'ok' : 'err');
   });
+  $('agentSaveToken')?.addEventListener('click', () => {
+    const input = $('agentGhToken');
+    const value = String(input?.value || '').trim();
+    if (!value) { toast('Paste a GitHub token first', 'warn'); return; }
+    try { localStorage.setItem(GH_TOKEN_LS, JSON.stringify(value)); } catch { toast('Could not save the token', 'err'); return; }
+    if (input) input.value = '';
+    saveGhSyncMeta({ at: ghSyncMeta().at, error: '', key: '' });
+    paintGhSyncStatus();
+    toast('GitHub token saved', 'ok');
+    scheduleMyListSync();
+  });
+  $('agentClearToken')?.addEventListener('click', () => {
+    try { localStorage.removeItem(GH_TOKEN_LS); } catch { /* ignore */ }
+    const input = $('agentGhToken'); if (input) input.value = '';
+    clearTimeout(myListSyncTimer);
+    paintGhSyncStatus();
+    toast('GitHub token cleared', 'info');
+  });
+  $('agentSyncNow')?.addEventListener('click', () => {
+    clearTimeout(myListSyncTimer);
+    if (!ghToken()) { paintGhSyncStatus(); toast('Save a GitHub token first', 'warn'); return; }
+    pushMyListSync(true);
+  });
+  paintGhSyncStatus();
 }
 
 /* ---------------- settings wiring ---------------- */
