@@ -3169,6 +3169,156 @@ function posEditHtml(p) {
     </div>
   </div>`;
 }
+function clampBarPrice(kind, px, ctx) {
+  const entry = ctx.entry;
+  const live = isNum(ctx.live) && ctx.live > 0 ? ctx.live : null;
+  if (!(px > 0) || !(entry > 0)) return null;
+  if (kind === 'stop') {
+    const ceil = (live != null ? live : entry) * 0.999;
+    const floor = Math.min(entry * 0.02, ceil * 0.25);
+    return Math.min(Math.max(px, Math.max(floor, entry * 0.001)), ceil);
+  }
+  if (kind === 'tp1') {
+    const floor = Math.max(entry, live != null ? live : entry) * 1.002;
+    const ceil = isNum(ctx.tp2) && ctx.tp2 > floor ? ctx.tp2 / 1.002 : floor * 8;
+    return Math.min(Math.max(px, floor), ceil);
+  }
+  if (kind === 'tp2') {
+    const floor = (isNum(ctx.tp1) && ctx.tp1 > 0 ? ctx.tp1 : Math.max(entry, live || entry)) * 1.002;
+    return Math.max(px, floor);
+  }
+  return px;
+}
+function dragTip(kind, px, entry) {
+  const name = kind === 'stop' ? 'Stop' : kind === 'tp1' ? 'TP1' : 'TP2';
+  const ch = entry > 0 ? (px / entry - 1) * 100 : null;
+  return name + ' ' + price(px) + (isNum(ch) ? ' · ' + (ch > 0 ? '+' : '') + ch.toFixed(1) + '%' : '');
+}
+function labelShift(pct) {
+  if (pct < 14) return 'translateX(0)';
+  if (pct > 86) return 'translateX(-100%)';
+  return 'translateX(-50%)';
+}
+function barLanes(items) {
+  const placed = [];
+  items.slice().sort((a, b) => a.pct - b.pct).forEach(it => {
+    let lane = 'below';
+    if (placed.some(p => p.lane === lane && Math.abs(p.pct - it.pct) < 16)) lane = 'above';
+    const still = placed.some(p => p.lane === lane && Math.abs(p.pct - it.pct) < 16);
+    it.lane = lane;
+    it.short = still;
+    placed.push(it);
+  });
+}
+let posDragging = false;
+function undoToast(msg, onUndo) {
+  const el = document.createElement('div');
+  el.className = 'pointer-events-auto max-w-sm rounded-xl border border-violet-500/30 bg-ink-800 px-3 py-2 text-sm shadow-2xl flex items-center gap-3';
+  const span = document.createElement('span');
+  span.className = 'flex-1 whitespace-normal break-words';
+  span.textContent = msg;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'text-violet-300 font-semibold shrink-0';
+  btn.textContent = 'Undo';
+  btn.addEventListener('click', () => { onUndo(); el.remove(); });
+  el.appendChild(span); el.appendChild(btn);
+  $('toasts').appendChild(el);
+  setTimeout(() => { el.remove(); }, 6000);
+}
+function placePosBar(bar) {
+  const lo = +bar.dataset.lo, hi = +bar.dataset.hi;
+  if (!(hi > lo)) return;
+  const pctOf = (v) => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+  bar.querySelectorAll('[data-at]').forEach(el => {
+    const v = +bar.dataset[el.dataset.at];
+    if (!isNum(v)) return;
+    el.style.left = pctOf(v) + '%';
+  });
+  bar.querySelectorAll('[data-lab]').forEach(el => {
+    const v = +bar.dataset[el.dataset.lab];
+    if (!isNum(v)) return;
+    const p = pctOf(v);
+    el.style.left = p + '%';
+    el.style.transform = labelShift(p);
+  });
+  const fill = bar.querySelector('.pos-fill');
+  const live = +bar.dataset.live;
+  if (fill && isNum(live)) fill.style.width = pctOf(live) + '%';
+}
+function commitBarDrag(key, kind, px) {
+  const p = positions().find(x => x.open && x.key === key);
+  if (!p || !(px > 0)) return;
+  const id = levelId(p);
+  const prev = posLevels[id] ? { ...posLevels[id] } : null;
+  const next = { ...(prev || {}), keepRaise: prev ? prev.keepRaise !== false : true };
+  if (kind === 'stop') { next.stop = px; next.stopPct = null; }
+  if (kind === 'tp1') { next.tp1 = px; next.tp1Pct = null; }
+  if (kind === 'tp2') { next.tp2 = px; next.tp2Pct = null; }
+  posLevels[id] = next;
+  savePosLevels();
+  renderPortfolio();
+  const name = kind === 'stop' ? 'Stop' : kind.toUpperCase();
+  undoToast(name + ' saved at ' + price(px) + (next.keepRaise !== false && kind === 'stop' ? ' · auto-raise still on' : ''), () => {
+    if (prev) posLevels[id] = prev; else delete posLevels[id];
+    savePosLevels();
+    renderPortfolio();
+  });
+}
+function bindPosBars(root) {
+  root.querySelectorAll('[data-drag]').forEach(handle => {
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      const bar = handle.closest('[data-posbar]');
+      if (!bar) return;
+      e.preventDefault();
+      e.stopPropagation();
+      posDragging = true;
+      try { handle.setPointerCapture(e.pointerId); } catch { /* older browsers still get the events on the handle */ }
+      const kind = handle.dataset.drag;
+      const startPx = +bar.dataset[kind];
+      const tip = bar.querySelector('.pos-tip');
+      const move = (ev) => {
+        if (ev.pointerId !== e.pointerId) return;
+        const track = bar.querySelector('.pos-track');
+        const rect = track.getBoundingClientRect();
+        if (!(rect.width > 0)) return;
+        let pct = ((ev.clientX - rect.left) / rect.width) * 100;
+        let lo = +bar.dataset.lo, hi = +bar.dataset.hi;
+        const span = Math.max(hi - lo, 1e-12);
+        if (kind === 'stop' && pct < 8) { lo -= span * 0.22; bar.dataset.lo = String(lo); pct = 12; }
+        if ((kind === 'tp1' || kind === 'tp2') && pct > 92) { hi += span * 0.28; bar.dataset.hi = String(hi); pct = 86; }
+        lo = +bar.dataset.lo; hi = +bar.dataset.hi;
+        let px = lo + (Math.max(0, Math.min(100, pct)) / 100) * (hi - lo);
+        px = clampBarPrice(kind, px, { entry: +bar.dataset.entry, live: +bar.dataset.live, tp1: +bar.dataset.tp1, tp2: +bar.dataset.tp2 });
+        if (!isNum(px)) return;
+        bar.dataset[kind] = String(px);
+        placePosBar(bar);
+        if (tip) {
+          tip.textContent = dragTip(kind, px, +bar.dataset.entry);
+          const shown = Math.max(8, Math.min(92, ((px - lo) / (hi - lo)) * 100));
+          tip.style.left = shown + '%';
+          tip.style.transform = labelShift(shown);
+          tip.classList.remove('hidden');
+        }
+      };
+      const up = (ev) => {
+        if (ev.pointerId !== e.pointerId) return;
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        handle.removeEventListener('pointercancel', up);
+        posDragging = false;
+        if (tip) tip.classList.add('hidden');
+        const px = +bar.dataset[kind];
+        if (!isNum(px) || !isNum(startPx) || Math.abs(px - startPx) / Math.max(startPx, 1e-12) < 0.003) { renderPortfolio(); return; }
+        commitBarDrag(bar.dataset.key, kind, px);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+      handle.addEventListener('pointercancel', up);
+    });
+  });
+}
 function readManualForm(form, p) {
   const raw = (name) => { const el = form.querySelector(`[data-ms="${name}"]`); const v = el ? el.value.trim() : ''; if (!v) return null; const n = +v; return Number.isFinite(n) ? n : NaN; };
   const entry = p.avgUsd;
@@ -3208,32 +3358,48 @@ function posCard(p) {
   const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
   const up = isNum(m.pnl) && m.pnl >= 0;
   const glow = !isNum(m.pnl) ? '' : up ? 'shadow-[0_0_22px_rgba(34,197,94,0.14)] border-emerald-500/25' : 'shadow-[0_0_22px_rgba(244,63,94,0.14)] border-rose-500/25';
-  const stop = pl.stop, tp1 = pl.tp1, tp2 = pl.tp2, entry = p.avgUsd, high = pl.high;
-  const right = isNum(tp2) ? tp2 : tp1;
-  const span = isNum(stop) && isNum(right) && right > stop ? right - stop : null;
-  const at = (v) => span && isNum(v) ? Math.max(0, Math.min(100, (v - stop) / span * 100)) : null;
-  const cur = at(lp), entryAt = at(entry), highAt = at(high), tp1At = at(tp1);
+  const stop = pl.stop, tp1 = pl.tp1, tp2 = pl.tp2, entry = p.avgUsd;
   const tp1Hit = p.tp1Done || (isNum(lp) && isNum(tp1) && lp >= tp1);
   const tp2Hit = p.tp2Done || (isNum(lp) && isNum(tp2) && lp >= tp2);
   const chip = (label, on) => `<span class="rounded-full border px-2 py-0.5 text-[10px] whitespace-normal break-words ${on ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-400'}">${label}</span>`;
   const reason = pl.reason || 'initial';
-  const tick = (atPct, cls, title) => atPct == null ? '' : `<div class="absolute top-1 h-5 w-0.5 ${cls}" style="left:${atPct}%" title="${title}"></div>`;
-  const bar = span ? `<div class="relative mt-3 h-7">
-      <div class="absolute left-0 right-0 top-2.5 h-2 rounded-full bg-gradient-to-r from-rose-500/50 via-slate-600/40 to-emerald-500/50"></div>
-      ${cur != null ? `<div class="pos-fill absolute left-0 top-2.5 h-2 rounded-full bg-gradient-to-r from-rose-400 to-emerald-400 transition-[width] duration-700 ease-out" data-bar="${cur}" data-key="${esc(p.key)}" style="width:${posBarMem[p.key] != null ? posBarMem[p.key] : 0}%"></div>` : ''}
-      ${tick(0, 'bg-rose-400', 'stop')}
-      ${tick(entryAt, 'bg-slate-100', 'entry')}
-      ${tick(tp1At, 'bg-emerald-300', 'TP1')}
-      ${tick(isNum(tp2) ? 99 : null, 'bg-emerald-400', 'TP2')}
-      ${highAt != null ? `<div class="absolute top-1.5 h-4 w-0.5 bg-amber-300" style="left:${highAt}%" title="high"></div>` : ''}
-      ${cur != null ? `<div class="absolute top-1.5 h-3.5 w-3.5 -ml-1.5 rounded-full bg-white shadow" style="left:${cur}%"></div>` : ''}
-    </div>
-    <div class="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] leading-snug">
-      <span class="text-rose-300 whitespace-normal break-words">stop ${price(stop)}</span>
-      <span class="text-slate-300 whitespace-normal break-words sm:text-right">entry ${price(entry)}</span>
-      <span class="text-emerald-200 whitespace-normal break-words">TP1 ${price(tp1)}</span>
-      <span class="text-emerald-300 whitespace-normal break-words sm:text-right">TP2 ${price(tp2)}</span>
-    </div>` : '';
+  let bar = '';
+  if (isNum(entry) && entry > 0 && isNum(stop) && isNum(tp1)) {
+    let lo = Math.min(stop, entry, isNum(lp) ? lp : entry);
+    let hi = Math.max(isNum(tp2) ? tp2 : tp1, tp1, entry, isNum(lp) ? lp : entry);
+    const pad = (hi - lo) * 0.08 || entry * 0.05;
+    lo -= pad; hi += pad;
+    const pctOf = (v) => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+    const marks = [
+      { id: 'stop', pct: pctOf(stop), name: 'stop', px: price(stop), cls: 'text-rose-300' },
+      { id: 'entry', pct: pctOf(entry), name: 'entry', px: price(entry), cls: 'text-amber-200' },
+      ...(isNum(lp) ? [{ id: 'live', pct: pctOf(lp), name: 'live', px: price(lp), cls: 'text-slate-100' }] : []),
+      { id: 'tp1', pct: pctOf(tp1), name: 'TP1', px: price(tp1), cls: 'text-emerald-200' },
+      ...(isNum(tp2) ? [{ id: 'tp2', pct: pctOf(tp2), name: 'TP2', px: price(tp2), cls: 'text-emerald-300' }] : [])
+    ];
+    barLanes(marks);
+    const lab = (it) => `<div data-lab="${it.id}" class="absolute ${it.lane === 'above' ? 'bottom-0' : 'top-0'} text-[9px] leading-tight whitespace-nowrap ${it.cls}" style="left:${it.pct}%;transform:${labelShift(it.pct)}"><span class="block">${it.short ? it.name : it.name + ' ' + it.px}</span></div>`;
+    bar = `<div class="posbar relative mt-1 select-none" data-posbar data-key="${esc(p.key)}" data-lo="${lo}" data-hi="${hi}" data-entry="${entry}" data-live="${isNum(lp) ? lp : ''}" data-stop="${stop}" data-tp1="${tp1}" data-tp2="${isNum(tp2) ? tp2 : ''}" style="touch-action:none">
+      <div class="relative h-4">${marks.filter(it => it.lane === 'above').map(lab).join('')}</div>
+      <div class="pos-track relative h-8">
+        <div class="absolute left-0 right-0 top-3 h-2 rounded-full bg-gradient-to-r from-rose-500/40 via-slate-600/40 to-emerald-500/50"></div>
+        ${isNum(lp) ? `<div class="pos-fill absolute left-0 top-3 h-2 rounded-full bg-gradient-to-r from-rose-400/80 to-white/70" style="width:${pctOf(lp)}%"></div>` : ''}
+        <div data-at="entry" class="absolute top-1 h-6 w-0.5 -ml-px bg-amber-300" style="left:${pctOf(entry)}%" title="entry"></div>
+        ${isNum(lp) ? `<div data-at="live" class="absolute top-2 h-4 w-4 -ml-2 rounded-full bg-white shadow pointer-events-none" style="left:${pctOf(lp)}%" title="live"></div>` : ''}
+        <button type="button" data-drag="stop" data-at="stop" class="absolute top-1.5 z-20 h-5 w-5 -ml-2.5 rounded-full bg-rose-500 border-2 border-white shadow cursor-grab" style="left:${pctOf(stop)}%;touch-action:none" aria-label="Drag stop"></button>
+        <button type="button" data-drag="tp1" data-at="tp1" class="absolute top-1.5 z-20 h-5 w-4 -ml-2 rounded-sm bg-emerald-400 border-2 border-white shadow cursor-grab" style="left:${pctOf(tp1)}%;touch-action:none" aria-label="Drag TP1"></button>
+        ${isNum(tp2) ? `<button type="button" data-drag="tp2" data-at="tp2" class="absolute top-1.5 z-20 h-5 w-4 -ml-2 rounded-sm bg-emerald-300 border-2 border-emerald-950 shadow cursor-grab" style="left:${pctOf(tp2)}%;touch-action:none" aria-label="Drag TP2"></button>` : ''}
+        <div class="pos-tip hidden absolute z-30 -top-1 -translate-y-full rounded bg-ink-950/95 border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-100 whitespace-nowrap pointer-events-none"></div>
+      </div>
+      <div class="relative h-4">${marks.filter(it => it.lane !== 'above').map(lab).join('')}</div>
+      <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+        <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-full bg-rose-500"></i>stop</span>
+        <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 bg-amber-300"></i>entry</span>
+        <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-full bg-white"></i>live</span>
+        <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-sm bg-emerald-400"></i>TP</span>
+      </div>
+    </div>`;
+  }
   return `<article class="rounded-2xl bg-ink-850/80 border border-white/10 p-3.5 ${glow}">
     <div class="flex items-start gap-3">
       ${info?.image ? `<img src="${safeUrl(info.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs font-bold shrink-0">${esc((p.symbol || '?').slice(0, 3))}</div>`}
@@ -3267,6 +3433,7 @@ function upClass(n) { return n >= 0 ? 'text-emerald-300' : 'text-rose-300'; }
 function renderPortfolio() {
   const el = $('portfolio'); if (!el) return;
   const ae = document.activeElement;
+  if (posDragging) return;
   if (ae && ae.closest && ae.closest('[data-pos-edit]') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
   const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
   if (!LOG.length && !anyW && !AUTOLOG.length && !loadEquity().length) { el.classList.add('hidden'); return; }
@@ -3296,11 +3463,7 @@ function renderPortfolio() {
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
   </section>`;
-  el.querySelectorAll('.pos-fill').forEach(bar => {
-    const to = bar.dataset.bar;
-    const key = bar.dataset.key;
-    requestAnimationFrame(() => { bar.style.width = to + '%'; if (to != null && to !== '') posBarMem[key] = +to; });
-  });
+  bindPosBars(el);
   $('wealthUsd')?.addEventListener('click', () => { wealthUnit = 'usd'; try { localStorage.setItem('sms:wealthunit', 'usd'); } catch { /* ignore */ } renderPortfolio(); });
   $('wealthSol')?.addEventListener('click', () => { wealthUnit = 'sol'; try { localStorage.setItem('sms:wealthunit', 'sol'); } catch { /* ignore */ } renderPortfolio(); });
   el.querySelectorAll('[data-eqrange]').forEach(b => b.addEventListener('click', () => { equityRange = b.dataset.eqrange; try { localStorage.setItem('sms:equityrange', equityRange); } catch { /* ignore */ } renderPortfolio(); }));
