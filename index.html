@@ -135,7 +135,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       <label class="block mt-3">
         <span class="text-xs text-slate-400 flex justify-between"><span>Pasted screener data / token list</span><span id="parseCount" class="text-emerald-400/80"></span></span>
         <textarea id="pasted" rows="8" spellcheck="false" placeholder="Paste mint addresses, DexScreener / Birdeye / GeckoTerminal URLs, or copied screener rows. Anything that looks like a Solana address is detected automatically." class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500 scroll-thin"></textarea>
-        <span class="fa block text-[11px] text-slate-500 mt-1">آدرس توکن‌ها یا لینک‌های DexScreener را اینجا پیست کن؛ اگر خالی است «Scan latest boosted» را بزن.</span>
+        <span class="fa block text-[11px] text-slate-500 mt-1">آدرس توکن‌ها را پیست کن، بعد Save as My List. لیست جدا از اسکن است.</span>
+        <button id="btnSaveList" type="button" class="mt-2 rounded-lg px-3 py-1.5 text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save as My List</button>
       </label>
       <label class="block mt-3">
         <span class="text-xs text-slate-400">Additional notes <span class="text-slate-600">(optional)</span></span>
@@ -2183,7 +2184,7 @@ let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
 function blankPos(k, r) {
-  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, high: null, auto: false, copy: false, copyState: null, sniper: false, closed: false };
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, closed: false };
 }
 function profileStopPct() {
   let pct = 20;
@@ -2197,6 +2198,7 @@ function freshStop(p) {
   const avg = p.avgUsd;
   const planStop = p.plan?.stop;
   const byPct = isNum(avg) && avg > 0 ? avg * (1 - profileStopPct() / 100) : null;
+  if (p?.plan?.myList && isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) return planStop;
   // A plan stop is the analyzed level. If that level sits much further below the
   // actual fill than the profile stop (a dip-zone stop after a market buy), use the profile stop.
   if (isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) {
@@ -2223,11 +2225,14 @@ function positions() {
       if (r.plan) p.plan = r.plan;
       if (r.auto) p.auto = true;
       if (r.sniper) p.sniper = true;
+      if (r.myList || r.plan?.myList) p.myList = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
     } else {
       p.sold += r.tokenAmount || 0;
       if (r.exitTag === 'tp1') p.tp1Done = true;
       if (r.exitTag === 'tp2') p.tp2Done = true;
+      if (r.exitTag && /^tp\d+$/.test(r.exitTag)) { p.tpDone = p.tpDone || {}; p.tpDone[r.exitTag] = true; }
+      if (r.myList || r.plan?.myList) p.myList = true;
       if (r.sniper) p.sniper = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
     }
@@ -2536,6 +2541,7 @@ try { posTableView = localStorage.getItem('sms:posview') === 'table'; } catch { 
 try { const u = localStorage.getItem('sms:wealthunit'); if (u === 'sol' || u === 'usd') wealthUnit = u; } catch { /* usd */ }
 const posBarMem = {};
 function posSource(p) {
+  if (p.myList || p.plan?.myList) return { label: 'MY LIST ⭐', cls: 'border-amber-300/40 bg-amber-400/15 text-amber-100' };
   if (p.sniper) return { label: 'SNIPE 🎯', cls: 'border-amber-400/40 bg-amber-500/15 text-amber-200' };
   if (p.copy) return { label: 'WHALE', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-200' };
   if (p.plan?.strat && /momentum/i.test(p.plan.strat)) return { label: 'MOMENTUM ⚡', cls: 'border-sky-400/40 bg-sky-500/15 text-sky-200' };
@@ -2913,6 +2919,12 @@ function posEditHtml(p) {
       <label class="min-w-0">TP2 price<input data-ms="tp2" value="${isNum(m.tp2) ? m.tp2 : ''}" placeholder="auto +100%" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
       <label class="min-w-0">or TP2 % above<input data-ms="tp2Pct" value="${isNum(m.tp2Pct) ? m.tp2Pct : ''}" placeholder="100" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
     </div>
+    ${p.plan?.myList ? `<div class="grid grid-cols-2 gap-2 text-[11px]">
+      <label class="min-w-0">Breakeven +%<input data-ms="beAt" value="${isNum(m.beAtPct) ? m.beAtPct : ''}" placeholder="off" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="min-w-0">Trail starts +%<input data-ms="trailAt" value="${isNum(m.trailAtPct) ? m.trailAtPct : ''}" placeholder="off" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="min-w-0">Trail % below high<input data-ms="trailPct" value="${isNum(m.trailPct) ? m.trailPct : ''}" placeholder="off" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
+      <label class="flex items-center gap-2 mt-4"><input data-ms="trailOff" type="checkbox" class="accent-violet-500" ${m.trailOff ? 'checked' : ''} /> Trailing off</label>
+    </div>` : ''}
     <label class="flex items-center gap-2 text-[11px] text-slate-300"><input data-ms="raise" type="checkbox" class="accent-violet-500" ${m.keepRaise === false ? '' : 'checked'} /> Keep auto-raise</label>
     <p data-ms-warn class="text-[11px] text-rose-300 whitespace-normal break-words hidden"></p>
     <div class="flex flex-wrap gap-2">
@@ -2945,7 +2957,10 @@ function readManualForm(form, p) {
   if (isNum(tp1) && isNum(entry) && !(tp1 > entry)) return { error: 'TP1 must be above entry' };
   if (isNum(tp2) && isNum(entry) && !(tp2 > entry)) return { error: 'TP2 must be above entry' };
   if (isNum(tp1) && isNum(tp2) && !(tp2 > tp1)) return { error: 'TP2 must be above TP1' };
-  return { stop: isNum(stopIn) ? stopIn : null, stopPct: isNum(stopIn) ? null : pctIn, tp1: isNum(tp1In) ? tp1In : null, tp1Pct: isNum(tp1In) ? null : tp1Pct, tp2: isNum(tp2In) ? tp2In : null, tp2Pct: isNum(tp2In) ? null : tp2Pct, keepRaise: !!form.querySelector('[data-ms="raise"]')?.checked };
+  const optNum = (name) => { const el = form.querySelector(`[data-ms="${name}"]`); if (!el || !el.value.trim()) return null; const n = +el.value; return Number.isFinite(n) ? n : NaN; };
+  const beAt = optNum('beAt'), trailAt = optNum('trailAt'), trailPct = optNum('trailPct');
+  if ([beAt, trailAt, trailPct].some(n => Number.isNaN(n))) return { error: 'Use numbers only' };
+  return { stop: isNum(stopIn) ? stopIn : null, stopPct: isNum(stopIn) ? null : pctIn, tp1: isNum(tp1In) ? tp1In : null, tp1Pct: isNum(tp1In) ? null : tp1Pct, tp2: isNum(tp2In) ? tp2In : null, tp2Pct: isNum(tp2In) ? null : tp2Pct, keepRaise: !!form.querySelector('[data-ms="raise"]')?.checked, beAtPct: beAt, trailAtPct: trailAt, trailPct, trailOff: !!form.querySelector('[data-ms="trailOff"]')?.checked };
 }
 function posCard(p) {
   const lp = livePrices.get(p.mint)?.price;
@@ -3005,6 +3020,7 @@ function posCard(p) {
     ${bar}
     <div class="mt-2 flex flex-wrap gap-1.5">${chip('TP1 ' + price(tp1) + ' · ' + (tp1Hit ? 'hit' : 'pending'), tp1Hit)}${chip('TP2 ' + price(tp2) + ' · ' + (tp2Hit ? 'hit' : 'pending'), tp2Hit)}</div>
     <button type="button" data-edit-stop="${esc(p.key)}" class="mt-2 text-[11px] text-violet-300 hover:underline">✏️ Edit stop</button>
+    ${typeof myListPlanHtml === 'function' ? myListPlanHtml(p, pl) : ''}
     ${posEditHtml(p)}
     <div class="mt-3 flex flex-wrap items-center gap-2">
       ${canSell ? [25, 50, 100].map(x => `<button data-sell="${esc(p.mint)}" data-pct="${x}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-rose-500/15 text-rose-200 border border-rose-500/25">Sell ${x}%</button>`).join('') : `<span class="text-[11px] text-slate-500">${p.wallet === activeKey ? 'No balance to sell' : 'Switch wallet to sell'}</span>`}
@@ -3485,6 +3501,7 @@ function notePositionCycles(list) {
   } catch { /* copy books not ready */ }
 }
 function effectiveStop(p, lp) {
+  if (p?.plan?.myList) return applyManualLevels(p, myListEffectiveStop(p, lp));
   let eff;
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
     const pl = positionTargets(p);
@@ -3538,6 +3555,7 @@ function inZone(t, px) { const e = t.entry; if (!isNum(px) || !e || e.noAnchor) 
   if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= (e.anchor === 'swing' ? e.zoneHi : e.zoneHi * 1.03);
   return px <= e.zoneHi && px > e.stop; }
 function priceExit(p, lp) {
+  if (p?.plan?.myList) return myListExit(p, lp);
   if (!isNum(lp)) return null;
   if ((sellFails[p.key] || 0) >= 3) return null;
   const eff = effectiveStop(p, lp); const pl = eff;
@@ -4493,581 +4511,466 @@ function renderSniper() {
   });
 }
 
-/* ---------------- My List (personal entries + chart) ---------------- */
-const MYLIST_DEFAULTS = { on: false, sizeSol: 0.05, pollSec: 30, confirm: 'close', chasePct: 10, tf: '5m' };
-const MYLIST_MODES = ['zone', 'manual', 'trend', 'resist'];
-const MYLIST_TFS = ['1m', '5m', '15m', '1h'];
+/* ---------------- My List (pasted watchlist, own entries and exits) ---------------- */
+const MYLIST_DEFAULTS = {
+  on: false, mode: 'zone', sizeMode: 'sol', sizeSol: 0.05, sizePct: 10, stopPct: 15, stopPx: null,
+  tps: [{ gainPct: 15, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: 10,
+  timeStopMin: null, timeMinGain: 0, reentry: true, cooldownMin: 5, maxReentries: 3
+};
+const MYLIST_MODES = ['zone', 'momentum', 'range', 'now'];
 let MYLIST = loadMyList();
 let listTimer = null, listBusy = false;
-const listOpen = new Set();
-const listView = {};
+function parseTps(text) {
+  const out = [];
+  for (const part of String(text || '').split(',')) {
+    const m = part.trim().match(/^(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)$/);
+    if (!m) continue;
+    const gainPct = +m[1], sellPct = +m[2];
+    if (gainPct > 0 && sellPct > 0 && sellPct <= 100) out.push({ gainPct, sellPct });
+  }
+  return out.slice(0, 6);
+}
+function formatTps(tps) { return (tps || []).map(t => t.gainPct + ':' + t.sellPct).join(', '); }
+function cleanTps(v) {
+  const list = Array.isArray(v) ? v : parseTps(v);
+  return list.map(t => ({ gainPct: +t.gainPct, sellPct: +t.sellPct })).filter(t => t.gainPct > 0 && t.sellPct > 0 && t.sellPct <= 100).slice(0, 6);
+}
+function numOr(v, d) { const n = +v; return Number.isFinite(n) ? n : d; }
+function mapListMode(m) {
+  if (m === 'manual') return 'range';
+  if (m === 'trend' || m === 'resist') return 'zone';
+  return MYLIST_MODES.includes(m) ? m : '';
+}
 function loadMyList() {
   const raw = load('sms:mylist', {});
-  const rows = Array.isArray(raw.rows) ? raw.rows.slice(0, 30) : [];
-  return { ...MYLIST_DEFAULTS, ...raw, on: false, rows: rows.map(sanitizeListRow).filter(Boolean) };
+  const rows = Array.isArray(raw.rows) ? raw.rows.slice(0, 40) : [];
+  const base = { ...MYLIST_DEFAULTS, ...raw, on: false, tps: cleanTps(raw.tps).length ? cleanTps(raw.tps) : MYLIST_DEFAULTS.tps.slice() };
+  base.rows = rows.map(sanitizeListRow).filter(Boolean);
+  return base;
 }
 function sanitizeListRow(r) {
   if (!r || !isAddr(r.mint)) return null;
-  const mode = MYLIST_MODES.includes(r.mode) ? r.mode : 'trend';
-  const tf = MYLIST_TFS.includes(r.tf) ? r.tf : '5m';
-  const confirm = ['close', 'two', 'retest'].includes(r.confirm) ? r.confirm : '';
-  const num = (v) => { const n = +v; return Number.isFinite(n) && n > 0 ? n : null; };
+  const tps = cleanTps(r.tps);
   return {
-    id: String(r.id || ('ml' + Date.now() + Math.random().toString(36).slice(2, 6))),
+    id: String(r.id || ('ml' + Date.now() + Math.random().toString(36).slice(2, 5))),
     mint: r.mint, symbol: String(r.symbol || '').slice(0, 16), pool: r.pool || '',
-    mode, tf, confirm, stopPx: num(r.stopPx), triggerPx: num(r.triggerPx),
-    chasePct: num(r.chasePct), cache: r.cache && Array.isArray(r.cache.candles) ? { at: +r.cache.at || 0, tf: r.cache.tf || tf, stale: !!r.cache.stale, candles: r.cache.candles.slice(-80) } : null
+    enabled: r.enabled !== false, mode: mapListMode(r.mode),
+    sizeMode: r.sizeMode === 'pct' ? 'pct' : (r.sizeMode === 'sol' ? 'sol' : ''),
+    sizeSol: Number.isFinite(+r.sizeSol) ? +r.sizeSol : null,
+    sizePct: Number.isFinite(+r.sizePct) ? +r.sizePct : null,
+    stopPct: Number.isFinite(+r.stopPct) ? +r.stopPct : null,
+    stopPx: Number.isFinite(+r.stopPx) && +r.stopPx > 0 ? +r.stopPx : null,
+    tps, rangeLo: Number.isFinite(+r.rangeLo) ? +r.rangeLo : null, rangeHi: Number.isFinite(+r.rangeHi) ? +r.rangeHi : null,
+    beAtPct: r.beAtPct === '' || r.beAtPct == null ? null : numOr(r.beAtPct, null),
+    trailAtPct: r.trailAtPct == null || r.trailAtPct === '' ? null : numOr(r.trailAtPct, null),
+    trailPct: r.trailPct == null || r.trailPct === '' ? null : numOr(r.trailPct, null),
+    timeStopMin: Number.isFinite(+r.timeStopMin) ? +r.timeStopMin : null,
+    timeMinGain: Number.isFinite(+r.timeMinGain) ? +r.timeMinGain : null,
+    reentry: r.reentry == null ? null : !!r.reentry,
+    cooldownMin: Number.isFinite(+r.cooldownMin) ? +r.cooldownMin : null,
+    maxReentries: Number.isFinite(+r.maxReentries) ? +r.maxReentries : null,
+    flags: Array.isArray(r.flags) ? r.flags.slice(0, 4).map(x => String(x).slice(0, 80)) : [],
+    lastTaAt: Number.isFinite(+r.lastTaAt) ? +r.lastTaAt : null,
+    zone: r.zone && isNum(+r.zone.lo) ? { lo: +r.zone.lo, hi: +r.zone.hi, noAnchor: !!r.zone.noAnchor } : null,
+    price: Number.isFinite(+r.price) ? +r.price : null,
+    reentriesToday: Number.isFinite(+r.reentriesToday) ? +r.reentriesToday : 0,
+    buysToday: Number.isFinite(+r.buysToday) ? +r.buysToday : 0,
+    dayKey: r.dayKey || '', cooldownUntil: Number.isFinite(+r.cooldownUntil) ? +r.cooldownUntil : 0,
+    boughtOnce: !!r.boughtOnce, sawOpen: !!r.sawOpen
   };
 }
 function saveMyList() {
-  const rows = MYLIST.rows.map(r => ({ ...r, cache: r.cache ? { at: r.cache.at, tf: r.cache.tf, stale: !!r.cache.stale, candles: (r.cache.candles || []).slice(-80) } : null }));
+  const rows = MYLIST.rows.map(r => { const { dexPair, ...rest } = r; return rest; });
   save('sms:mylist', { ...MYLIST, on: false, rows });
 }
+function listPosition(mint) { return openPositions().find(p => p.wallet === 'burner' && p.mint === mint && p.open) || null; }
 function stopMyList(reason, opts) {
   const was = MYLIST.on; MYLIST.on = false; saveMyList();
-  if (was && !opts?.quiet) toast('⛔ My List auto-buy stopped', 'err');
+  if (was && !opts?.quiet) toast('My List auto-buy stopped', 'err');
   renderKillFab();
   if (!opts?.quiet) renderMyList();
 }
-function listConfirm(row) { return row.confirm || MYLIST.confirm || 'close'; }
-function listChase(row) { return isNum(row.chasePct) ? row.chasePct : (isNum(+MYLIST.chasePct) ? +MYLIST.chasePct : 10); }
-function fitSwingLine(points, dir) {
-  if (!points || points.length < 2) return null;
-  let best = null;
-  for (let i = 0; i < points.length; i++) {
-    const chain = [points[i]];
-    for (let j = i + 1; j < points.length; j++) {
-      const prev = chain[chain.length - 1];
-      if (dir < 0 ? points[j].price < prev.price : points[j].price > prev.price) chain.push(points[j]);
-    }
-    if (chain.length < 2) continue;
-    const end = chain[chain.length - 1].i, bestEnd = best ? best[best.length - 1].i : -1;
-    if (!best || end > bestEnd || (end === bestEnd && chain.length > best.length)) best = chain;
-  }
-  if (!best) return null;
-  const use = best.slice(-3);
-  return { a: use[0], b: use[use.length - 1], touches: use.length };
-}
-function listStructure(cs) {
-  const { highs, lows } = swingPoints(cs, 2);
-  const pivots = [...highs.map(h => ({ ...h, kind: 'H' })), ...lows.map(l => ({ ...l, kind: 'L' }))].sort((a, b) => a.price - b.price);
-  const zones = [];
-  for (const pt of pivots) {
-    let z = zones.find(z => z.mid > 0 && Math.abs(pt.price - z.mid) / z.mid <= 0.015);
-    if (!z) { z = { lo: pt.price, hi: pt.price, mid: pt.price, sum: 0, touches: 0, highTouches: 0, lowTouches: 0 }; zones.push(z); }
-    z.touches++; z.sum += pt.price; z.lo = Math.min(z.lo, pt.price); z.hi = Math.max(z.hi, pt.price); z.mid = z.sum / z.touches;
-    if (pt.kind === 'H') z.highTouches++; else z.lowTouches++;
-  }
-  const hLabel = highs.length >= 2 ? (highs.at(-1).price > highs.at(-2).price ? 'HH' : 'LH') : null;
-  const lLabel = lows.length >= 2 ? (lows.at(-1).price > lows.at(-2).price ? 'HL' : 'LL') : null;
-  let trend = 'range';
-  if (hLabel === 'HH' && lLabel === 'HL') trend = 'up';
-  else if (hLabel === 'LH' && lLabel === 'LL') trend = 'down';
-  return { highs, lows, zones, trend, down: fitSwingLine(highs, -1), up: fitSwingLine(lows, 1) };
-}
-function breakConfirm(cs, levelAt, confirm) {
-  const last = cs.length - 1;
-  const broke = (i) => {
-    const lv = levelAt(i);
-    const avg = avgVol(cs, i, 20);
-    return isNum(lv) && lv > 0 && cs[i].c > lv && avg > 0 && cs[i].v > avg;
+function listStrategy(row) {
+  const d = MYLIST;
+  const use = (k, fallback) => (row && row[k] != null && row[k] !== '') ? row[k] : (d[k] != null ? d[k] : fallback);
+  const tps = row && Array.isArray(row.tps) && row.tps.length ? row.tps : d.tps;
+  return {
+    mode: row && row.mode ? row.mode : (d.mode || 'zone'),
+    sizeMode: row && row.sizeMode ? row.sizeMode : (d.sizeMode || 'sol'),
+    sizeSol: use('sizeSol', 0.05), sizePct: use('sizePct', 10),
+    stopPct: use('stopPct', 15), stopPx: row && isNum(row.stopPx) ? row.stopPx : null,
+    tps: tps && tps.length ? tps : [{ gainPct: 15, sellPct: 100 }],
+    beAtPct: row && row.beAtPct != null ? row.beAtPct : d.beAtPct,
+    trailAtPct: row && row.trailAtPct != null ? row.trailAtPct : d.trailAtPct,
+    trailPct: row && row.trailPct != null ? row.trailPct : d.trailPct,
+    timeStopMin: row && row.timeStopMin != null ? row.timeStopMin : d.timeStopMin,
+    timeMinGain: row && row.timeMinGain != null ? row.timeMinGain : (d.timeMinGain || 0),
+    reentry: row && row.reentry != null ? !!row.reentry : d.reentry !== false,
+    cooldownMin: row && row.cooldownMin != null ? row.cooldownMin : (d.cooldownMin || 0),
+    maxReentries: row && row.maxReentries != null ? row.maxReentries : (d.maxReentries ?? 3),
+    rangeLo: row ? row.rangeLo : null, rangeHi: row ? row.rangeHi : null
   };
-  let breakAt = -1;
-  for (let i = Math.max(2, cs.length - 8); i < cs.length; i++) if (broke(i)) breakAt = i;
-  const lvLast = levelAt(last);
-  const above = isNum(lvLast) && cs[last].c > lvLast;
-  if (!(breakAt >= 0) || !above) {
-    return { phase: 'waiting', ready: false, breakAt, reason: above ? 'volume is not above the recent average' : 'close still under the level' };
-  }
-  if (confirm === 'two') {
-    const a = last - 1;
-    const two = a >= 0 && cs[a].c > levelAt(a) && cs[last].c > lvLast;
-    return two ? { phase: 'broken', ready: true, breakAt, reason: '2 closes above + volume' } : { phase: 'broken', ready: false, breakAt, reason: 'waiting for 2 closes above' };
-  }
-  if (confirm === 'retest') {
-    let held = false;
-    for (let i = breakAt + 1; i < cs.length; i++) {
-      const lv = levelAt(i);
-      if (isNum(lv) && cs[i].l <= lv * 1.01 && cs[i].l >= lv * 0.98 && cs[i].c > lv) held = true;
-    }
-    if (held) return { phase: 'retest', ready: true, breakAt, reason: 'retest hold + volume' };
-    return { phase: 'broken', ready: false, breakAt, reason: 'waiting for retest hold' };
-  }
-  return { phase: 'broken', ready: true, breakAt, reason: 'close above + volume' };
 }
-function blankPlan(reason) {
-  return { ok: false, ready: false, state: 'waiting', trend: 'range', reason, trigger: null, triggerLabel: '—', setup: '—', confirmText: '', entry: null, plannedEntry: null, stop: null, tp1: null, tp2: null, rr: null, support: null, resist: null, zones: [], down: null, up: null, breakAt: -1, fillPx: null };
+function listEntryReady(spec, ctx) {
+  const now = ctx.now || Date.now();
+  if (!ctx.enabled) return { state: 'disabled', ready: false };
+  if (ctx.open) return { state: 'bought', ready: false };
+  if (!spec.reentry && ctx.boughtOnce) return { state: 'cooldown', ready: false };
+  if (ctx.cooldownUntil && now < ctx.cooldownUntil) return { state: 'cooldown', ready: false };
+  const cap = 1 + (spec.reentry ? spec.maxReentries : 0);
+  if (ctx.boughtOnce && (ctx.buysToday || 0) >= cap) return { state: 'cooldown', ready: false };
+  let hit = false;
+  if (spec.mode === 'now') hit = true;
+  else if (spec.mode === 'range') hit = isNum(ctx.price) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && spec.rangeLo <= ctx.price && ctx.price <= spec.rangeHi;
+  else if (spec.mode === 'momentum') hit = ctx.momState === 'trigger' && !(ctx.taAgeMin >= 60);
+  else hit = !!ctx.inZone && !(ctx.taAgeMin >= 60);
+  return { state: hit ? 'inzone' : 'waiting', ready: hit };
 }
-function withTargets(plan, entry, stop) {
-  plan.entry = entry; plan.plannedEntry = entry; plan.stop = stop;
-  plan.tp1 = isNum(entry) ? entry * 1.5 : null;
-  plan.tp2 = isNum(entry) ? entry * 2 : null;
-  plan.rr = isNum(entry) && isNum(stop) && entry > stop && isNum(plan.tp1) ? (plan.tp1 - entry) / (entry - stop) : null;
-  return plan;
+function listDistance(spec, px, zone) {
+  if (!isNum(px)) return null;
+  if (spec.mode === 'now') return 0;
+  if (spec.mode === 'range' && isNum(spec.rangeLo) && isNum(spec.rangeHi)) {
+    if (px < spec.rangeLo) return (spec.rangeLo - px) / px * 100;
+    if (px > spec.rangeHi) return (px - spec.rangeHi) / px * 100;
+    return 0;
+  }
+  if (zone && isNum(zone.lo) && isNum(zone.hi)) {
+    const mid = (zone.lo + zone.hi) / 2;
+    return mid > 0 ? (px - mid) / mid * 100 : null;
+  }
+  return null;
 }
-function buildListPlan(candles, opts) {
-  const o = opts || {};
-  const cs = (candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.c > 0 && c.h > 0);
-  if (cs.length < 15) return blankPlan('not enough candles');
-  const st = listStructure(cs);
-  const last = cs.length - 1;
-  const px = cs[last].c;
-  const mode = MYLIST_MODES.includes(o.mode) ? o.mode : 'trend';
-  const confirm = ['close', 'two', 'retest'].includes(o.confirm) ? o.confirm : 'close';
-  const supports = st.zones.filter(z => z.lowTouches >= 1 && z.mid <= px * 1.01).sort((a, b) => (b.lowTouches >= 2) - (a.lowTouches >= 2) || b.mid - a.mid);
-  const resists = st.zones.filter(z => z.highTouches >= 1).sort((a, b) => (b.highTouches >= 2) - (a.highTouches >= 2) || a.mid - b.mid);
-  const support = supports.find(z => z.lowTouches >= 2) || supports[0] || null;
-  const resistAbove = resists.filter(z => z.lo > px).sort((a, b) => a.lo - b.lo);
-  const resist = (resistAbove.find(z => z.highTouches >= 2) || resistAbove[0] || resists.find(z => z.highTouches >= 2) || resists[0] || null);
-  const setup = { trend: 'Trendline break', resist: 'Resistance break', zone: 'Support zone', manual: 'Manual price' }[mode];
-  const plan = { ok: true, ready: false, state: 'waiting', trend: st.trend, reason: '', trigger: null, triggerLabel: '', setup, confirmText: confirm === 'two' ? '2 closes above + volume' : confirm === 'retest' ? 'retest hold + volume' : 'close above + volume', entry: null, plannedEntry: null, stop: null, tp1: null, tp2: null, rr: null, support, resist, zones: st.zones, down: st.down, up: st.up, breakAt: -1, fillPx: null, highs: st.highs, lows: st.lows };
-  const userStop = isNum(o.stopPx) && o.stopPx > 0 ? o.stopPx : null;
-  const applyStop = (auto) => userStop || auto;
-  if (mode === 'manual') {
-    if (!(isNum(o.triggerPx) && o.triggerPx > 0)) return Object.assign(plan, blankPlan('set a trigger price'), { ok: true, trend: st.trend, support, resist, zones: st.zones, down: st.down, up: st.up, setup });
-    const level = o.triggerPx;
-    const conf = breakConfirm(cs, () => level, confirm);
-    plan.trigger = level; plan.triggerLabel = 'Manual price'; plan.breakAt = conf.breakAt; plan.state = conf.phase; plan.ready = conf.ready; plan.reason = conf.reason;
-    const swing = st.lows.length ? st.lows.at(-1).price : level * 0.98;
-    withTargets(plan, conf.ready ? px : level, applyStop(Math.min(level * 0.995, swing)));
-    return plan;
-  }
-  if (mode === 'zone') {
-    const z = supports.find(z => z.lowTouches >= 2 && z.hi <= px * 1.25) || supports.find(z => z.hi <= px * 1.25) || null;
-    if (!z) { plan.reason = 'no support zone in range'; return plan; }
-    const inside = px <= z.hi * 1.01 && px >= z.lo * 0.99;
-    plan.trigger = z.mid; plan.triggerLabel = 'S/R zone'; plan.reason = inside ? 'price is inside support' : 'waiting for price to reach support';
-    plan.state = inside ? 'retest' : 'waiting'; plan.ready = inside;
-    withTargets(plan, inside ? px : z.mid, applyStop(z.lo * 0.995));
-    return plan;
-  }
-  if (mode === 'trend') {
-    if (!st.down || st.down.touches < 2) { plan.reason = 'need 2 lower swing highs'; return plan; }
-    const levelAt = (i) => lineAt(st.down.a, st.down.b, i);
-    const level = levelAt(last);
-    const conf = breakConfirm(cs, levelAt, confirm);
-    plan.trigger = level; plan.triggerLabel = 'Trendline break'; plan.breakAt = conf.breakAt; plan.state = conf.phase; plan.ready = conf.ready; plan.reason = conf.reason;
-    const brLow = conf.breakAt >= 0 ? cs[conf.breakAt].l : cs[last].l;
-    const swing = st.lows.length ? st.lows.at(-1).price : brLow;
-    withTargets(plan, conf.ready ? px : level, applyStop(Math.min(brLow, swing) * 0.995));
-    return plan;
-  }
-  const pool = resists.filter(z => z.highTouches >= 2);
-  const use = pool.length ? pool : resists;
-  let broken = null;
-  for (const z of use) {
-    let did = false;
-    for (let i = Math.max(2, cs.length - 8); i < cs.length; i++) {
-      const avg = avgVol(cs, i, 20);
-      if (cs[i].c > z.hi && avg > 0 && cs[i].v > avg) did = true;
-    }
-    if (did && (!broken || z.hi > broken.hi)) broken = z;
-  }
-  const levelZone = broken || use.filter(z => z.lo > px).sort((a, b) => a.lo - b.lo)[0] || null;
-  if (!levelZone) { plan.reason = 'no resistance level'; return plan; }
-  const level = levelZone.hi;
-  plan.trigger = level; plan.triggerLabel = 'Resistance break';
-  if (!broken) { plan.reason = 'close still under resistance'; plan.state = 'waiting'; withTargets(plan, level, applyStop(level * 0.995)); return plan; }
-  const conf = breakConfirm(cs, () => level, confirm);
-  plan.breakAt = conf.breakAt; plan.state = conf.phase; plan.ready = conf.ready; plan.reason = conf.reason;
-  const chase = isNum(o.chasePct) ? o.chasePct : 10;
-  if (px > level * (1 + chase / 100)) { plan.ready = false; plan.reason = 'price is ' + ((px / level - 1) * 100).toFixed(0) + '% above the level (max chase ' + chase + '%)'; }
-  withTargets(plan, plan.ready ? px : level, applyStop(level * 0.995));
-  return plan;
+function listSolSize(spec) {
+  const bal = isNum(WALLETS.burner.sol) ? WALLETS.burner.sol : WALLETS.burner.lastSol;
+  let sol = spec.sizeMode === 'pct' && isNum(spec.sizePct) && isNum(bal) ? bal * spec.sizePct / 100 : +spec.sizeSol || 0;
+  const cap = burnerTradeCap();
+  if (cap.ok) sol = Math.min(sol, cap.byPct);
+  sol = Math.min(sol, S.maxSolPerTrade);
+  return sol;
 }
-function listShouldBuy(plan, armed) { return !!(armed && plan?.ready && plan.state !== 'bought'); }
-function listPosition(mint) { return openPositions().find(p => p.wallet === 'burner' && p.mint === mint && p.open) || null; }
-function presentPlan(row) {
-  const cache = row.cache;
-  const age = cache ? Date.now() - (cache.at || 0) : Infinity;
-  let plan = (!cache || cache.tf !== row.tf || age >= 90 * 60e3) ? blankPlan(cache ? 'cached TA older than 90 min' : 'waiting for candles') : buildListPlan(cache.candles, { mode: row.mode, confirm: listConfirm(row), chasePct: listChase(row), stopPx: row.stopPx, triggerPx: row.triggerPx });
-  if (plan.ready && isNum(plan.stop) && isNum(plan.plannedEntry) && plan.stop >= plan.plannedEntry) { plan.ready = false; plan.reason = 'stop is not below entry'; }
-  if (cache?.stale) plan.cached = true, plan.cachedAt = cache.at;
-  if (age >= 60 * 60e3) { plan.ready = false; if (plan.ok) plan.reason = 'cached TA older than 60 min'; }
-  const pos = listPosition(row.mint);
-  if (pos) {
-    plan.state = 'bought'; plan.ready = false;
-    plan.fillPx = pos.avgUsd;
-    if (isNum(pos.avgUsd)) { plan.tp1 = pos.avgUsd * 1.5; plan.tp2 = pos.avgUsd * 2; }
-  }
-  plan.row = row;
-  return plan;
+function listBuyBlocks(sol) {
+  const errs = [];
+  if (!(sol >= 0.001)) errs.push('size too small');
+  const cap = burnerTradeCap();
+  if (!cap.ok) errs.push(cap.err);
+  else if (sol > cap.byPct + 1e-9) errs.push('above balance % cap');
+  if (sol > S.maxSolPerTrade + 1e-9) errs.push('above max per trade');
+  if (spentToday() + sol > S.dailyMaxSol + 1e-9) errs.push('above daily cap');
+  if (openPositions().filter(p => p.open).length >= maxPos()) errs.push('max positions');
+  return errs;
 }
-function listMarkers(row, candles, plan) {
-  const out = [];
-  const toMs = (t) => t < 1e12 ? t * 1000 : t;
-  const nearest = (ts) => {
-    let best = -1, dist = Infinity;
-    candles.forEach((c, i) => { const d = Math.abs(toMs(c.t) - ts); if (d < dist) { dist = d; best = i; } });
-    return best;
+function myListSpec(p) {
+  const exit = p?.plan?.exit || {};
+  const m = manualOf(p) || {};
+  let tps = Array.isArray(exit.tps) ? exit.tps.map(t => ({ ...t })) : [];
+  const tp1 = manualTp(m, p?.avgUsd, 'tp1');
+  const tp2 = manualTp(m, p?.avgUsd, 'tp2');
+  if (isNum(tp1) && p?.avgUsd > 0) {
+    const gain = (tp1 / p.avgUsd - 1) * 100;
+    if (tps[0]) tps[0] = { ...tps[0], gainPct: gain }; else tps[0] = { gainPct: gain, sellPct: 100 };
+  }
+  if (isNum(tp2) && p?.avgUsd > 0) {
+    const gain = (tp2 / p.avgUsd - 1) * 100;
+    if (tps[1]) tps[1] = { ...tps[1], gainPct: gain }; else tps[1] = { gainPct: gain, sellPct: 100 };
+  }
+  return {
+    stopPct: isNum(exit.stopPct) ? exit.stopPct : 15,
+    stopPx: isNum(m.stop) ? m.stop : (isNum(exit.stopPx) ? exit.stopPx : null),
+    tps, beAtPct: m.beAtPct != null ? m.beAtPct : exit.beAtPct,
+    trailAtPct: m.trailOff ? null : (m.trailAtPct != null ? m.trailAtPct : exit.trailAtPct),
+    trailPct: m.trailPct != null ? m.trailPct : exit.trailPct,
+    timeStopMin: exit.timeStopMin, timeMinGain: exit.timeMinGain || 0
   };
-  for (const r of LOG) {
-    if (r.mint !== row.mint || r.status !== 'confirmed') continue;
-    const i = nearest(r.ts);
-    if (i >= 0) out.push({ i, kind: r.side === 'sell' ? 'sell' : 'buy', price: r.priceUsd || candles[i].c });
+}
+function myListEffectiveStop(p, lp) {
+  const entry = p?.avgUsd;
+  const spec = myListSpec(p);
+  let high = isNum(autoHigh[p.key]) ? autoHigh[p.key] : (isNum(entry) ? entry : 0);
+  if (isNum(lp) && lp > high) { high = lp; autoHigh[p.key] = high; save('sms:autohigh', autoHigh); }
+  let stop = isNum(spec.stopPx) && (!isNum(entry) || spec.stopPx < entry) ? spec.stopPx : (isNum(entry) ? entry * (1 - spec.stopPct / 100) : null);
+  let reason = 'initial';
+  const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
+  if (isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
+  if (isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct > 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + spec.trailAtPct / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
+  const prev = autoStop[p.key];
+  if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
+  else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
+  const tp1 = spec.tps[0] && entry > 0 ? entry * (1 + spec.tps[0].gainPct / 100) : null;
+  const tp2 = spec.tps[1] && entry > 0 ? entry * (1 + spec.tps[1].gainPct / 100) : null;
+  return { stop, reason, high, tp1, tp2, tps: spec.tps, beAtPct: spec.beAtPct, trailAtPct: spec.trailAtPct, trailPct: spec.trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain, trail: spec.trailPct };
+}
+function myListExit(p, lp) {
+  if (!isNum(lp) || !(p?.avgUsd > 0)) return null;
+  if ((sellFails[p.key] || 0) >= 3) return null;
+  const eff = effectiveStop(p, lp);
+  if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'trail' ? 'trail' : (eff.reason === 'break-even' ? 'stop' : 'stop') };
+  const done = p.tpDone || {};
+  for (let i = 0; i < (eff.tps || []).length; i++) {
+    const tag = 'tp' + i;
+    if (done[tag]) continue;
+    const tgt = p.avgUsd * (1 + eff.tps[i].gainPct / 100);
+    if (lp >= tgt) return { pctSell: Math.min(100, Math.max(1, eff.tps[i].sellPct || 100)), tag };
   }
-  if (plan?.breakAt >= 0) out.push({ i: plan.breakAt, kind: 'break', price: candles[plan.breakAt]?.c });
-  if (isNum(plan?.plannedEntry)) out.push({ i: candles.length - 1, kind: 'entry', price: plan.plannedEntry });
-  if (isNum(plan?.fillPx)) out.push({ i: nearest(listPosition(row.mint)?.firstTs || Date.now()), kind: 'fill', price: plan.fillPx });
-  return out;
+  if (isNum(eff.timeStopMin) && eff.timeStopMin > 0) {
+    const ageMin = (Date.now() - p.firstTs) / 60000;
+    const pnl = (lp / p.avgUsd - 1) * 100;
+    if (ageMin >= eff.timeStopMin && pnl < (eff.timeMinGain || 0)) return { pctSell: 100, tag: 'time' };
+  }
+  return null;
 }
-function paintListChart(canvas, candles, plan, markers, opt) {
-  if (!canvas) return;
-  const mini = !!opt?.mini;
-  const cssW = canvas.clientWidth || (mini ? 144 : 320);
-  const cssH = canvas.clientHeight || (mini ? 96 : 256);
-  if (cssW < 8 || cssH < 8) return;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssW, cssH);
-  ctx.fillStyle = '#0c1018'; ctx.fillRect(0, 0, cssW, cssH);
-  const cs = candles || [];
-  if (cs.length < 2) { ctx.fillStyle = '#64748b'; ctx.font = '11px sans-serif'; ctx.fillText('No candles yet', 8, 18); return; }
-  const count = Math.min(cs.length, opt?.count || (mini ? 60 : 80));
-  const maxStart = Math.max(0, cs.length - count);
-  let start = mini ? maxStart : Math.max(0, Math.min(maxStart, opt?.start ?? maxStart));
-  const view = cs.slice(start, start + count);
-  const volH = Math.round(cssH * (mini ? 0.18 : 0.22));
-  const padT = mini ? 4 : 8, padB = volH + 4, padL = 2, padR = mini ? 2 : 54;
-  const plotW = Math.max(10, cssW - padL - padR), plotH = Math.max(10, cssH - padT - padB);
-  const prices = [];
-  view.forEach(c => prices.push(c.h, c.l));
-  const extra = [plan?.trigger, plan?.stop, plan?.tp1, plan?.tp2, plan?.plannedEntry, plan?.fillPx, plan?.support?.mid, plan?.resist?.mid];
-  extra.forEach(n => { if (isNum(n)) prices.push(n); });
-  let min = Math.min(...prices), max = Math.max(...prices);
-  if (!(max > min)) { min *= 0.99; max *= 1.01; }
-  const pad = (max - min) * 0.08; min -= pad; max += pad;
-  const yAt = (p) => padT + (1 - (p - min) / (max - min)) * plotH;
-  const priceAt = (y) => min + (1 - (y - padT) / plotH) * (max - min);
-  const slot = plotW / view.length;
-  const xAt = (i) => padL + (i - start + 0.5) * slot;
-  const vmax = Math.max(...view.map(c => c.v || 0), 1);
-  view.forEach((c, k) => {
-    const i = start + k;
-    const x = xAt(i), up = c.c >= c.o;
-    ctx.globalAlpha = 0.45; ctx.fillStyle = up ? '#34d399' : '#fb7185';
-    const vh = Math.max(1, (c.v || 0) / vmax * (volH - 4));
-    ctx.fillRect(x - Math.max(1, slot * 0.3), cssH - vh, Math.max(1, slot * 0.6), vh);
-    ctx.globalAlpha = 1; ctx.strokeStyle = up ? '#34d399' : '#fb7185'; ctx.fillStyle = ctx.strokeStyle;
-    ctx.beginPath(); ctx.moveTo(x, yAt(c.h)); ctx.lineTo(x, yAt(c.l)); ctx.stroke();
-    const top = yAt(Math.max(c.o, c.c)), bot = yAt(Math.min(c.o, c.c));
-    ctx.fillRect(x - Math.max(1, slot * 0.28), top, Math.max(1.5, slot * 0.56), Math.max(1, bot - top));
-  });
-  const hLine = (p, color, label, dash) => {
-    if (!isNum(p)) return;
-    const y = yAt(p); if (y < padT - 2 || y > padT + plotH + 2) return;
-    ctx.save(); ctx.strokeStyle = color; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke(); ctx.restore();
-    if (!mini && label) { ctx.fillStyle = color; ctx.font = '10px sans-serif'; ctx.fillText(label, padL + plotW + 3, y + 3); }
-  };
-  (plan?.zones || []).forEach(z => {
-    if (z.lowTouches) hLine(z.mid, 'rgba(56,189,248,0.7)', 'S ×' + z.touches, [3, 3]);
-    if (z.highTouches && z !== plan.support) hLine(z.hi, 'rgba(251,113,133,0.55)', 'R ×' + z.highTouches, [3, 3]);
-  });
-  const drawLine = (ln, color) => {
-    if (!ln) return;
-    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = mini ? 1 : 1.5; ctx.beginPath();
-    ctx.moveTo(xAt(ln.a.i), yAt(lineAt(ln.a, ln.b, ln.a.i)));
-    ctx.lineTo(xAt(Math.min(cs.length - 1, Math.max(ln.b.i, cs.length - 1))), yAt(lineAt(ln.a, ln.b, cs.length - 1)));
-    ctx.stroke(); ctx.restore();
-  };
-  drawLine(plan?.up, '#38bdf8');
-  drawLine(plan?.down, '#fbbf24');
-  hLine(plan?.trigger, '#c4b5fd', 'TRIGGER');
-  hLine(plan?.stop, '#fb7185', 'STOP', [4, 3]);
-  hLine(plan?.tp1, '#34d399', 'TP1', [4, 3]);
-  hLine(plan?.tp2, '#6ee7b7', 'TP2', [2, 3]);
-  const arrow = (i, price, color, dir) => {
-    if (!isNum(price) || i < start || i >= start + count) return;
-    const x = xAt(i), y = yAt(price);
-    ctx.fillStyle = color; ctx.beginPath();
-    if (dir < 0) { ctx.moveTo(x, y - 7); ctx.lineTo(x - 4, y - 1); ctx.lineTo(x + 4, y - 1); }
-    else { ctx.moveTo(x, y + 7); ctx.lineTo(x - 4, y + 1); ctx.lineTo(x + 4, y + 1); }
-    ctx.fill();
-  };
-  (markers || []).forEach(m => {
-    if (m.kind === 'entry') arrow(m.i, m.price, '#f8fafc', -1);
-    else if (m.kind === 'fill') arrow(m.i, m.price, '#a78bfa', 1);
-    else if (m.kind === 'buy') arrow(m.i, m.price, '#34d399', 1);
-    else if (m.kind === 'sell') arrow(m.i, m.price, '#fb7185', -1);
-    else if (m.kind === 'break') { ctx.fillStyle = '#fbbf24'; ctx.fillRect(xAt(m.i) - 2, yAt(m.price) - 2, 4, 4); }
-  });
-  canvas._scale = { yAt, priceAt, padT, plotH, start, count, cssW };
+function myListPlanHtml(p, pl) {
+  if (!p?.plan?.myList || !pl) return '';
+  const tps = (pl.tps || []).map(t => '+' + t.gainPct + '% sell ' + t.sellPct + '%').join(', ') || '—';
+  const be = isNum(pl.beAtPct) && pl.beAtPct > 0 ? 'breakeven +' + pl.beAtPct + '%' : 'breakeven off';
+  const trail = isNum(pl.trailAtPct) && pl.trailAtPct > 0 ? 'trail ' + pl.trailPct + '% after +' + pl.trailAtPct + '%' : 'trail off';
+  return `<div class="mt-2 text-[11px] leading-snug text-slate-300 whitespace-normal break-words"><b class="text-slate-400">Exit plan</b> · stop ${price(pl.stop)} (${esc(pl.reason || 'initial')}) · ${esc(be)} · ${esc(trail)} · ${esc(tps)}</div>`;
 }
-function verdictOf(plan, armed) {
-  if (plan.state === 'bought') return { cls: 'text-emerald-300', text: 'Bought' };
-  if (plan.ready && armed) return { cls: 'text-emerald-300', text: 'READY — entering' };
-  if (plan.ready) return { cls: 'text-emerald-300', text: 'READY — auto-buy is off' };
-  return { cls: 'text-amber-200', text: 'NOT READY — waiting: ' + (plan.reason || 'setup') };
-}
-function listBlurb(plan) {
-  const bits = ['Trigger: ' + (plan.triggerLabel || '—') + ' @ ' + price(plan.trigger) + (plan.confirmText ? ' (' + plan.confirmText + ')' : ''), 'Stop: ' + price(plan.stop), 'TP: ' + price(plan.tp1) + ' / ' + price(plan.tp2), plan.state === 'bought' ? 'Bought' : (plan.ready ? 'Ready' : 'Waiting')];
-  if (plan.cached) bits.push('TA cached (' + Math.max(0, Math.round((Date.now() - plan.cachedAt) / 60000)) + ' min ago)');
-  return bits.join(' · ');
-}
+function modeLabel(mode) { return { zone: 'S/R zone', momentum: 'Momentum', range: 'Price range', now: 'Buy now' }[mode] || mode; }
+function stateLabel(state) { return { waiting: 'Waiting', inzone: 'In zone', bought: 'Bought', cooldown: 'Cooldown', disabled: 'Disabled' }[state] || 'Waiting'; }
 function renderMyList() {
   const box = $('myListBox'); if (!box) return;
   const focus = document.activeElement;
-  const typing = focus && box.contains(focus) && /^(INPUT|SELECT|TEXTAREA)$/.test(focus.tagName);
-  if (typing && box.dataset.built === String(MYLIST.rows.length) + ':' + [...listOpen].sort().join()) { paintListCanvases(); refreshListCopy(); return; }
-  const stateName = { waiting: 'Waiting break', broken: 'Broken', retest: 'Retest', bought: 'Bought' };
-  const opt = (arr, cur, labels) => arr.map(v => `<option value="${v}" ${v === cur ? 'selected' : ''}>${labels ? labels[v] : v}</option>`).join('');
+  if (focus && box.contains(focus) && /^(INPUT|TEXTAREA|SELECT)$/.test(focus.tagName)) return;
+  const modeOpts = (cur) => ['', ...MYLIST_MODES].map(v => `<option value="${v}" ${v === (cur || '') ? 'selected' : ''}>${v ? modeLabel(v) : 'List default'}</option>`).join('');
   const rows = MYLIST.rows.map(row => {
-    const plan = presentPlan(row);
-    const v = verdictOf(plan, MYLIST.on);
-    const open = listOpen.has(row.id);
-    const rr = isNum(plan.rr) ? plan.rr.toFixed(2) : '—';
-    return `<article class="rounded-xl border border-white/10 bg-ink-900/40 p-2.5" data-row="${row.id}">
-      <div class="flex flex-wrap gap-2 items-start">
-        <button type="button" data-open="${row.id}" class="shrink-0 w-36 h-24 rounded-lg overflow-hidden border border-white/10 bg-ink-900" aria-label="Open chart for ${esc(row.symbol || row.mint)}"><canvas data-chart="${row.id}" data-kind="mini" class="w-full h-full block"></canvas></button>
-        <div class="min-w-0 flex-1 basis-40" data-copy="${row.id}">
-          <div class="flex flex-wrap items-center gap-1.5"><b class="break-words">${esc(row.symbol || short(row.mint))}</b><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px]">${esc(stateName[plan.state] || 'Waiting break')}</span></div>
-          <div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words leading-snug">Trend ${esc(plan.trend)} · S ${price(plan.support?.mid)} ×${plan.support?.touches || 0} · R ${price(plan.resist?.mid)} ×${plan.resist?.highTouches || plan.resist?.touches || 0}</div>
-          <div class="text-[11px] text-slate-300 whitespace-normal break-words leading-snug">${esc(plan.setup)} · entry ${price(plan.plannedEntry)} · stop ${price(plan.stop)} · TP ${price(plan.tp1)} / ${price(plan.tp2)} · R:R ${rr}</div>
-          <div class="mt-1 text-[11px] font-semibold whitespace-normal break-words ${v.cls}">${esc(v.text)}</div>
+    const spec = listStrategy(row);
+    const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
+    const open = !!listPosition(row.mint);
+    const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
+    const ready = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
+    const dist = listDistance(spec, px, row.zone);
+    const info = (lastResult?.tokens || []).find(t => t.mint === row.mint);
+    const flags = (row.flags && row.flags.length ? row.flags : (info?.flags || []).map(f => f.text)).slice(0, 3);
+    return `<article class="rounded-xl border border-white/10 bg-ink-900/40 p-2.5" data-row="${esc(row.id)}">
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="flex items-center gap-1 text-[11px]"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
+        <b class="break-words">${esc(row.symbol || short(row.mint))}</b>
+        <span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px]">${stateLabel(ready.state)}</span>
+        <span class="text-[10px] text-slate-500">${esc(modeLabel(spec.mode))}</span>
+        <button type="button" data-ml-del="${esc(row.id)}" class="ml-auto text-[11px] text-rose-300">Remove</button>
+      </div>
+      <div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words leading-snug">Price ${price(px)} · to entry ${dist == null ? '—' : (dist > 0 ? '+' : '') + dist.toFixed(1) + '%'} · TA ${taAge == null ? '—' : Math.max(0, Math.round(taAge)) + 'm ago'}</div>
+      ${flags.length ? `<div class="mt-1 text-[10px] text-slate-400 whitespace-normal break-words">Info: ${esc(flags.join(' · '))}</div>` : ''}
+      <details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-500">Override</summary>
+        <div class="mt-1 grid grid-cols-2 gap-2 text-[11px]">
+          <label>Mode<select data-ml="mode" data-id="${esc(row.id)}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1">${modeOpts(row.mode)}</select></label>
+          <label>Size<select data-ml="sizeMode" data-id="${esc(row.id)}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1"><option value="" ${row.sizeMode ? '' : 'selected'}>Default</option><option value="sol" ${row.sizeMode === 'sol' ? 'selected' : ''}>SOL</option><option value="pct" ${row.sizeMode === 'pct' ? 'selected' : ''}>% balance</option></select></label>
+          <label>Range from<input data-ml="rangeLo" data-id="${esc(row.id)}" value="${row.rangeLo ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+          <label>Range to<input data-ml="rangeHi" data-id="${esc(row.id)}" value="${row.rangeHi ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+          <label>Stop %<input data-ml="stopPct" data-id="${esc(row.id)}" value="${row.stopPct ?? ''}" placeholder="default" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+          <label>TP gain:sell<input data-ml="tps" data-id="${esc(row.id)}" value="${esc(formatTps(row.tps))}" placeholder="15:100" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
         </div>
-      </div>
-      <div class="${open ? '' : 'hidden'} mt-2" data-full="${row.id}">
-        <div class="flex flex-wrap gap-1 mb-1">${MYLIST_TFS.map(tf => `<button type="button" data-tf="${row.id}" data-v="${tf}" class="rounded px-2 py-0.5 text-[10px] border ${row.tf === tf ? 'border-violet-400 text-violet-200' : 'border-white/10 text-slate-400'}">${tf}</button>`).join('')}</div>
-        <canvas data-chart="${row.id}" data-kind="full" class="w-full h-64 rounded-lg border border-white/10" style="touch-action:none"></canvas>
-        <p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(listBlurb(plan))}${row.mode === 'manual' ? ' · Tap or drag the chart to set the manual trigger.' : ''}</p>
-      </div>
-      <div class="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
-        <label>Mode<select data-field="mode" data-id="${row.id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1">${opt(MYLIST_MODES, row.mode, { zone: 'Support zone', manual: 'Manual price', trend: 'Trendline break', resist: 'Resistance break' })}</select></label>
-        <label>Timeframe<select data-field="tf" data-id="${row.id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1">${opt(MYLIST_TFS, row.tf)}</select></label>
-        <label>Confirm<select data-field="confirm" data-id="${row.id}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1"><option value="" ${row.confirm ? '' : 'selected'}>Default</option><option value="close" ${row.confirm === 'close' ? 'selected' : ''}>1 close</option><option value="two" ${row.confirm === 'two' ? 'selected' : ''}>2 closes</option><option value="retest" ${row.confirm === 'retest' ? 'selected' : ''}>Retest hold</option></select></label>
-        <label>Stop override<input data-field="stopPx" data-id="${row.id}" value="${row.stopPx ?? ''}" placeholder="auto" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-        <label>Manual trigger<input data-field="triggerPx" data-id="${row.id}" value="${row.triggerPx ?? ''}" placeholder="tap chart" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-        <label>Max chase %<input data-field="chasePct" data-id="${row.id}" value="${row.chasePct ?? ''}" placeholder="${MYLIST.chasePct}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      </div>
-      <button type="button" data-del="${row.id}" class="mt-2 text-[11px] text-rose-300">Remove</button>
+      </details>
     </article>`;
   }).join('');
-  box.innerHTML = `<details id="myListDetails" class="rounded-xl bg-ink-850 border ${MYLIST.on ? 'border-emerald-400/40' : 'border-white/5'}" open>
-    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-between"><span>My List</span>${MYLIST.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-400 text-ink-900">LIST ON</span>' : '<span class="text-[10px] text-slate-500">off</span>'}</summary>
+  box.innerHTML = `<details id="myListDetails" class="rounded-xl bg-ink-850 border ${MYLIST.on ? 'border-amber-300/50' : 'border-white/5'}" open>
+    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 flex items-center justify-between"><span>My List ⭐</span>${MYLIST.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-300 text-ink-900">AUTO ON</span>' : '<span class="text-[10px] text-slate-500">auto off</span>'}</summary>
     <div class="px-3 pb-3 text-xs space-y-2">
-      <p class="text-[11px] text-slate-400 whitespace-normal break-words">Tokens you pick, with their own entry. Auto-buy fires only when that row's trigger confirms, then uses your size, stop, and the panel TPs (+50% / +100%). Off on reload. Nothing is sent while a row is waiting.</p>
-      <div class="grid grid-cols-2 gap-2">
-        <label class="block"><span class="text-slate-400">SOL per buy</span><input id="mlSize" type="number" min="0.001" step="0.01" value="${MYLIST.sizeSol}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
-        <label class="block"><span class="text-slate-400">Refresh seconds</span><input id="mlPoll" type="number" min="15" max="120" step="1" value="${MYLIST.pollSec}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
-        <label class="block"><span class="text-slate-400">Confirm</span><select id="mlConfirm" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5"><option value="close" ${MYLIST.confirm === 'close' ? 'selected' : ''}>1 close + volume</option><option value="two" ${MYLIST.confirm === 'two' ? 'selected' : ''}>2 closes above</option><option value="retest" ${MYLIST.confirm === 'retest' ? 'selected' : ''}>Retest hold</option></select></label>
-        <label class="block"><span class="text-slate-400">Resistance max chase %</span><input id="mlChase" type="number" min="1" max="50" step="1" value="${MYLIST.chasePct}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+      <p class="text-[11px] text-slate-400 whitespace-normal break-words">Tokens from the pasted list. Flags are info only. Auto-buy skips RugCheck, insider, liquidity, age, and conviction. A Jupiter route plus max positions, balance %, and daily cap still apply. The auto-buy switch resets when you reload.</p>
+      <div class="grid grid-cols-2 gap-2 text-[11px]">
+        <label>Default entry<select id="mlMode" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1">${MYLIST_MODES.map(v => `<option value="${v}" ${MYLIST.mode === v ? 'selected' : ''}>${modeLabel(v)}</option>`).join('')}</select></label>
+        <label>Size<select id="mlSizeMode" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1"><option value="sol" ${MYLIST.sizeMode !== 'pct' ? 'selected' : ''}>SOL amount</option><option value="pct" ${MYLIST.sizeMode === 'pct' ? 'selected' : ''}>% of balance</option></select></label>
+        <label>SOL<input id="mlSizeSol" type="number" step="0.01" min="0.001" value="${MYLIST.sizeSol}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>% balance<input id="mlSizePct" type="number" step="1" min="1" max="100" value="${MYLIST.sizePct}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Stop % below entry<input id="mlStop" type="number" step="1" min="1" max="90" value="${MYLIST.stopPct}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Stop price (optional)<input id="mlStopPx" value="${MYLIST.stopPx ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label class="col-span-2">Take profit gain:sell %<input id="mlTps" value="${esc(formatTps(MYLIST.tps))}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Breakeven at +% (blank = off)<input id="mlBe" value="${MYLIST.beAtPct ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Trail starts +% (blank = off)<input id="mlTrailAt" value="${MYLIST.trailAtPct ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Trail % below high<input id="mlTrail" value="${MYLIST.trailPct ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Time stop minutes<input id="mlTime" value="${MYLIST.timeStopMin ?? ''}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Time stop min gain %<input id="mlTimeGain" value="${MYLIST.timeMinGain ?? 0}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Cooldown minutes<input id="mlCool" type="number" min="0" value="${MYLIST.cooldownMin}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
+        <label>Max re-entries / day<input id="mlReMax" type="number" min="0" value="${MYLIST.maxReentries}" class="mt-0.5 w-full rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono" /></label>
       </div>
-      <div class="flex gap-2"><input id="mlMint" placeholder="Mint address" class="flex-1 min-w-0 rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" /><button id="mlAdd" type="button" class="rounded-lg px-3 py-1.5 bg-ink-700 border border-white/10">Add</button></div>
-      <div class="flex gap-2">
-        <button id="mlSave" type="button" class="flex-1 rounded-lg py-1.5 bg-ink-700 hover:bg-ink-600 border border-white/10">Save list</button>
-        ${MYLIST.on ? '<button id="mlOff" type="button" class="flex-1 rounded-lg py-1.5 font-bold bg-rose-600 text-white">List OFF</button>' : '<button id="mlOn" type="button" class="flex-1 rounded-lg py-1.5 font-bold bg-emerald-500 text-ink-900">List ON</button>'}
+      <label class="flex items-center gap-2 text-[11px]"><input id="mlRe" type="checkbox" class="accent-violet-500" ${MYLIST.reentry !== false ? 'checked' : ''} /> Look for a new entry after a close</label>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="mlScalp" class="rounded-lg px-2 py-1 text-[11px] border border-white/10">Scalp: take <span id="mlScalpN">${isNum(MYLIST.tps?.[0]?.gainPct) ? MYLIST.tps[0].gainPct : 15}</span>% and close</button>
+        <input id="mlScalpPct" type="number" min="1" value="15" class="w-16 rounded bg-ink-800 border border-white/10 px-1 py-1 font-mono text-[11px]" />
+        <button type="button" id="mlSave" class="rounded-lg px-2 py-1 text-[11px] bg-ink-700 border border-white/10">Save strategy</button>
+        <button type="button" id="mlClear" class="rounded-lg px-2 py-1 text-[11px] text-rose-300">Clear list</button>
+        ${MYLIST.on ? '<button type="button" id="mlOff" class="rounded-lg px-2 py-1 text-[11px] font-bold bg-rose-600 text-white">My List auto-buy OFF</button>' : '<button type="button" id="mlOn" class="rounded-lg px-2 py-1 text-[11px] font-bold bg-amber-300 text-ink-900">My List auto-buy ON</button>'}
       </div>
-      <div class="space-y-2">${rows || '<p class="text-slate-500">No tokens yet.</p>'}</div>
+      <div class="space-y-2">${rows || '<p class="text-[11px] text-slate-500">No tokens yet. Paste mints above and tap Save as My List.</p>'}</div>
     </div></details>`;
-  box.dataset.built = String(MYLIST.rows.length) + ':' + [...listOpen].sort().join();
-  $('mlAdd')?.addEventListener('click', () => {
-    const mint = $('mlMint').value.trim();
-    if (!isAddr(mint)) return toast('Paste a Solana mint address', 'warn');
-    if (MYLIST.rows.some(r => r.mint === mint)) return toast('Already on My List', 'info');
-    MYLIST.rows.push(sanitizeListRow({ id: 'ml' + Date.now(), mint, mode: 'trend', tf: '5m' }));
-    $('mlMint').value = ''; saveMyList(); renderMyList(); myListTick();
+  const num = (id) => { const v = $(id)?.value.trim(); if (!v) return null; const n = +v; return Number.isFinite(n) ? n : null; };
+  const readDefaults = () => {
+    MYLIST.mode = MYLIST_MODES.includes($('mlMode')?.value) ? $('mlMode').value : 'zone';
+    MYLIST.sizeMode = $('mlSizeMode')?.value === 'pct' ? 'pct' : 'sol';
+    MYLIST.sizeSol = num('mlSizeSol') || 0.05;
+    MYLIST.sizePct = num('mlSizePct') || 10;
+    MYLIST.stopPct = num('mlStop') || 15;
+    MYLIST.stopPx = num('mlStopPx');
+    const tps = parseTps($('mlTps')?.value);
+    if (tps.length) MYLIST.tps = tps;
+    MYLIST.beAtPct = num('mlBe');
+    MYLIST.trailAtPct = num('mlTrailAt');
+    MYLIST.trailPct = num('mlTrail');
+    MYLIST.timeStopMin = num('mlTime');
+    MYLIST.timeMinGain = num('mlTimeGain') || 0;
+    MYLIST.cooldownMin = num('mlCool') || 0;
+    MYLIST.maxReentries = num('mlReMax') ?? 3;
+    MYLIST.reentry = !!$('mlRe')?.checked;
+    box.querySelectorAll('[data-ml]').forEach(el => {
+      const row = MYLIST.rows.find(r => r.id === el.dataset.id); if (!row) return;
+      const f = el.dataset.ml;
+      if (f === 'mode') row.mode = mapListMode(el.value);
+      else if (f === 'sizeMode') row.sizeMode = el.value === 'sol' || el.value === 'pct' ? el.value : '';
+      else if (f === 'tps') row.tps = parseTps(el.value);
+      else if (f === 'rangeLo' || f === 'rangeHi' || f === 'stopPct') { const n = +el.value; row[f] = el.value.trim() && Number.isFinite(n) ? n : null; }
+    });
+  };
+  $('mlSave')?.addEventListener('click', () => { readDefaults(); saveMyList(); toast('My List strategy saved', 'ok'); renderMyList(); });
+  $('mlScalp')?.addEventListener('click', () => {
+    const n = num('mlScalpPct') || 15;
+    if ($('mlTps')) $('mlTps').value = n + ':100';
+    if ($('mlScalpN')) $('mlScalpN').textContent = String(n);
+    MYLIST.tps = [{ gainPct: n, sellPct: 100 }];
+    saveMyList(); toast('Scalp preset: +' + n + '% sell 100%', 'ok');
   });
-  $('mlSave')?.addEventListener('click', () => { readMyListForm(); saveMyList(); toast('My List saved', 'ok'); renderMyList(); startMyList(); });
+  $('mlClear')?.addEventListener('click', () => { MYLIST.rows = []; saveMyList(); renderMyList(); });
   $('mlOff')?.addEventListener('click', () => stopMyList('manual'));
   $('mlOn')?.addEventListener('click', () => {
     if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
-    readMyListForm();
+    readDefaults();
     resetModalButtons();
-    openModal({ title: 'Turn My List ON', confirmLabel: 'Start My List', danger: true,
-      html: `<p class="text-xs text-slate-300">The burner will market-buy a listed token only after its trigger confirms (${MYLIST.sizeSol} SOL, still inside the global caps). It turns off on reload.</p><label class="mt-3 flex gap-2 items-start text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
+    openModal({ title: 'My List auto-buy', confirmLabel: 'Start', danger: true,
+      html: `<p class="text-xs text-slate-300">Listed tokens can market-buy when their entry hits. Quality filters are not applied. Caps still are. This switch turns off on reload.</p><label class="mt-3 flex gap-2 text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
       validate: () => $('mlAck')?.checked,
       onConfirm: async () => { MYLIST.on = true; saveMyList(); startMyList(); renderMyList(); renderKillFab(); toast('My List auto-buy ON', 'warn', 6000); myListTick(); } });
   });
-  box.querySelectorAll('[data-field]').forEach(el => el.addEventListener('change', () => { readMyListForm(); saveMyList(); renderMyList(); }));
-  box.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { MYLIST.rows = MYLIST.rows.filter(r => r.id !== b.dataset.del); listOpen.delete(b.dataset.del); saveMyList(); renderMyList(); }));
-  box.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => { const id = b.dataset.open; if (listOpen.has(id)) listOpen.delete(id); else listOpen.add(id); renderMyList(); }));
-  box.querySelectorAll('[data-tf]').forEach(b => b.addEventListener('click', () => { const row = MYLIST.rows.find(r => r.id === b.dataset.tf); if (!row) return; row.tf = b.dataset.v; saveMyList(); renderMyList(); myListTick(); }));
-  paintListCanvases();
+  box.querySelectorAll('[data-ml-on]').forEach(el => el.addEventListener('change', () => {
+    const row = MYLIST.rows.find(r => r.id === el.dataset.mlOn); if (!row) return;
+    row.enabled = el.checked; saveMyList(); renderMyList();
+  }));
+  box.querySelectorAll('[data-ml-del]').forEach(el => el.addEventListener('click', () => {
+    MYLIST.rows = MYLIST.rows.filter(r => r.id !== el.dataset.mlDel); saveMyList(); renderMyList();
+  }));
+  box.querySelectorAll('[data-ml]').forEach(el => el.addEventListener('change', () => { readDefaults(); saveMyList(); renderMyList(); }));
 }
-function readMyListForm() {
-  const n = (id, d, lo, hi) => { const x = +$(id)?.value; return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
-  if ($('mlSize')) {
-    MYLIST.sizeSol = n('mlSize', 0.05, 0.001, 100);
-    MYLIST.pollSec = Math.round(n('mlPoll', 30, 15, 120));
-    MYLIST.chasePct = n('mlChase', 10, 1, 50);
-    const c = $('mlConfirm')?.value; MYLIST.confirm = ['close', 'two', 'retest'].includes(c) ? c : 'close';
+function addMintsToList(addrs) {
+  let n = 0;
+  for (const mint of addrs) {
+    if (!isAddr(mint) || IGNORE.has(mint) || MYLIST.rows.some(r => r.mint === mint)) continue;
+    MYLIST.rows.push(sanitizeListRow({ id: 'ml' + Date.now() + n, mint, enabled: true }));
+    n++;
   }
-  document.querySelectorAll('#myListBox [data-field]').forEach(el => {
-    const row = MYLIST.rows.find(r => r.id === el.dataset.id); if (!row) return;
-    const f = el.dataset.field;
-    if (f === 'mode') row.mode = MYLIST_MODES.includes(el.value) ? el.value : row.mode;
-    else if (f === 'tf') row.tf = MYLIST_TFS.includes(el.value) ? el.value : row.tf;
-    else if (f === 'confirm') row.confirm = ['close', 'two', 'retest'].includes(el.value) ? el.value : '';
-    else { const v = +el.value; row[f] = Number.isFinite(v) && v > 0 ? v : null; }
-  });
+  if (!n) { toast('No new mints to add', 'warn'); return; }
+  saveMyList(); renderMyList(); toast('Added ' + n + ' token(s) to My List', 'ok');
+  myListTick();
 }
-function paintListCanvases() {
-  document.querySelectorAll('#myListBox canvas[data-chart]').forEach(canvas => {
-    const row = MYLIST.rows.find(r => r.id === canvas.dataset.chart); if (!row) return;
-    const plan = presentPlan(row);
-    const cs = row.cache?.tf === row.tf ? (row.cache.candles || []) : [];
-    const mini = canvas.dataset.kind === 'mini';
-    const view = listView[row.id] || { start: Math.max(0, cs.length - 80), count: 80 };
-    paintListChart(canvas, cs, plan, listMarkers(row, cs, plan), mini ? { mini: true } : view);
-    if (!mini) bindFullChart(canvas, row);
-  });
-}
-function refreshListCopy() {
-  MYLIST.rows.forEach(row => {
-    const el = document.querySelector(`[data-copy="${row.id}"]`); if (!el) return;
-    const plan = presentPlan(row);
-    const v = verdictOf(plan, MYLIST.on);
-    const rr = isNum(plan.rr) ? plan.rr.toFixed(2) : '—';
-    const stateName = { waiting: 'Waiting break', broken: 'Broken', retest: 'Retest', bought: 'Bought' };
-    el.innerHTML = `<div class="flex flex-wrap items-center gap-1.5"><b class="break-words">${esc(row.symbol || short(row.mint))}</b><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px]">${esc(stateName[plan.state] || 'Waiting break')}</span></div>
-      <div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words leading-snug">Trend ${esc(plan.trend)} · S ${price(plan.support?.mid)} ×${plan.support?.touches || 0} · R ${price(plan.resist?.mid)} ×${plan.resist?.highTouches || plan.resist?.touches || 0}</div>
-      <div class="text-[11px] text-slate-300 whitespace-normal break-words leading-snug">${esc(plan.setup)} · entry ${price(plan.plannedEntry)} · stop ${price(plan.stop)} · TP ${price(plan.tp1)} / ${price(plan.tp2)} · R:R ${rr}</div>
-      <div class="mt-1 text-[11px] font-semibold whitespace-normal break-words ${v.cls}">${esc(v.text)}</div>`;
-  });
-}
-function bindFullChart(canvas, row) {
-  if (canvas.dataset.bound) return;
-  canvas.dataset.bound = '1';
-  let drag = null, moved = 0;
-  const pointers = new Map();
-  const applyTrigger = (y, commit) => {
-    const sc = canvas._scale; if (!sc) return;
-    const px = sc.priceAt(y);
-    if (!(px > 0)) return;
-    row.mode = 'manual'; row.triggerPx = +px.toPrecision(6);
-    if (commit) { saveMyList(); renderMyList(); }
-    else { paintListCanvases(); refreshListCopy(); }
-  };
-  canvas.addEventListener('pointerdown', (e) => {
-    canvas.setPointerCapture?.(e.pointerId);
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const sc = canvas._scale;
-    const near = row.mode === 'manual' && sc && isNum(row.triggerPx) && Math.abs(e.offsetY - sc.yAt(row.triggerPx)) < 12;
-    drag = { x: e.clientX, y: e.clientY, start: (listView[row.id] || sc || {}).start || 0, trigger: near };
-    moved = 0;
-  });
-  canvas.addEventListener('pointermove', (e) => {
-    if (!pointers.has(e.pointerId)) return;
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.size === 2) {
-      const [a, b] = [...pointers.values()];
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const prev = canvas._pinch || dist;
-      const view = listView[row.id] || { start: canvas._scale?.start || 0, count: canvas._scale?.count || 80 };
-      view.count = Math.max(20, Math.min((row.cache?.candles || []).length || 80, Math.round(view.count * (prev / dist))));
-      listView[row.id] = view; canvas._pinch = dist; paintListCanvases(); return;
-    }
-    if (!drag) return;
-    moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
-    if (drag.trigger) { applyTrigger(e.offsetY, false); drag.y = e.clientY; return; }
-    const sc = canvas._scale; if (!sc) return;
-    const dx = e.clientX - drag.x;
-    const bars = Math.round(-dx / Math.max(4, (sc.cssW || 300) / (sc.count || 80)));
-    if (bars) {
-      const len = (row.cache?.candles || []).length;
-      const count = (listView[row.id] || sc).count || sc.count;
-      listView[row.id] = { count, start: Math.max(0, Math.min(Math.max(0, len - count), drag.start + bars)) };
-      paintListCanvases();
-    }
-  });
-  const end = (e) => {
-    pointers.delete(e.pointerId); canvas._pinch = null;
-    if (drag && moved < 5 && (drag.trigger || row.mode === 'manual')) applyTrigger(e.offsetY, true);
-    else if (drag?.trigger) { saveMyList(); renderMyList(); }
-    if (pointers.size === 0) drag = null;
-  };
-  canvas.addEventListener('pointerup', end);
-  canvas.addEventListener('pointercancel', end);
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const len = (row.cache?.candles || []).length || 80;
-    const view = listView[row.id] || { start: Math.max(0, len - 80), count: Math.min(80, len) };
-    const next = Math.max(20, Math.min(len, view.count + (e.deltaY > 0 ? 8 : -8)));
-    const shift = Math.round((view.count - next) / 2);
-    view.start = Math.max(0, Math.min(Math.max(0, len - next), view.start + shift));
-    view.count = next; listView[row.id] = view; paintListCanvases();
-  }, { passive: false });
-}
-async function resolveListPool(row) {
-  const j = await fetchJSON('https://api.dexscreener.com/latest/dex/tokens/' + row.mint, { timeout: 12000 });
-  const pairs = (j?.pairs || []).filter(p => p.chainId === 'solana' && p.baseToken?.address === row.mint);
-  pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
-  const p = pairs[0]; if (!p?.pairAddress) return false;
-  row.pool = p.pairAddress; if (!row.symbol) row.symbol = p.baseToken?.symbol || row.symbol;
-  if (isNum(+p.priceUsd)) livePrices.set(row.mint, { price: +p.priceUsd, at: Date.now() });
-  return true;
+async function refreshListMarket() {
+  const mints = MYLIST.rows.map(r => r.mint);
+  for (let i = 0; i < mints.length; i += 30) {
+    try {
+      const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.slice(i, i + 30).join(','));
+      const best = new Map();
+      for (const p of arr || []) {
+        const mint = p.baseToken?.address; if (!mint) continue;
+        const cur = best.get(mint);
+        if (!cur || (p.liquidity?.usd || 0) > (cur.liquidity?.usd || 0)) best.set(mint, p);
+      }
+      for (const row of MYLIST.rows) {
+        const p = best.get(row.mint); if (!p) continue;
+        row.dexPair = p; row.pool = p.pairAddress || row.pool;
+        if (!row.symbol) row.symbol = p.baseToken?.symbol || '';
+        const px = p.priceUsd != null ? +p.priceUsd : null;
+        if (isNum(px)) { row.price = px; livePrices.set(row.mint, { price: px, at: Date.now() }); }
+      }
+    } catch { /* keep the last price */ }
+  }
 }
 async function myListTick() {
   if (listBusy || !MYLIST.rows.length) return;
   listBusy = true;
   try {
+    await refreshListMarket();
     for (const row of MYLIST.rows) {
-      try {
-        if (!row.pool) await resolveListPool(row);
-        if (!row.pool) continue;
-        const candles = await fetchOhlcv(row.pool, row.tf);
-        row.cache = { at: Date.now(), tf: row.tf, stale: false, candles: candles.slice(-80) };
-        const last = candles[candles.length - 1];
-        if (isNum(last?.c)) livePrices.set(row.mint, { price: last.c, at: Date.now() });
-        row.error = '';
-      } catch (e) {
-        if (row.cache) row.cache.stale = true;
-        row.error = e.message || 'candles unavailable';
+      const spec = listStrategy(row);
+      const day = todayKey();
+      if (row.dayKey !== day) { row.dayKey = day; row.reentriesToday = 0; }
+      const open = listPosition(row.mint);
+      if (open) row.sawOpen = true;
+      else if (row.sawOpen) {
+        row.sawOpen = false; row.boughtOnce = true;
+        row.cooldownUntil = Date.now() + (spec.cooldownMin || 0) * 60000;
+      }
+      row.inZone = false; row.momState = row.momState || 'none';
+      if ((spec.mode === 'zone' || spec.mode === 'momentum') && row.pool) {
+        const tf = spec.mode === 'momentum' ? '1m' : '5m';
+        let candles = null;
+        try { candles = await fetchOhlcv(row.pool, tf); row.lastTaAt = Date.now(); row.taStale = false; }
+        catch (e) {
+          row.taStale = true;
+          if (row.cache?.tf === tf && row.lastTaAt && Date.now() - row.lastTaAt < 90 * 60e3) candles = row.cache.candles;
+        }
+        if (candles) row.cache = { at: row.lastTaAt || Date.now(), tf, candles: candles.slice(-80) };
+        try {
+          if (spec.mode === 'momentum' && candles) row.momState = momentumFromCandles(candles).state;
+          if (spec.mode === 'zone' && row.dexPair) {
+            const token = normalizePair(row.dexPair);
+            const analyzed = analyzeToken(token, digestRug(null), effectiveProfile($('risk')?.value || 'Balanced', collectInputs()), $('focus')?.value || 'Organic', { bad: false, sharpDown: false, lowMemeVol: false, medVol: 0, sample: 1, label: 'Neutral' });
+            row.zone = analyzed?.entry ? { lo: analyzed.entry.zoneLo, hi: analyzed.entry.zoneHi, noAnchor: !!analyzed.entry.noAnchor } : row.zone;
+            row.flags = (analyzed?.flags || []).map(f => f.text).slice(0, 4);
+            row.inZone = !!(analyzed && !analyzed.entry?.noAnchor && inZone(analyzed, row.price));
+          }
+        } catch { /* status stays waiting */ }
       }
     }
     saveMyList();
     renderMyList();
     if (MYLIST.on) await myListBuys();
-    if (MYLIST.on) await myListExits();
-  } catch (e) { /* keep the list on screen */ }
+    await myListExits();
+  } catch { /* leave the list on screen */ }
   finally { listBusy = false; }
 }
 async function myListBuys() {
   if (!MYLIST.on || !WALLETS.burner.kp) return;
-  await ensureSolMarket().catch(() => null);
-  const gate = solFilterState();
-  if (gate.action === 'pause') return;
   for (const row of MYLIST.rows) {
     if (!MYLIST.on) return;
-    const plan = presentPlan(row);
-    if (!listShouldBuy(plan, true)) continue;
-    if (listPosition(row.mint) || WALLETS.burner.tokens?.get(row.mint)?.raw > 0n) continue;
-    let sol = MYLIST.sizeSol;
-    if (gate.action === 'halve') sol = sol / 2;
-    const sized = clampAutoBuy(sol);
-    if (sized.err || !(sized.sol >= 0.001)) continue;
-    sol = +sized.sol.toFixed(6);
-    const errs = buyGuards('burner', row.mint, sol, { auto: true });
-    if (errs.length) continue;
-    const slip = Math.min(S.slippagePct, A.slipCap);
+    const spec = listStrategy(row);
+    const px = row.price;
+    const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
+    const open = !!listPosition(row.mint);
+    const gate = listEntryReady(spec, { enabled: row.enabled, open, price: px, inZone: row.inZone, momState: row.momState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
+    if (!gate.ready) continue;
+    if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) continue;
+    const sol = +listSolSize(spec).toFixed(6);
+    if (listBuyBlocks(sol).length) continue;
     let qo;
-    try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) }); }
     catch { continue; }
-    if (impactPct(qo.quote) > A.maxImpact) continue;
-    if (!MYLIST.on || !presentPlan(row).ready) continue;
-    const tradePlan = { stop: plan.stop, zoneLo: plan.trigger, zoneHi: plan.trigger, tp1: plan.tp1, tp2: plan.tp2, trail: 25, timeStopH: 24, strat: plan.setup, myList: true };
+    if (!qo?.quote) continue;
+    const entryPx = isNum(px) && px > 0 ? px : null;
+    const stop = isNum(spec.stopPx) && entryPx && spec.stopPx < entryPx ? spec.stopPx : (entryPx ? entryPx * (1 - spec.stopPct / 100) : null);
+    const plan = { myList: true, stop, strat: 'My List ' + spec.mode, exit: { stopPct: spec.stopPct, stopPx: spec.stopPx, tps: spec.tps, beAtPct: spec.beAtPct, trailAtPct: spec.trailAtPct, trailPct: spec.trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain } };
     try {
-      await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan: tradePlan, myList: true } });
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
+      row.boughtOnce = true;
+      row.dayKey = todayKey();
+      row.buysToday = (row.buysToday || 0) + 1;
       toast('My List buy ' + (row.symbol || short(row.mint)), 'ok', 8000);
-    } catch { /* the trade log records the failure */ }
+    } catch { /* trade log records the failure */ }
     break;
   }
 }
 async function myListExits() {
-  if (!MYLIST.on || (A.on && A.autoExit)) return;
+  if (A.on && A.autoExit) return;
   for (const p of openPositions()) {
-    if (!p.plan?.myList || p.wallet !== 'burner') continue;
-    const lp = livePrices.get(p.mint)?.price;
-    const ex = priceExit(p, lp);
+    if (!(p.myList || p.plan?.myList) || p.wallet !== 'burner') continue;
+    const lp = livePrices.get(p.mint)?.price ?? MYLIST.rows.find(r => r.mint === p.mint)?.price;
+    const ex = myListExit(p, lp);
     if (ex) await autoSell(p, ex.pctSell, ex.tag, lp);
   }
 }
 function startMyList() {
   clearInterval(listTimer);
-  listTimer = setInterval(() => { myListTick(); }, Math.round(MYLIST.pollSec || 30) * 1000);
+  listTimer = setInterval(() => { myListTick(); }, 30000);
 }
+$('btnSaveList')?.addEventListener('click', () => {
+  const parsed = parseInput($('pasted')?.value || '');
+  addMintsToList([...new Set([...(parsed.mints || []), ...(parsed.pairs || [])])]);
+});
 
 /* ---------------- settings wiring ---------------- */
 function fillSettings() {
@@ -5201,7 +5104,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, buildListPlan, listShouldBuy, renderMyList,
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList,
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
