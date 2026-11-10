@@ -5655,6 +5655,7 @@ function sanitizeListRow(r) {
     athHold: Number.isFinite(+r.athHold) && +r.athHold > 0 ? Math.round(+r.athHold) : null,
     athExpire: Number.isFinite(+r.athExpire) && +r.athExpire > 0 ? Math.round(+r.athExpire) : null,
     athStatus: r.athStatus ? String(r.athStatus).slice(0, 80) : '',
+    detailsOpen: !!r.detailsOpen,
     lastTaAt: Number.isFinite(+r.lastTaAt) ? +r.lastTaAt : null,
     zone: r.zone && isNum(+r.zone.lo) ? { lo: +r.zone.lo, hi: +r.zone.hi, noAnchor: !!r.zone.noAnchor } : null,
     price: Number.isFinite(+r.price) ? +r.price : null,
@@ -5835,8 +5836,23 @@ function buyButtonText(amount) {
   const usd = px > 0 ? n * px : null;
   return 'Buy ' + (+n).toFixed(3) + ' SOL' + (usd == null ? '' : ' (≈$' + usd.toFixed(2) + ')');
 }
-function manualBuyHtml(id, value) {
+function manualBuyHtml(id, value, opt) {
   const unit = unitWord();
+  if (opt && opt.compact) {
+    return `<div class="manual-buy mt-1.5" data-manual-buy="${esc(id)}" data-compact="1">
+      <div class="flex items-center gap-1">
+        <label class="relative min-w-0 flex-1">
+          <input type="text" inputmode="decimal" autocomplete="off" data-mb-amt value="${esc(value)}" aria-label="Buy amount in ${unit}" class="w-full rounded-lg bg-ink-800 border border-white/10 pl-2 pr-9 text-slate-100 font-mono" style="font-size:16px;height:36px" />
+          <span class="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-300">${unit}</span>
+        </label>
+        <button type="button" data-mb-buy class="shrink-0 rounded-lg bg-emerald-500 px-2.5 font-bold text-ink-950 disabled:opacity-40" style="height:36px;font-size:13px">Buy</button>
+        ${[5, 10, 20, 50].map(n => `<button type="button" data-mb-chip="${n}" class="shrink-0 rounded-full border border-white/15 bg-white/5 px-1.5 text-[11px] text-slate-100" style="height:28px">$${n}</button>`).join('')}
+      </div>
+      <div data-mb-conv class="hidden"></div>
+      <div data-mb-bal class="hidden"></div>
+      <div data-mb-reason class="text-[10px] text-rose-300 whitespace-normal break-words"></div>
+    </div>`;
+  }
   return `<div class="manual-buy mt-3 rounded-2xl border border-white/10 bg-ink-900/60 p-3" data-manual-buy="${esc(id)}">
     <div class="text-[12px] font-semibold text-slate-200">Manual buy</div>
     <label class="relative mt-2 block">
@@ -5864,7 +5880,7 @@ function paintManualBuy(root, solBal) {
   if (conv) conv.textContent = previewAmount(input.value) || 'Enter an amount';
   if (bal) bal.textContent = balanceLine(solBal);
   if (buy.dataset.loading === '1') return;
-  buy.textContent = buyButtonText(input.value);
+  buy.textContent = root.dataset.compact ? 'Buy' : buyButtonText(input.value);
   buy.disabled = !spend.ok;
   if (reason) reason.textContent = spend.ok ? '' : spend.error;
 }
@@ -5996,6 +6012,7 @@ function myListPlanHtml(p, pl) {
   return `<div class="mt-2 text-[11px] leading-snug text-slate-300 whitespace-normal break-words"><b class="text-slate-400">Exit plan</b> · stop ${price(pl.stop)} (${esc(pl.reason || 'initial')}) · ${esc(be)} · ${esc(trail)} · ${esc(tps)}</div>`;
 }
 function modeLabel(mode) { return { confluence: 'Trendline + Resistance break (confluence)', ath: 'ATH / range-high breakout', zone: 'S/R zone', momentum: 'Momentum', range: 'Price range', now: 'Buy now', trend: 'Trendline break', resist: 'Resistance break' }[mode] || mode; }
+function modeShort(mode) { return { confluence: 'Confluence', ath: 'ATH break', zone: 'S/R zone', momentum: 'Momentum', range: 'Range', now: 'Buy now', trend: 'Trendline', resist: 'Resistance' }[mode] || modeLabel(mode); }
 function levelDist(level, px) { if (!(level > 0) || !(px > 0)) return null; return (px / level - 1) * 100; }
 function listTriggerLabel(row, spec, model) {
   const tf = row.displayTf || spec.tf || '4h';
@@ -6054,14 +6071,17 @@ function roomStats(px, candles, tp1, ta) {
   if (!(px > 0)) return null;
   const cs = candles || [];
   const swings = cs.length >= 8 ? swingPoints(cs, 2) : { highs: [], lows: [] };
-  const above = [...swings.highs.map(h => h.price), ta?.resist?.mid].filter(p => isNum(p) && p > px * 1.003).sort((a, b) => a - b);
-  const below = [...swings.lows.map(l => l.price), ta?.support?.mid].filter(p => isNum(p) && p < px * 0.997 && p > px * 0.05).sort((a, b) => b - a);
-  const resist = above[0] || null;
-  const support = below[0] || null;
-  let next = above[1] || null;
+  const above = swings.highs.map(h => h.price).filter(p => isNum(p) && p > px * 1.003).sort((a, b) => a - b);
+  const below = swings.lows.map(l => l.price).filter(p => isNum(p) && p < px * 0.997 && p > px * 0.05).sort((a, b) => b - a);
+  const zoneRes = ta?.resist && isNum(ta.resist.mid) && ta.resist.mid > px * 1.001 ? ta.resist.mid : null;
+  const zoneSup = ta?.support && isNum(ta.support.mid) && ta.support.mid < px * 0.999 && ta.support.mid > px * 0.05 ? ta.support.mid : null;
+  const resist = zoneRes || above[0] || null;
+  const support = zoneSup || below[0] || null;
+  const higher = above.filter(p => !isNum(resist) || p > resist * 1.004);
+  let next = higher[0] || null;
   let nextKind = 'next resistance';
   if (!next && isNum(resist) && isNum(support) && resist > support) { next = resist + (resist - support); nextKind = 'measured move'; }
-  if ((!next || next <= px) && isNum(tp1) && tp1 > px) { next = tp1; nextKind = 'TP target'; }
+  if ((!next || next <= px) && isNum(tp1) && tp1 > px * 1.001 && (!isNum(resist) || Math.abs(tp1 - resist) / resist > 0.004)) { next = tp1; nextKind = 'TP target'; }
   const toRes = isNum(resist) ? (resist / px - 1) * 100 : null;
   const toSup = isNum(support) ? (1 - support / px) * 100 : null;
   const up = isNum(next) ? (next / px - 1) * 100 : null;
@@ -6492,19 +6512,21 @@ function renderMyList() {
     const pc = pair.priceChange || {};
     const h1 = pc.h1 != null ? +pc.h1 : null, h24 = pc.h24 != null ? +pc.h24 : null;
     const flags = (row.flags && row.flags.length ? row.flags : ((lastResult?.tokens || []).find(t => t.mint === row.mint)?.flags || []).map(f => f.text)).slice(0, 4);
-    const drawn = listChartSvg(v.model, { w: 320, h: 108 });
+    const drawn = listChartSvg(v.model, { w: 320, h: 72 });
     const sameUnit = (mid) => isNum(mid) && isNum(v.px) && mid > 0 && mid / v.px > 0.05 && mid / v.px < 20;
     const trend = v.model.trend === 'up' ? 'Up' : v.model.trend === 'down' ? 'Down' : v.model.trend === 'range' ? 'Range' : '';
     const zone = v.model.zone && isNum(v.model.zone.lo) ? price(v.model.zone.lo) + '–' + price(v.model.zone.hi) : '';
-    const sup = v.model.support && sameUnit(v.model.support.mid) ? price(v.model.support.mid) + (v.model.support.touches ? ' ×' + v.model.support.touches : '') : '';
-    const res = v.model.resist && sameUnit(v.model.resist.mid) ? price(v.model.resist.mid) + (v.model.resist.touches ? ' ×' + v.model.resist.touches : '') : '';
+    const resLevel = v.model.room && sameUnit(v.model.room.resist) ? v.model.room.resist : (v.model.resist && sameUnit(v.model.resist.mid) ? v.model.resist.mid : null);
+    const supLevel = v.model.room && sameUnit(v.model.room.support) ? v.model.room.support : (v.model.support && sameUnit(v.model.support.mid) ? v.model.support.mid : null);
+    const supTouches = v.model.support && isNum(supLevel) && v.model.support.mid && Math.abs(v.model.support.mid - supLevel) / v.model.support.mid < 0.01 ? v.model.support.touches : 0;
+    const resTouches = v.model.resist && isNum(resLevel) && v.model.resist.mid && Math.abs(v.model.resist.mid - resLevel) / v.model.resist.mid < 0.01 ? v.model.resist.touches : 0;
+    const sup = isNum(supLevel) ? price(supLevel) + (supTouches ? ' ×' + supTouches : '') : '';
+    const res = isNum(resLevel) ? price(resLevel) + (resTouches ? ' ×' + resTouches : '') : '';
     const tp1 = isNum(v.model.tp1) ? price(v.model.tp1) + (v.spec.mode === 'ath' ? ' · measured' : (v.model.scalp ? ' · scalp +' + v.model.gain1 + '%' : (isNum(v.model.gain1) ? ' +' + v.model.gain1 + '%' : ''))) : '';
     const tp2 = v.model.scalp ? 'scalp closes the rest' : (isNum(v.model.tp2) ? price(v.model.tp2) + (isNum(v.model.gain2) ? ' +' + v.model.gain2 + '%' : '') : '');
     const stopTxt = isNum(v.model.stop) && (v.spec.mode === 'ath' || !isNum(v.px) || v.model.stop < v.px) ? price(v.model.stop) : '';
-    const chg = (label, n) => isNum(n) ? `<span class="${n >= 0 ? 'text-emerald-300' : 'text-rose-300'}">${label} ${pct(n, 1)}</span>` : '';
     const priceBody = [
-      fact('Live', isNum(v.px) ? price(v.px) : ''),
-      fact('Change', [chg('1h', h1), chg('24h', h24)].filter(Boolean).join(' · ')),
+      fact('1h', isNum(h1) ? pct(h1, 1) : ''),
       fact('Mcap', usd(pair.marketCap ?? pair.fdv)),
       fact('Liq', usd(pair.liquidity?.usd))
     ].join('');
@@ -6512,7 +6534,15 @@ function renderMyList() {
     const levelsBody = [fact('Trend', trend), fact('Support', sup), fact('Resistance', res), fact('Zone', zone), fact('To trendline', v.spec.mode === 'confluence' ? shown(listDistText(v.distTrend)) : ''), fact('To band', v.spec.mode === 'confluence' ? shown(listDistText(v.distBand)) : ''), fact('ATH zone', v.model.ath ? price(v.model.ath.lo) + '–' + price(v.model.ath.hi) : ''), fact('To ATH', v.spec.mode === 'ath' ? shown(listDistText(v.distBand)) : ''), fact('Status', v.spec.mode === 'ath' ? (v.model.athStatus || '') : ''), fact('Trigger', esc(listTriggerLabel(row, v.spec, v.model)))].join('');
     const planBody = [fact('Setup', esc(modeLabel(v.spec.mode) + (isBreakMode(v.spec.mode) ? ' ' + v.spec.tf : '') + (v.spec.mode === 'ath' ? ' · ' + (v.spec.athEntry === 'now' ? 'immediate' : v.spec.athEntry === 'hold' ? 'hold ' + v.spec.athHold : 'retest') : ''))), fact('Stop', stopTxt), fact('TP1', tp1), fact('TP2', tp2)].join('');
     const distTxt = listDistText(v.dist);
-    const riskBody = [fact('To trigger', distTxt && distTxt !== '—' ? distTxt : ''), fact('R:R', !v.model.room?.rr && isNum(v.model.rr) ? '1 : ' + v.model.rr.toFixed(2) : '')].join('');
+    const riskBody = [fact('R:R', !v.model.room?.rr && isNum(v.model.rr) ? '1 : ' + v.model.rr.toFixed(2) : '')].join('');
+    const cardTf = v.spec.mode === 'momentum' ? '1m' : (row.displayTf || (isBreakMode(v.spec.mode) ? v.spec.tf : '4h'));
+    const setupSum = modeShort(v.spec.mode) + ' · ' + cardTf;
+    const trigSum = [isNum(v.model.trigger) ? price(v.model.trigger) : '', distTxt && distTxt !== '—' ? distTxt : ''].filter(Boolean).join(' · ');
+    const stopSum = v.spec.mode === 'ath' && !v.spec.athUserStop ? 'under band' : ((v.spec.stopPct > 0 ? v.spec.stopPct : 15) + '%');
+    const upside = isNum(v.model.room?.up) ? v.model.room.up : (isNum(v.px) && isNum(v.model.tp1) && v.model.tp1 > v.px ? (v.model.tp1 / v.px - 1) * 100 : null);
+    const rrShow = isNum(v.model.room?.rr) ? v.model.room.rr : v.model.rr;
+    const potSum = [isNum(upside) ? '+' + upside.toFixed(0) + '%' : '', isNum(rrShow) ? '1:' + rrShow.toFixed(1) : ''].filter(Boolean).join(' · ');
+    const h24cls = !isNum(h24) ? 'text-slate-500' : (h24 >= 0 ? 'text-emerald-300' : 'text-rose-300');
     const holders = holderLine(row.mint);
     const pos = listPosition(row.mint);
     let posHtml = '';
@@ -6524,38 +6554,52 @@ function renderMyList() {
     }
     const glow = v.ready ? 'shadow-[0_0_22px_rgba(34,197,94,0.14)] border-emerald-500/25' : 'border-white/10';
     const dex = pair.url || ('https://dexscreener.com/solana/' + row.mint);
-    return `<article class="rounded-2xl bg-ink-850/80 border p-3.5 ${glow}" data-row="${esc(row.id)}">
-      <div class="flex items-start gap-3">
-        ${info.imageUrl ? `<img src="${safeUrl(info.imageUrl)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs font-bold shrink-0">${esc((row.symbol || '?').slice(0, 3))}</div>`}
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(row.symbol || short(row.mint))}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></div>
-          <div class="text-[11px] text-slate-500 break-words">${esc(name || short(row.mint))}</div>
+    const cell = (k, val) => `<div class="min-w-0"><div class="text-[9px] uppercase tracking-wide text-slate-500">${k}</div><div class="text-[12px] leading-tight text-slate-100 whitespace-normal break-words">${val || '—'}</div></div>`;
+    return `<article class="rounded-2xl bg-ink-850/80 border p-2.5 ${glow}" data-row="${esc(row.id)}">
+      <div class="flex items-center gap-2">
+        ${info.imageUrl ? `<img src="${safeUrl(info.imageUrl)}" alt="" class="w-8 h-8 rounded-lg object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-8 h-8 rounded-lg bg-ink-700 grid place-items-center text-[10px] font-bold shrink-0">${esc((row.symbol || '?').slice(0, 3))}</div>`}
+        <div class="min-w-0 flex-1 flex items-center gap-1.5">
+          <b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b>
+          <span class="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
         </div>
-        <label class="flex items-center gap-1.5 text-[11px] text-slate-300 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
+        <div class="shrink-0 text-right leading-tight">
+          <div class="font-mono text-[13px] text-slate-100">${price(v.px)}</div>
+          <div class="text-[10px] ${h24cls}">${isNum(h24) ? pct(h24, 1) : ''}</div>
+        </div>
+        <label class="flex items-center gap-1 text-[11px] text-slate-300 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
       </div>
-      <button type="button" data-ml-chart="${esc(row.id)}" class="mt-3 block w-full rounded-xl border border-white/10 bg-ink-900/70 p-1.5 text-left" style="touch-action:manipulation" aria-label="Open chart">
-        ${drawn.empty ? '<div class="h-16 grid place-items-center text-[11px] text-slate-500">Chart waiting for candles</div>' : drawn.svg}
-        <div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500"><span>trendline</span><span>ATH zone</span><span>buy zone</span></div>
+      <button type="button" data-ml-chart="${esc(row.id)}" class="mt-1.5 block w-full rounded-lg border border-white/10 bg-ink-900/70 p-1 text-left" style="touch-action:manipulation" aria-label="Open chart">
+        ${drawn.empty ? '<div class="h-10 grid place-items-center text-[11px] text-slate-500">Chart waiting for candles</div>' : drawn.svg}
       </button>
-      <div class="mt-1 text-[10px] whitespace-normal break-words ${row.tfNote ? 'text-amber-200' : 'text-slate-500'}">${esc(row.tfNote || ('TF ' + (v.spec.mode === 'momentum' ? '1m' : (row.displayTf || (isBreakMode(v.spec.mode) ? v.spec.tf : '4h')))))}</div>
-      <div class="mt-3 space-y-2">
-        ${section('Price', priceBody)}
-        ${section('Levels', levelsBody)}
-        ${roomBox(v.model.room)}
-        ${section('Plan', planBody)}
-        ${section('Risk', riskBody)}
+      <div class="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+        ${cell('Setup', esc(setupSum))}
+        ${cell('Trigger', esc(trigSum))}
+        ${cell('Stop', esc(stopSum))}
+        ${cell('If breaks', potSum ? `<span class="text-emerald-300">${esc(potSum)}</span>` : '')}
       </div>
-      <div class="mt-2 flex items-center gap-2 text-[11px] whitespace-normal break-words ${holders.cls}" title="${esc(holders.tip || '')}"><span class="min-w-0">${esc(holders.text)}</span>${holders.spark}</div>
-      ${flags.length ? `<div class="mt-2 flex flex-wrap gap-1">${flags.map(f => `<span class="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-100 whitespace-normal break-words">${esc(f)}</span>`).join('')}</div>` : ''}
-      <div class="mt-3 flex items-start gap-2 rounded-xl px-2.5 py-2 ${v.ready ? 'bg-emerald-500/15 text-emerald-100' : 'bg-white/5 text-slate-200'}"><span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${v.ready ? 'bg-emerald-400' : 'bg-amber-400'}"></span><div class="min-w-0 text-[13px] font-semibold whitespace-normal break-words">${v.ready ? 'READY — entering' : 'Not ready: ' + esc(v.why)}${v.ready && !MYLIST.on ? '<span class="block text-[10px] font-normal text-slate-400">Auto-buy is off. Buy still uses the amount below.</span>' : ''}</div></div>
+      <p class="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold ${v.ready ? 'text-emerald-300' : 'text-amber-200'}"><span class="h-1.5 w-1.5 shrink-0 rounded-full ${v.ready ? 'bg-emerald-400' : 'bg-amber-400'}"></span><span class="min-w-0 truncate">${v.ready ? 'Ready' : 'Not ready: ' + esc(v.why)}</span></p>
       ${posHtml}
-      <div class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(strategySizeText(v.spec))}</div>
-      ${manualBuyHtml(row.id, listPrefill(v.spec))}
-      <div class="mt-2 flex flex-wrap items-center gap-2">
-        <button type="button" data-ml-edit="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Strategy</button>
-        <button type="button" data-ml-del="${esc(row.id)}" class="rounded-lg px-2.5 py-1.5 text-[11px] text-rose-300 border border-rose-500/20">Remove</button>
-        <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-[11px] text-violet-300">DexScreener</a>
+      ${manualBuyHtml(row.id, listPrefill(v.spec), { compact: true })}
+      <div class="mt-1 flex items-center gap-3 text-[11px]">
+        <button type="button" data-ml-edit="${esc(row.id)}" class="text-violet-300">Strategy</button>
+        <button type="button" data-ml-del="${esc(row.id)}" class="text-rose-300">Remove</button>
+        <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-violet-300">DexScreener</a>
       </div>
+      <details class="mt-1" data-ml-details="${esc(row.id)}" ${row.detailsOpen ? 'open' : ''}>
+        <summary class="cursor-pointer list-none text-[11px] text-slate-400">Details ▾</summary>
+        <div class="mt-1.5 space-y-2">
+          ${row.tfNote ? `<div class="text-[10px] text-amber-200 whitespace-normal break-words">${esc(row.tfNote)}</div>` : ''}
+          ${name ? `<div class="text-[10px] text-slate-500 break-words">${esc(name)}</div>` : ''}
+          ${section('Price', priceBody)}
+          ${section('Levels', levelsBody)}
+          ${roomBox(v.model.room)}
+          ${section('Plan', planBody)}
+          ${section('Risk', riskBody)}
+          <div class="flex items-center gap-2 text-[11px] whitespace-normal break-words ${holders.cls}" title="${esc(holders.tip || '')}"><span class="min-w-0">${esc(holders.text)}</span>${holders.spark}</div>
+          ${flags.length ? `<div class="flex flex-wrap gap-1">${flags.map(f => `<span class="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-100 whitespace-normal break-words">${esc(f)}</span>`).join('')}</div>` : ''}
+          <div class="text-[11px] text-slate-500 whitespace-normal break-words">${esc(strategySizeText(v.spec))}${v.ready && !MYLIST.on ? ' · Auto-buy is off' : ''}</div>
+        </div>
+      </details>
     </article>`;
   }).join('');
   const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><b>${esc(v.row.symbol || short(v.row.mint))}</b></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" class="text-rose-300">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
@@ -6620,6 +6664,12 @@ function renderMyList() {
     if (row) myListBuyNow(row, null);
   }));
   box.querySelectorAll('[data-ml-chart]').forEach(el => el.addEventListener('click', () => openListChart(el.dataset.mlChart)));
+  box.querySelectorAll('[data-ml-details]').forEach(el => el.addEventListener('toggle', () => {
+    const row = MYLIST.rows.find(r => r.id === el.dataset.mlDetails);
+    if (!row || row.detailsOpen === el.open) return;
+    row.detailsOpen = el.open;
+    saveMyList();
+  }));
   box.querySelectorAll('[data-ml-pos]').forEach(el => el.addEventListener('click', () => { document.getElementById('sec-portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
 }
 function addMintsToList(addrs) {
