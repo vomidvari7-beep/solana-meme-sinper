@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T15:06:00Z",
-  "updated_tehran": "2026-11-11 18:36 IRST",
+  "updated_utc": "2026-11-11T16:03:00Z",
+  "updated_tehran": "2026-11-11 19:33 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -11,6 +11,21 @@
       "mint": "2ExUXedCdWQJNZmkuEuEBUcUggyaMJjxFPJM4a4dpump",
       "symbol": "Lazarus",
       "why": "rugged 17:23 IRST"
+    },
+    {
+      "mint": "8vjRbWczGbQNy51Y5VYfz4Qnjje1Nm4mYzNAgGLk7Qfq",
+      "symbol": "MIHAO",
+      "why": "rugged, liq $23k -> $0"
+    },
+    {
+      "mint": "HLSL2UAa58pcWLKmYKoZs8apAfJBYN1gWPiDYEVE6RFp",
+      "symbol": "",
+      "why": "same shiller, mihao relaunch"
+    },
+    {
+      "mint": "AcDDfsAu1VD7yDAM3tm6ZTuXZKvvXehiyTJEVJjcWiMW",
+      "symbol": "Daniela Longo",
+      "why": "one wallet 80%, LP unlocked"
     }
   ]
 }
