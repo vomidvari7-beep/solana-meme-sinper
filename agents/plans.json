@@ -118,7 +118,7 @@
   "tp2": 0.06626,
   "rr": 1.54,
   "confidence": 72,
-  "status": "ready",
+  "status": "waiting",
   "expires": 1794371379000,
   "reason": "Confirmed: 04:30 1h closed 0.05758 above the 0.0556-0.0570 band (trendline from 0.0706 already broken), 4h EMA9>EMA21, ~$1M/24h; leg 1 now near 0.0577, leg 2 on retest of 0.0563-0.0577",
   "warnings": [
@@ -127,7 +127,8 @@
   ],
   "live": 0.05844,
   "ts": 1794364179000,
-  "updatedAt": 1794364179000
+  "updatedAt": 1794364179000,
+  "note": "06:19 Vahid chart review: resistance 0.0600-0.0640 not broken; waiting"
  },
  {
   "mint": "A13oRB9FFaiUjfi6LdCg6p9ka1u8SfGkUFs4SKvPpump",
