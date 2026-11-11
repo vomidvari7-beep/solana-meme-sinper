@@ -7286,7 +7286,7 @@ function renderDegen() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div><div class="text-[10px] text-slate-500">win ${wr}</div></div>
     </div>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
-    ${removedTxt ? `<p class="mt-2 text-[11px] font-semibold text-rose-300 whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
+    ${removedTxt ? `<p class="block-note mt-2 text-[11px] font-semibold whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
   </button>`;
   const chipCls = { READY: 'deg-chip deg-ready', WATCH: 'deg-chip deg-watch', EXPIRED: 'deg-chip deg-expired', 'ABOVE MAX': 'deg-chip deg-above' };
@@ -7305,7 +7305,7 @@ function renderDegen() {
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
-      ${(() => { const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
+      ${(() => { const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'block-note' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
     </article>`;
   }).join('');
@@ -7376,7 +7376,7 @@ function renderDegen() {
   }
   box.innerHTML = stats + `<div class="mt-2 space-y-2 text-xs">
     <button type="button" id="degenToggle" class="flex w-full items-center justify-between rounded-xl border border-white/10 px-3" style="min-height:44px"><span>Degen pot</span><span class="ios-sw${cfg.on ? ' on' : ''}"><i></i></span></button>
-    <button type="button" id="degenStop" class="w-full rounded-xl border border-rose-400 bg-rose-500/30 px-3 text-[14px] font-semibold text-rose-50" style="min-height:48px">STOP Degen</button>
+    <button type="button" id="degenStop" class="w-full rounded-xl border px-3 text-[14px] font-semibold${cfg.on ? ' is-live' : ''}" style="min-height:48px">STOP Degen</button>
     <div class="grid grid-cols-2 gap-2">
       <label class="block"><span class="text-slate-400">Budget USD · ${cfg.budgetUsd > 0 ? esc(usd(cfg.budgetUsd, 0)) : 'Unlimited'}</span><input id="degenBudget" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.budgetUsd > 0 ? cfg.budgetUsd : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Per trade USD</span><input id="degenTrade" type="number" min="0.5" step="0.5" value="${cfg.tradeUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
@@ -10190,6 +10190,18 @@ window.__smsScanChart = T.openScanChart;
   .toast-card[data-kind="ok"]::before { background: #3DDC97; }
   .toast-card[data-kind="err"]::before { background: #FF5C7A; }
   .toast-card[data-kind="warn"]::before { background: #E6B450; }
+  button.bg-rose-600, button.hover\:bg-rose-500, button.bg-rose-500\/10, button.bg-rose-500\/15, button.bg-rose-500\/20, button.bg-rose-500\/30, #degenStop, #degenReset, #btnClear, #bDelete, #pfClear, button[data-sell], button[data-degen-sell], button.btn-sell {
+    background: #181C22 !important;
+    color: #FF5C7A !important;
+    border: 1px solid #FF5C7A !important;
+    box-shadow: none !important;
+  }
+  #degenStop.is-live, #aKill, #cOff, #sOff, #mlOff {
+    background: #FF5C7A !important;
+    color: #1A0B10 !important;
+    border-color: #FF5C7A !important;
+  }
+  .block-note { color: #E7A8B4 !important; }
 </style>
 </body>
 </html>
