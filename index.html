@@ -2326,12 +2326,34 @@ const todayKey = () => new Date().toDateString();
 const solUsd = () => (lastResult?.sol?.price) || T_state.solPrice || null;
 let sizeUnit = 'usd';
 let sizeStore = 'sol';
+let solPxMem = { price: 0, at: 0 };
+function rememberSol(px) {
+  const n = +px;
+  if (n > 0) { solPxMem = { price: n, at: Date.now() }; if (!(T_state.solPrice > 0)) T_state.solPrice = n; }
+  return n > 0 ? n : null;
+}
 function solPriceNow() {
   const c = window.__SMS_SOL;
-  if (isNum(+c?.price) && +c.price > 0) return +c.price;
-  if (isNum(T_state.solPrice) && T_state.solPrice > 0) return T_state.solPrice;
-  if (isNum(lastResult?.sol?.price) && lastResult.sol.price > 0) return lastResult.sol.price;
+  const live = [c?.price, T_state.solPrice, lastResult?.sol?.price].map(v => +v).find(n => n > 0);
+  if (live) return rememberSol(live);
+  if (solPxMem.price > 0 && Date.now() - solPxMem.at < 10 * 60e3) return solPxMem.price;
   return null;
+}
+async function refreshSolPrice() {
+  const have = solPriceNow();
+  if (have) return have;
+  const mint = 'So11111111111111111111111111111111111111112';
+  try {
+    const j = await fetchJSONOnce('https://lite-api.jup.ag/price/v2?ids=' + mint, { timeout: 4000 });
+    const px = +j?.data?.[mint]?.price;
+    if (px > 0) return rememberSol(px);
+  } catch { /* try the next source */ }
+  try {
+    const g = await fetchJSONOnce('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', { timeout: 4000 });
+    const px = +g?.solana?.usd;
+    if (px > 0) return rememberSol(px);
+  } catch { /* last known, if any */ }
+  return solPriceNow();
 }
 function initSizeUnit() {
   let pref = '';
@@ -2825,25 +2847,28 @@ function clampAutoBuy(requested) {
   const sol = Math.min(+requested || 0, autoCap, globalCap, bc.byPct);
   return { sol, err: null, clamped: (+requested || 0) > sol + 1e-9, byPct: bc.byPct, stale: bc.stale, bal: bc.sol };
 }
-function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false } = {}) {
+function isDegenFill(r) { return !!(r && (r.degen || r.plan?.degen)); }
+function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, degen = false } = {}) {
   const errs = []; const w = WALLETS[walletKey];
   if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
   if (walletKey === 'burner' && !w.kp) errs.push('Burner wallet is locked — unlock it first');
   if (!(sol > 0)) errs.push('Amount must be > 0');
-  const tradeCap = solCap(S.maxSolPerTrade), autoCap = solCap(A.maxSolPerTrade);
-  if (tradeCap == null || (auto && autoCap == null)) errs.push('SOL price unavailable — USD sizes can’t be converted. Switch Size unit to SOL to trade manually.');
-  const cap = auto && tradeCap != null && autoCap != null ? Math.min(tradeCap, autoCap) : tradeCap;
-  if (cap != null && sol > cap + 1e-9) errs.push(`Exceeds max ${cap.toFixed(4)} SOL per ${auto ? 'auto ' : ''}trade`);
-  if (walletKey === 'burner') {
-    const bc = burnerTradeCap();
-    if (!bc.ok) errs.push(bc.err);
-    else if (!auto && sol > bc.byPct + 1e-9) errs.push(`Exceeds max ${A.balancePct}% of burner balance: ${sol} > ${bc.byPct.toFixed(4)} SOL (${bc.sol.toFixed(4)} SOL${bc.stale ? ' last known' : ''} × ${A.balancePct}%)`);
+  if (!degen) {
+    const tradeCap = solCap(S.maxSolPerTrade), autoCap = solCap(A.maxSolPerTrade);
+    if (tradeCap == null || (auto && autoCap == null)) errs.push('SOL price unavailable — USD sizes can’t be converted. Switch Size unit to SOL to trade manually.');
+    const cap = auto && tradeCap != null && autoCap != null ? Math.min(tradeCap, autoCap) : tradeCap;
+    if (cap != null && sol > cap + 1e-9) errs.push(`Exceeds max ${cap.toFixed(4)} SOL per ${auto ? 'auto ' : ''}trade`);
+    if (walletKey === 'burner') {
+      const bc = burnerTradeCap();
+      if (!bc.ok) errs.push(bc.err);
+      else if (!auto && sol > bc.byPct + 1e-9) errs.push(`Exceeds max ${A.balancePct}% of burner balance: ${sol} > ${bc.byPct.toFixed(4)} SOL (${bc.sol.toFixed(4)} SOL${bc.stale ? ' last known' : ''} × ${A.balancePct}%)`);
+    }
+    const spent = spentToday(r => !isDegenFill(r));
+    const dailyCap = solCap(S.dailyMaxSol);
+    if (dailyCap == null) errs.push('SOL price unavailable — USD daily cap can’t be converted');
+    else if (spent + sol > dailyCap + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${dailyCap.toFixed(4)} SOL`);
+    if (auto) { const as = spentToday(r => r.auto && !isDegenFill(r)); const autoDaily = solCap(A.dailyCap); if (autoDaily == null) errs.push('SOL price unavailable — USD auto cap can’t be converted'); else if (as + sol > autoDaily + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${autoDaily.toFixed(4)} SOL`); }
   }
-  const spent = spentToday();
-  const dailyCap = solCap(S.dailyMaxSol);
-  if (dailyCap == null) errs.push('SOL price unavailable — USD daily cap can’t be converted');
-  else if (spent + sol > dailyCap + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${dailyCap.toFixed(4)} SOL`);
-  if (auto) { const as = spentToday(r => r.auto); const autoDaily = solCap(A.dailyCap); if (autoDaily == null) errs.push('SOL price unavailable — USD auto cap can’t be converted'); else if (as + sol > autoDaily + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${autoDaily.toFixed(4)} SOL`); }
   const open = openPositions().filter(p => !p.degen); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
   if (!skipMaxOpen && !held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
   if (isNum(w.sol) && sol + S.reserveSol > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${S.reserveSol} reserve`);
@@ -3178,7 +3203,13 @@ async function liveTick() {
   if (liveBusy) { paintLive(liveAt ? Date.now() - liveAt : null, null); return; }
   const hidden = document.hidden;
   const mints = liveMints();
-  if (!mints.length) { if (!hidden) paintLive(null); if (!exitBusy) { exitBusy = true; try { await evaluateExits(); } finally { exitBusy = false; } } return; }
+  if (!mints.length) {
+    liveAt = Date.now();
+    if (!solPriceNow()) { try { await refreshSolPrice(); } catch { /* price later */ } }
+    if (!hidden) paintLive(0);
+    if (!exitBusy) { exitBusy = true; try { await evaluateExits(); } finally { exitBusy = false; } }
+    return;
+  }
   liveBusy = true;
   const t0 = performance.now();
   try {
@@ -6254,6 +6285,7 @@ async function sniperPoll() {
         const block = degenBuyBlock();
         if (block) { sniperNote(block, 'warn'); break; }
         if (degenCooled(p.mint) || openPositions().some(x => x.open && x.mint === p.mint) || (WALLETS.burner?.tokens?.get(p.mint)?.raw > 0n)) { sniperNote(p.symbol + ' degen cooldown or already held', 'warn'); continue; }
+        if (!solPriceNow()) await refreshSolPrice();
         sol = degenTradeSol();
       } else {
         const openSnipes = openPositions().filter(x => x.sniper && !x.degen).length;
@@ -6271,14 +6303,14 @@ async function sniperPoll() {
         sol = +sol.toFixed(6);
       }
       if (!(sol >= 0.001)) { sniperNote(p.symbol + ' size too small after caps', 'warn'); continue; }
-      const errs = buyGuards('burner', p.mint, sol, { skipMaxOpen: viaDegen });
+      const errs = buyGuards('burner', p.mint, sol, { skipMaxOpen: viaDegen, degen: viaDegen });
       if (errs.length) { sniperNote(p.symbol + ' blocked — ' + errs[0], 'warn'); break; }
       const slip = Math.min(S.slippagePct, A.slipCap);
       let qo;
       try { qo = await getQuote({ inputMint: WSOL, outputMint: p.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
       catch (e) { sniperNote(p.symbol + ' quote failed — ' + e.message, 'err'); continue; }
       const imp = impactPct(qo.quote);
-      if (imp > A.maxImpact) { sniperNote(p.symbol + ' impact ' + imp.toFixed(2) + '% > ' + A.maxImpact + '%', 'warn'); continue; }
+      if (imp > (viaDegen ? 15 : A.maxImpact)) { sniperNote(p.symbol + ' impact ' + imp.toFixed(2) + '% > ' + (viaDegen ? 15 : A.maxImpact) + '%', 'warn'); continue; }
       if (!SNIPER.on) return;
       const entryGuess = p.price > 0 ? p.price : null;
       const plan = viaDegen ? degenPlan(null, entryGuess) : { stop: entryGuess ? entryGuess * 0.85 : null, strat: 'Launch sniper', trail: 15, timeStopH: 0.5 };
@@ -6396,13 +6428,23 @@ function noteHunterSticky(mint, reason) {
   book[mint] = { until, reason: String(reason || 'hunter veto').slice(0, 160) };
   save(DEGEN_VETO_LS, book);
 }
+function hunterApproved(pick) {
+  const now = pick && (pick.entry_now === true || pick.entry_now === 'true');
+  return !!(now && +pick.confidence >= 55);
+}
+function clearHunterSticky(mint) {
+  if (!mint) return;
+  const book = hunterVetoBook();
+  if (!book[mint]) return;
+  delete book[mint];
+  save(DEGEN_VETO_LS, book);
+}
 function absorbHunterVetoes(picks) {
   for (const pick of picks || []) {
     if (!pick?.mint) continue;
-    const now = pick.entry_now === true || pick.entry_now === 'true';
-    if (now) continue;
+    if (hunterApproved(pick)) { clearHunterSticky(pick.mint); continue; }
     const reason = String(pick.reason || '');
-    if (/watch|reject|skip|avoid|wait|wash|insider/i.test(reason)) noteHunterSticky(pick.mint, reason);
+    if (/\breject\b|\bwash\b/i.test(reason)) noteHunterSticky(pick.mint, reason);
   }
 }
 function degenCooled(mint) {
@@ -6447,12 +6489,19 @@ function degenTradeSol() {
   if (!(px > 0)) return null;
   const usd = Math.min(cfg.tradeUsd, degenLeft());
   if (!(usd > 0)) return null;
-  let sol = usd / px;
-  const cap = solCap(S.maxSolPerTrade);
-  if (cap != null) sol = Math.min(sol, cap);
-  return +sol.toFixed(6);
+  return +(usd / px).toFixed(6);
 }
 function degenNote(msg) { DEGEN.note = String(msg || '').slice(0, 180); }
+function degenMark(mint, state, reason) {
+  if (!mint) return;
+  DEGEN.pickState = DEGEN.pickState || {};
+  DEGEN.pickState[mint] = { state, reason: String(reason || '').slice(0, 180), at: Date.now() };
+}
+function degenBlockNote(pick, reason) {
+  const mint = pick?.mint;
+  degenNote((pick?.symbol || (mint ? short(mint) : 'pick')) + ': ' + reason);
+  degenMark(mint, 'blocked', reason);
+}
 function degenLogHtml() {
   return LOG.filter(r => r && (r.degen || r.plan?.degen) && (r.status === 'confirmed' || r.status === 'pending')).slice(-24).reverse().map(r => {
     const why = r.entryReason || r.exitTag || (r.side === 'buy' ? 'degen buy' : 'sell');
@@ -6466,7 +6515,8 @@ function degenPickBlock(pick, price) {
   const exp = typeof agentTime === 'function' ? agentTime(pick.expires) : null;
   if (exp && exp < Date.now()) return 'expired';
   if (!(+pick.max_entry_price > 0)) return 'no max price';
-  if (!(isNum(price) && price > 0 && price <= +pick.max_entry_price)) return 'above max entry';
+  if (!isNum(price) || !(price > 0)) return 'no live price';
+  if (price > +pick.max_entry_price) return 'above max entry';
   if (degenCooled(pick.mint)) return 'cooldown 60m';
   if (openPositions().some(p => p.open && p.mint === pick.mint)) return 'already held';
   const bag = WALLETS.burner?.tokens?.get(pick.mint);
@@ -6522,14 +6572,15 @@ async function degenBuy(pick, opt) {
       const safe = await degenSafety(pick.mint);
       if (!safe.ok) { degenNote((pick.symbol || short(pick.mint)) + ' blocked — ' + safe.reason); return; }
     }
+    if (!solPriceNow()) await refreshSolPrice();
     const sol = degenTradeSol();
     if (!(sol >= 0.001)) { degenNote('degen size too small'); return; }
-    const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true });
+    const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
     if (errs.length) { degenNote(errs[0]); return; }
     const slip = Math.min(S.slippagePct, A.slipCap);
     const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
     const imp = impactPct(qo.quote);
-    if (imp > A.maxImpact) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
+    if (imp > 15) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
     const plan = degenPlan({ stop_pct: 25, time_stop_min: 45, trail: 20 }, price);
     let r;
     try {
@@ -6556,14 +6607,15 @@ async function degenBuy(pick, opt) {
     const safe = await degenSafety(pick.mint);
     if (!safe.ok) { degenNote((pick.symbol || short(pick.mint)) + ' blocked — ' + safe.reason); return; }
   }
+  if (!solPriceNow()) await refreshSolPrice();
   const sol = degenTradeSol();
   if (!(sol >= 0.001)) { degenNote('degen size too small'); return; }
-  const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true });
+  const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
   if (errs.length) { degenNote(errs[0]); return; }
   const slip = Math.min(S.slippagePct, A.slipCap);
   const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
   const imp = impactPct(qo.quote);
-  if (imp > A.maxImpact) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
+  if (imp > 15) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
   const plan = degenPlan(pick, price);
   let r;
   try {
@@ -6731,14 +6783,15 @@ function noteScanHit(row) {
   if (liveScanHits.length > 20) liveScanHits.length = 20;
 }
 function hunterVeto(mint) {
-  const sticky = hunterVetoBook()[mint];
-  if (sticky && sticky.until > Date.now()) return sticky.reason || 'hunter veto';
   const pick = (DEGEN.picks || []).find(p => p && p.mint === mint);
+  if (hunterApproved(pick)) { clearHunterSticky(mint); return ''; }
+  const sticky = hunterVetoBook()[mint];
+  if (sticky && sticky.until > Date.now() && /\breject\b|\bwash\b/i.test(String(sticky.reason || ''))) return String(sticky.reason).slice(0, 160);
   const now = pick && (pick.entry_now === true || pick.entry_now === 'true');
   if (degenCfg().hunterOnly !== false && !now) return pick ? 'not hunter entry' : 'not in hunter file';
   if (!pick || now) return '';
   const reason = String(pick.reason || '');
-  if (/watch|reject|skip|avoid|wait|wash|insider/i.test(reason)) return reason.slice(0, 160);
+  if (/\breject\b|\bwash\b/i.test(reason)) return reason.slice(0, 160);
   return '';
 }
 function maxNonPoolPct(rr) {
