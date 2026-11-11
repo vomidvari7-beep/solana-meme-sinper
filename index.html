@@ -79,6 +79,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   </div>
 </header>
 
+<div id="botBar" class="sticky top-0 z-50 border-b border-white/10 bg-ink-950/95 backdrop-blur px-2 py-2" style="padding-top:max(0.5rem, env(safe-area-inset-top))"></div>
+
 <section id="readyNow" class="max-w-7xl mx-auto px-4 pt-4">
   <div class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -214,6 +216,11 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       <details id="agentSettings" open class="mt-3 rounded-xl border border-violet-400/40 bg-ink-850">
         <summary class="cursor-pointer px-3 py-3 text-sm font-bold text-white">Agents / ایجنت‌ها</summary>
         <div class="px-3 pb-3 space-y-2.5 text-xs">
+          <label class="flex items-center gap-2"><input id="agentQuick" type="checkbox" class="accent-violet-500" checked /> Quick 15% mode <span class="text-slate-500">(one scalp, no scale-in)</span></label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block"><span class="text-slate-400">Quick TP %</span><input id="agentQuickTp" type="number" min="1" max="200" step="1" value="15" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+            <label class="block"><span class="text-slate-400">Quick max stop %</span><input id="agentQuickStop" type="number" min="1" max="50" step="1" value="7" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+          </div>
           <label class="flex items-center gap-2"><input id="agentUse" type="checkbox" class="accent-violet-500" checked /> Use agent plans</label>
           <label class="flex items-center gap-2"><input id="agentExits" type="checkbox" class="accent-violet-500" /> Agent exits <span class="text-slate-500">(off: alert only)</span></label>
           <label class="block"><span class="text-slate-300">GitHub sync token</span>
@@ -1722,7 +1729,7 @@ function render(R) {
       <div class="flex items-start gap-3">
         ${t.image ? `<img src="${safeUrl(t.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs shrink-0">${esc(t.symbol.slice(0,3))}</div>`}
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span>${(t.sources || []).map(s => `<span class="text-[10px] px-1.5 py-0.5 rounded-md border border-violet-400/30 bg-violet-500/10 text-violet-200">${esc(s)}</span>`).join('')}${momentumLabel(t) ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border ${t.momentum.state === 'trigger' ? 'border-amber-400/40 bg-amber-500/15 text-amber-200' : 'border-white/15 text-slate-300'}" title="${esc(t.momentum.reason || '')}">${momentumLabel(t)}</span>` : ''}</div>
+          <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span>${typeof quickOn === 'function' && quickOn() ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border border-sky-400/40 bg-sky-500/15 text-sky-100">Quick ${quickSettings().tp}%</span>` : ''}${(t.sources || []).map(s => `<span class="text-[10px] px-1.5 py-0.5 rounded-md border border-violet-400/30 bg-violet-500/10 text-violet-200">${esc(s)}</span>`).join('')}${momentumLabel(t) ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border ${t.momentum.state === 'trigger' ? 'border-amber-400/40 bg-amber-500/15 text-amber-200' : 'border-white/15 text-slate-300'}" title="${esc(t.momentum.reason || '')}">${momentumLabel(t)}</span>` : ''}</div>
           <div class="text-xs text-slate-400 truncate">${esc(t.name)} · ${esc(t.dexId)}</div>
           <button class="copy-addr mt-0.5 text-[11px] font-mono text-slate-500 hover:text-violet-300" data-addr="${esc(t.mint)}" title="Copy mint address">${esc(short(t.mint))} ⧉</button>
         </div>
@@ -2011,7 +2018,7 @@ const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQd
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
 const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
-const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20, srcBoost: true, srcTrend: true, srcVolume: true, srcNew: true, scaleIn: true, starterPct: 30, dontMiss: true, dontMissPct: 5, dontMissBars: 6 };
+const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20, srcBoost: true, srcTrend: true, srcVolume: true, srcNew: true, scaleIn: true, starterPct: 30, dontMiss: true, dontMissPct: 5, dontMissBars: 6, quickOn: true, quickTpPct: 15, quickStopPct: 7 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
@@ -2053,6 +2060,9 @@ function sanitizeSettings() {
   { const n = +A.starterPct; A.starterPct = Number.isFinite(n) ? Math.min(80, Math.max(10, n)) : 30; }
   { const n = +A.dontMissPct; A.dontMissPct = Number.isFinite(n) ? Math.min(30, Math.max(1, n)) : 5; }
   { const n = Math.round(+A.dontMissBars); A.dontMissBars = Number.isFinite(n) ? Math.min(48, Math.max(1, n)) : 6; }
+  A.quickOn = A.quickOn !== false;
+  { const n = +A.quickTpPct; A.quickTpPct = Number.isFinite(n) ? Math.min(200, Math.max(1, n)) : 15; }
+  { const n = +A.quickStopPct; A.quickStopPct = Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : 7; }
   { const n = +A.momentumMaxAgeH; A.momentumMaxAgeH = Number.isFinite(n) ? Math.min(48, Math.max(0.5, n)) : 6; }
   { const n = Math.round(+A.deepN); A.deepN = Number.isFinite(n) ? Math.min(30, Math.max(5, n)) : 20; }
   { const n = Math.round(+A.insiderBlockAt); A.insiderBlockAt = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : 20; }
@@ -2759,7 +2769,13 @@ async function openTrade(side, mint, { sol, pct } = {}) {
     onConfirm: async () => {
       if (Date.now() - qo.at > 30000) { modalStatus('Quote older than 30s — refreshing…'); await doQuote(); if (!qo) throw new Error('Re-quote failed'); if (impactPct(qo.quote) > 5 && !$('tmImpOk')?.checked) throw new Error('Price impact now > 5% — review and tick the override'); throw new Error('Quote refreshed — review the new numbers and confirm again'); }
       if (isBuy) { const errs = buyGuards(walletKey, mint, sol); if (errs.length) throw new Error('Blocked: ' + errs[0]); }
-      const res = await executeSwap({ walletKey, side, mint, quoteObj: qo, t, onStatus: (h) => modalStatus(h) });
+      let buyPlan = isBuy ? (planOf(t) || {}) : null;
+      if (isBuy && quickOn()) {
+        const entry = livePrices.get(mint)?.price || t.priceUsd;
+        const check = quickManualShape(entry, buyPlan.stop, false);
+        if (check) buyPlan = stampQuickPlan(buyPlan, check);
+      }
+      const res = await executeSwap({ walletKey, side, mint, quoteObj: qo, t, onStatus: (h) => modalStatus(h), extra: isBuy ? { plan: buyPlan } : null });
       modalStatus(`✔ Confirmed · <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(res.sig)}">${short(res.sig)} on Solscan ↗</a>`, 'text-emerald-300');
       toast(`${isBuy ? 'Bought' : 'Sold'} ${t.symbol} ✓`, 'ok'); return true;
     } });
@@ -3586,7 +3602,7 @@ function posCard(p) {
     <div class="flex items-start gap-3">
       ${info?.image ? `<img src="${safeUrl(info.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs font-bold shrink-0">${esc((p.symbol || '?').slice(0, 3))}</div>`}
       <div class="min-w-0 flex-1">
-        <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(p.symbol)}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${src.cls}">${src.label}</span></div>
+        <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(p.symbol)}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${src.cls}">${src.label}</span>${pl.quick ? `<span class="rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-100">Quick ${quickSettings().tp}%</span>` : ''}</div>
         <div class="text-[11px] text-slate-500 break-words">${esc(p.wallet)} · held ${heldFor(p.firstTs)}</div>
       </div>
       <div class="text-right min-w-0">
@@ -3989,7 +4005,7 @@ function unlockBurner() {
     onConfirm: async () => { modalStatus('<span class="spinner spinner-light"></span> Decrypting…');
       const sk = await decryptSecret(rec, $('buPass').value); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
       if (kp.publicKey.toBase58() !== rec.pub) throw new Error('Decrypted key does not match stored address');
-      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); } });
+      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); resumeArmedBots(); } });
   setTimeout(() => $('buPass')?.focus(), 50);
 }
 function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); toast('Burner locked (key wiped from memory)', 'info'); }
@@ -4108,6 +4124,11 @@ function renderBurner() {
         <label class="mt-1 flex items-center gap-2"><input id="aScan" type="checkbox" ${A.autoScan ? 'checked' : ''} class="accent-violet-500" /> Auto-scan selected sources every interval</label>
         <label class="mt-1 flex items-center gap-2"><input id="aBrk" type="checkbox" ${A.breakoutOnly ? 'checked' : ''} class="accent-violet-500" /> Auto-buy only BREAKOUT-confirmed tokens</label>
         <label class="mt-1 flex items-center gap-2"><input id="aMom" type="checkbox" ${A.momentumOn ? 'checked' : ''} class="accent-violet-500" /> Momentum breakout (new tokens)</label>
+        <label class="mt-1 flex items-center gap-2"><input id="aQuick" type="checkbox" ${A.quickOn !== false ? 'checked' : ''} class="accent-violet-500" /> Quick 15% mode (full sell at +TP, stop capped)</label>
+        <div class="grid grid-cols-2 gap-2 mt-1">
+          ${num('aQuickTp', A.quickTpPct || 15, '1', 'Quick TP %', 'min="1" max="200"')}
+          ${num('aQuickStop', A.quickStopPct || 7, '1', 'Quick max stop %', 'min="1" max="50"')}
+        </div>
         <label class="mt-1 flex items-center gap-2"><input id="aScale" type="checkbox" ${A.scaleIn !== false ? 'checked' : ''} class="accent-violet-500" /> Scale in on strong tokens (starter ${A.starterPct || 30}%, then pullback or breakout)</label>
         <label class="mt-1 flex items-center gap-2"><input id="aMiss" type="checkbox" ${A.dontMiss !== false ? 'checked' : ''} class="accent-violet-500" /> Don't miss: small buy if price runs ${A.dontMissPct || 5}% past the trigger with no retest in ${A.dontMissBars || 6} candles</label>
         <p class="text-[10px] text-slate-500 mt-1 whitespace-normal break-words">Always enforced: Candidate verdict only, no medium/high/critical flags, LP + mint/freeze + top-10 verified ✔, not on bonding curve, price inside the entry zone, analysis &lt; 60 min old, one buy per token, max ${maxPos()} open positions, max ${A.balancePct}% of burner balance per buy, global max ${esc(sizeHint(S.maxSolPerTrade) || S.maxSolPerTrade + ' ' + unitWord())}/trade &amp; ${esc(sizeHint(S.dailyMaxSol) || S.dailyMaxSol + ' ' + unitWord())}/day.</p>
@@ -4120,7 +4141,7 @@ function renderBurner() {
   const on = (id, f) => $(id)?.addEventListener('click', f);
   on('bCreate', createBurner); on('bImport', importBurner); on('bUnlock', unlockBurner); on('bLock', lockBurner); on('bExport', exportBurner); on('bWithdraw', withdrawBurner); on('bDelete', deleteBurner);
   on('bCopy', async () => { if (await copyText(rec.pub)) toast('Burner address copied', 'ok', 1500); });
-  on('aSave', () => { readAutoInputs(); toast('Auto caps saved', 'ok'); renderBurner(); });
+  on('aSave', () => { readAutoInputs(); paintQuickInputs(); toast('Auto caps saved', 'ok'); renderBurner(); });
   on('aOn', enableAuto); on('aKill', () => killSwitch('manual'));
   wireSizeToggle($('burnerBox'));
   if (rec) renderQR(rec.pub);
@@ -4138,10 +4159,18 @@ function readAutoInputs() {
     beAtPct: $('aBeAt') ? +$('aBeAt').value : A.beAtPct, earlyAtPct: $('aEarlyAt') ? +$('aEarlyAt').value : A.earlyAtPct, earlyTrailPct: $('aEarlyTr') ? +$('aEarlyTr').value : A.earlyTrailPct,
     momentumOn: $('aMom') ? $('aMom').checked : !!A.momentumOn, momentumMaxAgeH: $('aMomAge') ? +$('aMomAge').value : A.momentumMaxAgeH, deepN: $('aDeep') ? +$('aDeep').value : A.deepN, insiderBlockAt: $('aInsider') ? +$('aInsider').value : A.insiderBlockAt,
     scaleIn: $('aScale') ? $('aScale').checked : A.scaleIn !== false, dontMiss: $('aMiss') ? $('aMiss').checked : A.dontMiss !== false,
+    quickOn: $('aQuick') ? $('aQuick').checked : ($('agentQuick') ? $('agentQuick').checked : A.quickOn !== false),
+    quickTpPct: $('aQuickTp') ? +$('aQuickTp').value : ($('agentQuickTp') ? +$('agentQuickTp').value : A.quickTpPct),
+    quickStopPct: $('aQuickStop') ? +$('aQuickStop').value : ($('agentQuickStop') ? +$('agentQuickStop').value : A.quickStopPct),
     srcBoost: $('srcBoost') ? $('srcBoost').checked : A.srcBoost !== false, srcTrend: $('srcTrend') ? $('srcTrend').checked : A.srcTrend !== false, srcVolume: $('srcVolume') ? $('srcVolume').checked : A.srcVolume !== false, srcNew: $('srcNew') ? $('srcNew').checked : A.srcNew !== false });
   sanitizeSettings(); const { on, _solBadge, ...persist } = A; save(LS.auto, persist); save(LS.settings, S); fillSettings(); updateHints(); renderWallet(); renderPortfolio(); updateSolFilterBadge();
   if (lastResult) render(lastResult);
   if (A.on) startTimers();
+  const prefs = botPrefs();
+  prefs.momentum = !!A.momentumOn;
+  prefs.quick = A.quickOn !== false;
+  saveBotPrefs(prefs);
+  renderBotBar();
 }
 
 /* ---------------- SOL market filter (auto buys + whale copy buys) ---------------- */
@@ -4296,7 +4325,7 @@ function notePositionCycles(list) {
   } catch { /* copy books not ready */ }
 }
 function effectiveStop(p, lp) {
-  if (p?.plan?.myList) return applyManualLevels(p, myListEffectiveStop(p, lp));
+  if (p?.plan?.myList) return applyManualLevels(p, applyQuickOverlay(p, myListEffectiveStop(p, lp)));
   let eff;
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
     const pl = positionTargets(p);
@@ -4309,17 +4338,17 @@ function effectiveStop(p, lp) {
     let stop = isNum(pl.stop) ? pl.stop : null;
     let reason = 'initial';
     const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
-    if (isNum(entry) && entry > 0 && high > 0) {
+    if (!(quickOn() && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && high > 0) {
       if (high >= entry * (1 + A.beAtPct / 100)) raise(entry * 1.01, 'break-even');
       if (high >= entry * (1 + A.earlyAtPct / 100)) raise(high * (1 - A.earlyTrailPct / 100), 'early trail');
     }
-    if (p?.tp1Done && isNum(pl.trail) && high > 0) raise(high * (1 - pl.trail / 100), 'trail');
+    if (!(quickOn() && !manualLevelFlags(p).tp) && p?.tp1Done && isNum(pl.trail) && high > 0) raise(high * (1 - pl.trail / 100), 'trail');
     const prev = autoStop[p.key];
     if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
     else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
     eff = { ...pl, stop, reason, high };
   }
-  return applyManualLevels(p, eff);
+  return applyManualLevels(p, applyQuickOverlay(p, eff));
 }
 function autoStatusText() {
   if (!A.on) return 'Auto-trade is OFF. Nothing will be signed automatically.';
@@ -4412,6 +4441,110 @@ function trancheSol(full, pct) {
   const sol = +((+full || 0) * (pct > 0 ? pct : 0) / 100).toFixed(6);
   return sol > 0 ? sol : 0;
 }
+const QUICK_CD_LS = 'sms:quickcd';
+function quickOn() { return A.quickOn !== false; }
+function quickSettings() {
+  const tp = Number.isFinite(+A.quickTpPct) && +A.quickTpPct > 0 ? +A.quickTpPct : 15;
+  const maxStop = Number.isFinite(+A.quickStopPct) && +A.quickStopPct > 0 ? +A.quickStopPct : 7;
+  return { on: quickOn(), tp, maxStop, minStop: 3 };
+}
+function manualLevelFlags(p) {
+  const m = p && typeof manualOf === 'function' ? manualOf(p) : null;
+  return {
+    stop: !!(m && ((isNum(m.stop) && m.stop > 0) || (isNum(m.stopPct) && m.stopPct > 0))),
+    tp: !!(m && ((isNum(m.tp1) && m.tp1 > 0) || (isNum(m.tp1Pct) && m.tp1Pct > 0) || (isNum(m.tp2) && m.tp2 > 0) || (isNum(m.tp2Pct) && m.tp2Pct > 0)))
+  };
+}
+function nearestTarget(entry, levels) {
+  const above = (levels || []).filter(v => isNum(+v) && +v > entry * 1.001).map(Number);
+  return above.length ? Math.min(...above) : null;
+}
+function quickEntryCheck(entry, planStop, target) {
+  const q = quickSettings();
+  if (!q.on) return { ok: true };
+  if (!(entry > 0)) return { ok: false, reason: 'no entry price' };
+  if (isNum(target) && target > entry) {
+    const room = (target / entry - 1) * 100;
+    if (room + 1e-9 < q.tp) return { ok: false, reason: 'room < ' + q.tp + '%' };
+  }
+  const noise = entry * (1 - q.minStop / 100);
+  const cap = entry * (1 - q.maxStop / 100);
+  const stop = isNum(planStop) && planStop > 0 && planStop < entry ? planStop : cap;
+  if (stop > noise + 1e-12) return { ok: false, reason: 'stop < ' + q.minStop + '%' };
+  return { ok: true, stop: Math.max(stop, cap), tp: entry * (1 + q.tp / 100), tpPct: q.tp };
+}
+function quickManualShape(entry, planStop, customStop) {
+  const q = quickSettings();
+  if (!q.on || !(entry > 0)) return null;
+  const cap = entry * (1 - q.maxStop / 100);
+  let stop = isNum(planStop) && planStop > 0 && planStop < entry ? planStop : cap;
+  if (!customStop && stop < cap) stop = cap;
+  return { stop, tp: entry * (1 + q.tp / 100), tpPct: q.tp };
+}
+function stampQuickPlan(plan, check) {
+  if (!check || !check.tp) return plan || null;
+  const next = { ...(plan || {}), stop: check.stop, tp1: check.tp, tp2: null, quick: true, agent: true, trail: null };
+  next.exit = { ...(plan?.exit || {}), stopPx: check.stop, tps: [{ gainPct: check.tpPct, sellPct: 100 }], trailAtPct: null, trailPct: null, beAtPct: null };
+  return next;
+}
+function quickBook() { const v = load(QUICK_CD_LS, {}); return v && typeof v === 'object' ? v : {}; }
+function noteQuickExit(mint) {
+  if (!mint || !quickOn()) return;
+  const plan = typeof agentPlanFor === 'function' ? agentPlanFor(mint) : null;
+  const book = quickBook();
+  book[mint] = { exitAt: Date.now(), until: Date.now() + 30 * 60e3, planTs: (typeof agentTime === 'function' ? (agentTime(plan?.updatedAt) || agentTime(plan?.ts)) : 0) || 0 };
+  save(QUICK_CD_LS, book);
+}
+function quickReentryBlock(mint, plan) {
+  if (!quickOn()) return '';
+  const row = quickBook()[mint];
+  if (!row) return '';
+  if (Date.now() < row.until) return 'quick cooldown 30m';
+  const pts = typeof agentTime === 'function' ? (agentTime(plan?.updatedAt) || agentTime(plan?.ts)) : 0;
+  if (!plan || plan.status !== 'ready' || !(pts > row.exitAt)) return 'waiting for a fresh ready plan';
+  return '';
+}
+function applyQuickOverlay(p, eff) {
+  if (!quickOn() || !(p?.avgUsd > 0) || !eff) return eff;
+  const man = manualLevelFlags(p);
+  if (man.stop && man.tp) return eff;
+  const q = quickSettings();
+  const entry = p.avgUsd;
+  const next = { ...eff };
+  if (!man.tp) {
+    next.quick = true;
+    next.tp1 = entry * (1 + q.tp / 100);
+    next.tp2 = null;
+    next.tps = [{ gainPct: q.tp, sellPct: 100 }];
+    next.trailAtPct = null;
+    next.trailPct = null;
+    next.trail = null;
+    next.beAtPct = null;
+  }
+  if (!man.stop) {
+    next.quick = true;
+    const cap = entry * (1 - q.maxStop / 100);
+    if (!isNum(next.stop) || next.stop < cap) { next.stop = cap; next.reason = 'quick -' + q.maxStop + '%'; }
+  }
+  return next;
+}
+function paintQuickInputs() {
+  const q = quickSettings();
+  if ($('agentQuick')) $('agentQuick').checked = q.on;
+  if ($('aQuick')) $('aQuick').checked = q.on;
+  if ($('agentQuickTp')) $('agentQuickTp').value = q.tp;
+  if ($('aQuickTp')) $('aQuickTp').value = q.tp;
+  if ($('agentQuickStop')) $('agentQuickStop').value = q.maxStop;
+  if ($('aQuickStop')) $('aQuickStop').value = q.maxStop;
+}
+function saveQuick(patch) {
+  Object.assign(A, patch);
+  sanitizeSettings();
+  const { on, _solBadge, ...persist } = A;
+  save(LS.auto, persist);
+  paintQuickInputs();
+  rememberBot('quick', A.quickOn !== false);
+}
 function priceExit(p, lp) {
   if (p?.plan?.myList) return myListExit(p, lp);
   if (!isNum(lp)) return null;
@@ -4419,6 +4552,7 @@ function priceExit(p, lp) {
   const eff = effectiveStop(p, lp); const pl = eff;
   const pnl = p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const ageH = (Date.now() - p.firstTs) / 3.6e6;
   if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: (eff.reason === 'trail' || eff.reason === 'early trail') ? 'trail' : 'stop' };
+  if (eff.quick && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 100, tag: 'tp' };
   if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) return { pctSell: 50, tag: 'tp2' };
   if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) return { pctSell: 50, tag: 'tp1' };
   if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) return { pctSell: 100, tag: 'time' };
@@ -4460,7 +4594,9 @@ async function momentumTick(b, solGate, held, recent) {
     if (!(bsr >= 1.5)) { logMom(t, '5m buy/sell ' + (bsr == null ? 'unavailable' : bsr.toFixed(2)) + ' < 1.5', 'warn'); continue; }
     const sug = suggestedBuySol(t);
     const base = sug.sol > 0 ? sug.sol : Math.min(A.maxSolPerTrade, S.maxSolPerTrade);
-    let sol = +(base / 3).toFixed(6);
+    const reentry = quickReentryBlock(t.mint, typeof agentPlanFor === 'function' ? agentPlanFor(t.mint) : null);
+    if (reentry) { logMom(t, reentry, 'info'); continue; }
+    let sol = quickOn() ? +(+base).toFixed(6) : +(base / 3).toFixed(6);
     if (solGate.action === 'halve') sol = +(sol / 2).toFixed(6);
     const sized = clampAutoBuy(sol);
     if (sized.err) { autoLog(`${t.symbol}: momentum buy blocked — ${sized.err}`, 'warn'); break; }
@@ -4471,8 +4607,11 @@ async function momentumTick(b, solGate, held, recent) {
     const entryPx = isNum(px) && px > 0 ? px : m.level;
     const stop = momentumStop(entryPx, m.level);
     const prof = effectiveProfile($('risk')?.value || 'Balanced', collectInputs());
-    const plan = { stop, zoneLo: m.level, zoneHi: m.level * 1.015, tp3: entryPx * 5, trail: prof.trail, timeStopH: prof.timeStopH, strat: 'Momentum breakout', conviction: t.conviction };
-    autoLog(`${t.symbol}: MOMENTUM ⚡ ${m.reason}${lvl} → market buy ${sol} SOL (1/3), stop ${price(stop)}`, 'info');
+    let plan = { stop, zoneLo: m.level, zoneHi: m.level * 1.015, tp3: entryPx * 5, trail: quickOn() ? null : prof.trail, timeStopH: prof.timeStopH, strat: 'Momentum breakout', conviction: t.conviction };
+    const quick = quickEntryCheck(entryPx, stop, plan.tp3);
+    if (!quick.ok) { logMom(t, quick.reason, 'warn'); continue; }
+    if (quick.tp) plan = stampQuickPlan(plan, quick);
+    autoLog(`${t.symbol}: MOMENTUM ⚡ ${m.reason}${lvl} → market buy ${sol} SOL${quickOn() ? '' : ' (1/3)'}, stop ${price(plan.stop || stop)}`, 'info');
     const slip = Math.min(S.slippagePct, A.slipCap);
     let qo;
     try { qo = await getQuote({ inputMint: WSOL, outputMint: t.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
@@ -4481,8 +4620,8 @@ async function momentumTick(b, solGate, held, recent) {
     if (imp > A.maxImpact) { autoLog(`${t.symbol}: momentum price impact ${imp.toFixed(2)}% > ${A.maxImpact}% — skipped`, 'warn'); continue; }
     if (!A.on) return;
     try {
-      const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan, entryReason: 'starter 1/3 · ' + m.reason, scale: { i: 1, of: 3, kind: 'starter' } } });
-      autoLog(`BUY ${t.symbol} ${sol} SOL momentum @ ${price(r.rec.priceUsd)} — starter 1/3 · ${m.reason}`, 'ok', { sig: r.sig });
+      const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan, entryReason: (quickOn() ? 'quick scalp · ' : 'starter 1/3 · ') + m.reason, scale: quickOn() ? null : { i: 1, of: 3, kind: 'starter' } } });
+      autoLog(`BUY ${t.symbol} ${sol} SOL momentum @ ${price(r.rec.priceUsd)} — ${quickOn() ? 'quick scalp' : 'starter 1/3'} · ${m.reason}`, 'ok', { sig: r.sig });
       toast(`⚡ Momentum buy ${t.symbol} (${sol} SOL)`, 'ok', 8000);
     } catch (e) { autoLog(`${t.symbol}: momentum buy failed — ${e.message}`, 'err'); }
     break;
@@ -4551,7 +4690,7 @@ async function autoTick() {
       return { sol: sized.sol, err: sized.err };
     };
     for (const p of openNow) {
-      if (boughtThisTick || !A.scaleIn || !p.scaleOf || p.scaleI >= p.scaleOf) continue;
+      if (boughtThisTick || quickOn() || !A.scaleIn || !p.scaleOf || p.scaleI >= p.scaleOf) continue;
       const t = tokenInfo(p.mint);
       const px = livePrices.get(p.mint)?.price;
       const zone = t.entry;
@@ -4577,10 +4716,15 @@ async function autoTick() {
         if (!(agentPlanUsable(ap) && agentTriggerHit(ap, px))) continue;
         const full = sizedFull(t);
         if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
-        const scaleOn = agentScaleOn(ap, A.scaleIn !== false);
+        const blocked = quickReentryBlock(t.mint, ap);
+        if (blocked) { autoLog(t.symbol + ': ' + blocked, 'info'); continue; }
+        const scaleOn = !quickOn() && agentScaleOn(ap, A.scaleIn !== false);
         const sol = scaleOn ? trancheSol(full.sol, A.starterPct || 30) : full.sol;
-        const plan = agentOrderPlan(planOf(t), ap, null);
-        const hit = await cappedBuy({ t, sol, reason: 'agent plan · ' + (ap.setup || ap.reason || 'ready') + (scaleOn ? ' · starter' : ''), scale: scaleOn ? { i: 1, of: 3, kind: 'starter' } : null, plan, halve: solGate.action === 'halve' });
+        let plan = agentOrderPlan(planOf(t), ap, null);
+        const quick = quickEntryCheck(px, plan.stop || ap.stop, nearestTarget(px, ap.tp1, ap.tp2, plan.tp1, plan.tp2));
+        if (!quick.ok) { autoLog(t.symbol + ': ' + quick.reason, 'warn'); continue; }
+        if (quick.tp) plan = stampQuickPlan(plan, quick);
+        const hit = await cappedBuy({ t, sol, reason: 'agent plan · ' + (ap.setup || ap.reason || 'ready') + (quick.tp ? ' · quick' : '') + (scaleOn ? ' · starter' : ''), scale: scaleOn ? { i: 1, of: 3, kind: 'starter' } : null, plan, halve: solGate.action === 'halve' });
         if (hit === 'bought') { boughtThisTick = true; toast(`🤖 Auto-bought ${t.symbol}`, 'ok', 8000); }
         if (hit === 'block' || hit === 'bought') break;
         continue;
@@ -4590,11 +4734,13 @@ async function autoTick() {
       const zoneNow = inZone(t, px);
       const strong = strongRead({ px, holdersUp: isNum(holderTrend(t.mint)?.p1h) && holderTrend(t.mint).p1h > 0.4, volH1: t.vol?.h1, volH24: t.vol?.h24, trendUp: t.ta?.primary?.trend === 'up' || t.ta?.primary?.hLabel === 'HH' });
       let sol = full.sol, reason = 'in entry zone · ' + (t.entry?.strat || 'zone'), scale = null, plan = planOf(t);
-      if (A.scaleIn && strong.strong) {
+      const blocked = quickReentryBlock(t.mint, agentPlanFor(t.mint));
+      if (blocked) { autoLog(t.symbol + ': ' + blocked, 'info'); continue; }
+      if (!quickOn() && A.scaleIn && strong.strong) {
         sol = trancheSol(full.sol, A.starterPct);
         reason = 'starter ' + A.starterPct + '% · strong: ' + strong.reasons.join(', ');
         scale = { i: 1, of: 3, kind: 'starter' };
-      } else if (!zoneNow && A.dontMiss && isNum(px) && t.entry?.zoneHi) {
+      } else if (!quickOn() && !zoneNow && A.dontMiss && isNum(px) && t.entry?.zoneHi) {
         const ext = (px / t.entry.zoneHi - 1) * 100;
         const bars = ext >= A.dontMissPct ? (chaseBars.get(t.mint) || 0) + 1 : 0;
         if (bars) chaseBars.set(t.mint, bars); else chaseBars.delete(t.mint);
@@ -4604,7 +4750,10 @@ async function autoTick() {
         scale = { i: 1, of: 3, kind: 'dontmiss' };
         plan = { ...(plan || {}), stop: px * 0.9, strat: (t.entry?.strat || 'Entry') + " · don't miss" };
       } else if (!zoneNow) continue;
-      const hit = await cappedBuy({ t, sol, reason, scale, plan, halve: solGate.action === 'halve' });
+      const quick = quickEntryCheck(px, plan?.stop, nearestTarget(px, plan?.tp1, plan?.tp2, t.exit?.tp1, t.exit?.tp2));
+      if (!quick.ok) { autoLog(t.symbol + ': ' + quick.reason, 'warn'); continue; }
+      if (quick.tp) plan = stampQuickPlan(plan, quick);
+      const hit = await cappedBuy({ t, sol, reason: reason + (quick.tp ? ' · quick' : ''), scale, plan, halve: solGate.action === 'halve' });
       if (hit === 'bought') { boughtThisTick = true; toast(`🤖 Auto-bought ${t.symbol}`, 'ok', 8000); }
       if (hit === 'block' || hit === 'bought') break;
     }
@@ -4621,6 +4770,7 @@ async function autoSell(p, pctSell, tag, lp, extra) {
     const imp = impactPct(qo.quote); if (imp > 15) throw new Error(`price impact ${imp.toFixed(1)}% > 15% — not selling automatically`);
     const r = await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: tokenInfo(p.mint), auto: true, exitTag: tag, extra: extra || null });
     autoLog(`SELL ${pctSell}% ${p.symbol} (${tag}) → ${fmtSol(r.rec.solAmount)}`, 'ok', { sig: r.sig }); toast(`🤖 Auto-sold ${pctSell}% ${p.symbol} (${tag})`, tag === 'stop' ? 'warn' : 'ok', 8000);
+    if (tag === 'stop' || tag === 'tp' || /^tp\d+$/.test(tag || '')) noteQuickExit(p.mint);
     delete sellFails[p.key];
   } catch (e) { sellFails[p.key] = (sellFails[p.key] || 0) + 1; autoLog(`${p.symbol}: auto-sell failed (${sellFails[p.key]}/3) — ${e.message}`, 'err'); }
 }
@@ -4643,7 +4793,141 @@ function enableAuto() {
     validate: () => $('aoAck')?.checked,
     onConfirm: async () => { A.on = true; startTimers(); autoLog(`AUTO ON — caps ${A.maxSolPerTrade} SOL/trade, ${A.dailyCap} SOL/day, conv ≥ ${A.minConviction}, impact ≤ ${A.maxImpact}%`, 'warn');
       try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch { }
-      renderBurner(); renderPortfolio(); toast('🤖 Auto-trading ON — keep this tab open', 'warn', 6000); setTimeout(autoTick, 500); if (A.autoScan && !lastResult) setTimeout(autoScan, 1000); } });
+      renderBurner(); renderPortfolio(); rememberBot('auto', true); toast('🤖 Auto-trading ON — keep this tab open', 'warn', 6000); setTimeout(autoTick, 500); if (A.autoScan && !lastResult) setTimeout(autoScan, 1000); } });
+}
+const BOT_LS = 'sms:bots';
+function botPrefs() {
+  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false };
+  try {
+    const raw = localStorage.getItem(BOT_LS);
+    if (!raw) { saveBotPrefs(fallback); return { ...fallback }; }
+    const v = JSON.parse(raw);
+    if (v && typeof v === 'object') return { ...fallback, ...v };
+  } catch { /* defaults */ }
+  return { ...fallback };
+}
+function saveBotPrefs(p) { try { localStorage.setItem(BOT_LS, JSON.stringify(p)); } catch { /* ignore */ } }
+function rememberBot(key, on) {
+  const p = botPrefs();
+  p[key] = !!on;
+  saveBotPrefs(p);
+  renderBotBar();
+}
+function botLive(key) {
+  if (key === 'auto') return !!A.on;
+  if (key === 'mylist') return typeof MYLIST !== 'undefined' && !!MYLIST.on;
+  if (key === 'copy') return typeof COPY !== 'undefined' && !!COPY.on;
+  if (key === 'sniper') return typeof SNIPER !== 'undefined' && !!SNIPER.on;
+  return false;
+}
+function renderBotBar() {
+  const box = $('botBar'); if (!box) return;
+  const prefs = botPrefs();
+  const locked = !WALLETS.burner.kp;
+  const items = [
+    ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
+    ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%']
+  ];
+  const armed = items.some(([key]) => ['auto', 'mylist', 'copy', 'sniper'].includes(key) && prefs[key] && locked);
+  const pill = ([key, label]) => {
+    const liveKeys = ['auto', 'mylist', 'copy', 'sniper'];
+    const on = liveKeys.includes(key) ? !!prefs[key] && (botLive(key) || locked) : !!prefs[key];
+    const state = liveKeys.includes(key) && prefs[key] && locked ? 'ARMED' : (on ? 'ON' : 'OFF');
+    const cls = state === 'ON' ? 'bg-emerald-500 text-ink-950' : state === 'ARMED' ? 'bg-amber-300 text-ink-950' : 'bg-white/10 text-slate-300';
+    return `<button type="button" data-bot="${key}" class="min-h-[44px] rounded-full px-2 text-[11px] font-bold leading-tight ${cls}" style="touch-action:manipulation">${label}<span class="block text-[10px] font-extrabold">${state}</span></button>`;
+  };
+  box.innerHTML = `<div class="max-w-7xl mx-auto">
+    <div class="grid grid-cols-4 gap-1">${items.map(pill).join('')}</div>
+    <div class="mt-1 grid grid-cols-2 gap-1">
+      <button type="button" id="botAllOn" class="min-h-[44px] rounded-xl bg-emerald-600 text-white text-xs font-bold">All ON</button>
+      <button type="button" id="botAllOff" class="min-h-[44px] rounded-xl bg-rose-600 text-white text-xs font-bold">All OFF</button>
+    </div>
+    ${armed ? '<p class="mt-1 text-[11px] text-amber-200">Armed, unlock to run</p>' : ''}
+  </div>`;
+  box.querySelectorAll('[data-bot]').forEach(b => b.addEventListener('click', () => toggleBot(b.dataset.bot)));
+  $('botAllOn')?.addEventListener('click', allBotsOn);
+  $('botAllOff')?.addEventListener('click', () => killSwitch('manual'));
+  if ($('aMom')) $('aMom').checked = !!A.momentumOn;
+  if ($('agentUse')) $('agentUse').checked = agentPlansOn();
+  if ($('agentExits')) $('agentExits').checked = agentExitsOn();
+  if (typeof paintQuickInputs === 'function') paintQuickInputs();
+}
+function setExecBot(key, on) {
+  const locked = !WALLETS.burner.kp;
+  if (key === 'auto') {
+    if (!on) { A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null; }
+    else if (!locked) { A.on = true; startTimers(); setTimeout(autoTick, 400); }
+  } else if (key === 'mylist' && typeof MYLIST !== 'undefined') {
+    if (!on) { MYLIST.on = false; clearInterval(listTimer); listTimer = null; }
+    else if (!locked) { MYLIST.on = true; startMyList(); setTimeout(myListTick, 500); }
+  } else if (key === 'copy' && typeof COPY !== 'undefined') {
+    if (!on) { COPY.on = false; COPY.armBaseline = false; clearInterval(copyTimer); copyTimer = null; }
+    else if (!locked) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 500); }
+  } else if (key === 'sniper' && typeof SNIPER !== 'undefined') {
+    if (!on) { SNIPER.on = false; clearInterval(sniperTimer); sniperTimer = null; saveSniper(); }
+    else if (!locked) { SNIPER.on = true; startSniper(); }
+  }
+  rememberBot(key, on);
+  if (on && locked) toast(key + ' armed, unlock to run', 'warn');
+  renderKillFab();
+  try { renderBurner(); } catch { /* panel not open */ }
+  try { if (typeof renderWhale === 'function') renderWhale(); } catch { /* ignore */ }
+  try { if (typeof renderSniper === 'function') renderSniper(); } catch { /* ignore */ }
+  try { if (typeof renderMyList === 'function') renderMyList(); } catch { /* ignore */ }
+}
+function toggleBot(key) {
+  const prefs = botPrefs();
+  const next = !prefs[key];
+  if (key === 'momentum') {
+    A.momentumOn = next;
+    const { on, _solBadge, ...persist } = A;
+    save(LS.auto, persist);
+    rememberBot('momentum', next);
+    return;
+  }
+  if (key === 'plans') { saveAgentCfg({ usePlans: next }); rememberBot('plans', next); return; }
+  if (key === 'exits') { saveAgentCfg({ exits: next }); rememberBot('exits', next); renderPortfolio(); return; }
+  if (key === 'quick') { saveQuick({ quickOn: next }); rememberBot('quick', next); return; }
+  setExecBot(key, next);
+}
+function allBotsOn() {
+  const go = () => {
+    setExecBot('auto', true);
+    setExecBot('mylist', true);
+    setExecBot('copy', true);
+    setExecBot('sniper', true);
+    saveAgentCfg({ usePlans: true });
+    rememberBot('plans', true);
+    saveQuick({ quickOn: true });
+    rememberBot('quick', true);
+    renderBotBar();
+  };
+  resetModalButtons();
+  openModal({ title: 'Turn bots on', confirmLabel: 'All ON', danger: true,
+    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Auto, My List, Copy, and the Launch Sniper will place trades without asking once the burner is unlocked. Agent exits stays off.</p><label class="mt-3 flex gap-2 text-xs"><input id="allAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand.</label>`,
+    validate: () => $('allAck')?.checked,
+    onConfirm: async () => { go(); toast(WALLETS.burner.kp ? 'Bots ON' : 'Armed, unlock to run', 'warn', 6000); } });
+}
+function applyStoredBots() {
+  const p = botPrefs();
+  A.momentumOn = !!p.momentum;
+  A.quickOn = p.quick !== false;
+  saveAgentCfg({ usePlans: p.plans !== false, exits: !!p.exits });
+}
+function resumeArmedBots() {
+  if (!WALLETS.burner.kp) { renderBotBar(); return; }
+  const p = botPrefs();
+  if (p.auto && !A.on) { A.on = true; startTimers(); setTimeout(autoTick, 400); }
+  if (p.mylist && typeof MYLIST !== 'undefined' && !MYLIST.on) { MYLIST.on = true; startMyList(); setTimeout(myListTick, 500); }
+  if (p.copy && typeof COPY !== 'undefined' && !COPY.on) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 600); }
+  if (p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
+  A.momentumOn = !!p.momentum;
+  renderBotBar();
+  renderKillFab();
+  try { renderBurner(); } catch { /* ignore */ }
+  try { if (typeof renderWhale === 'function') renderWhale(); } catch { /* ignore */ }
+  try { if (typeof renderSniper === 'function') renderSniper(); } catch { /* ignore */ }
+  try { if (typeof renderMyList === 'function') renderMyList(); } catch { /* ignore */ }
 }
 function killSwitch(reason = 'manual') {
   const was = A.on; A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null;
@@ -4657,7 +4941,16 @@ function killSwitch(reason = 'manual') {
   else if (wasC) toast('⛔ Copy mode stopped', 'err');
   else if (wasS) toast('⛔ Launch sniper stopped', 'err');
   else if (wasL) toast('⛔ My List stopped', 'err');
+  if (reason !== 'locked') {
+    const prefs = botPrefs();
+    prefs.auto = false; prefs.mylist = false; prefs.copy = false; prefs.sniper = false; prefs.momentum = false;
+    saveBotPrefs(prefs);
+    A.momentumOn = false;
+    const { on, _solBadge, ...persist } = A;
+    save(LS.auto, persist);
+  }
   renderBurner(); if (typeof renderWhale === 'function') renderWhale(); if (typeof renderSniper === 'function') renderSniper(); renderPortfolio();
+  renderBotBar();
 }
 function renderKillFab() {
   let f = $('killFab');
@@ -5102,12 +5395,13 @@ function enableCopy() {
   openModal({ title: '🐋 Turn copy mode ON', confirmLabel: 'Start copying', danger: true,
     html: `<p class="text-xs text-slate-300">The burner will copy new whale buys and mirror their sells while this tab is open. Existing global caps still apply. Copy mode turns off on reload.</p><label class="mt-3 flex gap-2 items-start text-xs"><input id="cAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand copies execute without asking.</label>`,
     validate: () => $('cAck')?.checked,
-    onConfirm: async () => { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); renderWhale(); renderKillFab(); toast('🐋 Copy mode ON — only new trades are copied', 'warn', 6000); setTimeout(pollCopyOnce, 400); } });
+    onConfirm: async () => { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); rememberBot('copy', true); renderWhale(); renderKillFab(); toast('🐋 Copy mode ON — only new trades are copied', 'warn', 6000); setTimeout(pollCopyOnce, 400); } });
 }
 function stopCopy(reason, opts) {
   const was = COPY.on; COPY.on = false; COPY.armBaseline = false; clearInterval(copyTimer); copyTimer = null;
   if (was) whaleLog({ decision: 'stopped', detail: 'copy mode off (' + reason + ')' });
   if (was && !opts?.quiet) toast('⛔ Copy mode stopped', 'err');
+  if (reason !== 'locked') rememberBot('copy', false);
   renderKillFab();
   if (!opts?.quiet) renderWhale();
 }
@@ -5401,6 +5695,7 @@ function stopSniper(reason, opts) {
   saveSniper();
   if (was) sniperNote('stopped (' + reason + ')', 'err');
   if (was && !opts?.quiet) toast('⛔ Launch sniper stopped', 'err');
+  if (reason !== 'locked') rememberBot('sniper', false);
   renderKillFab();
   if (!opts?.quiet) renderSniper();
 }
@@ -5451,7 +5746,7 @@ function renderSniper() {
     openModal({ title: '🎯 Turn Launch Sniper ON', confirmLabel: 'Start sniper', danger: true,
       html: `<p class="text-xs text-slate-300">The burner will market-buy brand-new pools that pass the sniper checks, ${SNIPER.sizeSol} SOL each, while this tab is open. It turns off on reload.</p><label class="mt-3 flex gap-2 items-start text-xs"><input id="sAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand snipes execute without asking.</label>`,
       validate: () => $('sAck')?.checked,
-      onConfirm: async () => { SNIPER.on = true; saveSniper(); startSniper(); renderSniper(); renderKillFab(); sniperNote('SNIPER ON — ' + SNIPER.sizeSol + ' SOL, daily ' + SNIPER.dailySol + ', poll ' + SNIPER.pollSec + 's', 'warn'); toast('🎯 Launch sniper ON', 'warn', 6000); } });
+      onConfirm: async () => { SNIPER.on = true; saveSniper(); startSniper(); rememberBot('sniper', true); renderSniper(); renderKillFab(); sniperNote('SNIPER ON — ' + SNIPER.sizeSol + ' SOL, daily ' + SNIPER.dailySol + ', poll ' + SNIPER.pollSec + 's', 'warn'); toast('🎯 Launch sniper ON', 'warn', 6000); } });
   });
 }
 
@@ -5854,6 +6149,7 @@ function listPosition(mint) { return openPositions().find(p => p.wallet === 'bur
 function stopMyList(reason, opts) {
   const was = MYLIST.on; MYLIST.on = false; saveMyList();
   if (was && !opts?.quiet) toast('My List auto-buy stopped', 'err');
+  if (reason !== 'locked') rememberBot('mylist', false);
   renderKillFab();
   if (!opts?.quiet) renderMyList();
 }
@@ -6157,8 +6453,8 @@ function myListEffectiveStop(p, lp) {
   let stop = isNum(spec.stopPx) && (!isNum(entry) || spec.stopPx < entry) ? spec.stopPx : (isNum(entry) ? entry * (1 - spec.stopPct / 100) : null);
   let reason = 'initial';
   const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
-  if (isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
-  if (isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
+  if (!(quickOn() && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
+  if (!(quickOn() && !manualLevelFlags(p).tp) && isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
   const prev = autoStop[p.key];
   if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
   else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
@@ -6171,6 +6467,7 @@ function myListExit(p, lp) {
   if ((sellFails[p.key] || 0) >= 3) return null;
   const eff = effectiveStop(p, lp);
   if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'trail' ? 'trail' : (eff.reason === 'break-even' ? 'stop' : 'stop') };
+  if (eff.quick && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 100, tag: 'tp' };
   const done = p.tpDone || {};
   for (let i = 0; i < (eff.tps || []).length; i++) {
     const tag = 'tp' + i;
@@ -6651,7 +6948,13 @@ async function myListBuyNow(row, typed, onDone) {
       const qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(again.lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
       if (!qo?.quote) throw new Error('no Jupiter route');
       const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
-      const plan = listPlan(spec, isNum(px) && px > 0 ? px : null, listChartModel(row, spec, px));
+      let plan = listPlan(spec, isNum(px) && px > 0 ? px : null, listChartModel(row, spec, px));
+      const customTp = Array.isArray(row.tps) && row.tps.length;
+      const customStop = (isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0);
+      if (quickOn() && isNum(px) && px > 0 && !customTp) {
+        const check = quickManualShape(px, plan.stop, customStop);
+        if (check) plan = stampQuickPlan(plan, check);
+      }
       await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
       row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
       saveMyList(); renderMyList(); toast('Bought ' + (row.symbol || short(row.mint)) + ' · ' + again.label, 'ok', 8000);
@@ -6746,6 +7049,7 @@ function renderMyList() {
         <div class="min-w-0 flex-1 flex items-center gap-1.5">
           <b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b>
           <span class="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
+          ${typeof quickOn === 'function' && quickOn() ? `<span class="shrink-0 rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-100">Quick ${quickSettings().tp}%</span>` : ''}
         </div>
         <div class="shrink-0 text-right leading-tight">
           <div class="font-mono text-[13px] text-slate-100">${price(v.px)}</div>
@@ -6816,7 +7120,7 @@ function renderMyList() {
     openModal({ title: 'My List auto-buy', confirmLabel: 'Start', danger: true,
       html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Listed tokens can market-buy when their entry hits. Quality filters are not applied. Caps still are. This switch turns off on reload.</p><label class="mt-3 flex gap-2 text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
       validate: () => $('mlAck')?.checked,
-      onConfirm: async () => { MYLIST.on = true; saveMyList(); startMyList(); renderMyList(); renderKillFab(); toast('My List auto-buy ON', 'warn', 6000); myListTick(); } });
+      onConfirm: async () => { MYLIST.on = true; saveMyList(); startMyList(); rememberBot('mylist', true); renderMyList(); renderKillFab(); toast('My List auto-buy ON', 'warn', 6000); myListTick(); } });
   });
   $('mlAdd')?.addEventListener('click', () => {
     const parsed = parseInput($('mlAddMint')?.value || '');
@@ -6994,7 +7298,9 @@ async function myListBuys() {
     if (agentLive) plan = agentOrderPlan(plan, agent, row);
     const t = { mint: row.mint, symbol: row.symbol || short(row.mint) };
     let sol = null, reason = '', scale = null;
-    if (pos && MYLIST.scaleIn !== false && pos.scaleOf && pos.scaleI > 0 && pos.scaleI < pos.scaleOf) {
+    const reentry = !pos ? quickReentryBlock(row.mint, agent) : '';
+    if (reentry) { autoLog((row.symbol || short(row.mint)) + ': ' + reentry, 'info'); continue; }
+    if (pos && !quickOn() && MYLIST.scaleIn !== false && pos.scaleOf && pos.scaleI > 0 && pos.scaleI < pos.scaleOf) {
       const closes = candles.map(c => c.c);
       const e21 = emaLast(closes, 21);
       const pull = (row.zone && px >= row.zone.lo && px <= row.zone.hi) || (isNum(e21) && px <= e21 * 1.01 && px >= e21 * 0.97);
@@ -7003,7 +7309,7 @@ async function myListBuys() {
       else if (broke) { sol = trancheSol(full, 35); reason = 'add ' + (pos.scaleI + 1) + '/3 · breakout confirmation'; scale = { i: pos.scaleI + 1, of: 3, kind: 'breakout' }; }
     } else if (!pos && gate.state !== 'bought') {
       if (agentLive) {
-        const scaleOn = agentScaleOn(agent, MYLIST.scaleIn !== false);
+        const scaleOn = !quickOn() && agentScaleOn(agent, MYLIST.scaleIn !== false);
         if (scaleOn) {
           sol = trancheSol(full, MYLIST.starterPct || 30);
           reason = 'agent plan · ' + (agent.setup || 'ready') + ' · starter ' + (MYLIST.starterPct || 30) + '%';
@@ -7012,14 +7318,14 @@ async function myListBuys() {
           sol = full;
           reason = 'agent plan · ' + (agent.setup || 'ready') + (agent.reason ? ' · ' + agent.reason : '');
         }
-      } else if (MYLIST.scaleIn !== false && strong.strong) {
+      } else if (!quickOn() && MYLIST.scaleIn !== false && strong.strong) {
         sol = trancheSol(full, MYLIST.starterPct || 30);
         reason = 'starter ' + (MYLIST.starterPct || 30) + '% · strong: ' + strong.reasons.join(', ');
         scale = { i: 1, of: 3, kind: 'starter' };
       } else if (gate.ready) {
         sol = full;
         reason = 'trigger · ' + (row.breakReason || spec.mode);
-      } else if (MYLIST.dontMiss !== false && isNum(model.trigger)) {
+      } else if (!quickOn() && MYLIST.dontMiss !== false && isNum(model.trigger)) {
         const dm = dontMissRead(candles, model.trigger, px, { runPct: MYLIST.dontMissPct || 5, bars: MYLIST.dontMissBars || 6 });
         if (dm.fire) {
           sol = trancheSol(full, 20);
@@ -7030,8 +7336,15 @@ async function myListBuys() {
       }
     }
     if (!(sol > 0)) continue;
+    const customTp = Array.isArray(row.tps) && row.tps.length;
+    const customStop = (isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0);
+    const target = nearestTarget(px, plan?.tp1, plan?.tp2, model.tp1, model.resist?.mid, agent?.tp1);
+    const quick = quickEntryCheck(px, customStop ? null : (plan.stop || agent?.stop), customTp ? null : target);
+    if (!quick.ok) { autoLog((row.symbol || short(row.mint)) + ': ' + quick.reason, 'warn'); continue; }
+    if (quick.tp && !customTp) plan = stampQuickPlan(plan, { ...quick, stop: customStop ? plan.stop : quick.stop });
+    else if (quick.stop && !customStop) plan = { ...plan, stop: quick.stop, exit: { ...(plan.exit || {}), stopPx: quick.stop } };
     try {
-      const hit = await cappedBuy({ t, sol, reason, scale, plan, myList: true });
+      const hit = await cappedBuy({ t, sol, reason: reason + (quick.tp && !customTp ? ' · quick' : ''), scale, plan, myList: true });
       if (hit === 'bought') {
         row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
         toast('My List buy ' + t.symbol + ' — ' + reason, 'ok', 8000);
@@ -7081,7 +7394,13 @@ function agentCfg() {
   try { const v = JSON.parse(localStorage.getItem(AGENT_LS) || 'null'); if (v && typeof v === 'object') return { usePlans: v.usePlans !== false, exits: !!v.exits }; } catch { /* default */ }
   return d;
 }
-function saveAgentCfg(patch) { const next = { ...agentCfg(), ...patch }; try { localStorage.setItem(AGENT_LS, JSON.stringify(next)); } catch { /* ignore */ } return next; }
+function saveAgentCfg(patch) {
+  const next = { ...agentCfg(), ...patch };
+  try { localStorage.setItem(AGENT_LS, JSON.stringify(next)); } catch { /* ignore */ }
+  if ('usePlans' in patch && typeof rememberBot === 'function') rememberBot('plans', next.usePlans !== false);
+  if ('exits' in patch && typeof rememberBot === 'function') rememberBot('exits', !!next.exits);
+  return next;
+}
 function agentPlansOn() { return agentCfg().usePlans; }
 function agentExitsOn() { return agentCfg().exits; }
 function tehranClock(ts) {
@@ -7436,6 +7755,15 @@ function scheduleMyListSync() {
   myListSyncTimer = setTimeout(() => { pushMyListSync(); }, 10000);
 }
 function wireAgentSettings() {
+  const saveQuickFrom = () => saveQuick({
+    quickOn: $('agentQuick') ? $('agentQuick').checked : A.quickOn,
+    quickTpPct: $('agentQuickTp') ? +$('agentQuickTp').value : A.quickTpPct,
+    quickStopPct: $('agentQuickStop') ? +$('agentQuickStop').value : A.quickStopPct
+  });
+  $('agentQuick')?.addEventListener('change', saveQuickFrom);
+  $('agentQuickTp')?.addEventListener('change', saveQuickFrom);
+  $('agentQuickStop')?.addEventListener('change', saveQuickFrom);
+  paintQuickInputs();
   $('agentUse')?.addEventListener('change', () => { saveAgentCfg({ usePlans: $('agentUse').checked }); renderAgentPicks(); });
   $('agentExits')?.addEventListener('change', () => { saveAgentCfg({ exits: $('agentExits').checked }); renderPortfolio(); });
   $('agentCopyList')?.addEventListener('click', async () => {
@@ -7495,8 +7823,10 @@ $('btnSaveSettings').addEventListener('click', () => {
 $('btnResetSettings').addEventListener('click', () => { S = { ...DEFAULTS }; sanitizeSettings(); save(LS.settings, S); fillSettings(); renderBurner(); renderWallet(); updateHints(); toast('Settings defaults restored', 'info'); });
 $('risk').addEventListener('change', () => { $('setMaxPos').textContent = maxPos(); renderWallet(); renderBurner(); });
 $('btnWallet').addEventListener('click', () => { if (WALLETS.phantom.pubkey) $('tradeCard').scrollIntoView({ behavior: 'smooth' }); else connectPhantom(false); });
+applyStoredBots();
 wireAgentSettings();
 startAgents();
+renderBotBar();
 
 /* ---------------- init ---------------- */
 const READY_LS = 'sms:readyalert';
@@ -7618,7 +7948,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
