@@ -391,15 +391,45 @@ export function createEngine(cfg, state, net, swap) {
     finally { busy = false; }
   }
 
+  function planZone(p) {
+    const z = p?.leg2_zone;
+    if (Array.isArray(z) && +z[0] > 0 && +z[1] > 0) return { lo: Math.min(+z[0], +z[1]), hi: Math.max(+z[0], +z[1]) };
+    const t = +p?.trigger_price;
+    if (t > 0) return { lo: t, hi: t };
+    return { lo: null, hi: null };
+  }
+  function signalState(mint, zone, px) {
+    if (state.data.positions.some(p => p.open && p.mint === mint)) return 'bought';
+    const fills = (state.data.fills || []).filter(f => f && f.mint === mint && f.status === 'confirmed');
+    const last = fills[fills.length - 1];
+    if (last && last.side === 'sell') return 'sold';
+    if (px > 0 && zone.lo && zone.hi && px + 1e-12 >= Math.min(zone.lo, zone.hi) && px <= Math.max(zone.lo, zone.hi) * 1.0000001) return 'touched';
+    return 'waiting';
+  }
   function status() {
     const d = state.data;
     const pos = d.positions.filter(p => p.open).map(p => ({
       mode: p.mode, mint: p.mint, symbol: p.symbol, qty: p.qty, avgUsd: p.avgUsd,
       px: live(p.mint)?.px || null, pnlPct: p.avgUsd > 0 && live(p.mint)?.px ? (live(p.mint).px / p.avgUsd - 1) * 100 : null
     }));
+    const plans = agents.plans?.plans || [];
+    const signals = plans.filter(p => p && p.mint).slice(0, 40).map(p => {
+      const zone = planZone(p);
+      const px = live(p.mint)?.px || null;
+      return {
+        mint: p.mint, symbol: p.symbol || '', conf: isNum(+p.confidence) ? +p.confidence : null,
+        zoneLo: zone.lo, zoneHi: zone.hi, stop: +p.stop > 0 ? +p.stop : null,
+        target: +p.tp1 > 0 ? +p.tp1 : (+p.target > 0 ? +p.target : null),
+        price: px, state: signalState(p.mint, zone, px)
+      };
+    });
+    const executions = (d.fills || []).slice(-12).reverse().map(f => ({
+      ts: f.ts, side: f.side, symbol: f.symbol || '', mint: f.mint, mode: f.mode || '',
+      price: f.priceUsd || null, sig: f.sig || '', url: f.sig ? 'https://solscan.io/tx/' + f.sig : ''
+    }));
     return {
-      ok: true, paused: !!d.paused, dryRun: !!cfg.dryRun, pubkey: swap.owner,
-      toggles: d.toggles, positions: pos,
+      ok: true, paused: !!d.paused, dryRun: !!cfg.dryRun, liveTest: false, pubkey: swap.owner,
+      toggles: d.toggles, positions: pos, signals, executions,
       ledgers: { scalp: d.ledgers.scalp, degen: d.ledgers.degen },
       decisions: d.decisions.slice(0, 20),
       blacklist: Object.keys(d.blacklist || {}).length,

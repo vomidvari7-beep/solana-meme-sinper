@@ -6435,7 +6435,8 @@ function mountServerMode() {
     const rows = (data.positions || []).map(p => (p.symbol || p.mint.slice(0, 4)) + ' ' + p.mode + ' ' + (p.pnlPct == null ? '' : (p.pnlPct >= 0 ? '+' : '') + p.pnlPct.toFixed(1) + '%')).join(' · ');
     const scalp = data.ledgers && data.ledgers.scalp;
     const degen = data.ledgers && data.ledgers.degen;
-    box.innerHTML = '<div>' + (data.paused ? 'PAUSED' : 'running') + (data.dryRun ? ' · dry-run' : ' · live') + ' · ' + (data.pubkey || '') + '</div><div class="mt-1">' + toggles + '</div><div class="mt-1">Scalp $' + (scalp ? (+scalp.balanceUsd).toFixed(2) : '—') + ' · Degen $' + (degen ? (+degen.balanceUsd).toFixed(2) : '—') + '</div><div class="mt-1">' + (rows || 'No open server positions.') + '</div><div class="mt-1 text-slate-500">' + ((data.decisions || [])[0] ? (data.decisions[0].mode + ': ' + data.decisions[0].reason) : '') + '</div>';
+    const fills = (data.executions || []).slice(0, 6).map(f => (f.symbol || '') + ' ' + (f.side || '') + (f.url ? ' <a href="' + f.url + '" target="_blank" rel="noopener" class="text-sky-300">Solscan</a>' : '')).join(' · ');
+    box.innerHTML = '<div>' + (data.paused ? 'PAUSED' : 'running') + (data.dryRun ? ' · dry-run' : ' · live') + ' · ' + (data.pubkey || '') + '</div><div class="mt-1">' + toggles + '</div><div class="mt-1">Scalp $' + (scalp ? (+scalp.balanceUsd).toFixed(2) : '—') + ' · Degen $' + (degen ? (+degen.balanceUsd).toFixed(2) : '—') + '</div><div class="mt-1">' + (rows || 'No open server positions.') + '</div><div class="mt-1">' + (fills || 'No server fills yet.') + '</div><div class="mt-1 text-slate-500">' + ((data.decisions || [])[0] ? (data.decisions[0].mode + ': ' + data.decisions[0].reason) : '') + '</div>';
     box.querySelectorAll('[data-srv-mode]').forEach(el => el.addEventListener('change', async () => {
       const body = {};
       box.querySelectorAll('[data-srv-mode]').forEach(x => { body[x.dataset.srvMode] = x.checked; });
@@ -6447,7 +6448,12 @@ function mountServerMode() {
     const res = await fetch(c.url + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + c.token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    window.__SMS_SRV = data;
     paint(data);
+    try {
+      const sig = (data.signals || []).map(s => s.mint + s.state + s.price).join('|');
+      if (sig !== window.__SMS_SRV_SIG) { window.__SMS_SRV_SIG = sig; if (typeof renderAgentPicks === 'function') renderAgentPicks(); }
+    } catch { /* cards stay on the last paint */ }
     return data;
   }
   $('srvSave').addEventListener('click', () => {
@@ -8536,6 +8542,7 @@ function renderDegen() {
         <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num"><span data-live-mint="${esc(pick.mint)}">${price(px)}</span> <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
+      ${faZoneHtml(pick.mint)}
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
       ${(() => { const row = degenLastBlock(pick.mint); if (row) { const hm = tehranHM(row.at); const ok = row.reason === 'bought' || row.reason === 'unlocked ok'; const label = row.reason === 'bought' ? 'Bought ' + hm : row.reason === 'unlocked ok' ? 'Unlocked ok ' + hm : 'Blocked ' + hm + ': ' + row.reason; const cls = ok ? 'text-emerald-300' : 'block-note'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; } const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'block-note' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
@@ -9650,6 +9657,7 @@ function listChartSvg(model, opt) {
     return `<rect x="0" y="${Math.min(y1, y2).toFixed(2)}" width="${w}" height="${Math.max(1.5, Math.abs(y2 - y1)).toFixed(2)}" fill="${fill}"/>`;
   };
   const hline = (p, color) => show(p) ? `<line x1="0" y1="${y(p).toFixed(2)}" x2="${w}" y2="${y(p).toFixed(2)}" stroke="${color}" stroke-width="0.7" stroke-dasharray="2 3" opacity="0.55"/>` : '';
+  const entryBand = model.entryZone && isNum(model.entryZone.zoneLo) && isNum(model.entryZone.zoneHi) ? band({ lo: +model.entryZone.zoneLo, hi: +model.entryZone.zoneHi }, 'rgba(250,204,21,0.22)') + (show(model.entryZone.zoneHi) ? `<text x="6" y="${Math.max(12, y(model.entryZone.zoneHi) - 2).toFixed(1)}" fill="#facc15" font-size="10">محدوده ورود</text>` : '') + hline(model.entryZone.stop, '#E07A84') + hline(model.entryZone.target, '#5EAF86') : '';
   let tl = '';
   if (model.trendLine) {
     const a = model.trendLine.a, b = model.trendLine.b;
@@ -9670,7 +9678,7 @@ function listChartSvg(model, opt) {
     const y1 = y(zone.hi), y2 = y(zone.lo);
     buy = `<rect x="${x1.toFixed(2)}" y="${Math.min(y1, y2).toFixed(2)}" width="${Math.max(8, w - 4 - x1).toFixed(2)}" height="${Math.max(1.5, Math.abs(y2 - y1)).toFixed(2)}" fill="rgba(255,255,255,0.08)" stroke="${themeColor('--accent','#7AA2D6')}" stroke-width="0.6"/><text x="${Math.min(w - 52, x1 + 3).toFixed(2)}" y="${Math.min(h - 4, Math.max(labelSize, Math.min(y1, y2) + labelSize)).toFixed(2)}" fill="${themeColor('--accent','#7AA2D6')}" font-size="${labelSize}" font-weight="700">BUY ZONE</text>`;
   }
-  const svg = `<svg viewBox="0 0 ${w} ${h}" data-log="${log ? 1 : 0}" data-lo="${lo}" data-hi="${hi}" data-vh="${h}" class="w-full h-auto" role="img" aria-label="Price chart with trendline, ATH zone, and buy zone">${band(model.ath, themeColor('--accent-soft','rgba(122,162,214,0.18)'))}${distinct ? band(model.srBand, themeColor('--accent-soft','rgba(122,162,214,0.12)')) : ''}${bodies}${tl}${hline(model.stop, themeColor('--down','#E07A84'))}${hline(model.tp1, themeColor('--up','#5EAF86'))}${athLabel}${buy}</svg>`;
+  const svg = `<svg viewBox="0 0 ${w} ${h}" data-log="${log ? 1 : 0}" data-lo="${lo}" data-hi="${hi}" data-vh="${h}" class="w-full h-auto" role="img" aria-label="Price chart with trendline, ATH zone, and buy zone">${band(model.ath, themeColor('--accent-soft','rgba(122,162,214,0.18)'))}${entryBand}${distinct ? band(model.srBand, themeColor('--accent-soft','rgba(122,162,214,0.12)')) : ''}${bodies}${tl}${hline(model.stop, themeColor('--down','#E07A84'))}${hline(model.tp1, themeColor('--up','#5EAF86'))}${athLabel}${buy}</svg>`;
   return { svg, empty: false, bars: cs.length, log };
 }
 function listContext(row) {
@@ -9899,6 +9907,7 @@ async function drawListChart(row, tf) {
     const spec = listStrategy(row);
     const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
     const model = listChartModel({ ...row, cache: { tf, candles } }, spec, px);
+    if (model) model.entryZone = signalLevels(row.mint);
     const drawn = listChartSvg(model, { w: 360, h: 220 });
     box.innerHTML = chartTfButtons(tf) + (drawn.empty
       ? '<p class="text-xs text-slate-400">Live 1s candles appear after a few price ticks.</p>'
@@ -9939,6 +9948,7 @@ async function drawListChart(row, tf) {
   const spec = listStrategy(row);
   const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
   const model = listChartModel({ ...row, cache: { tf: useTf, candles: candles || [] } }, spec, px);
+  if (model) model.entryZone = signalLevels(row.mint);
   const drawn = listChartSvg(model, { w: 360, h: 220 });
   const noteHtml = note ? `<p class="mt-1 text-[11px] text-amber-200 whitespace-normal break-words">${esc(note)}</p>` : '';
   box.innerHTML = chartTfButtons(useTf) + noteHtml + (drawn.empty
@@ -10107,6 +10117,7 @@ function renderMyList(opts) {
             <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${row.mlArmed ? '<span class="setup-chip shrink-0">Breakout armed</span>' : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
             <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
+            ${faZoneHtml(row.mint)}
             ${row.mlGeo ? mlBreakSpark(row.mlGeo) : ''}
           </span>
           <span class="row-px">
@@ -11047,6 +11058,26 @@ function scoreBadge(label, score, down) {
   const tone = n == null ? 'mid' : n >= 60 ? 'ok' : n >= 40 ? 'mid' : 'bad';
   return `<span class="hunt-score hunt-${tone}">${label} ${n == null ? '—' : n}</span>${down ? '<span class="tag-down">downtrend</span>' : ''}`;
 }
+function signalLevels(mint) {
+  if (mint && typeof serverModeOn === 'function' && serverModeOn()) {
+    const hit = (window.__SMS_SRV?.signals || []).find(s => s && s.mint === mint);
+    if (hit) return hit;
+  }
+  const plan = typeof agentPlanFor === 'function' ? agentPlanFor(mint) : null;
+  if (!plan || typeof planDisplay !== 'function') return null;
+  const d = planDisplay(plan);
+  return { mint, symbol: plan.symbol || '', conf: d.conf, zoneLo: d.zoneLo, zoneHi: d.zoneHi, stop: d.stop, target: d.tp1, price: livePrices.get(mint)?.price || null, state: plan.status || 'waiting' };
+}
+function faZoneHtml(mint) {
+  const s = signalLevels(mint);
+  const lo = s && +s.zoneLo > 0 ? +s.zoneLo : null;
+  const hi = s && +s.zoneHi > 0 ? +s.zoneHi : null;
+  const zone = lo ? (hi && Math.abs(hi - lo) > lo * 1e-8 ? price(Math.min(lo, hi)) + '–' + price(Math.max(lo, hi)) : price(lo)) : '—';
+  const conf = s && isNum(+s.conf) ? Math.round(+s.conf) : '—';
+  const stop = s && +s.stop > 0 ? price(+s.stop) : '—';
+  const tgt = s && +s.target > 0 ? price(+s.target) : '—';
+  return `<p class="mt-1 text-[12px] whitespace-normal break-words text-slate-200">محدوده ورود: ${zone}</p><p class="text-[11px] text-slate-400 whitespace-normal break-words">امتیاز ورود: ${conf} · <span class="text-rose-300">حد ضرر ${stop}</span> · <span class="text-emerald-300">تارگت ${tgt}</span>${s && s.state ? ' · ' + esc(s.state) : ''}</p>`;
+}
 function hunterPlanBox(plan, px) {
   if (!plan) return '';
   const ready = typeof agentPlanUsable === 'function' && agentPlanUsable(plan);
@@ -11086,6 +11117,7 @@ function hunterCard(c, extra) {
     <div class="hunt-badges">${scoreBadge('Safety', x.safety, false)}${scoreBadge('Trend', x.trend, !!x.down)}</div>
     ${chips ? `<details class="hunt-details"><summary>Details</summary><div class="hunt-chips">${chips}</div></details>` : ''}
     ${hunterPlanBox(plan, live)}
+    ${faZoneHtml(c.mint)}
     ${typeof botSkipHtml === 'function' ? botSkipHtml('plans', c.mint) : ''}
     ${typeof explainNoBuy === 'function' ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">Why no buy: ${esc(explainNoBuy(c.mint))}</p>` : ''}
     <div class="hunt-actions"><button type="button" data-agent-add="${esc(c.mint)}" class="hunt-ghost">+ My List</button><button type="button" data-agent-buy="${esc(c.mint)}" class="hunt-buy">Buy</button></div>
@@ -12260,9 +12292,13 @@ function mountLiteChart(frame, model) {
     series.setData(rows.map(r => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close })));
     vol.setData(rows.map(r => ({ time: r.time, value: r.vol, color: r.close >= r.open ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)' })));
     const mark = (price, color, title) => { if (price > 0) series.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, title }); };
-    mark(+model.stop, themeColor('--down','#E07A84'), 'Stop');
-    mark(+model.tp1, themeColor('--up','#5EAF86'), 'Target');
-    mark(+model.trigger, themeColor('--accent','#7AA2D6'), 'Entry');
+    mark(+model.stop, themeColor('--down','#E07A84'), 'حد ضرر');
+    mark(+model.tp1, themeColor('--up','#5EAF86'), 'تارگت');
+    const lv = model.entryZone || (typeof signalLevels === 'function' ? signalLevels(model.faMint) : null);
+    if (lv && +lv.zoneLo > 0) {
+      mark(+lv.zoneLo, '#facc15', 'محدوده ورود');
+      if (+lv.zoneHi > +lv.zoneLo) mark(+lv.zoneHi, '#facc15', '');
+    } else mark(+model.trigger, '#facc15', 'محدوده ورود');
     chart.timeScale().fitContent();
     frame.querySelectorAll('svg').forEach(svg => { svg.style.display = 'none'; });
   }).catch(() => { /* keep the drawn sparkline */ });
@@ -12370,6 +12406,16 @@ function paintSheetChart(frame, model) {
   };
   guide(model.stop, themeColor('--down','#E07A84'));
   guide(model.tp1, themeColor('--up','#5EAF86'));
+  const lv = model.entryZone || (typeof signalLevels === 'function' ? signalLevels(model.faMint) : null);
+  if (lv && +lv.zoneLo > 0 && +lv.zoneHi > 0) {
+    band({ lo: +lv.zoneLo, hi: +lv.zoneHi }, 'rgba(250,204,21,0.22)');
+    ctx.fillStyle = '#facc15';
+    ctx.font = '11px Inter, sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillText('محدوده ورود', 8, Math.max(6, Math.min(cssH - 16, y(+lv.zoneHi) + 2)));
+    guide(+lv.stop, '#E07A84');
+    guide(+lv.target, '#5EAF86');
+  }
   ctx.font = '11px Inter, sans-serif';
   ctx.textBaseline = 'top';
   if (model.ath) {
@@ -12398,6 +12444,8 @@ function openTokenSheet(art) {
     sheet.classList.add('open');
     const model = typeof listChartMemo !== 'undefined' ? listChartMemo[art.dataset.row] : null;
     const frame = sheet.querySelector('.sheet-chart');
+    const row = typeof MYLIST !== 'undefined' ? MYLIST.rows.find(r => r.id === art.dataset.row) : null;
+    if (model && row) { model.faMint = row.mint; model.entryZone = signalLevels(row.mint); }
     if (frame && model) paintSheetChart(frame, model);
   });
 }

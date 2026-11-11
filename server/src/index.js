@@ -59,6 +59,7 @@ async function main() {
   const kp = unlocked.kp || parseSecret(unlocked.secret);
   const state = openState(cfg.stateFile);
   state.data.dryRun = cfg.dryRun;
+  state.data.liveTest = false;
   state.save();
   const net = createNet(cfg);
   const swap = createSwap(cfg, kp);
