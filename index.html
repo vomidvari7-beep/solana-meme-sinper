@@ -6911,7 +6911,7 @@ function agentApiHeaders(accept) {
   return headers;
 }
 async function agentHeadSha() {
-  if (agentTip.sha && Date.now() - agentTip.at < 15000) return agentTip.sha;
+  if (agentTip.sha && Date.now() - agentTip.at < 8000) return agentTip.sha;
   if (agentTipPromise) return agentTipPromise;
   agentTipPromise = (async () => {
     const ctl = new AbortController();
@@ -6930,31 +6930,26 @@ async function agentHeadSha() {
   return agentTipPromise;
 }
 async function fetchAgentDoc(name) {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 9000);
-  const grab = async (url, headers) => {
-    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal, headers: headers || { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(name + ' ' + res.status);
-    return await res.json();
+  const grab = (url, headers) => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    return fetch(url, { cache: 'no-store', signal: ctl.signal, headers: headers || { Accept: 'application/json' } })
+      .then(async (res) => { if (!res.ok) throw new Error(name + ' ' + res.status); return await res.json(); })
+      .finally(() => clearTimeout(timer));
   };
-  try {
-    const pagesUrl = 'https://vomidvari7-beep.github.io/solana-meme-sinper/agents/' + name + '.json?t=' + Date.now();
-    const pagesP = grab(pagesUrl).catch(() => null);
-    const sha = await agentHeadSha();
-    const pages = await pagesP;
-    let bySha = null;
-    if (sha) {
-      bySha = await grab('https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/' + sha + '/agents/' + name + '.json').catch(() => null);
-      if (!bySha) bySha = await grab('https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=' + sha, agentApiHeaders('application/vnd.github.raw')).catch(() => null);
-    }
-    const best = preferAgentDoc(pages, bySha);
-    if (best) return best;
-    const ref = sha || 'main';
-    try {
-      return await grab('https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=' + encodeURIComponent(ref), agentApiHeaders('application/vnd.github.raw'));
-    } catch { /* branch raw is the last resort and can be five minutes old */ }
-    return await grab(AGENT_RAW + name + '.json?t=' + Date.now());
-  } finally { clearTimeout(timer); }
+  const sha = await agentHeadSha();
+  const jobs = [
+    grab('https://vomidvari7-beep.github.io/solana-meme-sinper/agents/' + name + '.json?t=' + Date.now()).catch(() => null)
+  ];
+  if (sha) {
+    jobs.push(grab('https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/' + sha + '/agents/' + name + '.json').catch(() => null));
+    jobs.push(grab('https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=' + sha, agentApiHeaders('application/vnd.github.raw')).catch(() => null));
+  } else {
+    jobs.push(grab('https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=main&t=' + Date.now(), agentApiHeaders('application/vnd.github.raw')).catch(() => null));
+  }
+  const bodies = (await Promise.all(jobs)).filter(Boolean);
+  if (!bodies.length) throw new Error(name + ' fetch failed');
+  return bodies.reduce((best, cur) => preferAgentDoc(best, cur));
 }
 async function fetchDegenDoc() { return fetchAgentDoc('degen'); }
 async function degenFetchFile() {
