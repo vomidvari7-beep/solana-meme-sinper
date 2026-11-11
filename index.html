@@ -103,6 +103,15 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   #killFab { bottom: 78px !important; }
   details.adv { background: #12161F; border: 1px solid rgba(255,255,255,.06); border-radius: 16px; }
   details.adv > summary { padding: 14px 16px; font-weight: 650; cursor: pointer; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 14px; background: #181D28; border: 1px solid rgba(255,255,255,.06); }
+  .seg button { min-height: 36px; border: 0; border-radius: 10px; background: transparent; color: #8b93a7; font-size: 13px; font-weight: 650; }
+  .seg button.on { background: #12161F; color: #f8fafc; }
+  #tabTokens.seg-degen #myListBox, #tabTokens.seg-degen #emptyState, #tabTokens.seg-degen #results { display: none !important; }
+  .deg-chip { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); padding: 1px 6px; font-size: 10px; font-weight: 700; letter-spacing: .03em; }
+  .deg-ready { color: #34d399; border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+  .deg-watch { color: #fbbf24; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+  .deg-expired { color: #8b93a7; }
+  .deg-above { color: #fb7185; border-color: rgba(251,113,133,.35); background: rgba(251,113,133,.08); }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
@@ -6058,6 +6067,8 @@ async function degenPoll() {
     if (!res.ok) throw new Error('degen ' + res.status);
     const data = await res.json();
     DEGEN.picks = Array.isArray(data) ? data : (Array.isArray(data?.picks) ? data.picks : []);
+    DEGEN.updatedTehran = typeof data?.updated_tehran === 'string' ? data.updated_tehran : '';
+    DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
     DEGEN.fetched = Date.now();
     DEGEN.error = '';
     for (const pick of DEGEN.picks) {
@@ -6080,6 +6091,62 @@ function startDegen() {
   setTimeout(degenPoll, 800);
 }
 function stopDegen() { clearInterval(degenTimer); degenTimer = null; }
+function degenStatus(pick, px) {
+  const exp = typeof agentTime === 'function' ? agentTime(pick?.expires) : null;
+  if (exp && exp < Date.now()) return 'EXPIRED';
+  if (isNum(px) && +pick?.max_entry_price > 0 && px > +pick.max_entry_price) return 'ABOVE MAX';
+  const now = pick?.entry_now === true || pick?.entry_now === 'true';
+  if (now && +pick?.confidence >= 55 && isNum(px) && px > 0 && px <= +pick.max_entry_price) return 'READY';
+  return 'WATCH';
+}
+function degenAgeLabel(h) {
+  const n = +h;
+  if (!isNum(n) || n < 0) return '—';
+  if (n < 1) return Math.max(1, Math.round(n * 60)) + 'm';
+  return n.toFixed(n < 10 ? 1 : 0) + 'h';
+}
+let degenWatchBusy = false;
+async function degenWatch() {
+  if (degenWatchBusy) return;
+  degenWatchBusy = true;
+  try {
+    const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('degen ' + res.status);
+    const data = await res.json();
+    DEGEN.picks = Array.isArray(data) ? data : (Array.isArray(data?.picks) ? data.picks : []);
+    DEGEN.updatedTehran = typeof data?.updated_tehran === 'string' ? data.updated_tehran : '';
+    DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
+    DEGEN.fetched = Date.now();
+    DEGEN.error = '';
+    DEGEN.quotes = DEGEN.quotes || {};
+    for (const pick of DEGEN.picks) {
+      if (!pick?.mint) continue;
+      try {
+        const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + pick.mint);
+        const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+        if (best && +best.priceUsd > 0) {
+          DEGEN.quotes[pick.mint] = { price: +best.priceUsd, image: best.info?.imageUrl || '' };
+          livePrices.set(pick.mint, { price: +best.priceUsd, liq: best.liquidity?.usd ?? null, at: Date.now() });
+        }
+      } catch { /* keep the last quote */ }
+    }
+  } catch (e) { DEGEN.error = e.message || String(e); }
+  degenWatchBusy = false;
+  renderDegen();
+}
+function openDegenDesk() {
+  showTab('tokens');
+  showTokenSeg('degen');
+  $('degenDesk')?.scrollIntoView({ block: 'start' });
+}
+let tokenSeg = 'list';
+function showTokenSeg(name) {
+  tokenSeg = name === 'degen' ? 'degen' : 'list';
+  const pane = $('tabTokens');
+  if (pane) pane.classList.toggle('seg-degen', tokenSeg === 'degen');
+  $('degenDesk') && ($('degenDesk').hidden = tokenSeg !== 'degen');
+  document.querySelectorAll('#tokenSeg [data-seg]').forEach(b => b.classList.toggle('on', b.dataset.seg === tokenSeg));
+}
 function renderDegen() {
   const cfg = degenCfg();
   const left = degenLeft();
@@ -6089,7 +6156,8 @@ function renderDegen() {
   const wins = rounds.filter(c => c.pnlUsd > 0).length;
   const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
   const halted = cfg.on && degenTodayPnl() <= -cfg.dailyLossUsd;
-  const stats = `<div class="hero-card">
+  const stamp = DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—');
+  const stats = `<button type="button" data-open-degen class="hero-card w-full text-left">
     <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Left</div><div class="font-mono text-lg">${usd(left, 2)}</div></div>
@@ -6098,9 +6166,79 @@ function renderDegen() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
     </div>
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
-  </div>`;
+  </button>`;
+  const chipCls = { READY: 'deg-chip deg-ready', WATCH: 'deg-chip deg-watch', EXPIRED: 'deg-chip deg-expired', 'ABOVE MAX': 'deg-chip deg-above' };
+  const picks = (DEGEN.picks || []).map(pick => {
+    const q = (DEGEN.quotes || {})[pick.mint] || {};
+    const px = isNum(q.price) ? q.price : livePrices.get(pick.mint)?.price;
+    const st = degenStatus(pick, px);
+    const mono = esc(String(pick.symbol || '?').slice(0, 2).toUpperCase());
+    const logo = q.image ? `<img src="${safeUrl(q.image)}" alt="" class="mono-logo object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : '';
+    return `<article class="border-b border-white/10 py-2.5">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0">${logo}<span class="mono-logo" style="${q.image ? 'display:none' : ''}">${mono}</span></span>
+        <span class="min-w-0 flex-1"><b class="block truncate text-sm">${esc(pick.symbol || short(pick.mint))}</b><span class="block text-[10px] text-slate-500">${degenAgeLabel(pick.age_h)} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
+        <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
+      </div>
+      <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="font-mono">${price(px)} <span class="text-slate-500">/ max ${price(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
+      ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
+    </article>`;
+  }).join('');
+  const posHtml = open.map(p => {
+    const lp = livePrices.get(p.mint)?.price;
+    const money = posMoney(p, lp);
+    const stopPct = isNum(p.plan?.stopPct) ? p.plan.stopPct : -25;
+    const stopPx = isNum(p.avgUsd) ? p.avgUsd * (1 + stopPct / 100) : null;
+    const tpPx = isNum(p.avgUsd) ? p.avgUsd * 2 : null;
+    const trail = isNum(p.plan?.trail) ? p.plan.trail : 20;
+    const mins = isNum(p.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
+    const leftMin = p.tp1Done ? null : Math.ceil((mins * 60000 - (Date.now() - p.firstTs)) / 60000);
+    const trailTxt = p.tp1Done ? 'trailing ' + trail + '% off the high' : 'trail arms after 2x';
+    const timeTxt = p.tp1Done ? 'time stop done' : (leftMin <= 0 ? 'time stop due' : leftMin + 'm left');
+    const pnlCls = !isNum(money.pnl) ? 'text-slate-400' : (money.pnl >= 0 ? 'text-emerald-300' : 'text-rose-300');
+    return `<article class="border-b border-white/10 py-2.5">
+      <div class="flex items-center justify-between gap-2"><b class="text-sm">${esc(p.symbol)}</b><span class="deg-chip">DEGEN</span></div>
+      <div class="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Entry</div><div class="font-mono">${price(p.avgUsd)}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Now</div><div class="font-mono">${price(lp)}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L</div><div class="font-mono ${pnlCls}">${isNum(money.pnlUsd) ? (money.pnlUsd >= 0 ? '+' : '') + usd(money.pnlUsd, 2) : '—'} · ${pct(money.pnl)}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Stop</div><div class="font-mono text-rose-300">${price(stopPx)}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">2x</div><div class="font-mono text-emerald-300">${price(tpPx)}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Time stop</div><div class="font-mono">${timeTxt}</div></div>
+      </div>
+      <p class="mt-1 text-[11px] text-slate-500">${trailTxt}</p>
+      <button type="button" data-degen-sell="${esc(p.mint)}" class="mt-2 rounded-xl border border-rose-400/40 px-3 text-[12px] font-semibold text-rose-200" style="min-height:44px">Sell</button>
+    </article>`;
+  }).join('');
+  const closed = degenRounds().slice().sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0)).slice(0, 20).map(c => {
+    const cls = isNum(c.pnlUsd) && c.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300';
+    return `<article class="border-b border-white/10 py-2 text-[12px]">
+      <div class="flex items-center justify-between gap-2"><b>${esc(c.symbol || short(c.mint))}</b><span class="${cls} font-mono">${isNum(c.pnlUsd) ? (c.pnlUsd >= 0 ? '+' : '') + usd(c.pnlUsd, 2) : '—'} · ${pct(c.pnlPct)}</span></div>
+      <div class="mt-0.5 text-[11px] text-slate-500 font-mono">${price(c.avgEntry)} → ${price(c.avgExit)} · ${esc(c.exit || 'closed')} · ${tehranClock(c.closeTs)}</div>
+    </article>`;
+  }).join('');
+  const desk = $('degenDesk');
+  if (desk) desk.innerHTML = `<section class="hero-card">
+    <div class="flex items-center justify-between gap-2"><h2 class="sec-title text-sm"><span class="ico">◎</span>Degen</h2><span class="text-[10px] text-slate-500">${esc(stamp)}</span></div>
+    <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Cash left</div><div class="font-mono">${usd(left, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today P&L</div><div class="font-mono ${today < 0 ? 'text-rose-300' : 'text-emerald-300'}">${today > 0 ? '+' : ''}${usd(today, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${open.length}/${cfg.maxOpen}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
+    </div>
+    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
+    ${picks || '<p class="empty-note mt-2">No hunter picks yet.</p>'}
+    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open positions</h3>
+    ${posHtml || '<p class="empty-note mt-2">No open degen positions.</p>'}
+    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Closed</h3>
+    ${closed || '<p class="empty-note mt-2">No closed degen trades.</p>'}
+  </section>`;
+  desk?.querySelectorAll('[data-degen-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.degenSell, { pct: 100 })));
   const home = $('degenCard'); if (home) home.innerHTML = stats;
-  const box = $('degenBox'); if (!box) return;
+  const box = $('degenBox'); if (!box || (document.activeElement && box.contains(document.activeElement))) {
+    document.querySelectorAll('[data-open-degen]').forEach(b => b.addEventListener('click', openDegenDesk));
+    return;
+  }
   box.innerHTML = stats + `<div class="mt-2 space-y-2 text-xs">
     <button type="button" id="degenToggle" class="flex w-full items-center justify-between rounded-xl border border-white/10 px-3" style="min-height:44px"><span>Degen pot</span><span class="ios-sw${cfg.on ? ' on' : ''}"><i></i></span></button>
     <div class="grid grid-cols-2 gap-2">
@@ -6117,6 +6255,7 @@ function renderDegen() {
     toast('Degen limits saved', 'ok');
     renderDegen();
   });
+  document.querySelectorAll('[data-open-degen]').forEach(b => b.addEventListener('click', openDegenDesk));
 }
 function readSniperForm() {
   const g = (id) => $(id) ? +$(id).value : undefined;
@@ -8421,6 +8560,15 @@ function mountApp() {
   const preview = document.createElement('div');
   preview.id = 'agentPreview';
   home.appendChild(preview);
+  if (tokens) {
+    const seg = document.createElement('div');
+    seg.id = 'tokenSeg'; seg.className = 'seg';
+    seg.innerHTML = '<button type="button" data-seg="list" class="on">List</button><button type="button" data-seg="degen">Degen</button>';
+    const desk = document.createElement('div');
+    desk.id = 'degenDesk'; desk.hidden = true;
+    tokens.appendChild(seg); tokens.appendChild(desk);
+    seg.addEventListener('click', (e) => { const b = e.target.closest('[data-seg]'); if (b) showTokenSeg(b.dataset.seg); });
+  }
   ['myListBox', 'emptyState', 'results'].forEach(id => { const n = $(id); if (n && tokens) tokens.appendChild(n); });
   ['agentPicks', 'agentSettings', 'whaleBox', 'sniperBox'].forEach(id => { const n = $(id); if (n && agents) agents.appendChild(n); });
   const port = $('portfolio'); if (port && trades) trades.appendChild(port);
@@ -8444,6 +8592,8 @@ window.showTab = showTab;
 mountApp();
 fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
 if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
+setTimeout(degenWatch, 700);
+setInterval(degenWatch, 60000);
 syncAgentPreview();
 maybeLockSizeUnit();
 setInterval(() => { refreshHolderWatch(); }, 60 * 1000);
