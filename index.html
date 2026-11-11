@@ -318,8 +318,12 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   try { if (localStorage.getItem(key) === '1') safe = true; } catch (e) { /* storage blocked */ }
   window.__SMS_SAFE = !!safe;
   if (safe) document.documentElement.classList.add('sms-safe');
-  try { localStorage.setItem(key, '1'); } catch (e) { /* storage blocked */ }
-  setTimeout(function () { try { localStorage.removeItem(key); } catch (e) { /* storage blocked */ } }, 10000);
+  var arm = function () { try { localStorage.setItem(key, '1'); } catch (e) { /* storage blocked */ } };
+  var disarm = function () { try { localStorage.removeItem(key); } catch (e) { /* storage blocked */ } };
+  arm();
+  window.addEventListener('beforeunload', disarm);
+  window.addEventListener('pagehide', function (ev) { if (!ev.persisted) disarm(); });
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) arm(); });
 })();
 </script>
 
@@ -760,12 +764,21 @@ function paceKind(url) {
   if (/dexscreener\.com/i.test(url)) return 'dex';
   return '';
 }
-async function fetchJSONOnce(url, { timeout = 12000 } = {}) {
+async function fetchJSONOnce(url, { timeout = 12000, signal } = {}) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeout);
+  const onExt = () => ctl.abort();
+  if (signal) {
+    if (signal.aborted) { clearTimeout(t); const x = new Error('aborted'); x.name = 'AbortError'; x.status = 0; throw x; }
+    signal.addEventListener('abort', onExt, { once: true });
+  }
   try { const r = await fetch(url, { signal: ctl.signal, headers: { Accept: 'application/json' } });
     if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; } return await r.json(); }
-  catch (e) { if (e.name === 'AbortError') { const x = new Error('timeout'); x.status = 0; throw x; } throw e; }
-  finally { clearTimeout(t); }
+  catch (e) {
+    if (signal && signal.aborted) { const x = new Error('aborted'); x.name = 'AbortError'; x.status = 0; throw x; }
+    if (e.name === 'AbortError') { const x = new Error('timeout'); x.status = 0; throw x; }
+    throw e;
+  }
+  finally { clearTimeout(t); if (signal) signal.removeEventListener('abort', onExt); }
 }
 async function fetchJSON(url, opts) {
   const kind = paceKind(url);
@@ -1077,7 +1090,7 @@ function noteHolders(mint, n, at) {
       const b = Math.floor(p.t / (5 * 60e3));
       if (b !== bucket) { slim.push(p); bucket = b; }
     }
-    pts = slim.concat(recent).slice(-400);
+    pts = slim.concat(recent).slice(-300);
   }
   all[mint] = pts;
   const keys = Object.keys(all);
@@ -1241,7 +1254,7 @@ function recordDexMood(tokens) {
   const last = hist[hist.length - 1];
   if (last && now - last.ts < 2 * 60e3) hist[hist.length - 1] = point;
   else hist.push(point);
-  hist = hist.filter(p => now - p.ts < 864e5).slice(-500);
+  hist = hist.filter(p => now - p.ts < 864e5).slice(-300);
   try { localStorage.setItem('sms:dexmood', JSON.stringify(hist)); } catch { /* storage full */ }
   window.__SMS_DEX = { ...mood, ts: now };
   window.__SMS_DEX_HIST = hist;
@@ -1606,9 +1619,13 @@ async function fetchOhlcv(pool, tfKey, token) {
   const j = await fetchJSON(url, { timeout: 12000 });
   const list = j?.data?.attributes?.ohlcv_list;
   if (!Array.isArray(list) || list.length < 15) throw new Error('short candle set');
-  const candles = list.map(r => ({ t: +r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] })).filter(c => c.h > 0 && c.l > 0 && c.c > 0).sort((a, b) => a.t - b.t);
+  const candles = list.map(r => ({ t: +r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] })).filter(c => c.h > 0 && c.l > 0 && c.c > 0).sort((a, b) => a.t - b.t).slice(-300);
   if (candles.length < 15) throw new Error('short candle set');
   ohlcvCache.set(key, { at: Date.now(), candles });
+  if (ohlcvCache.size > 40) {
+    const oldest = [...ohlcvCache.entries()].sort((a, b) => a[1].at - b[1].at);
+    for (let i = 0; i < oldest.length - 32; i++) ohlcvCache.delete(oldest[i][0]);
+  }
   return candles;
 }
 let taCacheMem = null; let taCacheSeq = 0;
@@ -2100,7 +2117,7 @@ const logoBad = new Map();
 function noteLogo(mint, url) { rememberLogo(mint, url, { src: 'pump' }); }
 function logoFail(img) {
   if (!img) return;
-  const showLetter = () => { img.style.display = 'none'; const n = img.nextElementSibling; if (n) n.style.display = 'grid'; };
+  const showLetter = () => { img.onload = null; img.onerror = null; img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; img.style.display = 'none'; const n = img.nextElementSibling; if (n) n.style.display = 'grid'; };
   if (img.dataset.fell) { showLetter(); return; }
   const mint = img.dataset.mint || '';
   const src = String(img.currentSrc || img.src || '');
@@ -3408,6 +3425,7 @@ async function openTrade(side, mint, { sol, pct } = {}) {
       modalStatus(`✔ Confirmed · <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(res.sig)}">${short(res.sig)} on Solscan ↗</a>`, 'text-emerald-300');
       toast(`${isBuy ? 'Bought' : 'Sold'} ${t.symbol} ✓`, 'ok'); return true;
     } });
+  clearInterval(M.timer);
   M.timer = setInterval(() => { const el = $('tmAge'); if (el && qo) { const a = Math.round((Date.now() - qo.at) / 1000); el.textContent = a + 's' + (a > 30 ? ' (stale — will re-quote)' : ''); } }, 1000);
   doQuote();
   return true;
@@ -3466,20 +3484,27 @@ function hydrate() {
 
 /* ---------------- portfolio: positions + trade log ---------------- */
 const livePrices = new Map(); let alerted = load(LS.alerts, {});
+let priceBusy = false;
 async function refreshPrices() {
+  if (priceBusy || liveBusy) return;
+  priceBusy = true;
+  const ctl = beginFetch('prices');
+  try {
   const scanMints = (lastResult?.tokens || []).filter(t => t.verdict === 'Candidate').map(t => t.mint);
   const mints = [...new Set([...openPositions().map(p => p.mint), ...armedEntries().map(t => t.mint), ...scanMints])];
   if (mints.length) {
     for (let i = 0; i < mints.length; i += 30) {
-      try { const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.slice(i, i + 30).join(','));
+      if (ctl.signal.aborted) break;
+      try { const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.slice(i, i + 30).join(','), { signal: ctl.signal });
         const best = new Map(); for (const p of arr || []) { const m = p.baseToken?.address; if (!m) continue; if (!best.has(m) || (p.liquidity?.usd || 0) > (best.get(m).liquidity?.usd || 0)) best.set(m, p); }
         for (const [m, p] of best) livePrices.set(m, { price: +p.priceUsd, liq: p.liquidity?.usd ?? null, at: Date.now() }); }
-      catch (e) { console.warn('price refresh', e); }
+      catch (e) { if (e && e.name === 'AbortError') break; console.warn('price refresh', e); }
     }
     try { const c = await fetchSolContext(); if (isNum(c.price)) { T_state.solPrice = c.price; renderTicker(c); } } catch { }
     checkAlerts(); renderPortfolio();
   }
   renderReadyNow();
+  } finally { priceBusy = false; }
 }
 const tickBook = {};
 function tickBars(mint, tf) {
@@ -3496,7 +3521,7 @@ function pushTick(mint, px, ts) {
     const last = arr[arr.length - 1];
     if (!last || last.t !== bucket) arr.push({ t: bucket, o: px, h: px, l: px, c: px, v: 0 });
     else { last.h = Math.max(last.h, px); last.l = Math.min(last.l, px); last.c = px; }
-    if (arr.length > 600) arr.splice(0, arr.length - 600);
+    if (arr.length > 300) arr.splice(0, arr.length - 300);
   }
 }
 function pruneTicks(keep) {
@@ -3513,11 +3538,12 @@ function paintLive(ageMs, latency) {
 let liveBackoff = window.__SMS_SAFE ? 3000 : 1500;
 let liveBusy = false;
 let liveAt = 0;
-async function livePriceBatch(mints) {
+async function livePriceBatch(mints, signal) {
   const out = new Map();
   for (let i = 0; i < mints.length; i += 30) {
+    if (signal?.aborted) break;
     const chunk = mints.slice(i, i + 30);
-    const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + chunk.join(','), { timeout: 4000 });
+    const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + chunk.join(','), { timeout: 4000, signal });
     const best = new Map();
     for (const p of arr || []) {
       const m = p.baseToken?.address;
@@ -3529,7 +3555,7 @@ async function livePriceBatch(mints) {
   const missing = mints.filter(m => !out.has(m));
   if (missing.length) {
     try {
-      const j = await fetchJSONOnce('https://lite-api.jup.ag/price/v2?ids=' + missing.slice(0, 50).join(','), { timeout: 4000 });
+      const j = await fetchJSONOnce('https://lite-api.jup.ag/price/v2?ids=' + missing.slice(0, 50).join(','), { timeout: 4000, signal });
       const data = j?.data || {};
       for (const m of missing) { const px = +data[m]?.price; if (px > 0) out.set(m, { price: px, liq: null, m5b: null, m5s: null }); }
     } catch { /* DexScreener prices still stand */ }
@@ -3599,6 +3625,20 @@ function patchLiveText() {
     const text = price(px);
     if (el.textContent !== text) el.textContent = text;
   });
+  document.querySelectorAll('[data-live-pnl]').forEach(el => {
+    const mint = el.dataset.livePnl;
+    const px = livePrices.get(mint)?.price;
+    if (!(px > 0)) return;
+    let pos = null;
+    try { pos = openPositions().find(p => p.mint === mint); } catch { pos = null; }
+    if (!pos) return;
+    const m = posMoney(pos, px);
+    const text = isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : '';
+    if (el.textContent !== text) el.textContent = text;
+    const up = isNum(m.pnl) && m.pnl >= 0;
+    el.classList.toggle('pnl-up', up);
+    el.classList.toggle('pnl-down', isNum(m.pnl) && m.pnl < 0);
+  });
 }
 function schedulePaint() {
   if (document.hidden || paintQueued) return;
@@ -3607,15 +3647,20 @@ function schedulePaint() {
     paintQueued = false;
     if (document.hidden) return;
     patchLiveText();
-    const now = Date.now();
-    const gap = paintGap();
-    if (paneShown('tabTrades') && now - lastFullPaint.portfolio > gap) { lastFullPaint.portfolio = now; try { renderPortfolio(); } catch { /* portfolio hidden */ } }
-    if (paneShown('tabHome') && now - lastFullPaint.home > gap) { lastFullPaint.home = now; try { paintHomePositions(openPositions().filter(p => !p.degen)); } catch { /* home not ready */ } }
-    if (paneShown('tabTokens') && tokenSeg !== 'degen' && !document.body.classList.contains('sheet-on') && $('tradeModal')?.classList.contains('hidden') && now - lastFullPaint.list > gap) { lastFullPaint.list = now; try { renderMyList(); } catch { /* list busy */ } }
-    const degenOnScreen = paneShown('tabHome') || (paneShown('tabTokens') && tokenSeg === 'degen') || (paneShown('tabTrades') && tradeSeg === 'degen');
-    if (degenOnScreen && !$('degenDesk')?.querySelector('details[open]') && now - lastFullPaint.degen > gap) { lastFullPaint.degen = now; try { renderDegen(); } catch { /* degen card not ready */ } }
-    if (paneShown('tabHome') && now - lastFullPaint.ready > gap) { lastFullPaint.ready = now; try { renderReadyNow(); } catch { /* ready list not ready */ } }
   });
+}
+function slowPaint() {
+  if (document.hidden) return;
+  const now = Date.now();
+  const gap = trackedMintCount() > 20 ? 12000 : 8000;
+  try {
+    if (paneShown('tabTrades') && now - lastFullPaint.portfolio > gap) { lastFullPaint.portfolio = now; renderPortfolio(); }
+    if (paneShown('tabHome') && now - lastFullPaint.home > gap) { lastFullPaint.home = now; paintHomePositions(openPositions().filter(p => !p.degen)); }
+    if (paneShown('tabTokens') && tokenSeg !== 'degen' && !document.body.classList.contains('sheet-on') && $('tradeModal')?.classList.contains('hidden') && now - lastFullPaint.list > gap) { lastFullPaint.list = now; renderMyList(); }
+    const degenOnScreen = paneShown('tabHome') || (paneShown('tabTokens') && tokenSeg === 'degen') || (paneShown('tabTrades') && tradeSeg === 'degen');
+    if (degenOnScreen && !$('degenDesk')?.querySelector('details[open]') && now - lastFullPaint.degen > gap) { lastFullPaint.degen = now; renderDegen(); }
+    if (paneShown('tabHome') && now - lastFullPaint.ready > gap) { lastFullPaint.ready = now; renderReadyNow(); }
+  } catch { /* pane not ready */ }
 }
 function dropHiddenCharts() {
   document.querySelectorAll('.lite-host').forEach(n => { try { n._chart?.remove(); } catch { /* already gone */ } n._chart = null; });
@@ -3632,9 +3677,12 @@ async function liveTick() {
     return;
   }
   liveBusy = true;
+  if (priceBusy) abortFetch('prices');
+  const ctl = beginFetch('live');
   const t0 = performance.now();
   try {
-    const got = await livePriceBatch(mints);
+    const got = await livePriceBatch(mints, ctl.signal);
+    if (ctl.signal.aborted) return;
     const now = Date.now();
     const held = new Set(openMints());
     const focus = sheetMint();
@@ -3660,9 +3708,11 @@ async function liveTick() {
     if (!hidden) paintLive(0, performance.now() - t0);
     checkAlerts();
     if (!hidden) schedulePaint();
+    pruneMemory();
   } catch (e) {
-    if (e && (e.status === 429 || e.status === 0)) liveBackoff = Math.min(15000, Math.max(3000, liveBackoff * 2));
-    if (!hidden) paintLive(liveAt ? Date.now() - liveAt : null, null);
+    if (e && e.name === 'AbortError') { /* a newer poll or a hidden tab replaced this fetch */ }
+    else if (e && (e.status === 429 || e.status === 0)) liveBackoff = Math.min(15000, Math.max(3000, liveBackoff * 2));
+    if (!hidden && !(e && e.name === 'AbortError')) paintLive(liveAt ? Date.now() - liveAt : null, null);
   } finally { liveBusy = false; }
   if (!exitBusy) {
     exitBusy = true;
@@ -3670,23 +3720,86 @@ async function liveTick() {
   }
 }
 let liveLoopOn = false;
+let slowPaintTimer = null;
+const fetchCtl = {};
+function beginFetch(name) {
+  try { fetchCtl[name]?.abort(); } catch { /* already settled */ }
+  const ctl = new AbortController();
+  fetchCtl[name] = ctl;
+  return ctl;
+}
+function abortFetch(name) { try { fetchCtl[name]?.abort(); } catch { /* already settled */ } }
+function trackedMintCount() {
+  const set = new Set();
+  const add = (m) => { if (m) set.add(m); };
+  try { openPositions().forEach(p => add(p.mint)); } catch { /* positions not ready */ }
+  try { (MYLIST?.rows || []).forEach(r => add(r.mint)); } catch { /* list not ready */ }
+  try { (DEGEN?.picks || []).forEach(p => add(p.mint)); } catch { /* degen not ready */ }
+  try { AG?.plans?.forEach(p => add(p && p.mint)); } catch { /* plans not ready */ }
+  return set.size;
+}
+const BLANK_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+function releaseMedia(root) {
+  if (!root || !root.querySelectorAll) return;
+  root.querySelectorAll('img').forEach(img => {
+    img.onload = null; img.onerror = null;
+    if (img.getAttribute('src')) img.src = BLANK_IMG;
+  });
+  root.querySelectorAll('canvas').forEach(c => { try { c.width = 0; c.height = 0; } catch { /* detached */ } });
+  root.querySelectorAll('.lite-host').forEach(n => { try { n._chart?.remove(); } catch { /* already gone */ } n._chart = null; });
+}
+function capMap(map, max) {
+  if (!map || map.size <= max) return;
+  const drop = map.size - Math.floor(max * 0.8);
+  let i = 0;
+  for (const k of map.keys()) { map.delete(k); if (++i >= drop) break; }
+}
+let prunedAt = 0;
+function pruneMemory() {
+  const now = Date.now();
+  if (now - prunedAt < 20000) return;
+  prunedAt = now;
+  const keep = new Set();
+  const add = (m) => { if (m) keep.add(m); };
+  try { openPositions().forEach(p => add(p.mint)); } catch { /* positions not ready */ }
+  try { (MYLIST?.rows || []).forEach(r => add(r.mint)); } catch { /* list not ready */ }
+  try { (DEGEN?.picks || []).forEach(p => add(p.mint)); } catch { /* degen not ready */ }
+  try { AG?.plans?.forEach(p => add(p && p.mint)); } catch { /* plans not ready */ }
+  try { (AG?.candidates || []).forEach(c => add(c && c.mint)); } catch { /* candidates not ready */ }
+  try { (lastResult?.tokens || []).forEach(t => add(t.mint)); } catch { /* scan not ready */ }
+  for (const m of [...livePrices.keys()]) if (!keep.has(m)) livePrices.delete(m);
+  for (const m of [...tokenTape.keys()]) if (!keep.has(m)) tokenTape.delete(m);
+  try { if (DEGEN?.quotes) for (const m of Object.keys(DEGEN.quotes)) if (!keep.has(m)) delete DEGEN.quotes[m]; } catch { /* degen not ready */ }
+  capMap(logoMiss, 400);
+  capMap(logoBad, 400);
+  try {
+    const ids = new Set((MYLIST?.rows || []).map(r => r.id));
+    for (const id of Object.keys(listChartMemo)) if (!ids.has(id)) delete listChartMemo[id];
+  } catch { /* memo not ready */ }
+  for (const [k, v] of [...ohlcvCache.entries()]) if (!v || now - v.at > 20 * 60e3) ohlcvCache.delete(k);
+}
 function startLiveLoop() {
   if (liveLoopOn) return;
   liveLoopOn = true;
   const step = async () => {
     await liveTick();
     const openNow = openMints().length;
-    const baseWait = document.hidden ? 5000 : (window.__SMS_SAFE ? Math.max(2000, liveBackoff) : liveBackoff);
-    const wait = openNow && !document.hidden ? Math.min(2000, Math.max(1000, baseWait)) : baseWait;
+    const baseWait = document.hidden ? 5000 : (window.__SMS_SAFE ? Math.max(3000, liveBackoff) : liveBackoff);
+    let wait = openNow && !document.hidden ? Math.min(2000, Math.max(1000, baseWait)) : baseWait;
+    if (trackedMintCount() > 20) wait = Math.max(wait, 3000);
     setTimeout(step, wait);
   };
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { dropHiddenCharts(); paintLive(liveAt ? Date.now() - liveAt : null, null); return; }
-    liveTick();
-    try { refreshAgents(); } catch { /* agents later */ }
-    try { degenWatch(); } catch { /* degen file later */ }
+    if (document.hidden) {
+      abortFetch('live'); abortFetch('prices'); abortFetch('degen'); abortFetch('agents');
+      dropHiddenCharts(); paintLive(liveAt ? Date.now() - liveAt : null, null); return;
+    }
+    if (!liveBusy) liveTick();
+    try { if (!AG.fetching) refreshAgents(); } catch { /* agents later */ }
+    try { if (!degenWatchBusy) degenWatch(); } catch { /* degen file later */ }
   });
   setTimeout(step, 800);
+  if (!slowPaintTimer) slowPaintTimer = setInterval(() => { if (!document.hidden) slowPaint(); }, 4000);
   setInterval(() => { if (!document.hidden && liveAt) paintLive(Date.now() - liveAt, null); }, 1000);
 }
 function levelState(p) {
@@ -4451,11 +4564,11 @@ function posCard(p) {
       </div>
       <div class="text-right min-w-0">
         <div class="font-mono text-xl leading-none whitespace-normal break-words ${!isNum(m.pnl) ? 'text-slate-400' : upClass(m.pnl)}">${pct(m.pnl)}</div>
-        <div class="mt-1 font-mono text-[11px] whitespace-normal break-words ${!isNum(m.pnlUsd) ? 'text-slate-500' : upClass(m.pnlUsd)}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : '—'}${isNum(m.pnlSol) ? ' · ' + (m.pnlSol >= 0 ? '+' : '') + m.pnlSol.toFixed(4) + ' SOL' : ''}</div>
+        <div class="mt-1 font-mono text-[11px] whitespace-normal break-words ${!isNum(m.pnlUsd) ? 'text-slate-500' : upClass(m.pnlUsd)}" data-live-pnl="${esc(p.mint)}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : '—'}${isNum(m.pnlSol) ? ' · ' + (m.pnlSol >= 0 ? '+' : '') + m.pnlSol.toFixed(4) + ' SOL' : ''}</div>
       </div>
     </div>
     <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-      <div class="min-w-0"><div class="text-slate-500">Live</div><div class="num whitespace-normal break-words text-slate-100">${priceHtml(lp)}</div></div>
+      <div class="min-w-0"><div class="text-slate-500">Live</div><div class="num whitespace-normal break-words text-slate-100" data-live-mint="${esc(p.mint)}">${price(lp)}</div></div>
         <div class="min-w-0"><div class="text-slate-500">Entry</div><div class="num whitespace-normal break-words">${priceHtml(entry)}${p.scaleOf ? `<span class="block text-[10px] text-slate-400">${p.plan?.split ? 'Leg 1 ' + (p.scaleI >= 1 ? 'filled' : 'waiting') + ' · Leg 2 ' + (p.scaleI >= 2 ? 'filled' : 'waiting') : p.scaleI + '/' + p.scaleOf + ' filled'}</span>` : ''}</div></div>
       <div class="min-w-0"><div class="text-slate-500">Size</div><div class="font-mono whitespace-normal break-words">${fmtSol(m.costSolLeft)}<span class="block text-slate-400">${isNum(m.valueUsd) ? usd(m.valueUsd, 2) : '—'}</span></div></div>
       <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words ${stopOut && isNum(stopOut.usd) ? pnlColor(stopOut.usd) : 'text-rose-300'}">${price(stop)}<span class="block">${stopOut ? esc(pnlPhrase(stopOut)) : ''}</span>${stopOut && isNum(stopOut.sol) ? `<span class="block text-[10px] text-slate-400">${esc(fmtPnlSol(stopOut.sol))}</span>` : ''}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
@@ -4688,9 +4801,18 @@ function renderPortfolio() {
   if (posDragging) return;
   if (ae && ae.closest && ae.closest('[data-pos-edit]') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
   const pos = positions(); const open = pos.filter(p => p.open && !p.degen); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
+  const portSig = [tradeSeg, posTableView ? 1 : 0, equityRange, wealthUnit, closedRange, closedSrc, posEditKey || '', LOG.length, open.map(p => {
+    const lp = livePrices.get(p.mint)?.price;
+    const s = levelState(p);
+    const bucket = lp > 0 ? Math.round(Math.log(lp) * 50) : 0;
+    return p.key + ':' + p.qty + ':' + (s.lvl || '') + ':' + bucket;
+  }).join(',')].join('|');
+  if (el.dataset.mem === portSig && el.childElementCount) { patchLiveText(); paintHomePositions(open); return; }
   if (!LOG.length && !anyW && !AUTOLOG.length && !loadEquity().length) {
     el.classList.remove('hidden');
     el.dataset.view = tradeSeg;
+    el.dataset.mem = portSig;
+    releaseMedia(el);
     el.innerHTML = `<section id="sec-portfolio"><div class="seg trade-seg mb-3"><button type="button" data-tradeseg="open" class="${tradeSeg === 'open' ? 'on' : ''}">Open</button><button type="button" data-tradeseg="closed" class="${tradeSeg === 'closed' ? 'on' : ''}">Closed</button><button type="button" data-tradeseg="degen" class="${tradeSeg === 'degen' ? 'on' : ''}">Degen</button></div>${equityCardHtml()}<div class="trade-open"><p class="empty-note">No open positions. Buys you confirm show up here with entry, stop, and P&amp;L.</p></div><div class="trade-closed"><p class="empty-note">No closed trades yet.</p></div></section>`;
     el.querySelectorAll('[data-tradeseg]').forEach(b => b.addEventListener('click', () => { tradeSeg = b.dataset.tradeseg || 'open'; document.body.classList.toggle('trades-degen', tradeSeg === 'degen'); placeDegenDesk(); renderPortfolio(); }));
     el.querySelectorAll('[data-eqrange]').forEach(b => b.addEventListener('click', () => { equityRange = b.dataset.eqrange; try { localStorage.setItem('sms:equityrange', equityRange); } catch { /* ignore */ } renderPortfolio(); }));
@@ -4718,6 +4840,8 @@ function renderPortfolio() {
   const cards = open.map(posCard).join('');
   const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Qty</th><th>Avg entry</th><th>Price</th><th>PnL</th><th>Stop</th><th>TP1/TP2</th><th>Status</th><th>Sell</th></tr></thead><tbody>${posRows}</tbody></table></div>`;
   el.dataset.view = tradeSeg;
+  el.dataset.mem = portSig;
+  releaseMedia(el);
   el.innerHTML = `<section id="sec-portfolio">
     <div class="seg trade-seg mb-3"><button type="button" data-tradeseg="open" class="${tradeSeg === 'open' ? 'on' : ''}">Open</button><button type="button" data-tradeseg="closed" class="${tradeSeg === 'closed' ? 'on' : ''}">Closed</button><button type="button" data-tradeseg="degen" class="${tradeSeg === 'degen' ? 'on' : ''}">Degen</button></div>
     <div class="flex flex-wrap gap-3 text-[12px] text-slate-500 mb-2"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfRefresh" class="text-slate-300">Refresh</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div>
@@ -4776,6 +4900,10 @@ function renderPortfolio() {
 }
 function paintHomePositions(open) {
   const box = $('homePositions'); if (!box) return;
+  const sig = (open || []).slice(0, 8).map(p => p.mint + ':' + (p.qty || 0) + ':' + (p.tp1Done ? 1 : 0)).join('|') || 'empty';
+  if (box.dataset.mem === sig && box.childElementCount) { patchLiveText(); return; }
+  box.dataset.mem = sig;
+  releaseMedia(box);
   if (!open.length) { box.innerHTML = '<p class="empty-note">No open positions yet.</p>'; return; }
   box.innerHTML = open.slice(0, 8).map(p => {
     const lp = livePrices.get(p.mint)?.price;
@@ -4783,7 +4911,7 @@ function paintHomePositions(open) {
     const up = isNum(m.pnl) && m.pnl >= 0;
     const ticks = typeof tickBars === 'function' ? tickBars(p.mint, '1m') : [];
     const spark = ticks.length >= 2 && typeof listChartSvg === 'function' ? listChartSvg({ candles: ticks }, { w: 72, h: 28 }) : { empty: true, svg: '' };
-    return `<button type="button" class="watch-row" data-go-trades="1">${logoHtml(p.mint, p.symbol, 2)}<span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(p.symbol)}</b><span class="block text-[12px] text-slate-500 num">${fmtSol(m.costSolLeft)}</span></span>${spark.empty ? '' : `<span class="shrink-0">${spark.svg}</span>`}<span class="shrink-0 text-right num"><span class="block ${up ? 'pnl-up' : 'pnl-down'}" data-live-mint="${esc(p.mint)}">${price(lp)}</span><span class="block text-[12px] ${up ? 'pnl-up' : 'pnl-down'}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</span></span></button>`;
+    return `<button type="button" class="watch-row" data-go-trades="1">${logoHtml(p.mint, p.symbol, 2)}<span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(p.symbol)}</b><span class="block text-[12px] text-slate-500 num">${fmtSol(m.costSolLeft)}</span></span>${spark.empty ? '' : `<span class="shrink-0">${spark.svg}</span>`}<span class="shrink-0 text-right num"><span class="block ${up ? 'pnl-up' : 'pnl-down'}" data-live-mint="${esc(p.mint)}">${price(lp)}</span><span class="block text-[12px] ${up ? 'pnl-up' : 'pnl-down'}" data-live-pnl="${esc(p.mint)}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</span></span></button>`;
   }).join('');
   box.querySelectorAll('[data-go-trades]').forEach(b => b.addEventListener('click', () => showTab('trades')));
 }
@@ -7429,17 +7557,21 @@ async function agentHeadSha() {
   })();
   return agentTipPromise;
 }
-async function fetchAgentDoc(name) {
+async function fetchAgentDoc(name, signal) {
   const sha = await agentHeadSha();
+  if (signal?.aborted) { const x = new Error('aborted'); x.name = 'AbortError'; throw x; }
   if (!sha) throw new Error(name + ' no commit sha');
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
+  const onExt = () => ctl.abort();
+  if (signal) signal.addEventListener('abort', onExt, { once: true });
   try {
     const url = 'https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=' + sha;
     const res = await fetch(url, { cache: 'no-store', signal: ctl.signal, headers: agentApiHeaders('application/vnd.github.raw') });
+    if (signal?.aborted) { const x = new Error('aborted'); x.name = 'AbortError'; throw x; }
     if (!res.ok) throw new Error(name + ' ' + res.status);
     return await res.json();
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); if (signal) signal.removeEventListener('abort', onExt); }
 }
 async function fetchDegenDoc() { return fetchAgentDoc('degen'); }
 async function degenFetchFile() {
@@ -7658,16 +7790,24 @@ let degenQuoteCursor = 0;
 async function degenWatch() {
   if (degenWatchBusy || document.hidden) return;
   degenWatchBusy = true;
+  const ctl = beginFetch('degen');
   try {
-    const data = await fetchDegenDoc();
+    const data = await fetchDegenDoc(ctl.signal);
+    if (ctl.signal.aborted) return;
     if (!applyDegenDoc(data)) degenNote('stale degen.json ignored');
     DEGEN.quotes = DEGEN.quotes || {};
     const quoteList = (DEGEN.picks || []).filter(p => p?.mint);
     const take = window.__SMS_SAFE ? 3 : 6;
     for (let i = 0; i < Math.min(take, quoteList.length); i++) {
+      if (ctl.signal.aborted || document.hidden) break;
       const pick = quoteList[(degenQuoteCursor + i) % quoteList.length];
+      const fresh = livePrices.get(pick.mint);
+      if (fresh && fresh.price > 0 && Date.now() - (fresh.at || 0) < 3000) {
+        DEGEN.quotes[pick.mint] = { ...(DEGEN.quotes[pick.mint] || {}), price: fresh.price };
+        continue;
+      }
       try {
-        const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + pick.mint);
+        const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + pick.mint, { signal: ctl.signal });
         const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
         if (best && +best.priceUsd > 0) {
           DEGEN.quotes[pick.mint] = { price: +best.priceUsd, image: best.info?.imageUrl || '' };
@@ -7675,13 +7815,14 @@ async function degenWatch() {
           noteTape(pick.mint, best);
           livePrices.set(pick.mint, { price: +best.priceUsd, liq: best.liquidity?.usd ?? null, at: Date.now() });
         }
-      } catch { /* keep the last quote */ }
+      } catch (e) { if (e && e.name === 'AbortError') break; /* keep the last quote */ }
     }
     if (quoteList.length) degenQuoteCursor = (degenQuoteCursor + take) % quoteList.length;
-    await degenEvaluate(DEGEN.picks);
-  } catch (e) { DEGEN.error = e.message || String(e); degenLogEvent('pot', e.message || 'degen watch failed'); }
-  degenWatchBusy = false;
-  renderDegen();
+    if (!ctl.signal.aborted) await degenEvaluate(DEGEN.picks);
+  } catch (e) {
+    if (!(e && e.name === 'AbortError')) { DEGEN.error = e.message || String(e); degenLogEvent('pot', e.message || 'degen watch failed'); }
+  } finally { degenWatchBusy = false; }
+  if (!ctl.signal.aborted) renderDegen();
 }
 function openDegenDesk() {
   showTab('tokens');
@@ -7890,9 +8031,27 @@ function startLiveScan() {
   liveScanTimer = setTimeout(step, 600);
 }
 function stopLiveScan() { clearTimeout(liveScanTimer); liveScanTimer = null; }
+function degenViewSig(eq) {
+  const picks = DEGEN.picks || [];
+  let s = (degenOn() ? '1' : '0') + ':' + Math.round(eq?.equity || 0) + ':' + Math.floor(Date.now() / 60000) + ':' + (DEGEN.updatedAt || '') + ':' + (DEGEN.error || '') + ':' + (DEGEN.note || '') + ':' + liveScanHits.length + ':' + (liveScanOn ? 1 : 0);
+  for (const p of picks) {
+    const px = (DEGEN.quotes && DEGEN.quotes[p.mint] && DEGEN.quotes[p.mint].price) || livePrices.get(p.mint)?.price;
+    s += '|' + p.mint + degenStatus(p, px) + (p.confidence || '') + (hunterRemoved(p.mint) ? 'r' : '');
+    const st = DEGEN.pickState && DEGEN.pickState[p.mint];
+    if (st) s += st.state + (st.reason || '');
+  }
+  try { openPositions().forEach(p => { if (p.degen) s += '|o' + p.mint + p.qty + (p.tp1Done ? 't' : ''); }); } catch { /* positions not ready */ }
+  return s;
+}
 function renderDegen() {
   const cfg = degenCfg();
   const eq = degenEquity();
+  const degSig = degenViewSig(eq);
+  const desk0 = $('degenDesk');
+  if (desk0 && desk0.dataset.mem === degSig && desk0.childElementCount && !($('degenBox') && document.activeElement && $('degenBox').contains(document.activeElement))) {
+    patchLiveText();
+    return;
+  }
   const pnlCls = eq.pnl > 0 ? 'text-emerald-300' : eq.pnl < 0 ? 'text-rose-300' : 'text-slate-300';
   const pnlTxt = signedUsd(eq.pnl, false) + ' · ' + pct(eq.pct);
   const open = openPositions().filter(p => p.degen);
@@ -7930,7 +8089,7 @@ function renderDegen() {
         <span class="deg-chip">HUNTER</span>
         <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
       </div>
-      <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
+      <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num"><span data-live-mint="${esc(pick.mint)}">${price(px)}</span> <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
       ${(() => { const row = degenLastBlock(pick.mint); if (row) { const hm = tehranHM(row.at); const ok = row.reason === 'bought' || row.reason === 'unlocked ok'; const label = row.reason === 'bought' ? 'Bought ' + hm : row.reason === 'unlocked ok' ? 'Unlocked ok ' + hm : 'Blocked ' + hm + ': ' + row.reason; const cls = ok ? 'text-emerald-300' : 'block-note'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; } const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'block-note' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
@@ -7954,7 +8113,7 @@ function renderDegen() {
       <div class="flex items-center justify-between gap-2"><span class="flex items-center gap-2 min-w-0">${logoHtml(p.mint, p.symbol, 2, 'sm')}<b class="text-sm truncate">${esc(p.symbol)}</b></span><span class="deg-chip">DEGEN</span></div>
       <div class="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Entry</div><div class="font-mono">${price(p.avgUsd)}</div></div>
-        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Now</div><div class="font-mono">${price(lp)}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Now</div><div class="font-mono" data-live-mint="${esc(p.mint)}">${price(lp)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L</div><div class="font-mono ${pnlCls}">${isNum(money.pnlUsd) ? (money.pnlUsd >= 0 ? '+' : '') + usd(money.pnlUsd, 2) : '—'} · ${pct(money.pnl)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Stop</div><div class="font-mono text-rose-300">${price(stopPx)}</div><div class="text-[10px] text-slate-500">${esc(eff.reason || '')}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">High</div><div class="font-mono">${price(eff.high)}</div></div>
@@ -7974,7 +8133,7 @@ function renderDegen() {
     </article>`;
   }).join('');
   const desk = $('degenDesk');
-  if (desk) desk.innerHTML = `<section class="hero-card">
+  if (desk) { desk.dataset.mem = degSig; releaseMedia(desk); desk.innerHTML = `<section class="hero-card">
     <div class="flex items-center justify-between gap-2"><h2 class="sec-title text-sm"><span class="ico">◎</span>Degen</h2><span class="text-[10px] text-slate-500">${esc(stamp)}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Balance</div><div class="font-mono">${usd(eq.equity, 2)}</div><div class="text-[10px] text-slate-500">open positions valued live</div></div>
@@ -7993,15 +8152,16 @@ function renderDegen() {
     ${closed || '<p class="empty-note mt-2">No closed degen trades.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Trade log</h3>
     ${degenLogHtml() || '<p class="empty-note mt-2">No degen fills yet.</p>'}
-  </section>`;
+  </section>`; }
   desk?.querySelectorAll('[data-degen-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.degenSell, { pct: 100 })));
   placeDegenDesk();
   wantLogos((DEGEN.picks || []).map(p => p.mint).concat(open.map(p => p.mint)), () => renderDegen());
-  const home = $('degenCard'); if (home) home.innerHTML = stats;
+  const home = $('degenCard'); if (home) { releaseMedia(home); home.innerHTML = stats; }
   const box = $('degenBox'); if (!box || (document.activeElement && box.contains(document.activeElement))) {
     document.querySelectorAll('[data-open-degen]').forEach(b => b.addEventListener('click', openDegenDesk));
     return;
   }
+  releaseMedia(box);
   box.innerHTML = stats + `<div class="mt-2 space-y-2 text-xs">
     <button type="button" id="degenToggle" class="flex w-full items-center justify-between rounded-xl border border-white/10 px-3" style="min-height:44px"><span>Degen pot</span><span class="ios-sw${cfg.on ? ' on' : ''}"><i></i></span></button>
     <button type="button" id="degenStop" class="w-full rounded-xl border px-3 text-[14px] font-semibold${cfg.on ? ' is-live' : ''}" style="min-height:48px">STOP Degen</button>
@@ -8963,7 +9123,7 @@ function roomStats(px, candles, tp1, ta) {
   return { resist, support, next, nextKind, toRes, toSup, up, rr };
 }
 function listChartModel(row, spec, px) {
-  const raw = (row.cache?.candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0);
+  const raw = (row.cache?.candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0).slice(-300);
   const candles = alignCandlesToToken(raw, px);
   const geo = chartGeometry(candles);
   const tfKey = row.cache?.tf || spec.tf || '4h';
@@ -9315,7 +9475,7 @@ async function drawListChart(row, tf) {
       useTf = resolved.tf || preferred;
       note = resolved.note || '';
       if (resolved.candles) {
-        row.cache = { at: Date.now(), tf: useTf, candles: alignCandlesToToken(resolved.candles, row.price).slice(-200) };
+        row.cache = { at: Date.now(), tf: useTf, candles: alignCandlesToToken(resolved.candles, row.price).slice(-300) };
         row.displayTf = useTf;
         row.tfNote = note;
         row.lastTaAt = Date.now();
@@ -9385,6 +9545,15 @@ async function myListBuyNow(row, typed, onDone) {
       } catch (e) { toast(e.message || String(e), 'err', 8000); throw e; }
     } });
 }
+function myListStructSig() {
+  let s = (MYLIST.on ? '1' : '0') + '|' + listSort + '|' + (listTable ? 't' : 'c') + '|' + MYLIST.rows.length;
+  for (const r of MYLIST.rows) {
+    const px = (typeof livePrices !== 'undefined' && livePrices.get(r.mint)?.price) || r.price || 0;
+    const bucket = px > 0 ? Math.round(Math.log(px) * 80) : 0;
+    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + bucket;
+  }
+  return s;
+}
 function renderMyList(opts) {
   if (document.body.classList.contains('sheet-on')) {
     if (!opts || !opts.force) return;
@@ -9393,6 +9562,8 @@ function renderMyList(opts) {
   const box = $('myListBox'); if (!box) return;
   const focus = document.activeElement;
   if (focus && box.contains(focus) && /^(INPUT|TEXTAREA|SELECT)$/.test(focus.tagName)) return;
+  const listSig = myListStructSig();
+  if ((!opts || !opts.force) && box.dataset.mem === listSig && box.childElementCount) { patchLiveText(); return; }
   const views = MYLIST.rows.map(row => ({ row, ...listContext(row) }));
   views.forEach(v => { listChartMemo[v.row.id] = v.model; });
   const rank = (v) => {
@@ -9541,6 +9712,8 @@ function renderMyList(opts) {
   }).join('');
   const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => { const scored = AG.scores && AG.scores.get(v.row.mint); const setupBit = scored && isNum(+scored.score) ? `<div class="text-[10px] whitespace-normal break-words"><span class="setup-score">Setup ${Math.round(+scored.score)}</span>${scored.entry ? ' · ' + esc(scored.entry) : ''}</div>` : ''; return `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><span class="inline-flex items-center gap-2">${logoHtml(v.row.mint, v.row.symbol, 2, 'sm')}<span><b>${esc(v.row.symbol || short(v.row.mint))}</b>${setupBit}</span></span></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" data-ml-mint="${esc(v.row.mint)}" class="text-rose-300">Remove</button></td></tr>`; }).join('')}</tbody></table></div>`;
   const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="rounded-full border px-2.5 py-1 text-[11px] ${listSort === key ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
+  box.dataset.mem = listSig;
+  releaseMedia(box);
   box.innerHTML = `<div class="rounded-2xl border ${MYLIST.on ? 'border-amber-300/40' : 'border-white/10'} bg-ink-900/30 p-3">
     <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3>
       <div class="flex flex-wrap gap-2 text-[11px]"><button type="button" id="mlView" class="text-violet-300">${listTable ? 'Cards' : 'Table view'}</button><button type="button" id="mlClear" class="text-rose-300">Clear list</button></div></div>
@@ -9691,7 +9864,7 @@ async function myListTick() {
           row.taStale = true;
           if (row.cache?.tf === preferred && row.lastTaAt && Date.now() - row.lastTaAt < 90 * 60e3) { candles = row.cache.candles; tf = preferred; }
         }
-        if (candles) row.cache = { at: row.lastTaAt || Date.now(), tf, candles: alignCandlesToToken(candles, row.price).slice(-200) };
+        if (candles) row.cache = { at: row.lastTaAt || Date.now(), tf, candles: alignCandlesToToken(candles, row.price).slice(-300) };
         try {
           if (spec.mode === 'momentum' && candles) row.momState = momentumFromCandles(candles).state;
           if (spec.mode === 'zone' && row.dexPair) {
@@ -9833,8 +10006,11 @@ function startMyList() {
   listTimer = setInterval(() => { myListTick(); }, 30000);
 }
 const holderPolled = {};
+let holderBusy = false;
 async function refreshHolderWatch() {
-  if (document.hidden) return;
+  if (document.hidden || holderBusy) return;
+  holderBusy = true;
+  try {
   const mints = [];
   try { (MYLIST.rows || []).forEach(r => { if (r.mint) mints.push(r.mint); }); } catch { /* list not ready */ }
   try { openPositions().forEach(p => { if (p.open && p.mint) mints.push(p.mint); }); } catch { /* no positions */ }
@@ -9845,6 +10021,7 @@ async function refreshHolderWatch() {
     holderPolled[mint] = now;
     try { digestRug(await fetchRugReport(mint), null, mint); } catch { /* RugCheck spacing stays on the shared queue */ }
   }
+  } finally { holderBusy = false; }
 }
 $('btnSaveList')?.addEventListener('click', () => {
   const parsed = parseInput($('pasted')?.value || '');
@@ -10314,6 +10491,7 @@ function renderAgentPicks() {
     return { c, safety, trend, down, rank, i };
   }).sort((a, b) => b.rank - a.rank || a.i - b.i);
   const cards = ranked.map(({ c, safety, trend, down }) => hunterCard(c, { safety, trend, down })).join('');
+  releaseMedia(box);
   box.innerHTML = `<div class="space-y-3">
     <details class="hunt-status"><summary>Agent files · candidates ${ageOf('candidates')} · plans ${ageOf('plans')}</summary><div class="mt-2 text-[11px] text-slate-500 whitespace-normal break-words">${status}</div></details>
     ${banner}
@@ -10341,10 +10519,11 @@ function renderAgentPicks() {
 async function refreshAgents() {
   if (document.hidden || AG.fetching) return;
   AG.fetching = true;
+  const ctl = beginFetch('agents');
   const names = ['candidates', 'mylist', 'plans', 'risk', 'config', 'mylist_scores'];
   await Promise.all(names.map(async (name) => {
     try {
-      const data = await fetchAgentDoc(name);
+      const data = await fetchAgentDoc(name, ctl.signal);
       const stamp = (typeof degenExpiry === 'function' ? (degenExpiry(data?.updated_utc) || degenExpiry(data?.updatedAt) || degenExpiry(data?.ts)) : 0) || 0;
       AG.fileMs = AG.fileMs || {};
       if (stamp && AG.fileMs[name] && stamp < AG.fileMs[name]) { botLog(name === 'plans' ? 'plans' : 'agents', 'panel', 'stale ' + name + '.json ignored'); return; }
@@ -10381,7 +10560,7 @@ async function refreshAgents() {
         AG.risk = { pause_auto_buy: !!data.pause_auto_buy, ts: agentNum(data.ts) || 0, positions: Array.isArray(data.positions) ? data.positions : [] };
       }
       if (name === 'config' && data && typeof data === 'object') AG.config = { burner_public_address: String(data.burner_public_address || ''), notes: String(data.notes || '') };
-    } catch (e) { AG.errors[name] = e.message || String(e); }
+    } catch (e) { if (!(e && e.name === 'AbortError')) AG.errors[name] = e.message || String(e); }
   }));
   applyAgentRisk();
   renderAgentPicks();
@@ -10393,9 +10572,10 @@ async function refreshAgents() {
 }
 function startAgents() {
   clearInterval(AG.timer);
+  clearInterval(AG.syncTimer);
   refreshAgents();
   AG.timer = setInterval(refreshAgents, 15000);
-  setInterval(() => { if (ghToken()) pushMyListSync(); }, 10 * 60 * 1000);
+  AG.syncTimer = setInterval(() => { if (ghToken()) pushMyListSync(); }, 10 * 60 * 1000);
 }
 const GH_TOKEN_LS = 'sms:ghtoken';
 const GH_SYNC_LS = 'sms:ghsync';
@@ -10718,7 +10898,7 @@ function loadLite() {
   return litePromise;
 }
 function mountLiteChart(frame, model) {
-  const cs = (model?.candles || []).filter(c => c && c.c > 0);
+  const cs = (model?.candles || []).filter(c => c && c.c > 0).slice(-300);
   if (!frame || cs.length < 2) return;
   let host = frame.querySelector('.lite-host');
   if (!host) {
@@ -10730,6 +10910,8 @@ function mountLiteChart(frame, model) {
   loadLite().then((L) => {
     if (!L || !host.isConnected) return;
     try { host._chart?.remove(); } catch { /* replaced */ }
+    host._chart = null;
+    if (!host.isConnected) return;
     const chart = L.createChart(host, {
       width: host.clientWidth || 340,
       height: 220,
@@ -10767,7 +10949,7 @@ function closeTokenSheet() {
   const sheet = [...document.querySelectorAll('body > .token-sheet')].find(n => n.id !== 'botSheet');
   if (sheet) {
     sheet.classList.remove('open');
-    sheet.querySelectorAll('.lite-host').forEach(n => { try { n._chart?.remove(); } catch { /* gone */ } n._chart = null; });
+    releaseMedia(sheet);
     sheet.querySelectorAll('.sheet-chart canvas').forEach(c => { c.width = 0; c.height = 0; c.remove(); });
   }
   if (sheet && sheetHost && sheetHost.isConnected) sheetHost.appendChild(sheet);
@@ -10775,7 +10957,8 @@ function closeTokenSheet() {
 }
 function paintSheetChart(frame, model) {
   if (!frame || !model) return;
-  const cs = (model.candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0);
+  const cs = (model.candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0).slice(-300);
+  releaseMedia(frame);
   frame.replaceChildren();
   frame.style.overflow = 'hidden';
   frame.style.height = '220px';
@@ -10788,7 +10971,7 @@ function paintSheetChart(frame, model) {
   }
   const cssW = Math.max(280, Math.round(frame.clientWidth || 340));
   const cssH = 220;
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
@@ -10962,7 +11145,7 @@ function mountApp() {
   }
   $('safeLeave')?.addEventListener('click', () => {
     window.__SMS_SAFE = false;
-    try { localStorage.removeItem('sms:booting'); } catch { /* keep the other keys */ }
+    try { localStorage.setItem('sms:booting', '1'); } catch { /* keep the other keys */ }
     banner?.remove();
     liveBackoff = 1500;
     if (liveScanOn) startLiveScan();
@@ -10997,20 +11180,23 @@ fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); r
 if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
 degenRemovedBook();
 setTimeout(degenWatch, 700);
-setInterval(() => { if (!document.hidden) degenWatch(); }, 15000);
+if (!window.__smsPolls) {
+  window.__smsPolls = 1;
+  setInterval(() => { if (!document.hidden && !degenWatchBusy) degenWatch(); }, 15000);
+  setInterval(() => { if (!document.hidden) refreshHolderWatch(); }, 60 * 1000);
+  setInterval(() => { if (!document.hidden && !liveAt && !priceBusy && !liveBusy) refreshPrices(); }, 30000);
+  setInterval(() => { if (recordEquity(false)) renderPortfolio(); }, 5 * 60 * 1000);
+}
 startLiveLoop();
 syncAgentPreview();
 maybeLockSizeUnit();
-setInterval(() => { if (!document.hidden) refreshHolderWatch(); }, 60 * 1000);
 setTimeout(() => { refreshHolderWatch(); }, 20000);
 if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
 try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
 updateSolFilterBadge();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
 if (WALLETS.burner.pubkey) refreshBalances('burner');
-setInterval(() => { if (!document.hidden && !liveAt) refreshPrices(); }, 30000);
 if (openPositions().length) setTimeout(refreshPrices, 1500);
-setInterval(() => { if (recordEquity(false)) renderPortfolio(); }, 5 * 60 * 1000);
 setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 
 
