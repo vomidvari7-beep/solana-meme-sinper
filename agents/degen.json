@@ -1,6 +1,6 @@
 {
- "updated_utc": "2026-11-11T21:20:53Z",
- "updated_tehran": "2026-11-12 00:50 IRST",
+ "updated_utc": "2026-11-11T21:34:03Z",
+ "updated_tehran": "2026-11-12 01:04 IRST",
  "pot": {
   "budget_usd": 25,
   "per_trade_usd": 12.5,
@@ -8,6 +8,23 @@
   "max_trades": null
  },
  "picks": [
+  {
+   "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
+   "symbol": "Max",
+   "pair": "Eoe22HdCa9rhtBwKL6nNZmZxfuzF35xkxobcvfaF1vWQ",
+   "dex": "pumpswap",
+   "age_h": 0.56,
+   "liq_usd": 336549,
+   "mcap_usd": 9712088,
+   "reason": "VAHID MANUAL REQUEST 01:03 IRST (overrides blacklist for this pick only). Risks: 17 insiders, creator ~8%, copycat flag, vertical +26000%",
+   "entry_now": true,
+   "max_entry_price": 0.01,
+   "stop_pct": 25,
+   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
+   "time_stop_min": 45,
+   "confidence": 60,
+   "expires": 1794434643093
+  },
   {
    "mint": "6saFa4vn2798oPjYGqS2KrR3adQNwgwXnyxxvXUZHw2d",
    "symbol": "ELON",
@@ -34,23 +51,6 @@
    "liq_usd": 41681,
    "mcap_usd": 303962,
    "reason": "AVOID: vertical (m5 +34%, $304k mcap); top 10 holders near-equal 2.2-2.4% (bundle/fake-holder flag)",
-   "entry_now": false,
-   "max_entry_price": null,
-   "stop_pct": 25,
-   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
-   "time_stop_min": 45,
-   "confidence": 0,
-   "expires": 1794433853876
-  },
-  {
-   "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
-   "symbol": "Max",
-   "pair": "Eoe22HdCa9rhtBwKL6nNZmZxfuzF35xkxobcvfaF1vWQ",
-   "dex": "pumpswap",
-   "age_h": 0.34,
-   "liq_usd": 143863,
-   "mcap_usd": 2629083,
-   "reason": "AVOID: late ($2.63M mcap, m5 +86% vertical), copycat, 17 insiders, paid-caller shill spam, called '99% bundled'",
    "entry_now": false,
    "max_entry_price": null,
    "stop_pct": 25,
