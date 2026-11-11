@@ -6489,6 +6489,11 @@ function noteDegenExit(mint) {
   book[mint] = Date.now() + 60 * 60e3;
   save(DEGEN_CD_LS, book);
 }
+function degenExpiry(v) {
+  const n = typeof agentTime === 'function' ? agentTime(v) : (+v > 0 ? +v : null);
+  if (!(n > 0)) return null;
+  return n < 1e12 ? n * 1000 : n;
+}
 const DEGEN_VETO_LS = 'sms:degenveto';
 function hunterVetoBook() {
   const v = load(DEGEN_VETO_LS, {});
@@ -6756,10 +6761,26 @@ function degenMark(mint, state, reason) {
   DEGEN.pickState = DEGEN.pickState || {};
   DEGEN.pickState[mint] = { state, reason: String(reason || '').slice(0, 180), at: Date.now() };
 }
+const DEGEN_LOG_LS = 'sms:degenlog';
+function degenEventLog() {
+  const v = load(DEGEN_LOG_LS, []);
+  return Array.isArray(v) ? v : [];
+}
+function degenLogEvent(mint, reason, symbol) {
+  if (!mint || !reason) return;
+  const rows = degenEventLog().filter(x => x && x.mint !== mint);
+  rows.push({ mint, symbol: String(symbol || '').slice(0, 32), reason: String(reason).slice(0, 180), at: Date.now() });
+  save(DEGEN_LOG_LS, rows.slice(-50));
+}
+function degenLastBlock(mint) {
+  const row = degenEventLog().filter(x => x && x.mint === mint).pop();
+  return row || null;
+}
 function degenBlockNote(pick, reason) {
   const mint = pick?.mint;
   degenNote((pick?.symbol || (mint ? short(mint) : 'pick')) + ': ' + reason);
   degenMark(mint, 'blocked', reason);
+  degenLogEvent(mint, reason, pick?.symbol);
 }
 function degenLogHtml() {
   return LOG.filter(r => r && (r.degen || r.plan?.degen) && (r.status === 'confirmed' || r.status === 'pending')).slice(-24).reverse().map(r => {
@@ -6767,12 +6788,16 @@ function degenLogHtml() {
     return `<article class="border-b border-white/10 py-1.5 text-[12px]"><div class="flex justify-between gap-2"><b>${r.side === 'buy' ? 'BUY' : 'SELL'} ${esc(r.symbol || '')}</b><span class="font-mono">${price(r.priceUsd)}</span></div><div class="text-[11px] text-slate-500 whitespace-normal break-words">${esc(why)} · ${tehranClock(r.ts)}</div></article>`;
   }).join('');
 }
+function degenEntryLive(pick) {
+  return !!(pick && (pick.entry_now === true || pick.entry_now === 'true'));
+}
 function degenPickBlock(pick, price) {
   if (!pick || typeof pick.mint !== 'string' || pick.mint.length < 32) return 'bad mint';
-  if (hunterRemoved(pick.mint)) return 'removed by Hunter';
-  if (pick.entry_now !== true && pick.entry_now !== 'true') return 'not entry now';
+  if (degenEntryLive(pick)) clearHunterRemoved(pick.mint);
+  else if (hunterRemoved(pick.mint)) return 'removed by Hunter';
+  if (!degenEntryLive(pick)) return 'not entry now';
   if (!(+pick.confidence >= 55)) return 'confidence';
-  const exp = typeof agentTime === 'function' ? agentTime(pick.expires) : null;
+  const exp = degenExpiry(pick.expires);
   if (exp && exp < Date.now()) return 'expired';
   if (!(+pick.max_entry_price > 0)) return 'no max price';
   if (!isNum(price) || !(price > 0)) return 'no live price';
@@ -6798,18 +6823,45 @@ async function degenSafety(mint) {
   } catch (e) { return { ok: false, reason: e.message || 'honeypot' }; }
   return { ok: true, reason: checks.join(' ') };
 }
-async function degenFetchFile() {
-  const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store' });
-  if (!res.ok) throw new Error('degen ' + res.status);
-  const data = await res.json();
+function degenDocBody(data) {
+  if (data && data.content && data.encoding === 'base64' && typeof b64ToUtf8 === 'function') {
+    try { data = JSON.parse(b64ToUtf8(data.content)); } catch { /* use the wrapper */ }
+  }
   const picks = Array.isArray(data) ? data : (Array.isArray(data?.picks) ? data.picks : []);
-  DEGEN.picks = picks;
-  DEGEN.updatedTehran = typeof data?.updated_tehran === 'string' ? data.updated_tehran : '';
-  DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
+  return { data: data && typeof data === 'object' && !Array.isArray(data) ? data : { picks }, picks };
+}
+function applyDegenDoc(data) {
+  const body = degenDocBody(data);
+  const ms = degenExpiry(body.data.updated_utc) || degenExpiry(body.data.updatedAt) || 0;
+  if (DEGEN.fileMs && ms && ms < DEGEN.fileMs) return null;
+  if (ms) DEGEN.fileMs = ms;
+  DEGEN.picks = body.picks;
+  DEGEN.updatedTehran = typeof body.data.updated_tehran === 'string' ? body.data.updated_tehran : '';
+  DEGEN.updatedAt = ms || Date.now();
   DEGEN.fetched = Date.now();
   DEGEN.error = '';
-  absorbHunterVetoes(picks);
-  absorbHunterRemoved(picks);
+  absorbHunterVetoes(body.picks);
+  absorbHunterRemoved(body.picks);
+  return body.picks;
+}
+async function fetchDegenDoc() {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const api = 'https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/degen.json?ref=main';
+    try {
+      const res = await fetch(api, { cache: 'no-store', signal: ctl.signal, headers: { Accept: 'application/vnd.github.raw' } });
+      if (res.ok) return await res.json();
+    } catch { /* raw fallback */ }
+    const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) throw new Error('degen ' + res.status);
+    return await res.json();
+  } finally { clearTimeout(timer); }
+}
+async function degenFetchFile() {
+  const data = await fetchDegenDoc();
+  const picks = applyDegenDoc(data);
+  if (!picks) return DEGEN.picks || [];
   return picks;
 }
 async function degenTokenPx(mint, force) {
@@ -6822,8 +6874,8 @@ async function degenTokenPx(mint, force) {
   return +best.priceUsd;
 }
 async function degenBuy(pick, opt) {
-  if (hunterRemoved(pick?.mint)) { degenBlockNote(pick, 'removed by Hunter'); return; }
   if (opt?.live) {
+    if (!degenEntryLive(pick) && hunterRemoved(pick?.mint)) { degenBlockNote(pick, 'removed by Hunter'); return; }
     const price = isNum(opt.price) ? opt.price : await degenTokenPx(pick.mint, true);
     if (degenCooled(pick.mint) || openPositions().some(p => p.open && p.mint === pick.mint) || (WALLETS.burner?.tokens?.get(pick.mint)?.raw > 0n)) { degenBlockNote(pick, 'cooldown or already held'); return; }
     const veto = hunterVeto(pick.mint);
@@ -6848,8 +6900,9 @@ async function degenBuy(pick, opt) {
     let r;
     try {
       r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, plan, entryReason: 'live scan · conf ' + (opt.conf ?? '') } });
-    } catch (e) { noteDegenExit(pick.mint); throw e; }
+    } catch (e) { throw e; }
     degenMark(pick.mint, 'bought', '');
+    degenLogEvent(pick.mint, 'bought', pick.symbol);
     degenNote('live scan bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
     toast('Live scan buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
     renderDegen();
@@ -6885,8 +6938,9 @@ async function degenBuy(pick, opt) {
   let r;
   try {
     r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick · READY @ ' + price(price) } });
-  } catch (e) { noteDegenExit(pick.mint); throw e; }
+  } catch (e) { throw e; }
   degenMark(pick.mint, 'bought', '');
+  degenLogEvent(pick.mint, 'bought', pick.symbol);
   degenNote('bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
   toast('Degen buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
   renderDegen();
@@ -6925,29 +6979,24 @@ async function degenExitTick(skipRefresh) {
 }
 async function degenPoll() {
   if (!degenOn() || degenBusy) return;
-  if (!WALLETS.burner?.kp) { degenNote('armed, unlock to run'); renderDegen(); return; }
-  if (degenLedgerShort()) { degenHaltFunds(); renderDegen(); return; }
+  if (!WALLETS.burner?.kp) { degenNote('armed, unlock to run'); degenLogEvent('pot', 'burner locked'); renderDegen(); return; }
+  if (degenLedgerShort()) { degenHaltFunds(); degenLogEvent('pot', 'Degen out of funds'); renderDegen(); return; }
   degenBusy = true;
   try {
-    const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('degen ' + res.status);
-    const data = await res.json();
-    DEGEN.picks = Array.isArray(data) ? data : (Array.isArray(data?.picks) ? data.picks : []);
-    DEGEN.updatedTehran = typeof data?.updated_tehran === 'string' ? data.updated_tehran : '';
-    DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
-    DEGEN.fetched = Date.now();
-    DEGEN.error = '';
-    absorbHunterVetoes(DEGEN.picks);
-    absorbHunterRemoved(DEGEN.picks);
-    for (const pick of DEGEN.picks) {
+    const data = await fetchDegenDoc();
+    const picks = applyDegenDoc(data);
+    if (!picks) { degenNote('stale degen.json ignored'); return; }
+    for (const pick of picks) {
       const block = degenBuyBlock();
       if (block) { degenBlockNote(pick, block); break; }
       let price = null;
       try { price = await degenTokenPx(pick.mint); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
       const why = degenPickBlock(pick, price);
       if (why) { degenBlockNote(pick, why); continue; }
-      try { await degenBuy(pick, { price }); } catch (e) { noteDegenExit(pick.mint); degenBlockNote(pick, e.message); }
-      break;
+      try {
+        const bought = await degenBuy(pick, { price });
+        if (bought) break;
+      } catch (e) { degenBlockNote(pick, e.message); }
     }
   } catch (e) { DEGEN.error = e.message || String(e); }
   finally { degenBusy = false; renderDegen(); }
@@ -6960,12 +7009,16 @@ function startDegen() {
 }
 function stopDegen() { clearInterval(degenTimer); degenTimer = null; }
 function degenStatus(pick, px) {
-  const exp = typeof agentTime === 'function' ? agentTime(pick?.expires) : null;
+  const exp = degenExpiry(pick?.expires);
   if (exp && exp < Date.now()) return 'EXPIRED';
   if (isNum(px) && +pick?.max_entry_price > 0 && px > +pick.max_entry_price) return 'ABOVE MAX';
   const now = pick?.entry_now === true || pick?.entry_now === 'true';
   if (now && +pick?.confidence >= 55 && isNum(px) && px > 0 && px <= +pick.max_entry_price) return 'READY';
   return 'WATCH';
+}
+function tehranHM(ts) {
+  const p = tehranParts(ts);
+  return pad2(p.h) + ':' + pad2(p.min);
 }
 function degenAgeLabel(h) {
   const n = +h;
@@ -6979,16 +7032,8 @@ async function degenWatch() {
   if (degenWatchBusy || document.hidden) return;
   degenWatchBusy = true;
   try {
-    const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('degen ' + res.status);
-    const data = await res.json();
-    DEGEN.picks = Array.isArray(data) ? data : (Array.isArray(data?.picks) ? data.picks : []);
-    DEGEN.updatedTehran = typeof data?.updated_tehran === 'string' ? data.updated_tehran : '';
-    DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
-    DEGEN.fetched = Date.now();
-    DEGEN.error = '';
-    absorbHunterVetoes(DEGEN.picks);
-    absorbHunterRemoved(DEGEN.picks);
+    const data = await fetchDegenDoc();
+    if (!applyDegenDoc(data)) { degenNote('stale degen.json ignored'); degenWatchBusy = false; renderDegen(); return; }
     DEGEN.quotes = DEGEN.quotes || {};
     const quoteList = (DEGEN.picks || []).filter(p => p?.mint);
     const take = window.__SMS_SAFE ? 3 : 6;
@@ -7195,7 +7240,7 @@ async function liveScanOnce() {
       noteScanHit({ mint: p.mint, symbol: p.symbol, ok: true, status: 'PASS', conf, reason: 'buying from degen pot', at: Date.now() });
       try {
         await degenBuy({ mint: p.mint, symbol: p.symbol, stop_pct: 25, time_stop_min: 45, trail: 20, max_entry_price: p.price }, { live: true, price: p.price, conf });
-      } catch (e) { noteDegenExit(p.mint); noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: e.message || 'buy failed', at: Date.now() }); }
+      } catch (e) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: e.message || 'buy failed', at: Date.now() }); degenLogEvent(p.mint, e.message || 'buy failed', p.symbol); }
       break;
     }
   } catch (e) {
@@ -7257,7 +7302,7 @@ function renderDegen() {
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
-      ${(() => { const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
+      ${(() => { const row = degenLastBlock(pick.mint); if (row) { const hm = tehranHM(row.at); const label = row.reason === 'bought' ? 'Bought ' + hm : 'Blocked ' + hm + ': ' + row.reason; const cls = row.reason === 'bought' ? 'text-emerald-300' : 'text-rose-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; } const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
     </article>`;
   }).join('');
