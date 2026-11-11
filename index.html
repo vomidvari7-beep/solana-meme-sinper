@@ -2636,6 +2636,7 @@ const routeLabel = (q) => (q.routePlan || []).map(r => r.swapInfo?.label || '?')
 const impactPct = (q) => (+q.priceImpactPct || 0) * 100;
 
 /* ---------------- wallets ---------------- */
+function burnerReady() { return !!(WALLETS.burner && WALLETS.burner.kp); }
 const WALLETS = {
   phantom: { key: 'phantom', label: 'Phantom', pubkey: null, sol: null, tokens: new Map(), provider: null, err: null },
   burner:  { key: 'burner',  label: 'Burner',  pubkey: (load(LS.burner, null) || {}).pub || null, sol: null, lastSol: null, tokens: new Map(), kp: null, err: null }
@@ -2685,7 +2686,7 @@ async function signAndSend(walletKey, tx) {
     const res = await w.provider.signAndSendTransaction(tx);
     const sig = res?.signature || res; if (!sig) throw new Error('Phantom returned no signature'); return typeof sig === 'string' ? sig : b58encode(sig);
   }
-  if (!w.kp) throw new Error('Burner wallet is locked');
+  if (!burnerReady()) throw new Error('Burner wallet is locked');
   tx.sign([w.kp]);
   return await rpc('sendTransaction', [bytesToB64(tx.serialize()), { encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 3 }], 30000);
 }
@@ -2868,7 +2869,7 @@ function isDegenFill(r) { return !!(r && (r.degen || r.plan?.degen)); }
 function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, degen = false } = {}) {
   const errs = []; const w = WALLETS[walletKey];
   if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
-  if (walletKey === 'burner' && !w.kp) errs.push('Burner wallet is locked — unlock it first');
+  if (walletKey === 'burner' && !burnerReady()) errs.push('Burner wallet is locked — unlock it first');
   if (!(sol > 0)) errs.push('Amount must be > 0');
   if (!degen) {
     const tradeCap = solCap(S.maxSolPerTrade), autoCap = solCap(A.maxSolPerTrade);
@@ -2940,7 +2941,7 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
 async function openTrade(side, mint, { sol, pct } = {}) {
   const walletKey = activeKey; const w = active();
   if (!w.pubkey) { if (walletKey === 'phantom') { const ok = await connectPhantom(false); if (!ok) return; } else return toast('Create or unlock the burner wallet first', 'warn'); }
-  if (walletKey === 'burner' && !w.kp) return toast('Unlock the burner wallet first', 'warn');
+  if (walletKey === 'burner' && !burnerReady()) return toast('Unlock the burner wallet first', 'warn');
   const t = tokenInfo(mint); const isBuy = side === 'buy';
   let amountRaw, inMint, outMint, inLabel;
   if (isBuy) {
@@ -3180,7 +3181,7 @@ async function evaluateExits() {
   if (typeof degenExitTick === 'function') await degenExitTick(true);
   if (typeof sniperExitTick === 'function') await sniperExitTick(true);
   if (typeof myListExits === 'function') await myListExits();
-  if (!(A.on && A.autoExit) || !WALLETS.burner?.kp) return;
+  if (!(A.on && A.autoExit) || !burnerReady()) { if (A.on && A.autoExit) botLog('auto', 'panel', 'burner locked'); return; }
   for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
     const lp = livePrices.get(p.mint)?.price;
     const ex = priceExit(p, lp);
@@ -4486,7 +4487,7 @@ function unlockBurner() {
     onConfirm: async () => { modalStatus('<span class="spinner spinner-light"></span> Decrypting…');
       const sk = await decryptSecret(rec, $('buPass').value); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
       if (kp.publicKey.toBase58() !== rec.pub) throw new Error('Decrypted key does not match stored address');
-      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); resumeArmedBots(); } });
+      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); if (typeof botLog === 'function') botLog('unlock', 'panel', 'unlocked ok'); if (typeof degenLogEvent === 'function') { degenLogEvent('pot', 'unlocked ok'); (DEGEN.picks || []).forEach(p => p && p.mint && degenLogEvent(p.mint, 'unlocked ok', p.symbol)); } resumeArmedBots(); } });
   setTimeout(() => $('buPass')?.focus(), 50);
 }
 function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); paintLockBanner(); toast('Burner locked (key wiped from memory)', 'info'); }
@@ -4502,7 +4503,7 @@ function exportBurner() {
       $('beCopy').addEventListener('click', async () => { if (await copyText(k)) toast('Key copied — clear your clipboard after use', 'warn'); }); return true; } });
 }
 function withdrawBurner() {
-  const b = WALLETS.burner; if (!b.kp) return toast('Unlock the burner first', 'warn'); resetModalButtons();
+  const b = WALLETS.burner; if (!burnerReady()) return toast('Unlock the burner first', 'warn'); resetModalButtons();
   const nTok = [...(b.tokens?.values() || [])].filter(h => h.raw > 0n).length;
   openModal({ title: '↗ Withdraw all SOL from burner', confirmLabel: 'Withdraw all SOL', danger: true,
     html: `<p class="text-xs text-slate-400">Sends the full SOL balance (minus the 0.000005 SOL network fee) from <span class="font-mono">${esc(short(b.pubkey))}</span> to the address below. ${nTok ? `<b class="text-amber-300">${nTok} token balance(s) are NOT moved</b> — sell them first.` : ''}</p>
@@ -4544,7 +4545,7 @@ function lockedBotCount() {
 function paintLockBanner() {
   const el = $('lockBanner');
   if (!el) return;
-  const locked = !!(burnerRec() && !WALLETS.burner.kp);
+  const locked = !!(burnerRec() && !burnerReady());
   el.hidden = !locked;
   document.body.classList.toggle('lock-warn', locked);
   const n = locked ? lockedBotCount() : 0;
@@ -5220,6 +5221,7 @@ function logMom(t, msg, level) {
   if (momSeen[k]) return;
   momSeen[k] = Date.now();
   autoLog(`${t.symbol}: momentum — ${msg}`, level || 'info');
+  botLog('momentum', t.mint, msg);
 }
 async function momentumTick(b, solGate, held, recent) {
   const maxAge = A.momentumMaxAgeH;
@@ -5318,7 +5320,7 @@ async function cappedBuy(opt) {
 }
 async function autoTick() {
   if (!A.on || autoBusy) return; const b = WALLETS.burner;
-  if (!b.kp) { killSwitch('burner locked'); return; }
+  if (!burnerReady()) { botLog('auto', 'panel', 'burner locked'); return; }
   autoBusy = true; lastTick = Date.now();
   try {
     await refreshPrices(); await refreshBalances('burner');
@@ -5332,12 +5334,13 @@ async function autoTick() {
     if (!A.on) return;
     if (agentPauseBuys()) {
       if (!AG.pauseLogged) { autoLog('Agent risk paused scanner auto-buy', 'warn'); AG.pauseLogged = true; }
+      botLog('plans', 'panel', 'agent risk paused buys');
       return;
     }
     AG.pauseLogged = false;
     const solGate = solFilterState();
     noteSolFilter(solGate, autoLog);
-    if (solGate.action === 'pause') return;
+    if (solGate.action === 'pause') { botLog('auto', 'panel', solGate.badge || 'mood pause'); return; }
     const openNow = openPositions().filter(p => p.wallet === 'burner');
     const held = new Set(openNow.map(p => p.mint));
     const recent = new Set(LOG.filter(r => r.auto && r.side === 'buy' && r.status !== 'failed' && Date.now() - r.ts < 24 * 3.6e6 && !r.scale).map(r => r.mint));
@@ -5471,7 +5474,7 @@ async function autoScan() {
 window.__smsAutoScan = autoScan;
 function startTimers() { clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = setInterval(autoTick, 30000); if (A.autoScan) scanTimer = setInterval(autoScan, A.scanMin * 60e3); }
 function enableAuto() {
-  readAutoInputs(); const b = WALLETS.burner; if (!b.kp) return toast('Unlock the burner first', 'warn'); resetModalButtons();
+  readAutoInputs(); const b = WALLETS.burner; if (!burnerReady()) return toast('Unlock the burner first', 'warn'); resetModalButtons();
   openModal({ title: '🤖 Turn auto-trading ON', confirmLabel: 'Start auto-trading', danger: true,
     html: `<p class="text-xs text-slate-300">The burner wallet <span class="font-mono">${esc(short(b.pubkey))}</span> (${isNum(b.sol) ? b.sol.toFixed(4) : '?'} SOL) will <b>sign and send swaps automatically, without asking</b>, while this tab stays open.</p>
       <ul class="text-[11px] text-slate-300 list-disc pl-4 mt-2 space-y-0.5"><li>Max ${A.maxSolPerTrade} SOL per auto trade · global ${S.maxSolPerTrade} SOL/trade and ${S.dailyMaxSol} SOL/day · ${A.balancePct}% of burner balance · ${A.dailyCap} SOL per day (auto) · ${maxPos()} open positions</li><li>Only Candidates with conviction ≥ ${A.minConviction}, verified checklist, no red flags, price impact ≤ ${A.maxImpact}%, slippage ≤ ${A.slipCap}%</li><li>Buys only when live price enters the analysis entry zone; one buy per token</li><li>Auto-exit: ${A.autoExit ? `ON (stop, break-even at +${A.beAtPct}%, early trail ${A.earlyTrailPct}% from +${A.earlyAtPct}%, 50% at +50%, 50% of rest at +100%, trail rest, time stop)` : 'OFF (alerts only)'} · Auto-scan: ${A.autoScan ? 'every ' + A.scanMin + ' min' : 'OFF'}</li></ul>
@@ -5512,7 +5515,7 @@ function botLive(key) {
 function renderBotBar() {
   const box = $('botBar'); if (!box) return;
   const prefs = botPrefs();
-  const locked = !WALLETS.burner.kp;
+  const locked = !burnerReady();
   const liveKeys = ['auto', 'mylist', 'copy', 'sniper', 'degen', 'scan'];
   const items = [
     ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
@@ -5531,7 +5534,8 @@ function renderBotBar() {
   };
   const row = ([key, label, sub]) => {
     const on = !!prefs[key];
-    const note = rowStatus(key, on) + (sub ? ' · ' + sub : '');
+    const lastSkip = typeof botLast === 'function' ? botLast(key, 'panel') : null;
+    const note = rowStatus(key, on) + (sub ? ' · ' + sub : '') + (lastSkip ? ' · ' + tehranHM(lastSkip.at) + ' ' + lastSkip.reason : '');
     return `<button type="button" data-bot="${key}" aria-pressed="${on}" class="bot-row">
       <span class="bot-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/></svg></span>
       <span class="min-w-0 flex-1"><span class="block truncate text-[15px] font-semibold text-slate-100">${label}</span><span class="block truncate text-[12px] text-slate-500">${note}</span></span>
@@ -5566,7 +5570,7 @@ function renderBotBar() {
   if (typeof paintLockBanner === 'function') paintLockBanner();
 }
 function setExecBot(key, on) {
-  const locked = !WALLETS.burner.kp;
+  const locked = !burnerReady();
   if (key === 'auto') {
     if (!on) { A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null; }
     else if (!locked) { A.on = true; startTimers(); setTimeout(autoTick, 400); }
@@ -5642,17 +5646,24 @@ function applyStoredBots() {
   saveAgentCfg({ usePlans: p.plans !== false, exits: !!p.exits });
 }
 function resumeArmedBots() {
-  if (!WALLETS.burner.kp) { renderBotBar(); return; }
+  if (!burnerReady()) { renderBotBar(); return; }
   const p = botPrefs();
   if (p.auto && !A.on) { A.on = true; startTimers(); setTimeout(autoTick, 400); }
   if (p.mylist && typeof MYLIST !== 'undefined' && !MYLIST.on) { MYLIST.on = true; startMyList(); setTimeout(myListTick, 500); }
   if (p.copy && typeof COPY !== 'undefined' && !COPY.on) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 600); }
   if (p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
   if (p.degen || degenCfg().on) { const d = degenCfg(); d.on = true; saveDegen(d); startDegen(); }
+  else if (typeof degenPoll === 'function') degenPoll();
   if (p.scan) { liveScanOn = true; if (!window.__SMS_SAFE) startLiveScan(); }
   A.momentumOn = !!p.momentum;
   renderBotBar();
   renderKillFab();
+  if (typeof myListTick === 'function' && (p.mylist || (typeof MYLIST !== 'undefined' && MYLIST.on))) myListTick();
+  if (typeof pollCopyOnce === 'function' && (p.copy || (typeof COPY !== 'undefined' && COPY.on))) pollCopyOnce();
+  if (typeof sniperPoll === 'function' && (p.sniper || (typeof SNIPER !== 'undefined' && SNIPER.on))) sniperPoll();
+  if ((p.auto || A.on) && typeof autoTick === 'function') autoTick();
+  if ((p.scan || liveScanOn) && typeof liveScanOnce === 'function' && !window.__SMS_SAFE) liveScanOnce();
+  if (typeof refreshAgents === 'function') refreshAgents();
   try { renderBurner(); } catch { /* ignore */ }
   try { if (typeof renderWhale === 'function') renderWhale(); } catch { /* ignore */ }
   try { if (typeof renderSniper === 'function') renderSniper(); } catch { /* ignore */ }
@@ -6011,7 +6022,7 @@ async function checkTrancheHolds() {
 }
 async function pollCopyOnce() {
   if (!COPY.on || copyBusy) return { skipped: true };
-  if (!WALLETS.burner.kp) { stopCopy('burner locked'); return { stopped: true }; }
+  if (!burnerReady()) { botLog('copy', 'panel', 'burner locked'); return { skipped: true }; }
   copyBusy = true;
   try {
     const list = WHALES.filter(w => isAddr(w.wallet));
@@ -6123,7 +6134,7 @@ function renderWhale() {
 function startCopyTimer() { clearInterval(copyTimer); copyTimer = setInterval(pollCopyOnce, COPY.pollSec * 1000); }
 function enableCopy() {
   persistWhaleCfg();
-  if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+  if (!burnerReady()) return toast('Unlock the burner first', 'warn');
   resetModalButtons();
   openModal({ title: '🐋 Turn copy mode ON', confirmLabel: 'Start copying', danger: true,
     html: `<p class="text-xs text-slate-300">The burner will copy new whale buys and mirror their sells while this tab is open. Existing global caps still apply. Copy mode turns off on reload.</p><label class="mt-3 flex gap-2 items-start text-xs"><input id="cAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand copies execute without asking.</label>`,
@@ -6325,7 +6336,7 @@ function rememberSniper(p, checks) {
 }
 async function sniperPoll() {
   if (!SNIPER.on || sniperBusy) return;
-  if (!WALLETS.burner.kp) { sniperNote('burner locked — sniper idle', 'warn'); return; }
+  if (!burnerReady()) { sniperNote('burner locked — sniper idle', 'warn'); botLog('sniper', 'panel', 'burner locked'); return; }
   sniperBusy = true;
   try {
     const pools = await discoverSnipes();
@@ -6343,18 +6354,20 @@ async function sniperPoll() {
         catch (e) { checks = checks.concat([{ name: 'safety', ok: false, detail: e.message }]); }
       } else if (cheap.ok) checks = checks.concat([{ name: 'safety', ok: false, detail: 'queued' }]);
       rememberSniper(p, checks);
+      const failed = checks.find(c => !c.ok);
+      if (failed) botLog('sniper', p.mint, failed.name + ': ' + failed.detail);
       if (checks.every(c => c.ok)) ready.push(p);
     }
     for (const p of ready) {
-      if (LOG.some(r => r.sniper && r.side === 'buy' && r.mint === p.mint && ['pending', 'confirmed'].includes(r.status))) { sniperNote(p.symbol + ' already sniped', 'info'); continue; }
-      if (gate.action === 'pause') { sniperNote(p.symbol + ' paused — ' + gate.badge, 'warn'); break; }
+      if (LOG.some(r => r.sniper && r.side === 'buy' && r.mint === p.mint && ['pending', 'confirmed'].includes(r.status))) { sniperNote(p.symbol + ' already sniped', 'info'); botLog('sniper', p.mint, 'already sniped'); continue; }
+      if (gate.action === 'pause') { sniperNote(p.symbol + ' paused — ' + gate.badge, 'warn'); botLog('sniper', p.mint, gate.badge || 'mood pause'); break; }
       const viaDegen = degenOn();
       let sol;
       if (viaDegen) {
         const block = degenBuyBlock();
-        if (block) { sniperNote(block, 'warn'); break; }
-        if (hunterRemoved(p.mint)) { sniperNote(p.symbol + ' removed by Hunter', 'warn'); continue; }
-        if (degenCooled(p.mint) || openPositions().some(x => x.open && x.mint === p.mint) || (WALLETS.burner?.tokens?.get(p.mint)?.raw > 0n)) { sniperNote(p.symbol + ' degen cooldown or already held', 'warn'); continue; }
+        if (block) { sniperNote(block, 'warn'); botLog('sniper', p.mint, block); break; }
+        if (hunterRemoved(p.mint)) { sniperNote(p.symbol + ' removed by Hunter', 'warn'); botLog('sniper', p.mint, 'removed by Hunter'); continue; }
+        if (degenCooled(p.mint) || openPositions().some(x => x.open && x.mint === p.mint) || (WALLETS.burner?.tokens?.get(p.mint)?.raw > 0n)) { sniperNote(p.symbol + ' degen cooldown or already held', 'warn'); botLog('sniper', p.mint, 'cooldown or already held'); continue; }
         if (!solPriceNow()) await refreshSolPrice();
         sol = degenTradeSol();
       } else {
@@ -6398,7 +6411,7 @@ async function sniperPoll() {
 async function sniperSell(p, pct, tag, lp) {
   if (p?.degen) return;
   const b = WALLETS.burner;
-  if (!b.kp) return;
+  if (!burnerReady()) { botLog('sniper', p.mint, 'burner locked'); return; }
   let h = b.tokens.get(p.mint);
   if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* ignore */ } h = b.tokens.get(p.mint); }
   if (!h || h.raw === 0n) return;
@@ -6415,6 +6428,7 @@ async function sniperSell(p, pct, tag, lp) {
 async function sniperExitTick(skipRefresh) {
   const open = openPositions().filter(p => p.sniper && p.wallet === 'burner');
   if (!open.length) return;
+  if (!burnerReady()) { botLog('sniper', 'panel', 'burner locked'); return; }
   if (!skipRefresh) { try { await refreshPrices(); } catch { /* price map may still be warm */ } }
   let changed = false;
   for (const p of openPositions().filter(x => x.sniper && !x.degen && x.wallet === 'burner')) {
@@ -6739,7 +6753,7 @@ function degenSolEffect() {
 function degenBuyBlock() {
   const cfg = degenCfg();
   if (!cfg.on) return 'degen pot off';
-  if (!WALLETS.burner?.kp) return 'burner locked';
+  if (!burnerReady()) return 'burner locked';
   if (degenLedgerShort()) { degenHaltFunds(); return 'Degen out of funds'; }
   if (cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd) return 'degen daily loss stop';
   if (cfg.maxOpen > 0 && openPositions().filter(p => p.degen).length >= cfg.maxOpen) return 'degen max open';
@@ -6771,6 +6785,28 @@ function degenLogEvent(mint, reason, symbol) {
   const rows = degenEventLog().filter(x => x && x.mint !== mint);
   rows.push({ mint, symbol: String(symbol || '').slice(0, 32), reason: String(reason).slice(0, 180), at: Date.now() });
   save(DEGEN_LOG_LS, rows.slice(-50));
+  if (typeof botLog === 'function' && mint !== 'pot') botLog('degen', mint, reason);
+}
+const BOT_LOG_LS = 'sms:botlog';
+function botLogBook() { const v = load(BOT_LOG_LS, []); return Array.isArray(v) ? v : []; }
+function botLog(bot, key, reason) {
+  if (!bot || !reason) return;
+  const id = bot + ':' + (key || 'panel');
+  const rows = botLogBook().filter(x => x && (x.bot + ':' + (x.key || 'panel')) !== id);
+  rows.push({ bot, key: key || 'panel', reason: String(reason).slice(0, 160), at: Date.now() });
+  save(BOT_LOG_LS, rows.slice(-80));
+}
+function botLast(bot, key) {
+  return botLogBook().filter(x => x && x.bot === bot && (x.key || 'panel') === (key || 'panel')).pop() || null;
+}
+function botSkipHtml(bot, key) {
+  const row = botLast(bot, key);
+  if (!row) return '';
+  const hm = typeof tehranHM === 'function' ? tehranHM(row.at) : '';
+  const ok = row.reason === 'unlocked ok' || row.reason === 'bought';
+  const cls = ok ? 'text-emerald-300' : 'text-rose-300';
+  const label = ok ? (row.reason + ' ' + hm) : ('Blocked ' + hm + ': ' + row.reason);
+  return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`;
 }
 function degenLastBlock(mint) {
   const row = degenEventLog().filter(x => x && x.mint === mint).pop();
@@ -6844,20 +6880,21 @@ function applyDegenDoc(data) {
   absorbHunterRemoved(body.picks);
   return body.picks;
 }
-async function fetchDegenDoc() {
+async function fetchAgentDoc(name) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   try {
-    const api = 'https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/degen.json?ref=main';
+    const api = 'https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=main';
     try {
       const res = await fetch(api, { cache: 'no-store', signal: ctl.signal, headers: { Accept: 'application/vnd.github.raw' } });
       if (res.ok) return await res.json();
     } catch { /* raw fallback */ }
-    const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
-    if (!res.ok) throw new Error('degen ' + res.status);
+    const res = await fetch(AGENT_RAW + name + '.json?t=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) throw new Error(name + ' ' + res.status);
     return await res.json();
   } finally { clearTimeout(timer); }
 }
+async function fetchDegenDoc() { return fetchAgentDoc('degen'); }
 async function degenFetchFile() {
   const data = await fetchDegenDoc();
   const picks = applyDegenDoc(data);
@@ -6952,7 +6989,7 @@ async function degenSell(p, pct, tag, lp, reason) {
   degenSelling = true;
   try {
     const b = WALLETS.burner;
-    if (!b.kp) return;
+    if (!burnerReady()) { botLog('degen', p.mint, 'burner locked'); degenLogEvent(p.mint, 'burner locked', p.symbol); return; }
     let h = b.tokens.get(p.mint);
     if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* ignore */ } h = b.tokens.get(p.mint); }
     if (!h || h.raw === 0n) return;
@@ -6968,7 +7005,8 @@ async function degenSell(p, pct, tag, lp, reason) {
 }
 async function degenExitTick(skipRefresh) {
   const open = openPositions().filter(p => p.degen && p.wallet === 'burner');
-  if (!open.length || !WALLETS.burner?.kp) return;
+  if (!open.length) return;
+  if (!burnerReady()) { botLog('degen', 'panel', 'burner locked'); return; }
   if (!skipRefresh) { try { await refreshPrices(); } catch { /* use the last price */ } }
   for (const p of openPositions().filter(x => x.degen && x.wallet === 'burner')) {
     const lp = livePrices.get(p.mint)?.price;
@@ -6987,7 +7025,7 @@ async function degenEvaluate(picks) {
   const list = Array.isArray(picks) ? picks : (DEGEN.picks || []);
   const ready = list.filter(p => p && degenStatus(p, degenShownPx(p)) === 'READY');
   if (!degenOn()) { ready.forEach(p => degenBlockNote(p, 'degen pot off')); return; }
-  if (!WALLETS.burner?.kp) { ready.forEach(p => degenBlockNote(p, 'burner locked')); degenNote('armed, unlock to run'); return; }
+  if (!burnerReady()) { ready.forEach(p => degenBlockNote(p, 'burner locked')); botLog('degen', 'panel', 'burner locked'); degenNote('armed, unlock to run'); return; }
   if (degenLedgerShort()) { degenHaltFunds(); ready.forEach(p => degenBlockNote(p, 'Degen out of funds')); return; }
   if (degenBusy) return;
   degenBusy = true;
@@ -7008,10 +7046,15 @@ async function degenEvaluate(picks) {
         if (bought) filled = true;
       } catch (e) { degenBlockNote(pick, e.message || 'buy failed'); }
     }
-  } finally { degenBusy = false; renderDegen(); }
+  } finally {
+    degenBusy = false;
+    renderDegen();
+    if (degenKickQueued && burnerReady()) { degenKickQueued = false; setTimeout(degenPoll, 0); }
+  }
 }
+let degenKickQueued = false;
 async function degenPoll() {
-  if (degenBusy) return;
+  if (degenBusy) { degenKickQueued = true; return; }
   try {
     const data = await fetchDegenDoc();
     const picks = applyDegenDoc(data);
@@ -7221,6 +7264,7 @@ async function liveScanOnce() {
   if (!liveScanOn || liveScanBusy || document.hidden) return;
   liveScanBusy = true;
   try {
+    if (!burnerReady()) { botLog('scan', 'panel', 'burner locked'); noteScanHit({ mint: '', symbol: 'scanner', ok: false, status: 'BLOCK', conf: null, reason: 'burner locked', at: Date.now() }); return; }
     if (degenLedgerShort()) { degenHaltFunds(); noteScanHit({ mint: '', symbol: 'scanner', ok: false, status: 'BLOCK', conf: null, reason: 'Degen out of funds', at: Date.now() }); return; }
     const rows = await discoverLivePairs();
     liveScanGap = 4000;
@@ -7253,7 +7297,7 @@ async function liveScanOnce() {
       if (!safe.ok) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: safe.reason, at: Date.now() }); continue; }
       const conf = liveConfidence(p);
       if (conf < 60) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: 'confidence ' + conf + ' < 60', at: Date.now() }); continue; }
-      if (!degenOn() || !WALLETS.burner?.kp) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: degenOn() ? 'burner locked' : 'degen pot off', at: Date.now() }); break; }
+      if (!degenOn() || !burnerReady()) { const why = degenOn() ? 'burner locked' : 'degen pot off'; noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: why, at: Date.now() }); botLog('scan', p.mint, why); break; }
       const block = degenBuyBlock();
       if (block) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: block, at: Date.now() }); break; }
       noteScanHit({ mint: p.mint, symbol: p.symbol, ok: true, status: 'PASS', conf, reason: 'buying from degen pot', at: Date.now() });
@@ -7321,7 +7365,7 @@ function renderDegen() {
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
-      ${(() => { const row = degenLastBlock(pick.mint); if (row) { const hm = tehranHM(row.at); const label = row.reason === 'bought' ? 'Bought ' + hm : 'Blocked ' + hm + ': ' + row.reason; const cls = row.reason === 'bought' ? 'text-emerald-300' : 'text-rose-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; } const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
+      ${(() => { const row = degenLastBlock(pick.mint); if (row) { const hm = tehranHM(row.at); const ok = row.reason === 'bought' || row.reason === 'unlocked ok'; const label = row.reason === 'bought' ? 'Bought ' + hm : row.reason === 'unlocked ok' ? 'Unlocked ok ' + hm : 'Blocked ' + hm + ': ' + row.reason; const cls = ok ? 'text-emerald-300' : 'text-rose-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; } const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
     </article>`;
   }).join('');
@@ -7437,7 +7481,7 @@ function renderSniper() {
   const box = $('sniperBox'); if (!box) return;
   const open = $('sniperDetails')?.open || SNIPER.on;
   const num = (id, v, step, label, extra = '') => `<label class="block"><span class="text-slate-400">${label}</span><input id="${id}" type="number" step="${step}" value="${v}" ${extra} class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>`;
-  const rows = sniperRows.slice(0, 8).map(r => `<li class="border-t border-white/5 py-1"><b class="text-slate-200">${esc(r.symbol)}</b> <span class="text-slate-500">${esc(r.source)}</span><div class="text-[10px]">${r.checks.map(c => `<span class="${c.ok ? 'text-emerald-300' : 'text-rose-300'}">${esc(c.name)}: ${esc(c.detail)}</span>`).join(' · ')}</div></li>`).join('');
+  const rows = sniperRows.slice(0, 8).map(r => `<li class="border-t border-white/5 py-1"><b class="text-slate-200">${esc(r.symbol)}</b> <span class="text-slate-500">${esc(r.source)}</span><div class="text-[10px]">${r.checks.map(c => `<span class="${c.ok ? 'text-emerald-300' : 'text-rose-300'}">${esc(c.name)}: ${esc(c.detail)}</span>`).join(' · ')}</div>${botSkipHtml('sniper', r.mint)}</li>`).join('');
   box.innerHTML = `<details id="sniperDetails" class="rounded-xl bg-ink-850 border ${SNIPER.on ? 'border-amber-400/50' : 'border-white/5'}" ${open ? 'open' : ''}>
     <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-between"><span>🎯 Launch Sniper</span>${SNIPER.on ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-ink-900">SNIPE ON</span>' : '<span class="text-[10px] text-slate-500">off</span>'}</summary>
     <div class="px-3 pb-3 text-xs space-y-2">
@@ -7463,7 +7507,7 @@ function renderSniper() {
   $('sSave')?.addEventListener('click', () => { readSniperForm(); saveSniper(); toast('Sniper settings saved', 'ok'); renderSniper(); if (SNIPER.on) startSniper(); });
   $('sOff')?.addEventListener('click', () => stopSniper('manual'));
   $('sOn')?.addEventListener('click', () => {
-    if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+    if (!burnerReady()) return toast('Unlock the burner first', 'warn');
     readSniperForm();
     resetModalButtons();
     openModal({ title: '🎯 Turn Launch Sniper ON', confirmLabel: 'Start sniper', danger: true,
@@ -8424,7 +8468,7 @@ function listContext(row) {
   else if (spec.mode === 'zone') why = 'price is outside the entry zone';
   if (gate.ready && badge === 'Waiting') {
     const blocks = listBuyBlocks(+listSolSize(spec).toFixed(6));
-    if (!WALLETS.burner.kp) { badge = 'In zone'; why = 'burner is locked'; }
+    if (!burnerReady()) { badge = 'In zone'; why = 'burner is locked'; botLog('mylist', row.mint, 'burner locked'); }
     else if (blocks.length) { badge = 'In zone'; why = blocks[0]; }
     else { badge = 'READY — entering'; why = ''; ready = true; }
   } else if (badge === 'Waiting' && (row.inZone || (spec.mode === 'momentum' && row.momState === 'trigger') || (spec.mode === 'range' && isNum(px) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && px >= spec.rangeLo && px <= spec.rangeHi))) badge = 'In zone';
@@ -8688,7 +8732,7 @@ function openScanChart(mint) {
   drawListChart(row, '4h');
 }
 async function myListBuyNow(row, typed, onDone) {
-  if (!WALLETS.burner.kp) { toast('Unlock the burner first', 'warn'); onDone?.(); return; }
+  if (!burnerReady()) { toast('Unlock the burner first', 'warn'); botLog('mylist', row.mint, 'burner locked'); onDone?.(); return; }
   const spec = listStrategy(row);
   const spend = typeof typed === 'number' ? capSpend(typed) : (typed == null || String(typed).trim() === '' ? resolveListSpend(spec) : resolveTypedSpend(typed));
   if (!spend.ok) { toast(spend.error, 'err', 8000); onDone?.(); return; }
@@ -8822,6 +8866,7 @@ function renderMyList() {
         </button>
         <label class="flex items-center text-[11px] text-slate-400 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
       </div>
+      ${botSkipHtml('mylist', row.mint)}
       <div class="token-sheet">
         <div class="sheet-grab"></div>
         <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">${esc(row.symbol || short(row.mint))}</b><button type="button" data-sheet-close class="text-sm text-slate-400">Close</button></div>
@@ -8884,7 +8929,7 @@ function renderMyList() {
   $('mlEditDefault')?.addEventListener('click', () => openListDefaults());
   $('mlOff')?.addEventListener('click', () => stopMyList('manual'));
   $('mlOn')?.addEventListener('click', () => {
-    if (!WALLETS.burner.kp) return toast('Unlock the burner first', 'warn');
+    if (!burnerReady()) return toast('Unlock the burner first', 'warn');
     resetModalButtons();
     openModal({ title: 'My List auto-buy', confirmLabel: 'Start', danger: true,
       html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Listed tokens can market-buy when their entry hits. Quality filters are not applied. Caps still are. This switch turns off on reload.</p><label class="mt-3 flex gap-2 text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
@@ -9041,20 +9086,21 @@ async function myListTick() {
   finally { listBusy = false; }
 }
 async function myListBuys() {
-  if (!MYLIST.on || !WALLETS.burner.kp) return;
+  if (!MYLIST.on) return;
+  if (!burnerReady()) { (MYLIST.rows || []).forEach(r => r && r.mint && botLog('mylist', r.mint, 'burner locked')); return; }
   for (const row of MYLIST.rows) {
     if (!MYLIST.on) return;
     const spec = listStrategy(row);
     const px = row.price;
-    if (!row.enabled || !(px > 0)) continue;
-    if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) continue;
+    if (!row.enabled || !(px > 0)) { if (row.enabled) botLog('mylist', row.mint, 'no live price'); continue; }
+    if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) { botLog('mylist', row.mint, 'buy already pending'); continue; }
     const pos = listPosition(row.mint);
     const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
     const gate = listEntryReady(spec, { enabled: row.enabled, open: !!pos, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
-    if (gate.state === 'disabled' || gate.state === 'cooldown') continue;
+    if (gate.state === 'disabled' || gate.state === 'cooldown') { botLog('mylist', row.mint, gate.state); continue; }
     const model = listChartModel(row, spec, px);
     const agent = agentPlanFor(row.mint);
-    if (agent && !agentPlanUsable(agent)) { autoLog((row.symbol || short(row.mint)) + ': analyst plan ' + (agent.status || 'not ready'), 'info'); continue; }
+    if (agent && !agentPlanUsable(agent)) { const why = 'analyst plan ' + (agent.status || 'not ready'); autoLog((row.symbol || short(row.mint)) + ': ' + why, 'info'); botLog('plans', row.mint, why); continue; }
     if (agent && !agentPlansOn()) continue;
     if (agentPlansOn() && agent && !pos && !(isSplitPlan(agent) && splitEntryOn())) {
       if (!(agentPlanUsable(agent) && agentTriggerHit(agent, px))) continue;
@@ -9063,7 +9109,7 @@ async function myListBuys() {
     const hg = holderTrend(row.mint);
     const strong = strongRead({ candles, px, holdersUp: isNum(hg?.p1h) && hg.p1h > 0.4, volH1: row.dexPair?.volume?.h1, volH24: row.dexPair?.volume?.h24 });
     const resolved = resolveListSpend(spec);
-    if (!resolved.ok) { autoLog('My List ' + (row.symbol || short(row.mint)) + ' — ' + resolved.error, 'warn'); continue; }
+    if (!resolved.ok) { autoLog('My List ' + (row.symbol || short(row.mint)) + ' — ' + resolved.error, 'warn'); botLog('mylist', row.mint, resolved.error); continue; }
     const full = resolved.sol;
     const agentLive = agentPlansOn() && agent && agentPlanUsable(agent) && agentTriggerHit(agent, px);
     const tradeSpec = agentLive ? agentSpec(spec, row, agent, px) : spec;
@@ -9139,6 +9185,7 @@ async function myListBuys() {
 }
 async function myListExits() {
   if (A.on && A.autoExit) return;
+  if (!burnerReady()) { botLog('mylist', 'panel', 'burner locked'); return; }
   for (const p of openPositions()) {
     if (p.degen || !(p.myList || p.plan?.myList) || p.wallet !== 'burner') continue;
     const lp = livePrices.get(p.mint)?.price ?? MYLIST.rows.find(r => r.mint === p.mint)?.price;
@@ -9440,7 +9487,7 @@ function applyAgentRisk() {
       playAgentAlert();
       continue;
     }
-    if (!pos || !WALLETS.burner.kp) continue;
+    if (!pos || !burnerReady()) { if (pos) botLog('exits', pos.mint, 'burner locked'); continue; }
     const lp = livePrices.get(pos.mint)?.price;
     const pct = row.action === 'exit_now' ? 100 : Math.min(100, Math.max(1, agentNum(row.partial_pct) || 50));
     AG.seenRisk[key] = now;
@@ -9466,6 +9513,7 @@ function renderAgentPicks() {
       <div class="flex items-center gap-3"><span class="mono-logo">${esc(String(c.symbol || '?').slice(0, 1).toUpperCase())}</span><span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(c.symbol || short(c.mint))}</b><span class="block text-[12px] text-slate-500">${ago} · score ${isNum(agentNum(c.score)) ? Math.round(+c.score) : '—'}</span></span><span class="status-dot ${plan && agentPlanUsable(plan) ? 'on' : ''}"></span></div>
       <div class="mt-2 text-[13px] text-slate-400 whitespace-normal break-words">${esc(c.reason || 'No summary yet.')}${c.safety ? ' · ' + esc(c.safety) : ''}</div>
       ${agentPlanChip(c.mint)}
+      ${botSkipHtml('plans', c.mint)}
       <div class="mt-2 flex gap-2 text-[11px]">
         <button type="button" data-agent-add="${esc(c.mint)}" class="rounded-lg px-2 py-1 bg-violet-600 text-white">Add to My List</button>
         <button type="button" data-agent-buy="${esc(c.mint)}" class="rounded-lg px-2 py-1 bg-emerald-500 font-bold text-ink-950">Buy</button>
@@ -9500,9 +9548,11 @@ async function refreshAgents() {
   const names = ['candidates', 'mylist', 'plans', 'risk', 'config'];
   await Promise.all(names.map(async (name) => {
     try {
-      const res = await fetch(AGENT_RAW + name + '.json?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error(name + ' ' + res.status);
-      const data = await res.json();
+      const data = await fetchAgentDoc(name);
+      const stamp = (typeof degenExpiry === 'function' ? (degenExpiry(data?.updated_utc) || degenExpiry(data?.updatedAt) || degenExpiry(data?.ts)) : 0) || 0;
+      AG.fileMs = AG.fileMs || {};
+      if (stamp && AG.fileMs[name] && stamp < AG.fileMs[name]) { botLog(name === 'plans' ? 'plans' : 'agents', 'panel', 'stale ' + name + '.json ignored'); return; }
+      if (stamp) AG.fileMs[name] = stamp;
       AG.pulled = AG.pulled || {};
       AG.pulled[name] = Date.now();
       AG.fetched[name] = Date.now();
