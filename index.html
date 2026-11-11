@@ -872,7 +872,7 @@ async function fetchSolContext() {
   return ctx;
 }
 function renderTicker(ctx) {
-  if (ctx) { if (!ctx.at) ctx.at = Date.now(); window.__SMS_SOL = ctx; if (typeof window.__smsSizePrice === 'function') window.__smsSizePrice(); }
+  if (ctx) { if (!ctx.at) ctx.at = Date.now(); window.__SMS_SOL = ctx; if (isNum(+ctx.price) && typeof noteSolSample === 'function') noteSolSample(+ctx.price); if (typeof window.__smsSizePrice === 'function') window.__smsSizePrice(); }
   if (!ctx || !isNum(ctx.price)) { flashValue($('solPrice'), '—'); flashValue($('solChg'), 'unavailable'); if (typeof window.__smsSolBadge === 'function') window.__smsSolBadge(); return; }
   flashValue($('solPrice'), '$' + ctx.price.toFixed(2));
   $('solChg').className = 'font-mono text-[10px] tabular ' + pctCls(ctx.h24); flashValue($('solChg'), pct(ctx.h24) + ' 24h');
@@ -2771,7 +2771,7 @@ let sizeStore = 'sol';
 let solPxMem = { price: 0, at: 0 };
 function rememberSol(px) {
   const n = +px;
-  if (n > 0) { solPxMem = { price: n, at: Date.now() }; if (!(T_state.solPrice > 0)) T_state.solPrice = n; }
+  if (n > 0) { solPxMem = { price: n, at: Date.now() }; if (!(T_state.solPrice > 0)) T_state.solPrice = n; noteSolSample(n); }
   return n > 0 ? n : null;
 }
 function solPriceNow() {
@@ -11666,7 +11666,6 @@ const SCALP_RULE = {
   START_USD: 100,
   MIN_FREE: 5,
   MAX_OPEN: 2,
-  DAY_LOSS: 20,
   LIQ_MIN: 50000,
   VOL24_MIN: 100000,
   AGE_MIN_H: 2,
@@ -11719,7 +11718,39 @@ const scalpStopArm = {};
 const scalpWhy = { symbol: '', reason: 'Scalp is off', at: 0 };
 let SCALP_SCAN = [];
 let SCALP_SCAN_AT = 0;
-let SCALP_SOL = { m15: null, at: 0 };
+let SCALP_SOL = { m15: null, m15Source: '', m5: null, h1: null, at: 0 };
+const SOL_RING = [];
+const scalpSolLogged = new Set();
+function noteSolSample(px) {
+  const n = +px;
+  if (!(n > 0)) return;
+  const now = Date.now();
+  const last = SOL_RING[SOL_RING.length - 1];
+  if (last && now - last.t < 20000) return;
+  SOL_RING.push({ t: now, px: n });
+  const cut = now - 25 * 60e3;
+  while (SOL_RING.length && SOL_RING[0].t < cut) SOL_RING.shift();
+  if (SOL_RING.length > 80) SOL_RING.splice(0, SOL_RING.length - 80);
+}
+function solRingChange(now) {
+  if (SOL_RING.length < 2) return null;
+  const latest = SOL_RING[SOL_RING.length - 1];
+  if (now - latest.t > 3 * 60e3) return null;
+  const target = now - 15 * 60e3;
+  let best = null;
+  for (const s of SOL_RING) {
+    const age = now - s.t;
+    if (age < 12 * 60e3 || age > 20 * 60e3) continue;
+    if (!best || Math.abs(s.t - target) < Math.abs(best.t - target)) best = s;
+  }
+  if (!best || !(best.px > 0)) return null;
+  return (latest.px / best.px - 1) * 100;
+}
+function logSolOnce(msg) {
+  if (scalpSolLogged.has(msg)) return;
+  scalpSolLogged.add(msg);
+  botLog('scalp', 'SOL', msg);
+}
 function scalpOn() { return !!SCALP_ON; }
 function scalpDexOk(dex) {
   const d = String(dex || '').toLowerCase();
@@ -11890,9 +11921,12 @@ function scalpRoll(book) {
 }
 function scalpDayStopped(book) {
   scalpRoll(book);
+  if (book.haltDay === book.dayKey && (+book.pausesToday || 0) < SCALP_RULE.MAX_PAUSES) {
+    book.haltDay = '';
+    saveScalpLog(book);
+  }
   if (book.haltDay === book.dayKey) return 'scalp stopped for the day';
   if ((+book.pausesToday || 0) >= SCALP_RULE.MAX_PAUSES) return 'two pauses today';
-  if (scalpTodayPnl() <= -SCALP_RULE.DAY_LOSS) return 'daily -$20 stop';
   return '';
 }
 function scalpSizeUsd() {
@@ -12081,7 +12115,6 @@ function applyScalpLedger(rec) {
         if (log.pausesToday >= SCALP_RULE.MAX_PAUSES) log.haltDay = tehranDayKey(Date.now());
       }
     } else log.streak = 0;
-    if (scalpTodayPnl(book) <= -SCALP_RULE.DAY_LOSS) log.haltDay = tehranDayKey(Date.now());
     scalpNote(log, { kind: 'exit', mint: rec.mint, symbol: rec.symbol || '', reason: rec.entryReason || rec.exitTag || 'exit', m5: rec.plan?.m5, bsr: rec.plan?.bsr, volX: rec.plan?.volX, impact: rec.impactPct, ema15: rec.plan?.ema15 });
   }
   saveScalpLedger(book);
@@ -12129,23 +12162,52 @@ function scalpGate(mint) {
 }
 async function scalpSolBlock() {
   const ctx = window.__SMS_SOL || {};
-  const h1 = isNum(+ctx.h1) ? +ctx.h1 : null;
-  if (h1 == null) return 'SOL 1h unavailable';
-  if (h1 < SCALP_RULE.SOL_1H_MIN) return 'SOL 1h ' + h1.toFixed(1) + '%';
+  if (isNum(+ctx.price)) noteSolSample(+ctx.price);
+  let h1 = isNum(+ctx.h1) ? +ctx.h1 : null;
+  let m5 = isNum(+ctx.m5) ? +ctx.m5 : null;
   if (!SCALP_SOL.at || Date.now() - SCALP_SOL.at > 60000) {
+    const now = Date.now();
+    let candles = null;
     try {
       const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + SOL_MINT, { timeout: 8000 });
       const usdc = (arr || []).filter(p => p.baseToken?.address === SOL_MINT && /^(USDC|USDT)$/.test(p.quoteToken?.symbol || '')).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-      let m15 = null;
-      if (usdc?.pairAddress) {
-        const cs = await fetchOhlcv(usdc.pairAddress, '15m');
-        if (cs.length >= 2 && cs[cs.length - 2].c > 0) m15 = (cs[cs.length - 1].c / cs[cs.length - 2].c - 1) * 100;
+      if (usdc) {
+        if (isNum(+usdc.priceUsd)) noteSolSample(+usdc.priceUsd);
+        if (h1 == null && isNum(+usdc.priceChange?.h1)) h1 = +usdc.priceChange.h1;
+        if (m5 == null && isNum(+usdc.priceChange?.m5)) m5 = +usdc.priceChange.m5;
+        if (usdc.pairAddress) {
+          try { candles = await fetchOhlcv(usdc.pairAddress, '15m'); }
+          catch { candles = null; }
+        }
       }
-      SCALP_SOL = { m15, at: Date.now() };
-    } catch { return 'SOL 15m unavailable'; }
+    } catch { candles = null; }
+    if (h1 == null && isNum(SCALP_SOL.h1)) h1 = SCALP_SOL.h1;
+    if (m5 == null && isNum(SCALP_SOL.m5)) m5 = SCALP_SOL.m5;
+    let m15 = null;
+    let m15Source = '';
+    const prev = candles && candles.length >= 2 ? candles[candles.length - 2] : null;
+    const last = candles && candles.length >= 2 ? candles[candles.length - 1] : null;
+    if (prev && last && prev.c > 0 && last.c > 0) { m15 = (last.c / prev.c - 1) * 100; m15Source = 'ohlcv'; }
+    if (m15 == null) {
+      const ring = solRingChange(now);
+      if (ring != null) { m15 = ring; m15Source = 'ring'; }
+    }
+    if (m15 == null && (isNum(m5) || isNum(h1))) m15Source = 'proxy';
+    if (!m15Source) logSolOnce('SOL 15m unknown');
+    SCALP_SOL = { m15, m15Source, m5, h1, at: now };
   }
-  if (SCALP_SOL.m15 == null) return 'SOL 15m unavailable';
-  if (SCALP_SOL.m15 < SCALP_RULE.SOL_15M_MIN) return 'SOL 15m ' + SCALP_SOL.m15.toFixed(1) + '%';
+  const h1Now = isNum(SCALP_SOL.h1) ? SCALP_SOL.h1 : h1;
+  const m5Now = isNum(SCALP_SOL.m5) ? SCALP_SOL.m5 : m5;
+  if (h1Now == null) logSolOnce('SOL 1h unknown');
+  else if (h1Now < SCALP_RULE.SOL_1H_MIN) return 'SOL 1h ' + h1Now.toFixed(1) + '%';
+  if (SCALP_SOL.m15Source === 'ohlcv' || SCALP_SOL.m15Source === 'ring') {
+    if (isNum(SCALP_SOL.m15) && SCALP_SOL.m15 < SCALP_RULE.SOL_15M_MIN) return 'SOL 15m ' + SCALP_SOL.m15.toFixed(1) + '%';
+    return '';
+  }
+  if (SCALP_SOL.m15Source === 'proxy') {
+    if (isNum(m5Now) && m5Now < SCALP_RULE.SOL_15M_MIN) return 'SOL m5 ' + m5Now.toFixed(1) + '%';
+    if (isNum(h1Now) && h1Now < SCALP_RULE.SOL_1H_MIN) return 'SOL 1h ' + h1Now.toFixed(1) + '%';
+  }
   return '';
 }
 function scalpUniverse() {
@@ -12385,7 +12447,7 @@ function renderScalp() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today · win rate</div><div class="font-mono">${todayN} · ${wr}</div></div>
     </div>
     <p class="mt-2 text-[12px] text-slate-300 whitespace-normal break-words">Next size <b>${liveTestOn() ? '$3 (test)' : (sized.usd >= SCALP_RULE.MIN_FREE ? usd(sized.usd, 2) : '—')}</b> <span class="text-slate-500">${esc(liveTestOn() ? 'live test cap' : (sized.label || ''))}</span></p>
-    <p class="text-[11px] text-slate-500 whitespace-normal break-words">Free ${usd(eq.book.balanceUsd, 2)} · 50% then remainder · daily stop -$20 · max 2</p>
+    <p class="text-[11px] text-slate-500 whitespace-normal break-words">Free ${usd(eq.book.balanceUsd, 2)} · 50% then remainder · max 2</p>
     ${why}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open</h3>
     ${openHtml || '<p class="empty-note mt-1">No open scalp.</p>'}

@@ -72,8 +72,9 @@ export function createNet(cfg) {
       const usdc = (arr?.pairs || []).find(p => p.quoteToken?.symbol === 'USDC' || p.baseToken?.symbol === 'USDC');
       const px = usdc ? +usdc.priceUsd : null;
       const h1 = usdc?.priceChange?.h1 != null ? +usdc.priceChange.h1 : null;
-      return { price: px, h1, pool: usdc?.pairAddress || '' };
-    } catch { return { price: null, h1: null, m15: null }; }
+      const m5 = usdc?.priceChange?.m5 != null ? +usdc.priceChange.m5 : null;
+      return { price: px, h1, m5, pool: usdc?.pairAddress || '' };
+    } catch { return { price: null, h1: null, m5: null }; }
   }
   async function newPools() {
     const urls = [

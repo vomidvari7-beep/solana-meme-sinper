@@ -1,5 +1,6 @@
-import { degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, mlStop, planTriggerHit, planUsable, quoteImpact, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpStopLevel, textHasRugFlag } from './rules.js';
+import { degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
+import { tehranDayKey } from './util.js';
 
 function assert(cond, msg) {
   if (!cond) { console.error('FAIL ' + msg); process.exit(1); }
@@ -121,4 +122,23 @@ assert(degenLossPct(8) === 12 && degenLossPct(40) === 25 && degenLossPct(18) ===
 assert(degenPotLimits({ per_trade_usd: 20, max_open: 5, budget_usd: 40 }).tradeUsd === 12.5, 'pot cannot loosen size');
 assert(degenPotLimits({ per_trade_usd: 8, max_open: 1, budget_usd: 10 }).maxOpen === 1, 'pot can tighten');
 assert(degenPotLimits({}).budgetUsd === 25 && degenPotLimits(null).maxOpen === 2, 'pot defaults');
+
+const solNow = Date.now();
+const solDay = tehranDayKey(solNow);
+assert(scalpDayBlock({ scalpLog: { dayKey: solDay, haltDay: '', pausesToday: 0, pauseUntil: 0 }, ledgers: { scalp: { trades: [{ side: 'sell', ts: solNow, pnlUsd: -25 }] } } }) === '', 'a $25 day loss does not stop scalp');
+assert(scalpDayBlock({ scalpLog: { dayKey: solDay, haltDay: '', pausesToday: 2, pauseUntil: 0 }, ledgers: { scalp: { trades: [] } } }) === 'two pauses today', 'two pauses still stop the day');
+assert(scalpDayBlock({ scalpLog: { dayKey: solDay, haltDay: '', pausesToday: 0, pauseUntil: solNow + 1000 }, ledgers: { scalp: { trades: [] } } }) === 'paused 30m after 3 losses', 'three-loss pause stays');
+const solSamples = [{ t: solNow - 15 * 60e3, px: 100 }, { t: solNow, px: 97 }];
+assert(Math.abs(solRingChange(solSamples, solNow) + 3) < 1e-9, 'ring reads the 15 minute change');
+const viaRing = resolveSolM15({ candles: [{ c: 1 }], samples: solSamples, m5: 0, h1: 0, now: solNow });
+assert(viaRing.m15Source === 'ring' && Math.abs(viaRing.m15 + 3) < 1e-9, 'ring is used when 15m candles are short');
+const viaProxy = resolveSolM15({ candles: [], samples: [], m5: -2, h1: -1, now: solNow });
+assert(viaProxy.m15Source === 'proxy', 'm5 and h1 proxy when nothing else is known');
+assert(scalpSolBlockReason({ h1: -1, m5: -2, m15: null, m15Source: 'proxy' }) === 'SOL m5 -2.0%', 'proxy blocks m5 under -1.5%');
+assert(scalpSolBlockReason({ h1: -1, m5: -1, m15: null, m15Source: 'proxy' }) === '', 'proxy allows a mild dip');
+assert(scalpSolBlockReason({ h1: -4, m5: 0, m15: null, m15Source: 'proxy' }).startsWith('SOL 1h'), '1h still blocks');
+assert(scalpSolBlockReason({ h1: null, m5: null, m15: null, m15Source: '' }) === '', 'unknown sol change does not block');
+const viaOhlcv = resolveSolM15({ candles: [{ c: 100 }, { c: 98 }], samples: [], m5: -9, h1: -9, now: solNow });
+assert(viaOhlcv.m15Source === 'ohlcv' && Math.abs(viaOhlcv.m15 + 2) < 1e-9, '15m candles win over the proxy');
+assert(scalpSolBlockReason({ h1: -1, m5: -9, m15: viaOhlcv.m15, m15Source: 'ohlcv' }) === 'SOL 15m -2.0%', 'ohlcv still uses the -1.5% line');
 console.log('selftest ok');

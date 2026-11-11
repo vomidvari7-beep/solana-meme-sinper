@@ -1,7 +1,7 @@
 import { emaLast, isNum, lineAt, swingPoints, tehranDayKey, usd6 } from './util.js';
 
 export const SCALP = {
-  START_USD: 100, MIN_FREE: 5, MAX_OPEN: 2, DAY_LOSS: 20,
+  START_USD: 100, MIN_FREE: 5, MAX_OPEN: 2,
   LIQ_MIN: 50000, VOL24_MIN: 100000, AGE_MIN_H: 2, TOP10_MAX: 30, INSIDER_MAX: 20,
   M5_MIN: 1, M5_MAX: 10, H1_MAX: 60, BODY_MAX: 0.04, EMA20_MAX_ABOVE: 0.03, LAST3_MAX: 0.08,
   VOL_MULT: 2, FLOW: 1.2, BUYS_MIN: 15, IMPACT_MAX: 0.5, SLIP_BPS: 150, QUOTE_DRIFT: 0.01,
@@ -112,13 +112,69 @@ export function scalpTodayPnl(book) {
   return (scalpLedgerOf(book).trades || []).filter(t => t.side === 'sell' && tehranDayKey(t.ts) === day).reduce((s, t) => s + (isNum(t.pnlUsd) ? t.pnlUsd : 0), 0);
 }
 
+export function pushSolSample(samples, px, now = Date.now()) {
+  const n = +px;
+  if (!(n > 0) || !Array.isArray(samples)) return samples;
+  const last = samples[samples.length - 1];
+  if (last && now - last.t < 20000) return samples;
+  samples.push({ t: now, px: n });
+  const cut = now - 25 * 60e3;
+  while (samples.length && samples[0].t < cut) samples.shift();
+  if (samples.length > 80) samples.splice(0, samples.length - 80);
+  return samples;
+}
+
+export function solRingChange(samples, now = Date.now()) {
+  const rows = (samples || []).filter(s => s && s.px > 0 && s.t > 0);
+  if (rows.length < 2) return null;
+  const latest = rows[rows.length - 1];
+  if (now - latest.t > 3 * 60e3) return null;
+  const target = now - 15 * 60e3;
+  let best = null;
+  for (const s of rows) {
+    const age = now - s.t;
+    if (age < 12 * 60e3 || age > 20 * 60e3) continue;
+    if (!best || Math.abs(s.t - target) < Math.abs(best.t - target)) best = s;
+  }
+  if (!best || !(best.px > 0)) return null;
+  return (latest.px / best.px - 1) * 100;
+}
+
+export function resolveSolM15({ candles, samples, m5, h1, now = Date.now() } = {}) {
+  const cs = Array.isArray(candles) ? candles : [];
+  const prev = cs.length >= 2 ? cs[cs.length - 2] : null;
+  const last = cs.length >= 2 ? cs[cs.length - 1] : null;
+  if (prev && last && prev.c > 0 && last.c > 0) return { m15: (last.c / prev.c - 1) * 100, m15Source: 'ohlcv' };
+  const ring = solRingChange(samples, now);
+  if (ring != null) return { m15: ring, m15Source: 'ring' };
+  if (isNum(m5) || isNum(h1)) return { m15: null, m15Source: 'proxy' };
+  return { m15: null, m15Source: '' };
+}
+
+export function scalpSolBlockReason(sol) {
+  const h1 = isNum(sol?.h1) ? +sol.h1 : null;
+  const m5 = isNum(sol?.m5) ? +sol.m5 : null;
+  const m15 = isNum(sol?.m15) ? +sol.m15 : null;
+  const source = sol?.m15Source || '';
+  if (h1 != null && h1 < SCALP.SOL_1H_MIN) return 'SOL 1h ' + h1.toFixed(1) + '%';
+  if (source === 'ohlcv' || source === 'ring') {
+    if (m15 != null && m15 < SCALP.SOL_15M_MIN) return 'SOL 15m ' + m15.toFixed(1) + '%';
+    return '';
+  }
+  if (source === 'proxy') {
+    if (m5 != null && m5 < SCALP.SOL_15M_MIN) return 'SOL m5 ' + m5.toFixed(1) + '%';
+    if (h1 != null && h1 < SCALP.SOL_1H_MIN) return 'SOL 1h ' + h1.toFixed(1) + '%';
+    return '';
+  }
+  return '';
+}
+
 export function scalpDayBlock(book) {
   const log = book.scalpLog || {};
   const day = tehranDayKey();
   if (log.dayKey !== day) return '';
   if (log.haltDay === day) return 'scalp stopped for the day';
   if ((+log.pausesToday || 0) >= SCALP.MAX_PAUSES) return 'two pauses today';
-  if (scalpTodayPnl(book) <= -SCALP.DAY_LOSS) return 'daily -$20 stop';
   if (log.pauseUntil > Date.now()) return 'paused 30m after 3 losses';
   return '';
 }

@@ -1,5 +1,5 @@
 import { tapeFromDex } from './net.js';
-import { CAPS, fakeDataReason, h1BreakSignal, h1TrendHold, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
+import { CAPS, fakeDataReason, h1BreakSignal, h1TrendHold, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, pushSolSample, quoteImpact, resolveSolM15, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
 import { isNum, log, tehranDayKey, WSOL } from './util.js';
 
 function pairTape(p) { return tapeFromDex(p); }
@@ -20,7 +20,9 @@ export function createEngine(cfg, state, net, swap) {
     return '';
   }
   let agents = {};
-  let sol = { price: null, h1: null, m15: null, at: 0 };
+  let sol = { price: null, h1: null, m5: null, m15: null, m15Source: '', m15at: 0, at: 0 };
+  const solRing = [];
+  const solLogged = new Set();
   let recentScan = [];
   let h1Cursor = 0;
   const breakViews = new Map();
@@ -94,18 +96,36 @@ export function createEngine(cfg, state, net, swap) {
     }
     state.touch();
   }
+  function logSolOnce(msg) {
+    if (solLogged.has(msg)) return;
+    solLogged.add(msg);
+    log('scalp', msg);
+  }
   async function refreshSol() {
-    if (Date.now() - (sol.at || 0) < 20000 && sol.price && isNum(sol.h1) && isNum(sol.m15)) return sol;
+    const now = Date.now();
+    const m15Fresh = now - (sol.m15at || 0) < 60000;
+    if (now - (sol.at || 0) < 20000 && sol.price && m15Fresh) return sol;
     const next = await net.sol();
-    let m15 = isNum(sol.m15) ? sol.m15 : null;
-    if (next.pool && Date.now() - (sol.m15at || 0) > 60000) {
-      try {
-        const cs = await net.ohlcv(next.pool, '15m');
-        if (cs.length >= 2 && cs.at(-2).c > 0) m15 = (cs.at(-1).c / cs.at(-2).c - 1) * 100;
-      } catch { m15 = null; }
-      sol.m15at = Date.now();
+    if (next.price > 0) pushSolSample(solRing, next.price, now);
+    const h1 = isNum(next.h1) ? next.h1 : (isNum(sol.h1) ? sol.h1 : null);
+    const m5 = isNum(next.m5) ? next.m5 : (isNum(sol.m5) ? sol.m5 : null);
+    let m15 = sol.m15;
+    let m15Source = sol.m15Source || '';
+    let m15at = sol.m15at || 0;
+    if (!m15Fresh) {
+      let candles = null;
+      if (next.pool) {
+        try { candles = await net.ohlcv(next.pool, '15m'); }
+        catch { candles = null; }
+      }
+      const resolved = resolveSolM15({ candles, samples: solRing, m5, h1, now });
+      m15 = resolved.m15;
+      m15Source = resolved.m15Source;
+      m15at = now;
+      if (!m15Source) logSolOnce('SOL 15m unknown');
     }
-    sol = { price: next.price, h1: next.h1, pool: next.pool, m15, m15at: sol.m15at || 0, at: Date.now() };
+    if (h1 == null) logSolOnce('SOL 1h unknown');
+    sol = { price: next.price || sol.price || null, h1, m5, pool: next.pool || sol.pool || '', m15, m15Source, m15at, at: now };
     return sol;
   }
   function guard(mint, tape) {
@@ -160,10 +180,8 @@ export function createEngine(cfg, state, net, swap) {
   async function scalpTick() {
     if (!state.data.toggles.scalp || state.data.paused) return;
     await refreshSol();
-    if (!isNum(sol.h1)) { state.note('scalp', 'SOL', 'SOL', 'SOL 1h unavailable'); return; }
-    if (sol.h1 < SCALP.SOL_1H_MIN) { state.note('scalp', 'SOL', 'SOL', 'SOL 1h ' + sol.h1.toFixed(1) + '%'); return; }
-    if (!isNum(sol.m15)) { state.note('scalp', 'SOL', 'SOL', 'SOL 15m unavailable'); return; }
-    if (sol.m15 < SCALP.SOL_15M_MIN) { state.note('scalp', 'SOL', 'SOL', 'SOL 15m ' + sol.m15.toFixed(1) + '%'); return; }
+    const solMood = scalpSolBlockReason(sol);
+    if (solMood) { state.note('scalp', 'SOL', 'SOL', solMood); return; }
     const block = scalpDayBlock(state.data);
     if (block) { state.note('scalp', '', '', block); return; }
     if (await scalpBreak1h()) return;
