@@ -3319,6 +3319,7 @@ function setLiveTest(on) {
   save(TEST_LS, { on: !!on });
   try { renderLiveTest(); } catch { /* card later */ }
   try { renderScalp(); } catch { /* scalp later */ }
+  if (on && burnerReady() && A.on) armForcedTest();
 }
 function testBook() {
   const v = load(TEST_LOG, []);
@@ -3338,7 +3339,7 @@ function liveTestTake(sol) {
 function noteTestBuy(rec) {
   if (!rec || rec.side !== 'buy' || rec.status !== 'confirmed') return;
   const rows = testBook().filter(r => r && r.buySig !== rec.signature);
-  rows.push({ open: true, symbol: rec.symbol || '', mint: rec.mint, entryPx: rec.priceUsd || null, sizeUsd: rec.solAmount && rec.solUsd ? +(rec.solAmount * rec.solUsd).toFixed(2) : 3, buySig: rec.signature || '', exitPx: null, exitSig: '', pnlUsd: null, ts: rec.ts || Date.now(), exitTs: null });
+  rows.push({ open: true, forced: !!rec.forcedTest, symbol: rec.symbol || '', mint: rec.mint, entryPx: rec.priceUsd || null, sizeUsd: rec.solAmount && rec.solUsd ? +(rec.solAmount * rec.solUsd).toFixed(2) : 3, buySig: rec.signature || '', exitPx: null, exitSig: '', pnlUsd: null, ts: rec.ts || Date.now(), exitTs: null });
   saveTestBook(rows);
   try { renderLiveTest(); } catch { /* card later */ }
 }
@@ -3361,13 +3362,122 @@ function solscanLink(sig) {
   if (!sig) return '';
   return '<a class="text-violet-300 underline" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(sig) + '">Solscan</a>';
 }
+let testRunMsg = '';
+try { testRunMsg = String(load('sms:testerr', '') || ''); } catch { testRunMsg = ''; }
+function setTestMsg(s) {
+  testRunMsg = String(s || '').slice(0, 280);
+  try { save('sms:testerr', testRunMsg); } catch { /* card still updates */ }
+  try { renderLiveTest(); } catch { /* card later */ }
+}
+function testRowsToday() {
+  const day = tehranDayKey(Date.now());
+  return testBook().filter(r => r && tehranDayKey(r.ts || r.exitTs || 0) === day);
+}
+let forcedBusy = false;
+let forcedTimer = null;
+let forcedSellBusy = false;
+function armForcedTest() {
+  clearTimeout(forcedTimer);
+  if (!liveTestOn() || !burnerReady() || !A.on) return;
+  forcedTimer = setTimeout(() => { runForcedTest(false); }, 30000);
+}
+async function runForcedTest(manual) {
+  if (forcedBusy) return;
+  if (typeof serverModeOn === 'function' && serverModeOn()) { setTestMsg('Server mode is on. This browser will not buy.'); return; }
+  if (!liveTestOn()) { setTestMsg('Live test is off.'); return; }
+  if (!burnerReady()) { setTestMsg('Unlock the burner first.'); return; }
+  if (!manual && !A.on) { setTestMsg('AUTO is off.'); return; }
+  if (openLiveTest()) { setTestMsg('A test position is already open.'); return; }
+  const today = testRowsToday();
+  if (!manual && today.length) { setTestMsg('A test already ran today.'); return; }
+  if (today.some(r => r.forced)) { setTestMsg('Forced test already ran today.'); return; }
+  forcedBusy = true;
+  setTestMsg(manual ? 'Running test now…' : 'Auto test starting…');
+  try {
+    let plans = [];
+    try { plans = [...(AG?.plans?.values?.() || [])]; } catch { plans = []; }
+    if (!plans.length && typeof fetchAgentDoc === 'function') {
+      try {
+        const doc = await fetchAgentDoc('plans');
+        plans = Array.isArray(doc) ? doc : (Array.isArray(doc?.plans) ? doc.plans : []);
+      } catch (e) { setTestMsg('plans.json ' + (e.message || e)); return; }
+    }
+    plans = plans.filter(p => p && p.mint);
+    if (!plans.length) { setTestMsg('No tokens in plans.json yet.'); return; }
+    const prefer = new Set(['WIF', 'PENGU', 'BOME', 'JUP', 'RAY']);
+    const symOf = (s) => String(s || '').replace(/^\$/, '').toUpperCase();
+    const best = new Map();
+    for (let i = 0; i < plans.length; i += 30) {
+      const ids = plans.slice(i, i + 30).map(p => p.mint).join(',');
+      let arr = [];
+      try { arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + ids); } catch (e) { setTestMsg('DexScreener ' + (e.message || e)); return; }
+      for (const p of arr || []) {
+        const mint = p?.baseToken?.address;
+        if (!mint) continue;
+        const cur = best.get(mint);
+        if (!cur || (p.liquidity?.usd || 0) > (cur.liquidity?.usd || 0)) best.set(mint, p);
+      }
+    }
+    const ranked = plans.map(p => {
+      const d = best.get(p.mint);
+      return { mint: p.mint, symbol: p.symbol || d?.baseToken?.symbol || short(p.mint), liq: d?.liquidity?.usd || 0, px: +d?.priceUsd || 0 };
+    }).filter(p => p.liq >= 1e6 && p.px > 0 && !(typeof rugBlackHas === 'function' && rugBlackHas(p.mint)));
+    const pref = ranked.filter(p => prefer.has(symOf(p.symbol)));
+    const pool = (pref.length ? pref : ranked).slice().sort((a, b) => b.liq - a.liq);
+    const pick = pool[0];
+    if (!pick) { setTestMsg('No plan token with liquidity ≥ $1M (not blacklisted).'); return; }
+    const pxSol = solPriceNow() || liveSolPx();
+    if (!(pxSol > 0)) { setTestMsg('SOL price unavailable.'); return; }
+    const sol = +(3 / pxSol).toFixed(6);
+    if (!(sol >= 0.001)) { setTestMsg('Test size under 0.001 SOL.'); return; }
+    const errs = buyGuards('burner', pick.mint, sol, { auto: true, skipMaxOpen: true });
+    if (errs.length) { setTestMsg(errs[0]); return; }
+    let qo;
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: 150 }); }
+    catch (e) { setTestMsg('Jupiter quote: ' + (e.message || e)); return; }
+    const bad = typeof fakeImpactReason === 'function' ? fakeImpactReason(qo.quote) : '';
+    if (bad) { setTestMsg(bad); return; }
+    const imp = impactPct(qo.quote);
+    if (imp > 1) { setTestMsg('Price impact ' + imp.toFixed(2) + '% > 1%.'); return; }
+    const plan = { forced: true, stop: pick.px * 0.97, tp: pick.px * 1.03, timeStopMin: 8 };
+    try {
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol, mint: pick.mint }, auto: true, extra: { test: true, forcedTest: true, plan, entryReason: 'forced live test $3' } });
+    } catch (e) { setTestMsg('Swap: ' + (e.message || e)); return; }
+    setTestMsg('Bought ' + pick.symbol + ' · $3 test. TP +3% · stop -3% · 8m.');
+  } finally { forcedBusy = false; }
+}
+async function forcedTestExit() {
+  const row = openLiveTest();
+  if (!row || !row.forced || forcedSellBusy || !burnerReady()) return;
+  const lp = livePrices.get(row.mint)?.price;
+  const age = Date.now() - (row.ts || Date.now());
+  let why = '';
+  if (isNum(lp) && isNum(row.entryPx) && row.entryPx > 0) {
+    if (lp >= row.entryPx * 1.03) why = 'tp +3%';
+    else if (lp <= row.entryPx * 0.97) why = 'stop -3%';
+  }
+  if (!why && age >= 8 * 60e3) why = 'time stop 8m';
+  if (!why) return;
+  forcedSellBusy = true;
+  try {
+    let h = WALLETS.burner.tokens.get(row.mint);
+    if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* retry next tick */ } h = WALLETS.burner.tokens.get(row.mint); }
+    if (!h || h.raw === 0n) { setTestMsg(why + ' — no token balance yet'); return; }
+    const qo = await getQuote({ inputMint: row.mint, outputMint: WSOL, amountRaw: h.raw, slippageBps: 150 });
+    await executeSwap({ walletKey: 'burner', side: 'sell', mint: row.mint, quoteObj: qo, t: { symbol: row.symbol, mint: row.mint }, auto: true, exitTag: why, extra: { test: true, forcedTest: true, entryReason: why } });
+    setTestMsg('Sold ' + (row.symbol || '') + ' · ' + why);
+  } catch (e) { setTestMsg(why + ' sell: ' + (e.message || e)); }
+  finally { forcedSellBusy = false; }
+}
 function renderLiveTest() {
   document.querySelectorAll('[data-live-test]').forEach(host => {
     const on = liveTestOn();
     const rows = [...testBook()].reverse().slice(0, 5);
-    const list = rows.map(r => `<div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words"><b>${esc(r.symbol || short(r.mint || ''))}</b> ${r.open ? 'open' : 'closed'} · entry ${price(r.entryPx)} · $${isNum(r.sizeUsd) ? r.sizeUsd.toFixed(2) : '3'} · ${solscanLink(r.buySig)}${r.exitSig ? ' · exit ' + price(r.exitPx) + ' · ' + solscanLink(r.exitSig) : ''}${isNum(r.pnlUsd) ? ' · P&L ' + (r.pnlUsd >= 0 ? '+' : '') + '$' + r.pnlUsd.toFixed(2) : ''}</div>`).join('');
-    host.innerHTML = `<div class="flex items-center justify-between gap-2"><b class="text-[13px]">Live test $3</b><button type="button" data-test-toggle class="rounded-full border px-2 py-0.5 text-[10px] ${on ? 'border-amber-300/50 text-amber-100' : 'border-white/15 text-slate-400'}">${on ? 'ON' : 'OFF'}</button></div><p class="mt-1 text-[11px] text-slate-500">While this is on, the first real auto signal buys $3 and no second test opens until that one closes. The switch stays on until you turn it off.</p>${list || '<p class="mt-1 text-[11px] text-slate-500">No test fills yet.</p>'}`;
+    const list = rows.map(r => `<div class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words"><b>${esc(r.symbol || short(r.mint || ''))}</b> ${r.open ? 'open' : 'closed'}${r.forced ? ' · forced' : ''} · entry ${price(r.entryPx)} · $${isNum(r.sizeUsd) ? r.sizeUsd.toFixed(2) : '3'} · ${solscanLink(r.buySig)}${r.exitSig ? ' · exit ' + price(r.exitPx) + ' · ' + solscanLink(r.exitSig) : ''}${isNum(r.pnlUsd) ? ' · P&L ' + (r.pnlUsd >= 0 ? '+' : '') + '$' + r.pnlUsd.toFixed(2) : ''}</div>`).join('');
+    const err = testRunMsg ? `<p class="mt-1 text-[11px] text-rose-300 whitespace-normal break-words">${esc(testRunMsg)}</p>` : '';
+    host.innerHTML = `<div class="flex items-center justify-between gap-2"><b class="text-[13px]">Live test $3</b><span class="flex items-center gap-1"><button type="button" data-test-run class="rounded-full border border-amber-300/50 px-2 py-0.5 text-[10px] text-amber-100">Run test now</button><button type="button" data-test-toggle class="rounded-full border px-2 py-0.5 text-[10px] ${on ? 'border-amber-300/50 text-amber-100' : 'border-white/15 text-slate-400'}">${on ? 'ON' : 'OFF'}</button></span></div><p class="mt-1 text-[11px] text-slate-500">While this is on, the first real auto signal buys $3. If AUTO is on and no test has run today, one $3 plan-token buy starts about 30s after unlock. TP +3%, stop -3%, sell all at 8 minutes.</p>${err}${list || '<p class="mt-1 text-[11px] text-slate-500">No test fills yet.</p>'}`;
     host.querySelector('[data-test-toggle]')?.addEventListener('click', () => setLiveTest(!liveTestOn()));
+    host.querySelector('[data-test-run]')?.addEventListener('click', () => { runForcedTest(true); });
   });
 }
 /* ---------------- execution (shared by manual + auto) ---------------- */
@@ -3677,6 +3787,7 @@ function liveMints() {
   return [...new Set(list)];
 }
 async function evaluateExits() {
+  if (typeof forcedTestExit === 'function') { try { await forcedTestExit(); } catch (e) { setTestMsg(e.message || String(e)); } }
   if (typeof scalpExitTick === 'function') await scalpExitTick();
   if (typeof degenExitTick === 'function') await degenExitTick(true);
   if (typeof sniperExitTick === 'function') await sniperExitTick(true);
@@ -6199,7 +6310,7 @@ function enableAuto() {
     validate: () => $('aoAck')?.checked,
     onConfirm: async () => { A.on = true; startTimers(); autoLog(`AUTO ON — caps ${A.maxSolPerTrade} SOL/trade, ${A.dailyCap} SOL/day, conv ≥ ${A.minConviction}, impact ≤ ${A.maxImpact}%`, 'warn');
       try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch { }
-      renderBurner(); renderPortfolio(); rememberBot('auto', true); toast('🤖 Auto-trading ON — keep this tab open', 'warn', 6000); setTimeout(autoTick, 500); if (A.autoScan && !lastResult) setTimeout(autoScan, 1000); } });
+      renderBurner(); renderPortfolio(); rememberBot('auto', true); toast('🤖 Auto-trading ON — keep this tab open', 'warn', 6000); setTimeout(autoTick, 500); if (A.autoScan && !lastResult) setTimeout(autoScan, 1000); if (typeof armForcedTest === 'function') armForcedTest(); } });
 }
 const BOT_LS = 'sms:bots';
 function botPrefs() {
@@ -6456,6 +6567,7 @@ function resumeArmedBots() {
   if (typeof pollCopyOnce === 'function' && (p.copy || (typeof COPY !== 'undefined' && COPY.on))) pollCopyOnce();
   if (typeof sniperPoll === 'function' && (p.sniper || (typeof SNIPER !== 'undefined' && SNIPER.on))) sniperPoll();
   if ((p.auto || A.on) && typeof autoTick === 'function') autoTick();
+  if (typeof armForcedTest === 'function') armForcedTest();
   if ((p.scan || liveScanOn) && typeof liveScanOnce === 'function' && !window.__SMS_SAFE) liveScanOnce();
   if (typeof refreshAgents === 'function') refreshAgents();
   try { renderBurner(); } catch { /* ignore */ }
@@ -12413,6 +12525,7 @@ updateSolFilterBadge();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
 mountServerMode();
 renderLiveTest();
+if (burnerReady() && A.on) armForcedTest();
 if (WALLETS.burner.pubkey) refreshBalances('burner');
 if (openPositions().length) setTimeout(refreshPrices, 1500);
 setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
