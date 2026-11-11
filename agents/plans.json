@@ -32,7 +32,7 @@
   "rr": 5.4606,
   "confidence": 52,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "BACK TO WAITING: 1h 19:30 IRST closed 0.06185, back inside the 0.06006-0.0648 band after the 18:30 re-break (15m 19:45 dumped 0.0653->0.0623 on 54k); stop 0.059 kept 1.1% under the 16:30 IRST 1h breakout low 0.05967; re-arm on a 1h close >0.0648; invalid on a 1h close <0.06006",
   "warnings": [
    "16:30 IRST first break failed: 17:30 1h closed 0.06358 back inside the band",
@@ -45,9 +45,9 @@
    "A 1h close back below 0.0648 returns this to waiting; a 1h close below 0.06006 invalidates",
    "20:31 IRST: second failed hold above 0.0648 today; confidence cut to 52 so the panel stops auto-buying the zone"
   ],
-  "live": 0.06432,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.06295,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -216,7 +216,7 @@
   "rr": 6.8473,
   "confidence": 56,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "Best clean coil on the list: $12.0M liq, 1h/15m HH/HL, price above a rising 1h and 4h EMA21, h1 buyers 97/81. 19:30 IRST 1h closed 0.0006198, session high 0.0006244, just under the nearest band 0.000628-0.000642. Buy on a 1h close above 0.0006285; stop 0.000600 = 1.5% under the 16:30-18:45 HL cluster 0.000605-0.000610. Target avg x1.30. Conf 56: structure and liq are strong, but the level is not broken yet and 18:30 volume was only modest.",
   "warnings": [
    "Nearest band 0.000628-0.000642; next supply 0.000650-0.000664 (old 4h trigger was 0.0006519)",
@@ -224,9 +224,9 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$12.0M); 24h volume ~$560k"
   ],
-  "live": 0.0006162,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.0006125,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -415,7 +415,7 @@
   "rr": 4.4664,
   "confidence": 55,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "Clean uptrend, $21.4M liq, 1h/15m HH/HL, above a rising 1h and 4h EMA21, h1 buyers 272/224, 18:30 1h volume 2.7x average (high 0.003687). Live 0.003616 is ~4% under the nearest band 0.003726-0.003768 (old trigger 0.004042 was the higher stack). Buy on a 1h close above 0.003772; stop 0.003512 = 1.5% under the 17:30-18:15 HL 0.003566. Conf 55: quality is high, but 0.00382-0.00404 supply sits right above so the +30% target has to clear that stack. Not 60 until the close happens on volume.",
   "warnings": [
    "Overhead supply 0.00382-0.00388 and 0.00392-0.00404; the old 4h trigger 0.004042 clears that stack",
@@ -423,9 +423,9 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$21.4M)"
   ],
-  "live": 0.0036,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.00358,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -607,7 +607,7 @@
   "rr": 2.53,
   "confidence": 48,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "RE-ARMED: 15m 20:30 IRST spiked to 0.000844 (above the 0.000809 ATH wick) and closed 0.000599, 20:45 closed 0.000575, both above 0.0004935; live ~0.00054 is >5% above the zone, so waiting for the retest; stop 0.000435 = 1.3% under the 20:30 breakout-candle low 0.000441",
   "warnings": [
    "Thin liquidity (~$76k) \u2014 below the $300k preference; slippage can be large. Warn, do not size up.",
@@ -620,9 +620,9 @@
    "20:31 IRST: invalidation hit (1h close 0.000464 < 0.000482); live 0.0004627, stop 0.000436 kept below",
    "21:05 IRST: extreme volatility - 15m wick 0.000441->0.000844 on ~$76k liquidity; the 21:30 1h close must hold above 0.0004935"
   ],
-  "live": 0.0005433,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.0004908,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [],
@@ -762,7 +762,7 @@
   "rr": 2.0119,
   "confidence": 48,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "24h +82% uptrend still HH/HL and above a rising 1h/4h EMA21, but the 18:30 1h (high 0.002673, close 0.002390) and 19:15 15m (high 0.002673, close 0.002390) put a rejection wick at the local ATH. h1 sellers 45/115. Entry is a pullback to 0.00219-0.00233, not a breakout chase. Stop 0.001923 = 1.5% under the 16:30 IRST 1h low 0.001952. Target avg x1.30. Conf 48: trend is up, but sellers just took the wick, liq is only $175k, and 24h volume is modest (~$77k).",
   "warnings": [
    "Liquidity ~$175k \u2014 below the $300k preference",
@@ -773,9 +773,9 @@
    "A 1h close below 0.001952 invalidates the pullback",
    "21:05 IRST: price ran to ~0.00316, 36% above the pullback zone; zone kept (moves at most once an hour), may re-base next run"
   ],
-  "live": 0.003168,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.003051,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -926,7 +926,7 @@
   "rr": 2.5304,
   "confidence": 48,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "Quality backdrop ($3.5M liq, above a rising 1h/4h EMA21, h1 buyers 178/152) but price is chopping in the first 1h band 0.1405-0.1437; 13:30 high 0.1450 and 18:30 high 0.1440 were rejected. The +30% target only has room after clearing the 0.1458-0.1525 stack (12 touches), so the trigger stays 0.153, not the nearer first band. Stop 0.1345 below 0.1355-0.1378 support. Conf 48: not a tight entry today.",
   "warnings": [
    "Do not buy a poke through 0.1405-0.1450 \u2014 that band already rejected twice today and 0.1458-0.1525 sits immediately above",
@@ -935,9 +935,9 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$3.5M)"
   ],
-  "live": 0.1416,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.1381,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -1140,7 +1140,7 @@
   "rr": 1.0423,
   "confidence": 46,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "Hunter #1 (score 99, +41% 24h). 18:30 1h and 15:30 4h both closed at 0.001087, breaking the 0.000962-0.001016 band on 4.3x volume. Entry is a retest of that band, not a chase. Stop 0.000848 = 1.5% under the 15m 19:00 breakout low 0.000861 (the 1h low 0.000833 is too wide). Hunter target x1.15. Conf 46: liq only $134k, 4h EMA21 is still falling, h1 sellers 113/144, and the 18:30 candle was vertical.",
   "warnings": [
    "Liquidity ~$134k \u2014 below the $300k preference; slippage risk",
@@ -1149,9 +1149,9 @@
    "Hunter candidate target = avg entry x1.15 (not 1.30)",
    "A 1h close back below 0.000960 invalidates"
   ],
-  "live": 0.001008,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.001281,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [],
@@ -1312,7 +1312,7 @@
   "rr": 4.88,
   "confidence": 56,
   "status": "ready",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "BROKEN: 15m 20:30 and 20:45 IRST closed 0.0293/0.02957 above the 0.02881-0.02912 band + 0.02921 trigger (live hold 2+ candles); strongest candle 1h 19:30 IRST (23.6k, 5x avg) low 0.028293, stop 0.02787 = 1.5% under it; zone = band bottom to 5% above band top; target zone mid x1.30",
   "warnings": [
    "Volume is dead on the last 1h (~$4k, sellers 25 vs 5) \u2014 a close on that tape is not a signal",
@@ -1323,9 +1323,9 @@
    "20:31 IRST: 1h 19:30 closed 0.02911 inside the band, 0.3% under the 0.02921 trigger, on 23.6k (5x the prior hours); third tag of the band today - breakout imminent but not confirmed",
    "21:05 IRST: confirmed on thin dollar volume (15m 3-8k); confidence 56 (<60) so the panel will not auto-buy; the 1h close at 21:30 above 0.02921 adds confirmation, a 1h close back below 0.02881 = invalid"
   ],
-  "live": 0.02957,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.02938,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -1519,7 +1519,7 @@
   "rr": 2.3157,
   "confidence": 44,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "Above a rising 1h/4h EMA21, $1.5M liq, 24h +13%. Live 0.02729 is under the nearest real cap: 03:30 IRST 4h high 0.02928, then rejected. Old trigger 0.0318 was the higher 0.0311-0.0317 stack \u2014 this plan uses the nearer 0.02930 close. Stop 0.02544 = 1.5% under the 15:30 1h low 0.02583. Conf 44: h1 sellers 30/95, 14:30 already failed 0.02781, and 0.0311-0.0317 still caps the +30% path.",
   "warnings": [
    "Overhead: 0.0311-0.0317 (old trigger 0.0318) still sits above 0.02930",
@@ -1528,9 +1528,9 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity good (~$1.5M); 24h volume modest (~$430k)"
   ],
-  "live": 0.02861,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.02846,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -1758,7 +1758,7 @@
   "rr": 2.0769,
   "confidence": 42,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "Live 0.004845 is back at the 0.00472-0.00506 1h band after a failed poke: 16:30 closed 0.005020, 17:30 high 0.005117 then closed 0.004493. 1h/4h EMAs are rising and structure is HH/HL, but 1h EMA9 is still under EMA21 and 16:30-17:30 already failed this band. Buy only on a 1h close above 0.005075. Stop 0.004330 = 1.5% under the 17:30 low 0.004397. Conf 42: near the level, but a fresh fail and liq only $240k.",
   "warnings": [
    "Liquidity ~$240k \u2014 below the $300k preference",
@@ -1768,9 +1768,9 @@
    "My List risk 1:2: target = avg entry x1.30",
    "1h EMA9 is still below EMA21"
   ],
-  "live": 0.004522,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.004528,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [],
@@ -1925,7 +1925,7 @@
   "rr": 4.8267,
   "confidence": 40,
   "status": "waiting",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "Live 0.1177 is ~2.7% under 0.121, $6.1M liq, HH/HL, above a rising 1h/4h EMA21. Tight stop 0.1132 = 1.5% under the 13:30 HL 0.1149 (tighter than the old 0.1049). Conf 40: the tape is too quiet (last 1h volume ~$4k, 6 buys / 9 sells) for a strong signal. Need a 1h close above 0.121 on real volume.",
   "warnings": [
    "Last 1h volume is tiny (~$4k) \u2014 do not treat a quiet poke as a break",
@@ -1933,9 +1933,9 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$6.1M)"
   ],
-  "live": 0.1178,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.1173,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [
@@ -2124,7 +2124,7 @@
   "rr": 2.073,
   "confidence": 15,
   "status": "invalid",
-  "expires": 1794425738075,
+  "expires": 1794428207091,
   "reason": "INVALID: live 0.007832 fell through the 0.00808 stop (1.5% under the 16:30 IRST breakout low 0.008201); breakout fully failed; re-arm only on a 1h close back above 0.0096",
   "warnings": [
    "4h 15:30-19:30 IRST closed 0.00871 back below 0.00960 after a 0.01029 wick \u2014 failed break on both 1h and 4h",
@@ -2136,9 +2136,9 @@
    "Confidence 32 (<60): panel will not auto-buy",
    "20:31 IRST: price broke the 0.00808 stop; stop parked 10% under live (no setup)"
   ],
-  "live": 0.008481,
-  "ts": 1794418538075,
-  "updatedAt": 1794418538075,
+  "live": 0.008414,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
   "key_levels": {
    "1D": {
     "resistance": [],
@@ -2296,5 +2296,235 @@
    "note": "16:30 Tehran 1h broke the 0.0093-0.0096 band from 0.00845 and ran to 0.01029 on that same candle (~21% from the open)"
   },
   "manualTp": "30:100"
+ },
+ {
+  "mint": "5dvXTZ5qwgafnHtwu3Ls3QrWx1U4LQsFeCuJgkk4QEC6",
+  "symbol": "EMBER",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trigger_price": 0.00049,
+  "trigger_condition": "zone",
+  "entry_mode": "zone",
+  "entry_zone": [
+   0.000455,
+   0.00049
+  ],
+  "leg2_zone": [
+   0.000455,
+   0.00049
+  ],
+  "entry_condition": "retest of the broken 1h band 0.000455-0.00049 that holds (no 15m close below 0.000455); live is >5% above the band, so wait",
+  "leg2_condition": "retest of the broken 1h band 0.000455-0.00049 that holds (no 15m close below 0.000455); live is >5% above the band, so wait",
+  "scale_in": false,
+  "starter_pct": null,
+  "leg1_price": null,
+  "leg1_condition": "skipped",
+  "leg1_target": null,
+  "leg2_target": 0.0006142,
+  "stop": 0.000417,
+  "target": 0.0006142,
+  "tp1": 0.0006142,
+  "tp2": 0.0006142,
+  "rr": 2.55,
+  "confidence": 40,
+  "status": "waiting",
+  "expires": 1794428207091,
+  "reason": "NEW (My List): 15m 21:15 IRST spiked 0.000395->0.000545 (+38%, $15.6k, ~40x avg) and the 1h 20:30 IRST closed 0.000545, breaking the 1h band 0.00045-0.000466 (Nov 11 02:30-06:30 highs); live ~0.00054 is ~16% above, so waiting for the retest; stop 0.000417 (15% cap; breakout-candle low 0.00039 too wide); target zone mid x1.30",
+  "warnings": [
+   "Very illiquid: most 1h candles trade $100-$3k; one-candle spike could fully retrace",
+   "4h resistance 0.00053-0.000567 (Nov 9 highs + today) sits right at live",
+   "Breakout candle 1h 20:30 IRST low 0.000383; the chart stop would be >15% below the zone, cap binds",
+   "My List: safety filters skipped"
+  ],
+  "live": 0.0005476,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
+  "breakout_candle": {
+   "time": "2026-11-11 21:15 IRST",
+   "tf": "15m",
+   "low": 0.00039012
+  },
+  "resistance_band": [
+   0.00045,
+   0.000466
+  ],
+  "key_levels": {
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.000533,
+       0.000567
+      ],
+      "touches": 2
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.00045,
+       0.000466
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.000375,
+       0.000383
+      ],
+      "touches": 3
+     }
+    ]
+   }
+  }
+ },
+ {
+  "mint": "7XdCaKpqLmKE2K7yr9xaeWB1H2CVZ1oGwxB6hmd9pump",
+  "symbol": "WIZARD",
+  "setup": "pullback",
+  "tf": "1h",
+  "trigger_price": 0.000525,
+  "trigger_condition": "zone",
+  "entry_mode": "zone",
+  "entry_zone": [
+   0.0005,
+   0.000525
+  ],
+  "leg2_zone": [
+   0.0005,
+   0.000525
+  ],
+  "entry_condition": "touch of zone 0.0005-0.000525 and hold (no 15m close below 0.0005)",
+  "leg2_condition": "touch of zone 0.0005-0.000525 and hold (no 15m close below 0.0005)",
+  "scale_in": false,
+  "starter_pct": null,
+  "leg1_price": null,
+  "leg1_condition": "skipped",
+  "leg1_target": null,
+  "leg2_target": 0.0005894,
+  "stop": 0.000482,
+  "target": 0.0005894,
+  "tp1": 0.0005894,
+  "tp2": 0.0005894,
+  "rr": 2.52,
+  "confidence": 50,
+  "status": "waiting",
+  "expires": 1794428207091,
+  "reason": "NEW (Hunter): 1h uptrend with higher lows 0.000255->0.000378->0.000422->0.000449->0.000501 since 08:30 IRST; pullback zone = 0.00049-0.00051 resistance (17:30-19:30 IRST highs) turned support; stop 0.000482 = 1.4% under the 15m 20:15 higher low 0.000489; target x1.15; ATH breakout trigger 0.00072 kept as an extra",
+  "warnings": [
+   "15m 21:00 IRST wicked to the ATH 0.000719 and 21:15 rejected to 0.000599 (heavy upper wick); a heavy-volume dump into the zone = invalid",
+   "+322% in 24h, liquidity only ~$96k",
+   "Invalid on a 15m close below 0.0005 or a 1h lower low"
+  ],
+  "live": 0.0005684,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
+  "breakout_candle": null,
+  "breakout_trigger": 0.000722,
+  "breakout_condition": "1h close above the 0.000719 ATH",
+  "ath": 0.000719,
+  "key_levels": {
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.0006,
+       0.000719
+      ],
+      "touches": 2
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.00049,
+       0.000509
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.000422,
+       0.000449
+      ],
+      "touches": 2
+     }
+    ]
+   }
+  }
+ },
+ {
+  "mint": "C5xph2yL6gMdxmuLGxJBkGpmuDFfyi5fqkBNhvL6pump",
+  "symbol": "BTC",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trigger_price": 0.0012,
+  "trigger_condition": "zone",
+  "entry_mode": "zone",
+  "entry_zone": [
+   0.00109,
+   0.0012
+  ],
+  "leg2_zone": [
+   0.00109,
+   0.0012
+  ],
+  "entry_condition": "retest of the broken 1h band 0.00109-0.0012 that holds (no 15m close below 0.00109); live ~6% above the 0.001146 level, so wait",
+  "leg2_condition": "retest of the broken 1h band 0.00109-0.0012 that holds (no 15m close below 0.00109); live ~6% above the 0.001146 level, so wait",
+  "scale_in": false,
+  "starter_pct": null,
+  "leg1_price": null,
+  "leg1_condition": "skipped",
+  "leg1_target": null,
+  "leg2_target": 0.001317,
+  "stop": 0.00102,
+  "target": 0.001317,
+  "tp1": 0.001317,
+  "tp2": 0.001317,
+  "rr": 1.38,
+  "confidence": 52,
+  "status": "waiting",
+  "expires": 1794428207091,
+  "reason": "NEW (Hunter): 1h 20:30 IRST closed 0.001274 (30k, ~3x avg) above the descending 1h band 0.00109-0.001146 (13:30/17:30 IRST highs); breakout candle low 0.000961 is >15% below, so leg 1 skipped and stop capped at 0.00102 (6.4% under zone low, below the 0.00099-0.00101 lows); target x1.15 = 0.001317",
+  "warnings": [
+   "4h resistance 0.00129-0.00139 (Nov 10 22:30-00:30 highs); 15m 21:30 IRST rejected at 0.00137",
+   "Leg 1 skipped: breakout-candle stop would be >15% below the breakout"
+  ],
+  "live": 0.001215,
+  "ts": 1794421007091,
+  "updatedAt": 1794421007091,
+  "breakout_candle": {
+   "time": "2026-11-11 20:30 IRST",
+   "tf": "1h",
+   "low": 0.00096139
+  },
+  "resistance_band": [
+   0.00109,
+   0.001146
+  ],
+  "key_levels": {
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.00129,
+       0.00139
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "1h": {
+    "support": [
+     {
+      "zone": [
+       0.00099,
+       0.00101
+      ],
+      "touches": 4
+     }
+    ]
+   }
+  }
  }
 ]
