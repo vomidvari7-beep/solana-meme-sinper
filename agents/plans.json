@@ -43,7 +43,7 @@
   "tp2": 0.08424,
   "leg2_target": 0.08424,
   "rr": 3.45,
-  "live": 0.06188379511742193,
+  "live": 0.0632259656269396,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -89,7 +89,7 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$12.0M); 24h volume ~$560k"
   ],
-  "live": 0.0006115379498794319,
+  "live": 0.0006117418220854571,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "key_levels": {
@@ -289,7 +289,7 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$21.4M)"
   ],
-  "live": 0.003535836254485513,
+  "live": 0.003531005005348584,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "key_levels": {
@@ -471,10 +471,10 @@
   "tp1": 0.0006416,
   "tp2": 0.0006416,
   "rr": 2.53,
-  "confidence": 48,
-  "status": "waiting",
+  "confidence": 25,
+  "status": "invalid",
   "expires": 1794438549944,
-  "reason": "RE-ARMED: 15m 20:30 IRST spiked to 0.000844 (above the 0.000809 ATH wick) and closed 0.000599, 20:45 closed 0.000575, both above 0.0004935; live ~0.00054 is >5% above the zone, so waiting for the retest; stop 0.000435 = 1.3% under the 20:30 breakout-candle low 0.000441",
+  "reason": "INVALID: 22:30 IRST 1h made a lower low 0.000406 (under the 0.000441 higher low and the 0.000435 stop); live 0.000439 sits on the stop. Re-arm only on a 1h close back above 0.000505.",
   "warnings": [
    "22:30 IRST 1h wicked to 0.000406 under the 0.000435 stop and made a lower low before recovering to ~0.000457; structure weaker",
    "Thin liquidity (~$76k) \u2014 below the $300k preference; slippage can be large. Warn, do not size up.",
@@ -487,9 +487,9 @@
    "20:31 IRST: invalidation hit (1h close 0.000464 < 0.000482); live 0.0004627, stop 0.000436 kept below",
    "21:05 IRST: extreme volatility - 15m wick 0.000441->0.000844 on ~$76k liquidity; the 21:30 1h close must hold above 0.0004935"
   ],
-  "live": 0.000470948320180976,
-  "ts": 1794427749944,
-  "updatedAt": 1794427749944,
+  "live": 0.0004391922708529227,
+  "ts": 1794429255483,
+  "updatedAt": 1794429255483,
   "key_levels": {
    "1D": {
     "resistance": [],
@@ -640,7 +640,7 @@
    "A 1h close below 0.001952 invalidates the pullback",
    "21:05 IRST: price ran to ~0.00316, 36% above the pullback zone; zone kept (moves at most once an hour), may re-base next run"
   ],
-  "live": 0.002882039467900386,
+  "live": 0.002907845806782774,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "key_levels": {
@@ -802,7 +802,7 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$3.5M)"
   ],
-  "live": 0.13764014255627488,
+  "live": 0.13718770255364912,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "key_levels": {
@@ -1020,7 +1020,7 @@
   "tp2": 0.0017745,
   "leg2_target": 0.0017745,
   "rr": 1.84,
-  "live": 0.0012065634539008118,
+  "live": 0.0012029276791189337,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -1133,7 +1133,7 @@
   "tp2": 0.03848,
   "leg2_target": 0.03848,
   "rr": 5.13,
-  "live": 0.029297389094736528,
+  "live": 0.029266149660965083,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -1209,7 +1209,7 @@
   "tp2": 0.038155,
   "leg2_target": 0.038155,
   "rr": 5.57,
-  "live": 0.029923633699041666,
+  "live": 0.029806311129097915,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -1257,7 +1257,7 @@
    "My List risk 1:2: target = avg entry x1.30",
    "1h EMA9 is still below EMA21"
   ],
-  "live": 0.0047376797899021696,
+  "live": 0.004561336862423913,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "key_levels": {
@@ -1422,7 +1422,7 @@
    "My List risk 1:2: target = avg entry x1.30",
    "Liquidity excellent (~$6.1M)"
   ],
-  "live": 0.11678703952720529,
+  "live": 0.11647342085531663,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "key_levels": {
@@ -1625,7 +1625,7 @@
    "Confidence 32 (<60): panel will not auto-buy",
    "20:31 IRST: price broke the 0.00808 stop; stop parked 10% under live (no setup)"
   ],
-  "live": 0.008767329171131873,
+  "live": 0.007963959028662244,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "key_levels": {
@@ -1852,7 +1852,7 @@
   "tp2": 0.000689,
   "leg2_target": 0.000689,
   "rr": 1.04,
-  "live": 0.0005184299241122118,
+  "live": 0.0005322338556443157,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -1895,7 +1895,7 @@
    "+322% in 24h, liquidity only ~$96k",
    "Invalid on a 15m close below 0.0005 or a 1h lower low"
   ],
-  "live": 0.0005677671043188834,
+  "live": 0.0005756804562527218,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "breakout_candle": null,
@@ -1969,7 +1969,7 @@
    "4h resistance 0.00129-0.00139 (Nov 10 22:30-00:30 highs); 15m 21:30 IRST rejected at 0.00137",
    "Leg 1 skipped: breakout-candle stop would be >15% below the breakout"
   ],
-  "live": 0.0011951593734581632,
+  "live": 0.0011959030634753629,
   "ts": 1794427749944,
   "updatedAt": 1794427749944,
   "breakout_candle": {
@@ -2051,7 +2051,7 @@
   "tp2": 0.00715,
   "leg2_target": 0.00715,
   "rr": 2.16,
-  "live": 0.005127293958655573,
+  "live": 0.0050188359694321606,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -2127,7 +2127,7 @@
   "tp2": 0.005018,
   "leg2_target": 0.005018,
   "rr": 2.14,
-  "live": 0.0038167047542182037,
+  "live": 0.003749060921728103,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -2176,7 +2176,7 @@
   "tp2": 0.02522,
   "leg2_target": 0.02522,
   "rr": 3.22,
-  "live": 0.01795939056224242,
+  "live": 0.017961376128259234,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
@@ -2224,7 +2224,7 @@
   "tp2": 0.002028,
   "leg2_target": 0.002028,
   "rr": 2.21,
-  "live": 0.0014875631923179802,
+  "live": 0.0014681720609387367,
   "expires": 1794438549944,
   "ts": 1794427749944,
   "updatedAt": 1794427749944
