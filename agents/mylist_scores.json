@@ -1,0 +1,551 @@
+{
+ "updated_utc": "2026-11-11T05:36:03+00:00",
+ "updated_tehran": "2026-11-11 09:06 IRST",
+ "tokens": [
+  {
+   "mint": "Ai66LHZG9MCzg1WKdawwqduVAXpNDUuV8M3uyq5ppump",
+   "symbol": "CATE",
+   "pair": "HCMqvKC7KWHX3oEWuQibs8fPM1s6617nZtUe1zyAyoQF",
+   "dex": "orca",
+   "price": 121.71,
+   "score": 71,
+   "setup": "1h up, 4h mixed; chg 1h 7.38% 6h 458829% 24h 402343%",
+   "entry": "breakout/retest of 0.000137005",
+   "level": {
+    "resistance": 0.00013700451305949743,
+    "support": 0.00012635221267697668
+   },
+   "notes": []
+  },
+  {
+   "mint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+   "symbol": "JUP",
+   "pair": "C8Gr6AUuq9hEdSYJzoEpNcdjpojPZwqG5MtQbeouNNwg",
+   "dex": "meteora",
+   "price": 0.2609,
+   "score": 69,
+   "setup": "1h up, 4h up; chg 1h -0.02% 6h 3.77% 24h 2.93%",
+   "entry": "breakout/retest of 0.261864",
+   "level": {
+    "resistance": 0.26186372549374615,
+    "support": 0.2258090296919583
+   },
+   "notes": [
+    "RugCheck warn: Mutable metadata"
+   ]
+  },
+  {
+   "mint": "4CxjZyMNoF1p6eXHXHv1TWpS2X47CuUmLwtGe18spump",
+   "symbol": "mihao",
+   "pair": "Ho1aSG6WGH1FfXdEHrK2f4Ggt1Hoxo9s5jcLMDqeyeBz",
+   "dex": "pumpswap",
+   "price": 0.01578,
+   "score": 61,
+   "setup": "1h down, 4h up; chg 1h 10.14% 6h 55.54% 24h 2231%",
+   "entry": "wait pullback to EMA21 ~0.00415327 or break 0.0198417",
+   "level": {
+    "resistance": 0.01984174917379591,
+    "support": 0.0003804043911232816
+   },
+   "notes": []
+  },
+  {
+   "mint": "A13oRB9FFaiUjfi6LdCg6p9ka1u8SfGkUFs4SKvPpump",
+   "symbol": "TOAD",
+   "pair": "Nx9dcwNs3iJxM5YAxshMHE4aYJHdDyyGMhVcmaSgfu8",
+   "dex": "pumpswap",
+   "price": 0.0007549,
+   "score": 55,
+   "setup": "1h up, 4h down; chg 1h 9.9% 6h 8.82% 24h -0.29%",
+   "entry": "breakout/retest of 0.000749972",
+   "level": {
+    "resistance": 0.0007499718774017169,
+    "support": 0.0006535232425456984
+   },
+   "notes": []
+  },
+  {
+   "mint": "Ce2gx9KGXJ6C9Mp5b5x1sn9Mg87JwEbrQby4Zqo3pump",
+   "symbol": "neet",
+   "pair": "5wNu5QhdpRGrL37ffcd6TMMqZugQgxwafgz477rShtHy",
+   "dex": "pumpswap",
+   "price": 0.02823,
+   "score": 51,
+   "setup": "1h down, 4h up; chg 1h -0.8% 6h 14.04% 24h 14.01%",
+   "entry": "trigger: close above 0.0292814",
+   "level": {
+    "resistance": 0.0292813683044223,
+    "support": 0.021556091270899982
+   },
+   "notes": []
+  },
+  {
+   "mint": "Hg5Ja55T5wESq4vyFoiVCMeHXtGyVA69X2UHq8hgpump",
+   "symbol": "baton",
+   "pair": "Cb7ZRgPLhji3Th7htXyKEqbXvNjPpeTvckXuWakBUhXu",
+   "dex": "pumpswap",
+   "price": 0.004129,
+   "score": 46,
+   "setup": "1h up, 4h down; chg 1h -0.21% 6h 6.94% 24h 4.39%",
+   "entry": "trigger: close above 0.00429903",
+   "level": {
+    "resistance": 0.004299027718404195,
+    "support": 0.003642595874580975
+   },
+   "notes": []
+  },
+  {
+   "mint": "DtcicPCKTKeAh7TDEzTym3hXeoHAoMiBdYJhMYxZpump",
+   "symbol": "CBUCKS",
+   "pair": "B4Cp45PGifVM5FAXfh6AeV8QZ3eUNQnqGBw7KuC7MHnB",
+   "dex": "pumpswap",
+   "price": 0.005092,
+   "score": 46,
+   "setup": "1h down, 4h up; chg 1h -0.79% 6h 3.42% 24h 26.34%",
+   "entry": "wait pullback to EMA21 ~0.00393713 or break 0.00648649",
+   "level": {
+    "resistance": 0.006486489687472855,
+    "support": 0.0021291691644891924
+   },
+   "notes": []
+  },
+  {
+   "mint": "9Pfync3ejPC9eHqVzq3nYQJAhyhjqpnB9UsaSfLxpump",
+   "symbol": "KET",
+   "pair": "Fex8CSkNXfaxAPRqQARKGchYAMVfwDg28sfmBXXGkNGX",
+   "dex": "pumpswap",
+   "price": 0.001964,
+   "score": 44,
+   "setup": "1h up, 4h down; chg 1h -0.87% 6h 0.89% 24h 33.95%",
+   "entry": "trigger: close above 0.00205433",
+   "level": {
+    "resistance": 0.002054330803685748,
+    "support": 0.0013163128656419499
+   },
+   "notes": []
+  },
+  {
+   "mint": "4kjruqGHDsSqkMdFfCjV7Vb62HPFhtXyWc2t6JpQzDnz",
+   "symbol": "GTA6",
+   "pair": "FDamUzyiEA7Cq1VNiQcbhuHpfCmmcJfgA6DwQQ1hhLd2",
+   "dex": "raydium",
+   "price": 0.007546,
+   "score": 41,
+   "setup": "1h down, 4h up; chg 1h -5.99% 6h -18.47% 24h -30.01%",
+   "entry": "bounce zone near 198.803",
+   "level": {
+    "resistance": 229.2224858576145,
+    "support": 198.80298397114717
+   },
+   "notes": []
+  },
+  {
+   "mint": "6mXFCoZ515w37YfmwXGJMPfQfiK5tr9WkihW3oN9pump",
+   "symbol": "PIRATE",
+   "pair": "CKuwAXUbnxmeCNurN5VvyC7kLz42JnQtyh2nyFJ8Kv1X",
+   "dex": "pumpswap",
+   "price": 0.0003722,
+   "score": 40,
+   "setup": "1h up, 4h down; chg 1h -9.11% 6h 16.48% 24h 33.47%",
+   "entry": "wait pullback to EMA21 ~0.000353475 or break 0.000808939",
+   "level": {
+    "resistance": 0.0008089389509436957,
+    "support": 0.00025803565203696234
+   },
+   "notes": []
+  },
+  {
+   "mint": "9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump",
+   "symbol": "ANSEM",
+   "pair": "FnzKY6x7entQ1eR3D225dQyT7ybfka4PskBMQhb8L3CC",
+   "dex": "pumpswap",
+   "price": 0.05471,
+   "score": 39,
+   "setup": "1h down, 4h up; chg 1h -4.43% 6h 0.39% 24h 8.5%",
+   "entry": "wait pullback to EMA21 ~0.0511256 or break 0.0705661",
+   "level": {
+    "resistance": 0.07056609738752026,
+    "support": 0.04124876037286055
+   },
+   "notes": [
+    "RugCheck danger: Single holder ownership",
+    "RugCheck warn: High holder concentration"
+   ]
+  },
+  {
+   "mint": "Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk",
+   "symbol": "USELESS",
+   "pair": "Q2sPHPdUWFMg7M7wwrQKLrn619cAucfRsmhVJffodSp",
+   "dex": "raydium",
+   "price": 0.1361,
+   "score": 38,
+   "setup": "1h down, 4h up; chg 1h -2.93% 6h -2.44% 24h 1.61%",
+   "entry": "trigger: close above 0.143567",
+   "level": {
+    "resistance": 0.14356668696444302,
+    "support": 0.11887450940241265
+   },
+   "notes": []
+  },
+  {
+   "mint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
+   "symbol": "GATO",
+   "pair": "5E3dXLXGwmTDCokA51WYYaKttjFZBwqCoyUHBUi5gt2m",
+   "dex": "pumpswap",
+   "price": 0.008307,
+   "score": 34,
+   "setup": "1h down, 4h down; chg 1h 3% 6h -1.36% 24h -22.41%",
+   "entry": "wait pullback to EMA21 ~0.0103329 or break 0.0134801",
+   "level": {
+    "resistance": 0.013480139267349712,
+    "support": 0.0067156850062262356
+   },
+   "notes": []
+  },
+  {
+   "mint": "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv",
+   "symbol": "PENGU",
+   "pair": "FAqh648xeeaTqL7du49sztp9nfj5PjRQrfvaMccyd9cz",
+   "dex": "orca",
+   "price": 0.006215,
+   "score": 34,
+   "setup": "1h down, 4h down; chg 1h -0.78% 6h 0.85% 24h -2.05%",
+   "entry": "trigger: close above 0.00643545",
+   "level": {
+    "resistance": 0.006435451479084677,
+    "support": 0.00594011165922169
+   },
+   "notes": []
+  },
+  {
+   "mint": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+   "symbol": "$WIF",
+   "pair": "EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMx",
+   "dex": "raydium",
+   "price": 0.1574,
+   "score": 34,
+   "setup": "1h down, 4h mixed; chg 1h -0.49% 6h 0.75% 24h 0.04%",
+   "entry": "trigger: close above 0.162593",
+   "level": {
+    "resistance": 0.16259272831807522,
+    "support": 0.15110798721030694
+   },
+   "notes": []
+  },
+  {
+   "mint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
+   "symbol": "ZCAT",
+   "pair": "BTccxxTFi7a9xJTE1exKn38Jgie35s6gNeRxd8DM61Rc",
+   "dex": "raydium",
+   "price": 0.01895,
+   "score": 32,
+   "setup": "1h down, 4h down; chg 1h -5.56% 6h 13.71% 24h 7.53%",
+   "entry": "bounce zone near 1005.53",
+   "level": {
+    "resistance": 1199.3284007069774,
+    "support": 1005.5290622860043
+   },
+   "notes": []
+  },
+  {
+   "mint": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+   "symbol": "Fartcoin ",
+   "pair": "Bzc9NZfMqkXR6fz1DBph7BDf9BroyEf6pnzESP7v5iiw",
+   "dex": "raydium",
+   "price": 0.1153,
+   "score": 30,
+   "setup": "1h down, 4h down; chg 1h -0.62% 6h 1.51% 24h -2.58%",
+   "entry": "trigger: close above 0.118966",
+   "level": {
+    "resistance": 0.11896599525610264,
+    "support": 0.1129419804438183
+   },
+   "notes": []
+  },
+  {
+   "mint": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+   "symbol": "PUMP",
+   "pair": "2uF4Xh61rDwxnG9woyxsVQP7zuA6kLFpb3NvnRQeoiSd",
+   "dex": "pumpswap",
+   "price": 0.003512,
+   "score": 30,
+   "setup": "1h down, 4h down; chg 1h -0.41% 6h 1.11% 24h -1.91%",
+   "entry": "trigger: close above 0.00361224",
+   "level": {
+    "resistance": 0.0036122433983256743,
+    "support": 0.003346167036082417
+   },
+   "notes": []
+  },
+  {
+   "mint": "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",
+   "symbol": "BOME",
+   "pair": "DSUvc5qf5LJHHV5e2tD184ixotSnCnwj7i4jJa4Xsrmt",
+   "dex": "raydium",
+   "price": 0.0006046,
+   "score": 29,
+   "setup": "1h down, 4h down; chg 1h -1.34% 6h -0.05% 24h -0.96%",
+   "entry": "trigger: close above 0.000627953",
+   "level": {
+    "resistance": 0.0006279530118702311,
+    "support": 0.0005950504182195155
+   },
+   "notes": [
+    "RugCheck warn: Single holder ownership",
+    "RugCheck warn: High holder concentration",
+    "RugCheck warn: Mutable metadata"
+   ]
+  },
+  {
+   "mint": "HuAXPyDWDaMYFKuwQHpqL1oPnj93zdzWmtvFGzCeCUa7",
+   "symbol": "MASK",
+   "pair": "4GWh5saKgzoukhhj4Rh3p5FmPU6yPuAexV6FaH5JQYfm",
+   "dex": "raydium",
+   "price": 0.01168,
+   "score": 27,
+   "setup": "1h down, 4h down; chg 1h -0.55% 6h -4.3% 24h -23.87%",
+   "entry": "bounce zone near 1005.06",
+   "level": {
+    "resistance": 1198.4253530260705,
+    "support": 1005.0579926856716
+   },
+   "notes": [
+    "RugCheck danger: Single holder ownership",
+    "RugCheck warn: High holder concentration"
+   ]
+  },
+  {
+   "mint": "Bv1a7cEj5aRnJQhMw4kRQqAFesMSd5LwcDnUzq52BMmr",
+   "symbol": "FLOAT",
+   "pair": "FJk9sajdc2Q4heRPPu3yLzkmf2ZByZkpiHQLv9e2bn5A",
+   "dex": "raydium",
+   "price": 0.00986,
+   "score": 27,
+   "setup": "1h down, 4h down; chg 1h 0.16% 6h -2.63% 24h -2.62%",
+   "entry": "wait pullback to EMA21 ~0.00885435 or break 0.0160241",
+   "level": {
+    "resistance": 0.016024056100555534,
+    "support": 0.006398154712339147
+   },
+   "notes": []
+  },
+  {
+   "mint": "Hg3w7GdPViZ5URuCNnK6EwXLzSTmVwX6UXLeD6Pbpump",
+   "symbol": "\u54aa\u597d",
+   "pair": "GSucfCJDqx8pShmYr2KokoAbjUHjq6ivvAfkmi5A8KSB",
+   "dex": "pumpswap",
+   "price": 0.0004937,
+   "score": 27,
+   "setup": "insufficient candles",
+   "entry": "no OHLCV",
+   "level": null,
+   "notes": []
+  },
+  {
+   "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
+   "symbol": "WEALTH",
+   "pair": "5n8V68fCaNTRQvaXzrmBryDe5jFLrgm65pFfsmia6Nro",
+   "dex": "pumpswap",
+   "price": 0.0007722,
+   "score": 26,
+   "setup": "1h down, 4h down; chg 1h 0.93% 6h -10.51% 24h -13.04%",
+   "entry": "wait pullback to EMA21 ~0.000835297 or break 0.00106617",
+   "level": {
+    "resistance": 0.00106616690497957,
+    "support": 0.0005433544728860825
+   },
+   "notes": [],
+   "manualStop": 0.0006
+  },
+  {
+   "mint": "2j5SaS7xy776qCBpyPQbZjyQSAtKiFgrwjfErthnW2ZM",
+   "symbol": "CLAUDIA",
+   "pair": "Fe7bpDYCs74GqiCUF14HwgUMToPKV1d9mDYVX5BTohFr",
+   "dex": "pumpswap",
+   "price": 0.00554,
+   "score": 26,
+   "setup": "1h down, 4h down; chg 1h 0.52% 6h 8.37% 24h -31.9%",
+   "entry": "wait pullback to EMA21 ~0.00557915 or break 0.0115008",
+   "level": {
+    "resistance": 0.011500834862833192,
+    "support": 0.0040556730715020995
+   },
+   "notes": []
+  },
+  {
+   "mint": "63LfDmNb3MQ8mw9MtZ2To9bEA2M71kZUUGq5tiJxcqj9",
+   "symbol": "GIGA",
+   "pair": "4xxM4cdb6MEsCxM52xvYqkNbzvdeWWsPDZrBcTqVGUar",
+   "dex": "raydium",
+   "price": 0.001694,
+   "score": 26,
+   "setup": "1h down, 4h down; chg 1h 0.54% 6h 0.38% 24h -0.97%",
+   "entry": "trigger: close above 0.00173834",
+   "level": {
+    "resistance": 0.0017383414897428045,
+    "support": 0.0016657289520672215
+   },
+   "notes": []
+  },
+  {
+   "mint": "6GmAFSYs4gk3FDao5FzzySQpPZaWsa4rUJHacpMpUNgx",
+   "symbol": "STONK",
+   "pair": "zxTpi4BtaWX3mgdAPoezkMD1hxx8CdeCfrqXMWvSCLX",
+   "dex": "meteora",
+   "price": 0.05008,
+   "score": 25,
+   "setup": "1h down, 4h down; chg 1h -0.11% 6h -1.76% 24h -0.93%",
+   "entry": "trigger: close above 0.0521195",
+   "level": {
+    "resistance": 0.052119496894403594,
+    "support": 0.047560095108317726
+   },
+   "notes": []
+  },
+  {
+   "mint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
+   "symbol": "TROLL",
+   "pair": "4w2cysotX6czaUGmmWg13hDpY4QEMG2CzeKYEQyK9Ama",
+   "dex": "pumpswap",
+   "price": 0.02733,
+   "score": 24,
+   "setup": "1h down, 4h down; chg 1h 0.27% 6h -0.24% 24h -4.28%",
+   "entry": "wait pullback to EMA21 ~0.0277022 or break 0.0302902",
+   "level": {
+    "resistance": 0.030290219351567397,
+    "support": 0.025928621188995287
+   },
+   "notes": []
+  },
+  {
+   "mint": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+   "symbol": "RAY",
+   "pair": "6UmmUiYoBjSrhakAobJw8BvkmJtDVxaeBtbt7rxWo1mg",
+   "dex": "raydium",
+   "price": 1.63,
+   "score": 24,
+   "setup": "1h down, 4h down; chg 1h -0.46% 6h 1.77% 24h -3.4%",
+   "entry": "bounce zone near 1.60863",
+   "level": {
+    "resistance": 1.8209225253581427,
+    "support": 1.6086302482092998
+   },
+   "notes": [
+    "RugCheck danger: Top 10 holders high ownership",
+    "RugCheck warn: Single holder ownership",
+    "RugCheck warn: Single holder ownership",
+    "RugCheck warn: Missing file metadata",
+    "RugCheck warn: Mutable metadata"
+   ]
+  },
+  {
+   "mint": "BWJfBNeXpapG7uoqByp5KSwWgCQba8QcDmA2DQiEpump",
+   "symbol": "Leonida",
+   "pair": "5GxdoPcK2LJ6QYcJ3uvtC37tgsFHma55ULFkufTYe49R",
+   "dex": "pumpswap",
+   "price": 0.0003967,
+   "score": 24,
+   "setup": "1h mixed, 4h down; chg 1h -0.99% 6h -10.79% 24h 95.17%",
+   "entry": "wait pullback to EMA21 ~0.000361664 or break 0.000494822",
+   "level": {
+    "resistance": 0.0004948218813091825,
+    "support": 0.0002214645606926665
+   },
+   "notes": []
+  },
+  {
+   "mint": "DvjbEsdca43oQcw2h3HW1CT7N3x5vRcr3QrvTUHnXvgV",
+   "symbol": "DOOD",
+   "pair": "5KXE8RMF7iW9Ptn665AHfzsMFjYb4LV2Ta8eZEtsTwWC",
+   "dex": "raydium",
+   "price": 0.001595,
+   "score": 24,
+   "setup": "1h down, 4h down; chg 1h 0.15% 6h -0.4% 24h -3.35%",
+   "entry": "bounce zone near 0.00157926",
+   "level": {
+    "resistance": 0.0017632813786066207,
+    "support": 0.0015792586592816122
+   },
+   "notes": [
+    "RugCheck warn: Single holder ownership",
+    "RugCheck warn: High holder concentration",
+    "RugCheck warn: Mutable metadata"
+   ]
+  },
+  {
+   "mint": "GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump",
+   "symbol": "ACT",
+   "pair": "B4PHSkL6CeZbxVqm1aUPQuVpc5ERFcaZj7u9dhtphmVX",
+   "dex": "raydium",
+   "price": 0.009456,
+   "score": 22,
+   "setup": "1h down, 4h down; chg 1h -1.04% 6h -4.94% 24h -9.04%",
+   "entry": "wait pullback to EMA21 ~0.0098428 or break 0.0130036",
+   "level": {
+    "resistance": 0.013003636266873106,
+    "support": 0.008773490378761257
+   },
+   "notes": [
+    "RugCheck danger: Top 10 holders high ownership",
+    "RugCheck danger: Single holder ownership"
+   ]
+  },
+  {
+   "mint": "EJAxERvKU4kEVXn3NarjvRtgaMaJyP9ZuMeKA7JJpump",
+   "symbol": "CHOO",
+   "pair": "3unG5b7czBspnmjFRZzzNyQVpk8q3LERr6BAYnFohdfz",
+   "dex": "pumpswap",
+   "price": 0.00131,
+   "score": 21,
+   "setup": "1h down, 4h down; chg 1h 1.61% 6h -18.23% 24h -19.53%",
+   "entry": "wait pullback to EMA21 ~0.00195904 or break 0.00321121",
+   "level": {
+    "resistance": 0.0032112100445166464,
+    "support": 0.0012402264629398233
+   },
+   "notes": []
+  },
+  {
+   "mint": "FZxHLUGiGchY5uvvoeqh1EKiXTrGdN67WUBhUc1fLoat",
+   "symbol": "PUSSY",
+   "pair": "4HHcEXZvCYQjSpLrGei5GpRwaZPUmNqFs6eh1BXssfsj",
+   "dex": "raydium",
+   "price": 0.0007175,
+   "score": 21,
+   "setup": "insufficient candles",
+   "entry": "no OHLCV",
+   "level": null,
+   "notes": []
+  },
+  {
+   "mint": "8RNUw4N655VSrZKuhGdywhbSMDTrheguFPfxbpE2NZHQ",
+   "symbol": "PURR",
+   "pair": "Ad7pbBvVRNofo96WR6eHwmU2o4naZ6Lao1J98hW8a1TQ",
+   "dex": "raydium",
+   "price": 0.001524,
+   "score": 19,
+   "setup": "1h down, 4h down; chg 1h -0.47% 6h -3.04% 24h -7.84%",
+   "entry": "wait pullback to EMA21 ~0.0016278 or break 0.00178023",
+   "level": {
+    "resistance": 0.0017802254687066094,
+    "support": 0.001218321441578335
+   },
+   "notes": []
+  },
+  {
+   "mint": "5wsjHxT5nW5jQuVupXUNnYszF3WoWCfGGk9LMcsCJzY8",
+   "symbol": "STANK",
+   "pair": "91iHWaWXneUyoNDJhSno7ezxQg1VW5P6PdarNGyFfPCz",
+   "dex": "meteora",
+   "price": 0.003435,
+   "score": 14,
+   "setup": "1h down, 4h down; chg 1h -3.59% 6h -28.95% 24h 4.47%",
+   "entry": "wait pullback to EMA21 ~0.00405724 or break 0.00618831",
+   "level": {
+    "resistance": 0.006188313082906376,
+    "support": 0.003122921035092138
+   },
+   "notes": []
+  }
+ ]
+}
