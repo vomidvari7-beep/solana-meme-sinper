@@ -1,19 +1,32 @@
 {
- "updated_utc": "2026-11-11T09:53:21+00:00",
- "updated_tehran": "2026-11-11 13:23 IRST",
+ "updated_utc": "2026-11-11T10:27:03+00:00",
+ "updated_tehran": "2026-11-11 13:57 IRST",
  "candidates": [
   {
    "mint": "6mwuYnY3fHdxed9GnrdY5BkXhJwMi1uz39MPsYUcpump",
    "symbol": "BULLHARIS",
    "pair": "CxJ4mLGpwre4WfkJwx8FeLFNLBRETNzHxy25y3JtXzyr",
    "dex": "pumpswap",
-   "score": 95,
-   "reason": "liq $50k, mcap $0.44M, vol24 $347k (V/L 6.9), age 16h, 24h 1169%",
+   "score": 99,
+   "reason": "liq $95k, mcap $1.25M, vol24 $350k (V/L 3.7), age 16h, 24h 3534%",
    "safety": "RugCheck score 1, warnings none, top10 ex-pools 22.2%, insiders 0.0%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
    "rank": 1
+  },
+  {
+   "mint": "2j5SaS7xy776qCBpyPQbZjyQSAtKiFgrwjfErthnW2ZM",
+   "symbol": "CLAUDIA",
+   "pair": "Fe7bpDYCs74GqiCUF14HwgUMToPKV1d9mDYVX5BTohFr",
+   "dex": "pumpswap",
+   "score": 89,
+   "reason": "liq $343k, mcap $5.49M, vol24 $1290k (V/L 3.8), age 849h, 24h -13.29%",
+   "safety": "RugCheck score 1, warnings none, top10 ex-pools 16.7%, insiders 4.1%, LP locked 100%, mint/freeze revoked",
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
+   "rank": 2
   },
   {
    "mint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
@@ -21,37 +34,24 @@
    "pair": "5E3dXLXGwmTDCokA51WYYaKttjFZBwqCoyUHBUi5gt2m",
    "dex": "pumpswap",
    "score": 88,
-   "reason": "liq $311k, mcap $8.57M, vol24 $2127k (V/L 6.8), age 1869h, 24h -15.99%",
+   "reason": "liq $309k, mcap $8.46M, vol24 $2119k (V/L 6.8), age 1870h, 24h -18.15%",
    "safety": "RugCheck score 1, warnings none, top10 ex-pools 15.5%, insiders 3.1%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
-   "rank": 2
-  },
-  {
-   "mint": "2j5SaS7xy776qCBpyPQbZjyQSAtKiFgrwjfErthnW2ZM",
-   "symbol": "CLAUDIA",
-   "pair": "Fe7bpDYCs74GqiCUF14HwgUMToPKV1d9mDYVX5BTohFr",
-   "dex": "pumpswap",
-   "score": 86,
-   "reason": "liq $341k, mcap $5.42M, vol24 $1297k (V/L 3.8), age 848h, 24h -17.73%",
-   "safety": "RugCheck score 1, warnings none, top10 ex-pools 16.7%, insiders 4.1%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
    "rank": 3
   },
   {
-   "mint": "Bv1a7cEj5aRnJQhMw4kRQqAFesMSd5LwcDnUzq52BMmr",
-   "symbol": "FLOAT",
-   "pair": "FJk9sajdc2Q4heRPPu3yLzkmf2ZByZkpiHQLv9e2bn5A",
-   "dex": "raydium",
-   "score": 84,
-   "reason": "liq $647k, mcap $9.77M, vol24 $1109k (V/L 1.7), age 324h, 24h -2.58%",
-   "safety": "RugCheck score 1, warnings none, top10 ex-pools 25.9%, insiders 7.6%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
+   "mint": "5wsjHxT5nW5jQuVupXUNnYszF3WoWCfGGk9LMcsCJzY8",
+   "symbol": "STANK",
+   "pair": "91iHWaWXneUyoNDJhSno7ezxQg1VW5P6PdarNGyFfPCz",
+   "dex": "meteora",
+   "score": 85,
+   "reason": "liq $165k, mcap $3.53M, vol24 $999k (V/L 6.1), age 158h, 24h -15.35%",
+   "safety": "RugCheck score 1, warnings none, top10 ex-pools 18.1%, insiders 0.0%, LP locked 100%, mint/freeze revoked",
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
    "rank": 4
   },
   {
@@ -59,13 +59,39 @@
    "symbol": "DOPE",
    "pair": "6iep3EgqksbZwgzMBCyAJtiVtVYkCgL9BnPBEwLR8AGQ",
    "dex": "pumpswap",
-   "score": 83,
-   "reason": "liq $129k, mcap $1.05M, vol24 $337k (V/L 2.6), age 740h, 24h 48.27%",
+   "score": 85,
+   "reason": "liq $133k, mcap $1.10M, vol24 $336k (V/L 2.5), age 741h, 24h 51.69%",
    "safety": "RugCheck score 1, warnings none, top10 ex-pools 22.6%, insiders 15.7%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
    "rank": 5
+  },
+  {
+   "mint": "C5xph2yL6gMdxmuLGxJBkGpmuDFfyi5fqkBNhvL6pump",
+   "symbol": "BTC",
+   "pair": "3M9sVgL4u6ATKaiExf3XhQqNfMB6ijvzk3meMcQaen1w",
+   "dex": "pumpswap",
+   "score": 83,
+   "reason": "liq $133k, mcap $1.11M, vol24 $274k (V/L 2.1), age 1406h, 24h -8.04%",
+   "safety": "RugCheck score 1, warnings none, top10 ex-pools 17.9%, insiders 6.5%, LP locked 100%, mint/freeze revoked",
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
+   "rank": 6
+  },
+  {
+   "mint": "Bv1a7cEj5aRnJQhMw4kRQqAFesMSd5LwcDnUzq52BMmr",
+   "symbol": "FLOAT",
+   "pair": "FJk9sajdc2Q4heRPPu3yLzkmf2ZByZkpiHQLv9e2bn5A",
+   "dex": "raydium",
+   "score": 80,
+   "reason": "liq $646k, mcap $9.70M, vol24 $1110k (V/L 1.7), age 324h, 24h -3.94%",
+   "safety": "RugCheck score 1, warnings none, top10 ex-pools 25.9%, insiders 7.6%, LP locked 100%, mint/freeze revoked",
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
+   "rank": 7
   },
   {
    "mint": "BWJfBNeXpapG7uoqByp5KSwWgCQba8QcDmA2DQiEpump",
@@ -78,32 +104,6 @@
    "timestamp_utc": "2026-11-11T06:01:50+00:00",
    "timestamp_tehran": "2026-11-11 09:31 IRST",
    "ts": 1794376910421,
-   "rank": 6
-  },
-  {
-   "mint": "5wsjHxT5nW5jQuVupXUNnYszF3WoWCfGGk9LMcsCJzY8",
-   "symbol": "STANK",
-   "pair": "91iHWaWXneUyoNDJhSno7ezxQg1VW5P6PdarNGyFfPCz",
-   "dex": "meteora",
-   "score": 78,
-   "reason": "liq $168k, mcap $3.47M, vol24 $1006k (V/L 6.0), age 157h, 24h -12.03%",
-   "safety": "RugCheck score 1, warnings none, top10 ex-pools 18.1%, insiders 0.0%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
-   "rank": 7
-  },
-  {
-   "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
-   "symbol": "WEALTH",
-   "pair": "5n8V68fCaNTRQvaXzrmBryDe5jFLrgm65pFfsmia6Nro",
-   "dex": "pumpswap",
-   "score": 77,
-   "reason": "liq $74k, mcap $0.71M, vol24 $430k (V/L 5.8), age 139h, 24h -14.31%",
-   "safety": "RugCheck score 1, warnings none, top10 ex-pools 24.2%, insiders 0.0%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
    "rank": 8
   },
   {
@@ -111,63 +111,33 @@
    "symbol": "JEANPHIL",
    "pair": "4R8CiMnJWDNoes3fQi1ccPFJygPXazaHaWpHrN3rZeNj",
    "dex": "pumpswap",
-   "score": 74,
-   "reason": "liq $270k, mcap $3.32M, vol24 $214k (V/L 0.8), age 1263h, 24h -10.48%",
+   "score": 75,
+   "reason": "liq $273k, mcap $3.37M, vol24 $215k (V/L 0.8), age 1263h, 24h -9.16%",
    "safety": "RugCheck score 1, warnings none, top10 ex-pools 23.3%, insiders 5.4%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
    "rank": 9
   },
   {
-   "mint": "C5xph2yL6gMdxmuLGxJBkGpmuDFfyi5fqkBNhvL6pump",
-   "symbol": "BTC",
-   "pair": "3M9sVgL4u6ATKaiExf3XhQqNfMB6ijvzk3meMcQaen1w",
-   "dex": "pumpswap",
-   "score": 73,
-   "reason": "liq $128k, mcap $1.04M, vol24 $268k (V/L 2.1), age 1406h, 24h -18.57%",
-   "safety": "RugCheck score 1, warnings none, top10 ex-pools 17.5%, insiders 6.5%, LP locked 100%, mint/freeze revoked",
-   "timestamp_utc": "2026-11-11T09:53:21+00:00",
-   "timestamp_tehran": "2026-11-11 13:23 IRST",
-   "ts": 1794390801290,
+   "mint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
+   "symbol": "ZCAT",
+   "pair": "BTccxxTFi7a9xJTE1exKn38Jgie35s6gNeRxd8DM61Rc",
+   "dex": "raydium",
+   "score": 74,
+   "reason": "liq $594k, mcap $17.43M, vol24 $588k (V/L 1.0), age 1739h, 24h -2.75%",
+   "safety": "RugCheck score 1, warnings none, top10 ex-pools 16.9%, insiders 6.4%, LP locked 100%, mint/freeze revoked",
+   "timestamp_utc": "2026-11-11T10:27:03+00:00",
+   "timestamp_tehran": "2026-11-11 13:57 IRST",
+   "ts": 1794392823374,
    "rank": 10
   }
  ],
  "rejections_this_run": [
   {
-   "symbol": "CBUCKS",
-   "mint": "DtcicPCKTKeAh7TDEzTym3hXeoHAoMiBdYJhMYxZpump",
-   "reason": "top10 35.1%"
-  },
-  {
-   "symbol": "gork",
-   "mint": "38PgzpJYu2HkiYvV8qePFakB8tuobPdGm2FFEn7Dpump",
-   "reason": "top10 32.4%; insiders 46.8%"
-  },
-  {
-   "symbol": "gif",
-   "mint": "HgPhgMZtVjKZvg9swhzBQtGUqH7zYyPKePRrC3aUpump",
+   "symbol": "JEEP",
+   "mint": "6Pj9gbaqrr217qkWQrrDhXXdNeitYRTdfyQmky66pump",
    "reason": "liq $0<50k"
-  },
-  {
-   "symbol": "Vicemas",
-   "mint": "GWxceEVSTHLvhFi9z6pbwgUNYRgXBMrwCXTXcS1Upump",
-   "reason": "liq $12560<50k"
-  },
-  {
-   "symbol": "WSB",
-   "mint": "B82PFKmT4aM38EUUqVoZs6sZdAfxDHHrB6DSXxCKpump",
-   "reason": "liq $0<50k"
-  },
-  {
-   "symbol": "PIRATE",
-   "mint": "6mXFCoZ515w37YfmwXGJMPfQfiK5tr9WkihW3oN9pump",
-   "reason": "vol/liq 14.5>8"
-  },
-  {
-   "symbol": "APE",
-   "mint": "9c5JteS7LDobkcxXKdkfgrxeebxEruAQJ6x9F7Tupump",
-   "reason": "liq $12702<50k"
   },
   {
    "symbol": "PENGUIN",
@@ -175,169 +145,29 @@
    "reason": "liq $1<50k"
   },
   {
-   "symbol": "baton",
-   "mint": "Hg5Ja55T5wESq4vyFoiVCMeHXtGyVA69X2UHq8hgpump",
-   "reason": "insiders 20.4%"
+   "symbol": "Vicemas",
+   "mint": "GWxceEVSTHLvhFi9z6pbwgUNYRgXBMrwCXTXcS1Upump",
+   "reason": "liq $12491<50k"
   },
   {
-   "symbol": "JEEP",
-   "mint": "6Pj9gbaqrr217qkWQrrDhXXdNeitYRTdfyQmky66pump",
-   "reason": "liq $0<50k"
-  },
-  {
-   "symbol": "FOID",
-   "mint": "AtFRJ5kSvtPZ9yT1hGJhJKWmiSr7PPutCwcHt5SSpump",
-   "reason": "liq $2<50k"
-  },
-  {
-   "symbol": "PLAY",
-   "mint": "PLAYs3GSSadH2q2JLS7djp7yzeT75NK78XgrE5YLrfq",
-   "reason": "top10 96.0%; LP locked 0%; danger: Low Liquidity"
-  },
-  {
-   "symbol": "trenches",
-   "mint": "9LFj2cbr843aKLnvvFRWAExnpzcCn2LiB6cE8t2tpump",
-   "reason": "liq $2<50k"
-  },
-  {
-   "symbol": "ZEC",
-   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
-   "reason": "mcap $24107 out of range"
-  },
-  {
-   "symbol": "ACT",
-   "mint": "GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump",
-   "reason": "top10 76.6%; insiders 164.6%; danger: Top 10 holders high ownership,Single holder ownership"
-  },
-  {
-   "symbol": "FAIR",
-   "mint": "FairDR2UmRqHxsVPdPcetePCjFaDqVYv3oQX9fcQTpTg",
-   "reason": "liq $25365<50k"
-  },
-  {
-   "symbol": "NEWRISE",
-   "mint": "8Rf41YZDFn4C1apKaPw19nvNR6MSs2bgeTq17rjxrise",
-   "reason": "liq $0<50k"
-  },
-  {
-   "symbol": "PLASTIC",
-   "mint": "58smR4GCZBxXfUUiX6KZ4JXkK6jmX42vjatWgA3vrise",
-   "reason": "mint authority active; LP locked 0%; danger: Mint Authority still enabled,Large Amount of LP Unlocked,Low Liquidity"
-  },
-  {
-   "symbol": "NIHAO",
-   "mint": "8yLBuP74RnFmjSRS8BGFebvyoTo8uiEjPB71h3Zgpump",
-   "reason": "vol/liq 22.5>8"
-  },
-  {
-   "symbol": "CYBERLEEK",
-   "mint": "ApZuxdpzMrbEYTGEzeY9afh5pj9d6qPRJCTgQYiipbKg",
-   "reason": "insiders 32.4%"
-  },
-  {
-   "symbol": "\u54aa\u597d",
-   "mint": "Hg3w7GdPViZ5URuCNnK6EwXLzSTmVwX6UXLeD6Pbpump",
-   "reason": "vol/liq 14.8>8"
-  },
-  {
-   "symbol": "TRUMP",
-   "mint": "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN",
-   "reason": "mcap $320342007 out of range"
-  },
-  {
-   "symbol": "GTA6",
-   "mint": "4kjruqGHDsSqkMdFfCjV7Vb62HPFhtXyWc2t6JpQzDnz",
-   "reason": "insiders 97.6%"
-  },
-  {
-   "symbol": "CatFu",
-   "mint": "FP7NvFXQXoZL1nQC5QZtE1bzwgALdxj1TeA9J25epump",
-   "reason": "liq $31827<50k"
-  },
-  {
-   "symbol": "JACK",
-   "mint": "9iKLhkPgrzdvFMZYKsuQdYjj52oTGPeNz2WTpMh5gcMP",
-   "reason": "top10 72.3%; LP locked 0%; danger: Mint Authority still enabled,Large Amount of LP Unlocked,Top 10 holders high ownership"
-  },
-  {
-   "symbol": "meowl",
-   "mint": "8ryRQD6jWfxnSdvvVbQ8Tzwo1NgGP7w1X1nQPpb4pump",
-   "reason": "insiders 87.3%"
-  },
-  {
-   "symbol": "STONK",
-   "mint": "6GmAFSYs4gk3FDao5FzzySQpPZaWsa4rUJHacpMpUNgx",
-   "reason": "insiders 80.9%; LP locked 0%"
-  },
-  {
-   "symbol": "thesis",
-   "mint": "5Uj1W1jCJpRhmKqxToSxx9Rd1SYSdsakJczSDKPnpump",
-   "reason": "liq $0<50k"
-  },
-  {
-   "symbol": "Dacity",
-   "mint": "nxPqZ4F7ux8Vph5NFu25rEP6Kx9Gr1U6Fmj36Rjpump",
-   "reason": "insiders 33.4%"
-  },
-  {
-   "symbol": "NIHAO",
-   "mint": "416sPL5fqhQpAJVboEQC5Yq52kY4VXzVY6y2GdJhcGnz",
-   "reason": "liq $4104<50k"
-  },
-  {
-   "symbol": "greg",
-   "mint": "4Ye6Y6Vaic8cyPdfW2f9PcLhXkysBtSmV84G8X7spump",
-   "reason": "liq $5452<50k"
-  },
-  {
-   "symbol": "ClapCat",
-   "mint": "5BjfgmtfqvNpAWx1CnZynoWLWNMnrwHLhTFzQ81vkEc8",
-   "reason": "liq $40229<50k"
+   "symbol": "TI",
+   "mint": "7cin51XTpSkesiZMLJvEGNXqd5DFFqSBixcvn7Ppump",
+   "reason": "liq $18076<50k"
   },
   {
    "symbol": "CARDS",
    "mint": "CARDSccUMFKoPRZxt5vt3ksUbxEFEcnZ3H2pd3dKxYjp",
-   "reason": "mcap $185052250 out of range"
+   "reason": "mcap $185613013 out of range"
   },
   {
-   "symbol": "Looby",
-   "mint": "E2HPtLCsgb5fK3fxWBAJ4djqAejepWK6ZTqFazf5kgR6",
-   "reason": "liq $29972<50k"
+   "symbol": "greg",
+   "mint": "4Ye6Y6Vaic8cyPdfW2f9PcLhXkysBtSmV84G8X7spump",
+   "reason": "liq $5517<50k"
   },
   {
-   "symbol": "ESR",
-   "mint": "3v39wuiJ4kGzsmd1w4DCFDWfGC2ScaJ9mXfZJaXvoREV",
-   "reason": "liq $687<50k"
-  },
-  {
-   "symbol": "Anu",
-   "mint": "DLjVQ4naEGR5ykUvfWNVggQMcyyuwQqX7ZYHGoaDpump",
-   "reason": "liq $6743<50k"
-  },
-  {
-   "symbol": "tSAT",
-   "mint": "tSATdGGSLYBVCrm3pXiib8NmzKcB1iUdjRRseNGssxu",
-   "reason": "mcap $58835 out of range"
-  },
-  {
-   "symbol": "AICoin",
-   "mint": "B9FgqHbtccsgcL6YPfUhNd81qveNtrTbsfLvcjxtpump",
-   "reason": "liq $325<50k"
-  },
-  {
-   "symbol": "BOXCAT",
-   "mint": "CQ8zNLYwMEAVVBHEswusZrsUraCvc7HjiBPwgTbRpump",
-   "reason": "liq $39091<50k"
-  },
-  {
-   "symbol": "DACITY",
-   "mint": "5tBXkPVh716zSXHNZSr8i1PX7e6Uuj46JnBLdYchpump",
-   "reason": "vol/liq 17.0>8"
-  },
-  {
-   "symbol": "jeff",
-   "mint": "HAsTKXYvv65zM7J6Cu5o5PcZsiKMQYo5oz4WPjgqwP6k",
-   "reason": "top10 39.8%"
+   "symbol": "NIHAO",
+   "mint": "8yLBuP74RnFmjSRS8BGFebvyoTo8uiEjPB71h3Zgpump",
+   "reason": "vol/liq 22.1>8"
   },
   {
    "symbol": "CLUTCH",
@@ -345,44 +175,24 @@
    "reason": "mint authority active; LP locked 0%; danger: Mint Authority still enabled,Large Amount of LP Unlocked,Low Liquidity"
   },
   {
-   "symbol": "GTA",
-   "mint": "EJv8TgQfN6gtYN8Z6KGyBeNPbVYmogmudfxiRA2Fpump",
-   "reason": "liq $26597<50k"
+   "symbol": "meowl",
+   "mint": "8ryRQD6jWfxnSdvvVbQ8Tzwo1NgGP7w1X1nQPpb4pump",
+   "reason": "insiders 87.3%"
   },
   {
-   "symbol": "BOT",
-   "mint": "82PywaaKPWncgeckdPRX2GyhSBCNaPdd7CUSstD5pump",
-   "reason": "liq $0<50k"
+   "symbol": "CatFu",
+   "mint": "FP7NvFXQXoZL1nQC5QZtE1bzwgALdxj1TeA9J25epump",
+   "reason": "liq $34190<50k"
   },
   {
-   "symbol": "FOMO",
-   "mint": "3FFhaqDgcGCP84tinaZMpQx18gndeEwAiQ7sxSydpump",
-   "reason": "liq $2<50k"
+   "symbol": "timmy",
+   "mint": "TiMSdJrkVwUpeEWJpuqRvHt4wVS7uH77LbNPGGVJXNw",
+   "reason": "liq $43406<50k"
   },
   {
-   "symbol": "VEYL",
-   "mint": "GHtnAtTCPFz8MRTMQiEyuEob283EUgqd1d1Fysnhpump",
-   "reason": "liq $39202<50k"
-  },
-  {
-   "symbol": "SOL",
-   "mint": "HWqSHNsXsW9L3zf2viWKDFKDr512cbCyT9pynAYRpump",
-   "reason": "liq $0<50k"
-  },
-  {
-   "symbol": "PIZZA",
-   "mint": "25YymNVsua1yZbapaiVuhCgS2w8KrFwt2p7hF3Aqpump",
-   "reason": "liq $4983<50k"
-  },
-  {
-   "symbol": "FUCAT",
-   "mint": "2UcqYeGG2waJRagLdqRxHjQ3umwqacF4TmqmRTtppump",
-   "reason": "liq $7821<50k"
-  },
-  {
-   "symbol": "TEDDY",
-   "mint": "FnEWN3gQbDFy4R3StYTws1HbihSA7WZxkq1PzRrQ2VhS",
-   "reason": "liq $6421<50k"
+   "symbol": "ACT",
+   "mint": "GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump",
+   "reason": "top10 76.6%; insiders 164.6%; danger: Top 10 holders high ownership,Single holder ownership"
   },
   {
    "symbol": "Chachamaru",
@@ -390,24 +200,64 @@
    "reason": "liq $2<50k"
   },
   {
-   "symbol": "\u6708\u85aa\u55b5",
-   "mint": "4qperWiuSvkn1r3T6ZZkWThzadoxttAeNbPdbDJTpump",
-   "reason": "liq $14154<50k"
+   "symbol": "NEWRISE",
+   "mint": "8Rf41YZDFn4C1apKaPw19nvNR6MSs2bgeTq17rjxrise",
+   "reason": "liq $0<50k"
   },
   {
-   "symbol": "woohao",
-   "mint": "BLVpn8ofkjnAzpWGaVpspZ5bHTeXDbXFgX4vn3fkpump",
-   "reason": "liq $16266<50k"
+   "symbol": "FAIR",
+   "mint": "FairDR2UmRqHxsVPdPcetePCjFaDqVYv3oQX9fcQTpTg",
+   "reason": "liq $25927<50k"
+  },
+  {
+   "symbol": "PIZZA",
+   "mint": "25YymNVsua1yZbapaiVuhCgS2w8KrFwt2p7hF3Aqpump",
+   "reason": "liq $4983<50k"
+  },
+  {
+   "symbol": "PLASTIC",
+   "mint": "58smR4GCZBxXfUUiX6KZ4JXkK6jmX42vjatWgA3vrise",
+   "reason": "mint authority active; LP locked 0%; danger: Mint Authority still enabled,Large Amount of LP Unlocked,Low Liquidity"
   },
   {
    "symbol": "X",
    "mint": "9VZerdNL1x6EjetDqRnh5bYcdmk1y8sLAGs1ybzGpump",
-   "reason": "vol/liq 73.6>8"
+   "reason": "vol/liq 72.5>8"
   },
   {
-   "symbol": "CATE",
-   "mint": "Ai66LHZG9MCzg1WKdawwqduVAXpNDUuV8M3uyq5ppump",
-   "reason": "insiders 37.8%"
+   "symbol": "AgenC",
+   "mint": "5yC9BM8KUsJTPbWPLfA2N8qH1s9V8DQ3Vcw1G6Jdpump",
+   "reason": "top10 55.0%"
+  },
+  {
+   "symbol": "Leonida",
+   "mint": "BWJfBNeXpapG7uoqByp5KSwWgCQba8QcDmA2DQiEpump",
+   "reason": "liq $47766<50k"
+  },
+  {
+   "symbol": "gif",
+   "mint": "HgPhgMZtVjKZvg9swhzBQtGUqH7zYyPKePRrC3aUpump",
+   "reason": "liq $0<50k"
+  },
+  {
+   "symbol": "trenches",
+   "mint": "9LFj2cbr843aKLnvvFRWAExnpzcCn2LiB6cE8t2tpump",
+   "reason": "liq $2<50k"
+  },
+  {
+   "symbol": "jeff",
+   "mint": "HAsTKXYvv65zM7J6Cu5o5PcZsiKMQYo5oz4WPjgqwP6k",
+   "reason": "top10 39.8%"
+  },
+  {
+   "symbol": "ESR",
+   "mint": "3v39wuiJ4kGzsmd1w4DCFDWfGC2ScaJ9mXfZJaXvoREV",
+   "reason": "liq $691<50k"
+  },
+  {
+   "symbol": "Chvinci ",
+   "mint": "CwFLWiEGef1i7nbbDdAUdm6PAgreuxhDsC6KmDCMpump",
+   "reason": "liq $0<50k"
   },
   {
    "symbol": "TENEX",
@@ -415,24 +265,174 @@
    "reason": "liq $0<50k"
   },
   {
-   "symbol": "TTWO",
-   "mint": "TTWofwAge91oFhZs7kpQdyrVRkmevgM88xijGvQFbKo",
-   "reason": "mcap $96 out of range"
+   "symbol": "woohao",
+   "mint": "BLVpn8ofkjnAzpWGaVpspZ5bHTeXDbXFgX4vn3fkpump",
+   "reason": "liq $16729<50k"
+  },
+  {
+   "symbol": "NIHAO",
+   "mint": "416sPL5fqhQpAJVboEQC5Yq52kY4VXzVY6y2GdJhcGnz",
+   "reason": "liq $4114<50k"
+  },
+  {
+   "symbol": "GTA6",
+   "mint": "4kjruqGHDsSqkMdFfCjV7Vb62HPFhtXyWc2t6JpQzDnz",
+   "reason": "insiders 97.6%"
+  },
+  {
+   "symbol": "thesis",
+   "mint": "5Uj1W1jCJpRhmKqxToSxx9Rd1SYSdsakJczSDKPnpump",
+   "reason": "liq $0<50k"
+  },
+  {
+   "symbol": "Utility",
+   "mint": "r9fkdXyGKrvgkXBzLNUJBYEFUUppZgK8wtetDampump",
+   "reason": "liq $2593<50k"
+  },
+  {
+   "symbol": "AICoin",
+   "mint": "B9FgqHbtccsgcL6YPfUhNd81qveNtrTbsfLvcjxtpump",
+   "reason": "liq $325<50k"
+  },
+  {
+   "symbol": "DIGS",
+   "mint": "9QT8K685Hrae4k11dhGXirdtpfAaimExtyfwt8cPpump",
+   "reason": "liq $28573<50k"
+  },
+  {
+   "symbol": "SOL",
+   "mint": "HWqSHNsXsW9L3zf2viWKDFKDr512cbCyT9pynAYRpump",
+   "reason": "liq $0<50k"
+  },
+  {
+   "symbol": "CBUCKS",
+   "mint": "DtcicPCKTKeAh7TDEzTym3hXeoHAoMiBdYJhMYxZpump",
+   "reason": "top10 35.1%"
   },
   {
    "symbol": "xfill",
    "mint": "5obfMMi4cm9dkt6DQcWTunS5JQNJiBiHKghYb194pump",
-   "reason": "liq $3647<50k"
+   "reason": "liq $3737<50k"
   },
   {
-   "symbol": "timmy",
-   "mint": "TiMSdJrkVwUpeEWJpuqRvHt4wVS7uH77LbNPGGVJXNw",
-   "reason": "liq $44754<50k"
+   "symbol": "FUCAT",
+   "mint": "2UcqYeGG2waJRagLdqRxHjQ3umwqacF4TmqmRTtppump",
+   "reason": "liq $4881<50k"
   },
   {
-   "symbol": "AgenC",
-   "mint": "5yC9BM8KUsJTPbWPLfA2N8qH1s9V8DQ3Vcw1G6Jdpump",
-   "reason": "top10 55.0%"
+   "symbol": "CYBERLEEK",
+   "mint": "ApZuxdpzMrbEYTGEzeY9afh5pj9d6qPRJCTgQYiipbKg",
+   "reason": "insiders 32.4%"
+  },
+  {
+   "symbol": "BOXCAT",
+   "mint": "CQ8zNLYwMEAVVBHEswusZrsUraCvc7HjiBPwgTbRpump",
+   "reason": "liq $38531<50k"
+  },
+  {
+   "symbol": "SPSC",
+   "mint": "4nswj3o1Lo9iWYvvRJxUD8vbCy9ay7QQoXYcncHNbonk",
+   "reason": "mcap $158158 out of range"
+  },
+  {
+   "symbol": "PUMP",
+   "mint": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+   "reason": "mcap $1619556230 out of range"
+  },
+  {
+   "symbol": "xihao",
+   "mint": "7x3ujazwvFMvbM3akMVDHGbaXK1aDgzxQ5966seppump",
+   "reason": "liq $7840<50k"
+  },
+  {
+   "symbol": "PIRATE",
+   "mint": "6mXFCoZ515w37YfmwXGJMPfQfiK5tr9WkihW3oN9pump",
+   "reason": "vol/liq 13.9>8"
+  },
+  {
+   "symbol": "mihao",
+   "mint": "4CxjZyMNoF1p6eXHXHv1TWpS2X47CuUmLwtGe18spump",
+   "reason": "vol/liq 62.9>8"
+  },
+  {
+   "symbol": "STONK",
+   "mint": "6GmAFSYs4gk3FDao5FzzySQpPZaWsa4rUJHacpMpUNgx",
+   "reason": "insiders 80.9%; LP locked 0%"
+  },
+  {
+   "symbol": "GTA",
+   "mint": "EJv8TgQfN6gtYN8Z6KGyBeNPbVYmogmudfxiRA2Fpump",
+   "reason": "liq $26908<50k"
+  },
+  {
+   "symbol": "APE",
+   "mint": "9c5JteS7LDobkcxXKdkfgrxeebxEruAQJ6x9F7Tupump",
+   "reason": "liq $19265<50k"
+  },
+  {
+   "symbol": "VEYL",
+   "mint": "GHtnAtTCPFz8MRTMQiEyuEob283EUgqd1d1Fysnhpump",
+   "reason": "liq $34852<50k"
+  },
+  {
+   "symbol": "Mony",
+   "mint": "7sfmvAmGae6Fq6KQ5z3T2Vi6hQJ7jSEB5uGBVQXapump",
+   "reason": "liq $2368<50k"
+  },
+  {
+   "symbol": "DacityCoin",
+   "mint": "DKYcjobF7HPtL9RyQBRdeRQ2iWvizpfbgWwPWNXdpump",
+   "reason": "vol/liq 15.4>8"
+  },
+  {
+   "symbol": "$PLAY",
+   "mint": "EvEFaj8bU5vNa4jc15GgRQrVMqu7Wzf9Kz6aKn3yeB1z",
+   "reason": "liq $40882<50k"
+  },
+  {
+   "symbol": "gork",
+   "mint": "38PgzpJYu2HkiYvV8qePFakB8tuobPdGm2FFEn7Dpump",
+   "reason": "top10 32.4%; insiders 46.8%"
+  },
+  {
+   "symbol": "ANT",
+   "mint": "H5imUBBArRQhKxvBLJhb73ghXscbEgGpriRxCxyHrise",
+   "reason": "mint authority active; LP locked 0%; danger: Mint Authority still enabled,Large Amount of LP Unlocked,Low Liquidity"
+  },
+  {
+   "symbol": "forg",
+   "mint": "2HhH7LwfNHrxqMrSoXZ6Ri7GdmRYSJ4e8qSra9Krpump",
+   "reason": "liq $25445<50k"
+  },
+  {
+   "symbol": "RINO",
+   "mint": "8bVP1RqzpFa9zuVs5y84GV5zKAqYXworCfjoY1twrise",
+   "reason": "mint authority active; LP locked 0%; danger: Mint Authority still enabled,Low Liquidity"
+  },
+  {
+   "symbol": "TEDDY",
+   "mint": "FnEWN3gQbDFy4R3StYTws1HbihSA7WZxkq1PzRrQ2VhS",
+   "reason": "liq $6421<50k"
+  },
+  {
+   "symbol": "JACK",
+   "mint": "9iKLhkPgrzdvFMZYKsuQdYjj52oTGPeNz2WTpMh5gcMP",
+   "reason": "top10 72.3%; LP locked 0%; danger: Mint Authority still enabled,Large Amount of LP Unlocked,Top 10 holders high ownership"
+  },
+  {
+   "symbol": "Anu",
+   "mint": "DLjVQ4naEGR5ykUvfWNVggQMcyyuwQqX7ZYHGoaDpump",
+   "reason": "liq $6737<50k"
+  },
+  {
+   "symbol": "RINGPAD",
+   "mint": "HAhZGYQzGHXkbfukyvs3Vj6t7nfqgWUym1LCKRZcpump",
+   "reason": "liq $0<50k"
+  },
+  {
+   "symbol": "FOMO",
+   "mint": "3FFhaqDgcGCP84tinaZMpQx18gndeEwAiQ7sxSydpump",
+   "reason": "liq $2<50k"
   }
  ]
 }
