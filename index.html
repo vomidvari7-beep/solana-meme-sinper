@@ -3042,7 +3042,7 @@ async function getFill(sig, owner, mint) {
     const keys = tx.transaction.message.accountKeys.map(k => k.pubkey || k);
     const i = keys.indexOf(owner);
     const solDelta = i >= 0 ? (tx.meta.postBalances[i] - tx.meta.preBalances[i]) / 1e9 : null;
-    return { tokDelta, solDelta, fee: tx.meta.fee / 1e9 };
+    return { tokDelta, solDelta, fee: tx.meta.fee / 1e9, blockTime: tx.blockTime > 0 ? tx.blockTime : 0 };
   } catch (e) { console.warn('fill', e); return null; }
 }
 
@@ -3190,8 +3190,12 @@ function updateTrade(id, patch) { const r = LOG.find(x => x.id === id); if (r) {
 let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
+function tradeBuyTs(r) {
+  if (r && r.blockTime > 0) return r.blockTime * 1000;
+  return r?.ts || 0;
+}
 function blankPos(k, r) {
-  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, scalp: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null };
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: tradeBuyTs(r), tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, scalp: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null, buyTsSet: false };
 }
 function profileStopPct() {
   let pct = 20;
@@ -3227,6 +3231,8 @@ function positions() {
     if (p?.closed && r.side === 'buy') { restart = true; p = null; }
     if (!p) { p = blankPos(k, r); if (restart) p.reentry = true; by.set(k, p); }
     if (r.side === 'buy') {
+      const bt = tradeBuyTs(r);
+      if (!p.buyTsSet && bt > 0) { p.firstTs = bt; p.buyTsSet = true; }
       const qty = r.tokenAmount || 0;
       const px = r.priceUsd || 0;
       if (qty > 0 && px > 0) { p.bought += qty; p.costUsd += qty * px; }
@@ -3648,6 +3654,7 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   let fill = null;
   try { fill = await getFill(sig, w.pubkey, mint); } catch { fill = null; }
   const patch = { status: 'confirmed' };
+  if (fill && fill.blockTime > 0) patch.blockTime = fill.blockTime;
   if (fill && fill.tokDelta) { const tk = Math.abs(fill.tokDelta); patch.tokenAmount = tk; patch.fill = 'chain';
     const solReal = isBuy ? solAmount : (fill.solDelta != null ? Math.max(0, fill.solDelta + fill.fee) : solAmount);
     patch.solAmount = solReal; patch.priceSol = solReal / tk; patch.priceUsd = sp ? solReal * sp / tk : null; patch.feeSol = fill.fee; }
@@ -3946,6 +3953,18 @@ function patchLiveText() {
     const px = livePrices.get(el.dataset.liveMint)?.price;
     if (!(px > 0)) return;
     const text = price(px);
+    if (el.textContent !== text) el.textContent = text;
+  });
+  document.querySelectorAll('[data-held]').forEach(el => {
+    let ts = +el.dataset.held;
+    const mint = el.dataset.heldMint;
+    if (mint) {
+      try {
+        const pos = openPositions().find(p => p.open && p.mint === mint);
+        if (pos && pos.firstTs > 0) ts = pos.firstTs;
+      } catch { /* trade log not ready */ }
+    }
+    const text = heldFor(ts);
     if (el.textContent !== text) el.textContent = text;
   });
   document.querySelectorAll('[data-live-pnl]').forEach(el => {
@@ -4888,7 +4907,7 @@ function posCard(p) {
       ${logoHtml(p.mint, p.symbol, 3, 'sq')}
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(p.symbol)}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${src.cls}">${src.label}</span>${pl.quick ? `<span class="rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-100">Quick 15% · 1:1</span>` : ''}</div>
-        <div class="text-[11px] text-slate-500 break-words">${esc(p.wallet)} · held ${heldFor(p.firstTs)}</div>
+        <div class="text-[11px] text-slate-500 break-words">${esc(p.wallet)} · held <span data-held="${p.firstTs || 0}" data-held-mint="${esc(p.mint)}">${heldFor(p.firstTs)}</span></div>
       </div>
       <div class="text-right min-w-0">
         <div class="font-mono text-xl leading-none whitespace-normal break-words ${!isNum(m.pnl) ? 'text-slate-400' : upClass(m.pnl)}">${pct(m.pnl)}</div>
@@ -10940,7 +10959,7 @@ function h1TrendAt(prior, index) {
   const lv = lineAt(fit.a, fit.b, index);
   return lv > 0 ? lv : 0;
 }
-function h1TrendHold(candles, now) {
+function h1TrendHold(candles, now, livePx) {
   const { closed } = h1Parts(candles, now || Date.now());
   const wait = { buy: false, kind: 'trendhold1h', entry: null, stop: null, target: null, line: null, low: null, key: '', reason: 'waiting' };
   if (closed.length < 24) return wait;
@@ -10960,7 +10979,8 @@ function h1TrendHold(candles, now) {
   const key = 'hold:' + Math.round(line * 1e8) + ':' + (br.t || i);
   if (!(hold1.c > at(i + 1)) || !(hold2.c > at(i + 2))) return { ...wait, line, stop, key, reason: 'closed back below the trendline' };
   if (!(stop > 0) || !(stop < hold2.c)) return { ...wait, line, key, stop, reason: 'stop' };
-  return { buy: true, kind: 'trendhold1h', entry: hold2.c, stop, target: hold2.c * 1.3, line, low: br.l, key, reason: 'trend break + hold' };
+  const level = at(i + 2);
+  return settleBreakBuy({ buy: true, kind: 'trendhold1h', entry: hold2.c, stop, target: hold2.c * 1.3, line, low: br.l, key, level, triggerClose: (hold2.t || 0) + 3600e3, reason: 'trend break + hold' }, now || Date.now(), livePx, closed);
 }
 function h1ResistZone(prior, bar) {
   const src = (prior || []).slice(-48);
@@ -11002,7 +11022,7 @@ function h1Spike(mint) {
   const avg = prev.reduce((s, b) => s + b.v, 0) / prev.length;
   return avg > 0 ? { v: bars[bars.length - 1].v, avg } : null;
 }
-function h1BreakSignal(candles, now, livePx, spike) {
+function h1BreakSignal(candles, now, livePx, spike, m15) {
   const { closed, forming } = h1Parts(candles, now || Date.now());
   const wait = { buy: false, fa: '', state: 'wait', entry: null, stop: null, target: null, zoneLo: null, zoneHi: null, line: null, low: null, key: '', reason: 'waiting' };
   if (!forming || closed.length < 21) return { ...wait, fa: closed.length ? 'منتظر شکست' : '' };
@@ -11016,7 +11036,11 @@ function h1BreakSignal(candles, now, livePx, spike) {
   const crossed = px > line && px > zoneHi;
   const key = Math.round(line * 1e8) + ':' + Math.round(zoneHi * 1e8);
   if (!crossed || !h1VolOk(forming, closed, spike) || !(stop > 0) || !(stop < px)) return { ...wait, fa: 'منتظر شکست', zoneLo, zoneHi, line, key, reason: crossed ? 'no volume' : 'waiting for the cross' };
-  return { buy: true, fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3, zoneLo, zoneHi, line, low: forming.l, key, reason: '1h breakout' };
+  const liveBuy = { buy: true, kind: 'breakout1h', fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3, zoneLo, zoneHi, line, low: forming.l, key, level: zoneHi, reason: '1h breakout' };
+  if (!Array.isArray(m15)) return liveBuy;
+  const hit = currentBreakClose(m15, now || Date.now(), c => c.c > zoneHi && c.c > line);
+  if (!hit) return Object.assign({}, liveBuy, { buy: false, triggerClose: 0, reason: 'waiting 15m close' });
+  return settleBreakBuy(Object.assign({}, liveBuy, { triggerClose: hit.t + 15 * 60e3 }), now || Date.now(), px, closed);
 }
 function ceilingZone(prior) {
   const src = (prior || []).slice(-48);
@@ -11045,7 +11069,30 @@ function ceilingZone(prior) {
 function closedM15(m15, now) {
   return (m15 || []).filter(c => c && c.c > 0 && c.t > 0 && c.t + 15 * 60e3 <= now).sort((a, b) => a.t - b.t);
 }
-function ceilingBreakSignal(h1, m15, now) {
+function currentBreakClose(m15, now, isAbove) {
+  const closed = closedM15(m15, now);
+  let i = closed.length - 1;
+  if (i < 0 || !isAbove(closed[i])) return null;
+  while (i > 0 && isAbove(closed[i - 1])) i--;
+  return closed[i];
+}
+const BREAK_FRESH_MS = 20 * 60 * 1000;
+function settleBreakBuy(sig, now, livePx, closedH1) {
+  if (!sig || !sig.buy || sig.kind === 'htfretest') return sig;
+  const closeAt = +sig.triggerClose || 0;
+  const level = +sig.level || 0;
+  const trigger = +sig.entry || 0;
+  const stop = +sig.stop || 0;
+  const px = isNum(livePx) && livePx > 0 ? livePx : trigger;
+  let reason = '';
+  if (!(closeAt > 0) || now - closeAt > BREAK_FRESH_MS) reason = 'expired';
+  else if ((closedH1 || []).some(c => c && (c.t || 0) + 3600e3 > closeAt && (c.t || 0) + 3600e3 <= now && c.c > 0 && level > 0 && c.c < level)) reason = '1h closed back below';
+  else if (!(level > 0) || !(px > level)) reason = 'back below the level';
+  else if (trigger > 0 && stop > 0 && stop < trigger && px < trigger - (trigger - stop) - 1e-12) reason = 'past the stop distance';
+  if (!reason) return sig;
+  return Object.assign({}, sig, { buy: false, reason });
+}
+function ceilingBreakSignal(h1, m15, now, livePx) {
   const empty = { buy: false, kind: 'ceilingbreak', entry: null, stop: null, target: null, ceilingLo: null, ceilingHi: null, base: null, key: '', reason: 'waiting' };
   const { closed, forming } = h1Parts(h1, now || Date.now());
   const bars = forming ? closed.concat([forming]) : closed.slice();
@@ -11069,7 +11116,7 @@ function ceilingBreakSignal(h1, m15, now) {
   const hit = closedM15(m15, now || Date.now()).find(c => c.c > found.zone.hi && (!breakT || c.t + 15 * 60e3 > breakT));
   if (!hit) return view;
   if (!(stop > 0) || !(stop < hit.c)) return Object.assign({}, view, { reason: 'stop' });
-  return { buy: true, kind: 'ceilingbreak', entry: hit.c, stop, target: hit.c * 1.3, ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base, key: 'ceil:' + Math.round(found.zone.hi * 1e8) + ':' + hit.t, reason: 'ceilingbreak' };
+  return settleBreakBuy({ buy: true, kind: 'ceilingbreak', entry: hit.c, stop, target: hit.c * 1.3, ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base, level: found.zone.hi, triggerClose: hit.t + 15 * 60e3, key: 'ceil:' + Math.round(found.zone.hi * 1e8) + ':' + hit.t, reason: 'ceilingbreak' }, now || Date.now(), livePx, closed);
 }
 function lhStructure(closed) {
   const { highs, lows } = swingPoints(closed || [], 2);
@@ -11096,11 +11143,9 @@ function lhBreakSignal(h1, m15, now, livePx) {
   const aboveLine = line > 0 && px > line;
   const stop = st.hl && st.hl.price > 0 ? st.hl.price * 0.99 : null;
   const view = Object.assign({}, empty, { broken, lastLH: st.lastLH, line, hl: st.hl ? st.hl.price : null, stop, reason: broken ? 'waiting 15m close' : 'watching LH' });
-  const lhT = closed[st.lhIndex] && closed[st.lhIndex].t || 0;
-  const hits = closedM15(m15, stamp).filter(c => c.c > st.lastLH && (!lhT || c.t >= lhT));
-  const hit = hits.length ? hits[hits.length - 1] : null;
+  const hit = currentBreakClose(m15, stamp, c => c.c > st.lastLH && line > 0 && c.c > line);
   if (!(broken && aboveLine && hit && stop > 0 && stop < hit.c)) return view;
-  return { buy: true, kind: 'lhbreak', broken: true, entry: hit.c, stop, target: hit.c * 1.3, lastLH: st.lastLH, line, hl: st.hl.price, key: 'lh:' + Math.round(st.lastLH * 1e8) + ':' + hit.t, reason: 'lhbreak' };
+  return settleBreakBuy({ buy: true, kind: 'lhbreak', broken: true, entry: hit.c, stop, target: hit.c * 1.3, lastLH: st.lastLH, line, hl: st.hl.price, level: st.lastLH, triggerClose: hit.t + 15 * 60e3, key: 'lh:' + Math.round(st.lastLH * 1e8) + ':' + hit.t, reason: 'lhbreak' }, stamp, livePx, closed);
 }
 function tfParts(candles, now, span) {
   const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0 && c.o > 0 && c.t > 0).sort((a, b) => a.t - b.t);
@@ -11196,9 +11241,9 @@ async function mlBreakPass() {
     if (!book?.h1) continue;
     const px = livePrices.get(r.mint)?.price || r.price;
     const now = Date.now();
-    const sig = h1BreakSignal(book.h1, now, px, h1Spike(r.mint));
-    const hold = h1TrendHold(book.h1, now);
-    const ceiling = ceilingBreakSignal(book.h1, book.m15 || [], now);
+    const sig = h1BreakSignal(book.h1, now, px, h1Spike(r.mint), book.m15 || []);
+    const hold = h1TrendHold(book.h1, now, px);
+    const ceiling = ceilingBreakSignal(book.h1, book.m15 || [], now, px);
     const lh = lhBreakSignal(book.h1, book.m15 || [], now, px);
     let htf = htfRetestSignal(book.h4 || [], book.h1, now, 4 * 3600e3);
     if (!htf.lastLH && book.d1) htf = htfRetestSignal(book.d1, book.h1, now, 24 * 3600e3);
@@ -11218,7 +11263,11 @@ async function mlBreakPass() {
     if ((r.mlFa || '') !== (sig.fa || '')) { r.mlFa = sig.fa || ''; painted = true; }
     if (!order || !order.buy || !MYLIST.on || !burnerReady()) continue;
     try { await refreshBalances('burner'); } catch { /* size off the last balance */ }
-    if (myListOpenCount() >= 2) { botLog('mylist', r.mint, 'max 2 open'); continue; }
+    if (myListOpenCount() >= 2) {
+      botLog('mylist', r.mint, 'max 2 open');
+      if (order.key && !mlBreakBook().some(x => x.mint === r.mint && x.key === order.key)) mlBreakNote({ kind: 'expire', mint: r.mint, symbol: r.symbol || '', key: order.key, setup: order.kind || '' });
+      continue;
+    }
     const flow = livePrices.get(r.mint) || {};
     const pair = r.dexPair || {};
     const fake = fakeDataReason(r.mint, {
@@ -11229,7 +11278,7 @@ async function mlBreakPass() {
     });
     if (fake) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', fake); botLog('mylist', r.mint, fake); continue; }
     const key = order.key;
-    if (mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy')) continue;
+    if (mlBreakBook().find(x => x.mint === r.mint && x.key === key && (x.kind === 'buy' || x.kind === 'expire'))) continue;
     if (LOG.some(t => t.myList && t.mint === r.mint && t.side === 'buy' && (t.status === 'pending' || t.status === 'confirmed') && t.plan?.mlBreakKey === key)) continue;
     if (listPosition(r.mint) || mlBreakLock.has(r.mint)) continue;
     const resolved = myListWalletSize();

@@ -1,4 +1,4 @@
-import { ceilingBreakSignal, degenLossPct, degenPotLimits, degenReservedSol, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
+import { ceilingBreakSignal, degenLossPct, degenPotLimits, degenReservedSol, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, settleBreakBuy, solRingChange, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
 import { lineAt, tehranDayKey } from './util.js';
 
@@ -82,6 +82,9 @@ const dry = sword.cs.map(c => ({ ...c }));
 dry[39] = { ...dry[39], v: 10 };
 assert(!h1BreakSignal(dry, sword.now, sword.live).buy, 'a wick with no volume does not buy');
 assert(h1BreakSignal(dry, sword.now, sword.live, { mult: 2 }).buy, 'a 2x short-term volume spike can confirm the cross');
+const freshM15 = [{ t: sword.cs[39].t, o: 0.0009, h: 0.00108, l: 0.00085, c: 0.00108, v: 40 }];
+assert(h1BreakSignal(sword.cs, sword.now, sword.live, null, freshM15).buy, 'breakout buys a 15m close inside 20 minutes');
+assert(!h1BreakSignal(sword.cs, sword.now + 21 * 60e3, sword.live, null, freshM15).buy, 'breakout expires 20 minutes after that 15m close');
 const oldScalp = { avgUsd: 1, firstTs: Date.now() - 11 * 60e3, plan: { breakLow: 0.98 }, prot: { high: 1, runner: false, entryLiq: 1000 } };
 assert(scalpExitReason(oldScalp, 0.99, [], { liq: 1000 }) === 'no +1.5% in 4m', 'regular scalp time stop stays');
 const h1pos = { avgUsd: 0.001087, firstTs: Date.now() - 20 * 60e3, plan: { kind: 'breakout1h', stop: 0.000833 * 0.985 }, prot: { entryLiq: 1000, high: 0.001087 } };
@@ -177,6 +180,15 @@ assert(Math.abs(ceil.entry - 1.08) < 1e-12, 'ceiling entry is the 15m close');
 assert(ceil.stop < ceil.base && ceil.stop > ceil.base * 0.98, 'ceiling stop is about 1% under the base');
 assert(Math.abs(ceil.target - 1.08 * 1.3) < 1e-12, 'ceiling target is +30%');
 assert(!ceilingBreakSignal(ceilH1, [], ceilNow).buy, 'ceiling waits for a 15m close');
+assert(!ceilingBreakSignal(ceilH1, ceilM15, ceilNow + 21 * 60e3, ceil.entry).buy, 'ceiling expires 20 minutes after the 15m close');
+assert(!ceilingBreakSignal(ceilH1, ceilM15, ceilNow, ceil.ceilingHi * 0.99).buy, 'ceiling does not buy back under the box');
+const ceilUnder = ceilH1.map(c => ({ ...c }));
+ceilUnder[27] = { ...ceilUnder[27], c: ceil.ceilingHi * 0.99, h: ceil.ceilingHi * 1.08 };
+const ceilLateM15 = [{ t: ceilH1[27].t + 40 * 60e3, o: ceil.ceilingHi, h: ceil.ceilingHi * 1.04, l: ceil.ceilingHi, c: ceil.ceilingHi * 1.02, v: 8 }];
+const ceilLateNow = ceilH1[27].t + 60 * 60e3 + 1000;
+assert(!ceilingBreakSignal(ceilUnder, ceilLateM15, ceilLateNow, ceil.ceilingHi * 1.02).buy, 'ceiling cancels when the 1h closes back under the box');
+assert(settleBreakBuy({ buy: true, kind: 'ceilingbreak', triggerClose: ceilNow, level: 1, entry: 1.1, stop: 1.05 }, ceilNow, 1.04).reason === 'past the stop distance', 'a buy stops once price falls further than the stop distance');
+assert(settleBreakBuy({ buy: true, kind: 'htfretest', triggerClose: 0, entry: 1 }, ceilNow, 0.1).buy, 'htf retest keeps its own 72h window');
 
 const lhSpec = [];
 for (let i = 0; i < 30; i++) lhSpec.push({ o: 1, h: 1.02, l: 0.98, c: 1 });
@@ -198,6 +210,8 @@ assert(lh.buy && lh.kind === 'lhbreak', 'LH break buys the 15m close');
 assert(Math.abs(lh.entry - 1.05) < 1e-12, 'LH entry is the 15m close');
 assert(lh.stop > 0 && lh.stop < lh.hl, 'LH stop is under the higher low');
 assert(!lhBreakSignal(lhH1, [], lhNow, 1.06).buy, 'LH break waits for a 15m close');
+assert(!lhBreakSignal(lhH1, lhM15, lhNow + 21 * 60e3, 1.06).buy, 'LH break expires 20 minutes after the 15m close');
+assert(!h1TrendHold(baton.cs, baton.now + 21 * 60e3, 0.00078).buy, 'trend hold expires 20 minutes after the 1h close');
 
 function htfBars() {
   const span = 4 * 3600e3;

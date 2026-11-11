@@ -312,7 +312,6 @@ export function createEngine(cfg, state, net, swap) {
     const rows = agents.mylist?.tokens || [];
     if (!rows.length) return;
     const openN = mainOpenCount();
-    if (openN >= 2) { state.note('breakout', '', '', 'max 2 open'); return; }
     const cursor = state.data.breakCursor || 0;
     const row = rows[cursor % rows.length];
     state.data.breakCursor = cursor + 1;
@@ -325,9 +324,9 @@ export function createEngine(cfg, state, net, swap) {
     let h4 = [];
     try { h4 = (await net.ohlcv(tape.pool, '4h', row.mint)).slice(-80); } catch { h4 = []; }
     const now = Date.now();
-    const liveSig = h1BreakSignal(h1, now, tape.px);
-    const hold = h1TrendHold(h1, now);
-    const ceiling = ceilingBreakSignal(h1, m15, now);
+    const liveSig = h1BreakSignal(h1, now, tape.px, null, m15);
+    const hold = h1TrendHold(h1, now, tape.px);
+    const ceiling = ceilingBreakSignal(h1, m15, now, tape.px);
     const lh = lhBreakSignal(h1, m15, now, tape.px);
     let htf = htfRetestSignal(h4, h1, now, 4 * 3600e3);
     if (!htf.lastLH) {
@@ -346,10 +345,15 @@ export function createEngine(cfg, state, net, swap) {
     });
     if (breakViews.size > 40) breakViews.delete(breakViews.keys().next().value);
     if (!sig.buy) return;
+    state.data.seenBreaks = state.data.seenBreaks || {};
+    if (openN >= 2) {
+      if (sig.key) state.data.seenBreaks[row.mint] = sig.key;
+      state.note('breakout', row.mint, row.symbol || tape.symbol, 'max 2 open');
+      return;
+    }
     if (state.findOpen(row.mint)) { state.note('breakout', row.mint, row.symbol || tape.symbol, 'already open'); return; }
     const fake = guard(row.mint, tape);
     if (fake) { state.note('breakout', row.mint, row.symbol || tape.symbol, fake); return; }
-    state.data.seenBreaks = state.data.seenBreaks || {};
     if (state.data.seenBreaks[row.mint] === sig.key) return;
     const bal = await swap.balance();
     const sized = listWalletSize(bal, CAPS.reserveSol, openN, mainReservedSol());

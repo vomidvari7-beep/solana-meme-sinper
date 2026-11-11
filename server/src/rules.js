@@ -461,7 +461,7 @@ function h1ResistZone(prior, bar) {
 }
 
 /** Forming 1h candle vs the descending trendline and the last resistance box. Buys on the live cross, not the close. */
-export function h1BreakSignal(candles, now = Date.now(), livePx = null, spike = null) {
+export function h1BreakSignal(candles, now = Date.now(), livePx = null, spike = null, m15 = null) {
   const { closed, forming } = h1Parts(candles, now);
   const wait = { buy: false, fa: '', state: 'wait', entry: null, stop: null, target: null, zoneLo: null, zoneHi: null, line: null, low: null, key: '', reason: 'waiting' };
   if (!forming || closed.length < 21) return { ...wait, fa: closed.length ? 'منتظر شکست' : '' };
@@ -477,14 +477,18 @@ export function h1BreakSignal(candles, now = Date.now(), livePx = null, spike = 
   if (!crossed || !h1VolOk(forming, closed, spike) || !(stop > 0) || !(stop < px)) {
     return { ...wait, fa: 'منتظر شکست', zoneLo, zoneHi, line, key, reason: crossed ? 'no volume' : 'waiting for the cross' };
   }
-  return {
-    buy: true, fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3,
-    zoneLo, zoneHi, line, low: forming.l, key,     reason: '1h breakout'
+  const liveBuy = {
+    buy: true, kind: 'breakout1h', fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3,
+    zoneLo, zoneHi, line, low: forming.l, key, level: zoneHi, reason: '1h breakout'
   };
+  if (!Array.isArray(m15)) return liveBuy;
+  const hit = currentBreakClose(m15, now, c => c.c > zoneHi && c.c > line);
+  if (!hit) return { ...liveBuy, buy: false, triggerClose: 0, reason: 'waiting 15m close' };
+  return settleBreakBuy({ ...liveBuy, triggerClose: hit.t + 15 * 60e3 }, now, px, closed);
 }
 
 /** Strong closed 1h trendline break, then two closed holds above the line. Buys the second hold's close. */
-export function h1TrendHold(candles, now = Date.now()) {
+export function h1TrendHold(candles, now = Date.now(), livePx = null) {
   const { closed } = h1Parts(candles, now);
   const wait = { buy: false, kind: 'trendhold1h', entry: null, stop: null, target: null, line: null, low: null, key: '', reason: 'waiting' };
   if (closed.length < 24) return wait;
@@ -502,7 +506,11 @@ export function h1TrendHold(candles, now = Date.now()) {
   const key = 'hold:' + Math.round(line * 1e8) + ':' + (br.t || i);
   if (!(hold1.c > at(i + 1)) || !(hold2.c > at(i + 2))) return { ...wait, line, stop, key, reason: 'closed back below the trendline' };
   if (!(stop > 0) || !(stop < hold2.c)) return { ...wait, line, key, stop, reason: 'stop' };
-  return { buy: true, kind: 'trendhold1h', entry: hold2.c, stop, target: hold2.c * 1.3, line, low: br.l, key, reason: 'trend break + hold' };
+  const level = at(i + 2);
+  return settleBreakBuy({
+    buy: true, kind: 'trendhold1h', entry: hold2.c, stop, target: hold2.c * 1.3, line, low: br.l, key,
+    level, triggerClose: (hold2.t || 0) + 3600e3, reason: 'trend break + hold'
+  }, now, livePx, closed);
 }
 
 function ceilingZone(prior) {
@@ -534,8 +542,36 @@ function closedM15(m15, now) {
   return (m15 || []).filter(c => c && c.c > 0 && c.t > 0 && c.t + 15 * 60e3 <= now).sort((a, b) => a.t - b.t);
 }
 
+/** The 15m close that started the current run above the level. Later closes do not refresh it. */
+export function currentBreakClose(m15, now, isAbove) {
+  const closed = closedM15(m15, now);
+  let i = closed.length - 1;
+  if (i < 0 || !isAbove(closed[i])) return null;
+  while (i > 0 && isAbove(closed[i - 1])) i--;
+  return closed[i];
+}
+
+export const BREAK_FRESH_MS = 20 * 60 * 1000;
+
+/** Buy only inside ~20 minutes of the trigger close, while price is still above the level and inside the stop distance. */
+export function settleBreakBuy(sig, now, livePx, closedH1) {
+  if (!sig || !sig.buy || sig.kind === 'htfretest') return sig;
+  const closeAt = +sig.triggerClose || 0;
+  const level = +sig.level || 0;
+  const trigger = +sig.entry || 0;
+  const stop = +sig.stop || 0;
+  const px = isNum(livePx) && livePx > 0 ? livePx : trigger;
+  let reason = '';
+  if (!(closeAt > 0) || now - closeAt > BREAK_FRESH_MS) reason = 'expired';
+  else if ((closedH1 || []).some(c => c && (c.t || 0) + 3600e3 > closeAt && (c.t || 0) + 3600e3 <= now && c.c > 0 && level > 0 && c.c < level)) reason = '1h closed back below';
+  else if (!(level > 0) || !(px > level)) reason = 'back below the level';
+  else if (trigger > 0 && stop > 0 && stop < trigger && px < trigger - (trigger - stop) - 1e-12) reason = 'past the stop distance';
+  if (!reason) return sig;
+  return { ...sig, buy: false, reason };
+}
+
 /** 1h ceiling break, then the 15m close that finishes above the box. */
-export function ceilingBreakSignal(h1, m15, now = Date.now()) {
+export function ceilingBreakSignal(h1, m15, now = Date.now(), livePx = null) {
   const empty = { buy: false, kind: 'ceilingbreak', entry: null, stop: null, target: null, ceilingLo: null, ceilingHi: null, base: null, key: '', reason: 'waiting' };
   const { closed, forming } = h1Parts(h1, now);
   const bars = forming ? closed.concat([forming]) : closed.slice();
@@ -559,11 +595,12 @@ export function ceilingBreakSignal(h1, m15, now = Date.now()) {
   const hit = closedM15(m15, now).find(c => c.c > found.zone.hi && (!breakT || c.t + 15 * 60e3 > breakT));
   if (!hit) return view;
   if (!(stop > 0) || !(stop < hit.c)) return { ...view, reason: 'stop' };
-  return {
+  return settleBreakBuy({
     buy: true, kind: 'ceilingbreak', entry: hit.c, stop, target: hit.c * 1.3,
-    ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base,
+    ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base, level: found.zone.hi,
+    triggerClose: hit.t + 15 * 60e3,
     key: 'ceil:' + Math.round(found.zone.hi * 1e8) + ':' + hit.t, reason: 'ceilingbreak'
-  };
+  }, now, livePx, closed);
 }
 
 export function lhStructure(closed) {
@@ -599,14 +636,13 @@ export function lhBreakSignal(h1, m15, now = Date.now(), livePx = null) {
   const aboveLine = line > 0 && px > line;
   const stop = st.hl && st.hl.price > 0 ? st.hl.price * 0.99 : null;
   const view = { ...empty, broken, lastLH: st.lastLH, line, hl: st.hl ? st.hl.price : null, stop, reason: broken ? 'waiting 15m close' : 'watching LH' };
-  const lhT = closed[st.lhIndex]?.t || 0;
-  const hit = closedM15(m15, now).filter(c => c.c > st.lastLH && (!lhT || c.t >= lhT)).at(-1);
+  const hit = currentBreakClose(m15, now, c => c.c > st.lastLH && line > 0 && c.c > line);
   if (!(broken && aboveLine && hit && stop > 0 && stop < hit.c)) return view;
-  return {
+  return settleBreakBuy({
     buy: true, kind: 'lhbreak', broken: true, entry: hit.c, stop, target: hit.c * 1.3,
-    lastLH: st.lastLH, line, hl: st.hl.price,
+    lastLH: st.lastLH, line, hl: st.hl.price, level: st.lastLH, triggerClose: hit.t + 15 * 60e3,
     key: 'lh:' + Math.round(st.lastLH * 1e8) + ':' + hit.t, reason: 'lhbreak'
-  };
+  }, now, livePx, closed);
 }
 
 function tfParts(candles, now, span) {
