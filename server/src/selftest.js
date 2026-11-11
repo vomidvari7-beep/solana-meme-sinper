@@ -1,4 +1,5 @@
 import { fakeDataReason, mlStop, planTriggerHit, planUsable, quoteImpact, scalpEntryFail, scalpSizeUsd, scalpStopLevel, textHasRugFlag } from './rules.js';
+import { evaluateSetup } from './setup.js';
 
 function assert(cond, msg) {
   if (!cond) { console.error('FAIL ' + msg); process.exit(1); }
@@ -31,5 +32,14 @@ assert(mlStop(1, 0.5) === 0.85, 'break stop cap -15%');
 assert(planUsable({ status: 'ready', confidence: 60, ts: Date.now(), trigger_price: 1 }), 'plan conf');
 assert(!planUsable({ status: 'ready', confidence: 59, ts: Date.now() }), 'plan conf floor');
 assert(planTriggerHit({ entry_mode: 'above', trigger_price: 1 }, 1.01), 'zone touch');
+
+const now = 1_000_000;
+const open = { code: 'abcd', exp: now + 1000, fails: 0, hits: [] };
+assert(evaluateSetup(open, 'abcd', now, '1.1.1.1').ok, 'setup code ok');
+assert(!evaluateSetup({ ...open, exp: now - 1 }, 'abcd', now, '1.1.1.1').ok, 'setup expired');
+assert(!evaluateSetup({ done: true }, 'abcd', now, '1.1.1.1').ok, 'setup closed');
+let locked = { code: 'abcd', exp: now + 1000, fails: 0, hits: [] };
+for (let i = 0; i < 5; i++) locked = evaluateSetup(locked, 'nope', now, '9.9.9.9').row;
+assert((locked.lockedUntil || 0) > now, 'setup rate limit');
 
 console.log('selftest ok');

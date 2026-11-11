@@ -1,111 +1,47 @@
-# SolanaMemeSniper daemon
+# دیمون SolanaMemeSniper
 
-Headless Node.js process that keeps trading when Safari is closed. It follows the live panel rules from commit `9daa884` and the fake-data guards:
+پنل روی HTTPS است. آیفون به `http://IP:8787` وصل نمی‌شود. نصب، Caddy را با گواهی خودکار راه می‌اندازد و فقط `/api/*` را به `127.0.0.1:8787` می‌فرستد. خود دیمون روی اینترنت باز نیست.
 
-- Scalp uses its own ledger, starting at $100. The first position takes half of the free balance. The second takes the rest, and only if the first is at breakeven. Skip under $5. Max 2 open. Daily stop -$20. At +5% it holds and trails only while 1-minute momentum is strong.
-- My List breakout buys use a stop 1.5% under the strongest break candle, never wider than -15%, and a +30% target.
-- Agent plans buy when confidence is at least 60, the plan is fresh and `ready`, and price touches the trigger.
-- Live Degen scan buys from the Degen ledger and uses the tiered exit (stop, +50% breakeven, +80% trail, partials, time stop).
-- AVOID, confidence 0, rug flags, zero sells, liquidity above 20× 24h volume or above market cap, and a Jupiter quote with no impact are skipped as `fake-data`. A mint that falls 80% inside an hour is stored in the blacklist and never bought again.
+## از آیفون، بدون تونل SSH
 
-The browser panel does not change its trading while Server mode is off.
-
-## English setup (Ubuntu 22.04 or 24.04)
-
-The private key is never committed, never logged, and never sent to an agent.
+1. یک VPS با اوبونتو ۲۲.۰۴ یا ۲۴.۰۴ بخر. پورت‌های ۲۲، ۸۰ و ۴۴۳ را باز بگذار.
+2. کنسول وب همان VPS را باز کن، یا در Termius به آن SSH بزن.
+3. این یک خط را بچسبان:
 
 ```bash
-sudo bash server/install.sh
+curl -fsSL https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/main/server/install.sh | sudo bash
 ```
 
-That installs Node 20 if needed, creates the `sms` user, copies the app to `/opt/sms`, and starts `sms-daemon` with `SMS_DRY_RUN=1`. Dry-run logs decisions and does not send transactions.
+4. آخر خروجی سه خط است: آدرس `https://…`، توکن API، و لینک یک‌بارمصرف setup. لینک را در سافاری باز کن.
+5. کلید خصوصی برنر و یک عبارت عبور (حداقل ۸ حرف) را وارد کن. کد راه‌اندازی از خود لینک پر شده است. صفحه ۳۰ دقیقه اعتبار دارد، بعد از چند تلاش اشتباه قفل می‌شود، و بعد از ذخیرهٔ کلید برای همیشه بسته می‌شود. کلید در لاگ و در مخزن نوشته نمی‌شود.
+6. در پنل، Wallet & Trading و Server mode: همان آدرس `https://` (بدون پورت و بدون `/api`) و توکن را بگذار و Use the server را روشن کن. تا وقتی این حالت روشن است خود مرورگر معامله نمی‌کند.
 
-### Put the key on the machine
-
-Use one of these. Do both only if you want a spare. The plaintext file is shredded after encryption.
-
-**Setup page (recommended).** From your laptop:
+اگر دامنهٔ خودت را می‌خواهی، قبل از نصب این را بزن و DNS را به IP سرور اشاره بده:
 
 ```bash
-ssh -L 8788:127.0.0.1:8788 user@YOUR_VPS
+echo bot.example.com | sudo tee /etc/sms/domain
 ```
 
-Open `http://127.0.0.1:8788`. The page refuses every address except localhost. Type the burner secret, a passphrase (8+ characters), and the API token the phone will use (12+ characters). The daemon encrypts the key with scrypt and AES-256-GCM into `/var/lib/sms/key.enc` and stores only the API token in `/var/lib/sms/api.token` (mode 600).
+بدون این فایل، آدرس به شکل `1-2-3-4.sslip.io` ساخته می‌شود.
 
-**File the owner creates.**
+بار اول معامله واقعی نمی‌فرستد (`SMS_DRY_RUN=1`). وقتی خواستی واقعی شود، در `/etc/sms/sms.env` مقدار را `0` کن و `sudo systemctl restart sms-daemon` بزن. حالت‌های اسکالپ، بریک‌اوت، پلن و دجن پیش‌فرض خاموش‌اند و از پنل روشن می‌شوند. دکمهٔ Pause all خرید و فروش خودکار را نگه می‌دارد.
+
+اگر ۳۰ دقیقه گذشت و هنوز کلید را نفرستادی، همان دستور curl را دوباره اجرا کن تا لینک تازه ساخته شود.
+
+راه جایگزین، اگر کنسول فایل می‌پذیرد: کلید را در `/etc/sms/key` و عبارت عبور را در `/etc/sms/passphrase` بگذار، هر دو با `chmod 600`. دیمون کلید را رمز می‌کند و فایل خام را پاک می‌کند.
+
+دفترها، پوزیشن‌ها و فهرست سیاه در `/var/lib/sms/book.json` می‌مانند.
+
+## English
+
+GitHub Pages is HTTPS, so iOS Safari blocks `http://VPS:8787`. install.sh installs Caddy, gets a certificate for `<public-ip-with-dashes>.sslip.io` (or `SMS_DOMAIN` / `/etc/sms/domain`), and reverse-proxies only `/api/*` to `127.0.0.1:8787`. The setup page is `https://<host>/setup`. CORS allows only `https://vomidvari7-beep.github.io`.
+
+iPhone flow: buy an Ubuntu 22.04/24.04 VPS with ports 22, 80, and 443 open. Open its web console or Termius and paste:
 
 ```bash
-sudo install -m 600 /dev/stdin /etc/sms/key
-# paste the base58 secret or the JSON byte array, then Ctrl-D
-sudo install -m 600 /dev/stdin /etc/sms/passphrase
-# type the passphrase, then Ctrl-D
-sudo systemctl restart sms-daemon
+curl -fsSL https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/main/server/install.sh | sudo bash
 ```
 
-On the next start the daemon encrypts `/etc/sms/key` into `/var/lib/sms/key.enc` and deletes the plaintext file. Later restarts read the passphrase from `/etc/sms/passphrase` or from `SMS_PASSPHRASE`. Without a passphrase, the daemon waits on the localhost page instead of trading.
+Open the printed `https://…/setup#…` link in Safari within 30 minutes. Enter the burner secret and a passphrase. The setup code is filled from the link, attempts are rate-limited, and the page is disabled forever after the key is encrypted. The API token is printed once in that console output. Paste the https origin (no port, no `/api`) and the token into Server mode.
 
-Accepted key forms: Phantom base58 secret, 64-byte JSON array, or hex.
-
-### Turn on live trading
-
-Edit `/etc/sms/sms.env` and set `SMS_DRY_RUN=0`, then `sudo systemctl restart sms-daemon`. Modes still start off. Enable them from the phone or:
-
-```bash
-curl -s -H "Authorization: Bearer YOUR_TOKEN" -H 'content-type: application/json' \
-  -d '{"scalp":true,"breakout":true,"plans":true,"degen":true,"scan":true}' \
-  http://127.0.0.1:8787/api/mode
-```
-
-### Phone
-
-In the panel, Wallet & Trading → Server mode. Paste `http://YOUR_VPS:8787` and the API token, tick Use the server, Save. The card shows positions, ledger balances, and the mode checkboxes. Pause all calls `POST /api/pause`. While Server mode is on, this browser will not sign scalp, breakout, plan, degen, or auto buys.
-
-The status API is read-only except pause, resume, and those toggles. There is no endpoint that places a trade.
-
-### Status
-
-```bash
-sudo systemctl status sms-daemon
-sudo journalctl -u sms-daemon -f
-curl -s -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8787/api/status
-```
-
-State (positions, both ledgers, blacklist, cooldowns) is `/var/lib/sms/book.json`. A restart continues from that file.
-
-## راه‌اندازی فارسی
-
-این پردازش حتی وقتی سافاری بسته است معامله می‌کند. کلید خصوصی هیچ‌وقت داخل مخزن، لاگ، یا پیام ایجنت نوشته نمی‌شود.
-
-روی اوبونتو ۲۲.۰۴ یا ۲۴.۰۴:
-
-```bash
-sudo bash server/install.sh
-```
-
-بار اول حالت آزمایشی است (`SMS_DRY_RUN=1`): تصمیم‌ها لاگ می‌شوند و تراکنشی فرستاده نمی‌شود.
-
-کلید را یکی از این دو راه بدهید.
-
-۱. صفحهٔ محلی. از لپ‌تاپ:
-
-```bash
-ssh -L 8788:127.0.0.1:8788 user@YOUR_VPS
-```
-
-بعد در مرورگر `http://127.0.0.1:8788` را باز کنید. فقط از خود سرور و از راه تونل باز می‌شود. کلید برنر، یک عبارت عبور (حداقل ۸ حرف) و توکن API (حداقل ۱۲ حرف) را وارد کنید. کلید با AES-256-GCM رمز می‌شود و در `/var/lib/sms/key.enc` می‌ماند.
-
-۲. فایل با دسترسی فقط مالک:
-
-```bash
-sudo install -m 600 /dev/stdin /etc/sms/key
-sudo install -m 600 /dev/stdin /etc/sms/passphrase
-sudo systemctl restart sms-daemon
-```
-
-بعد از رمز شدن، فایل خام کلید پاک می‌شود. راه‌اندازی بعدی عبارت عبور را از `/etc/sms/passphrase` می‌خواند.
-
-معاملهٔ واقعی: در `/etc/sms/sms.env` مقدار `SMS_DRY_RUN=0` را بگذارید و سرویس را ری‌استارت کنید. حالت‌ها پیش‌فرض خاموش‌اند. از کارت Server mode در پنل روشن‌شان کنید.
-
-در پنل، آدرس `http://YOUR_VPS:8787` و توکن را ذخیره کنید و Use the server را بزنید. تا وقتی این حالت روشن است، خود مرورگر خرید نمی‌زند تا دو بار خرید نشود. دکمهٔ Pause all همهٔ خرید و فروش خودکار را نگه می‌دارد. پوزیشن‌ها روی زنجیره می‌مانند تا Resume.
-
-دفتر اسکالپ و دجن، پوزیشن‌ها و فهرست سیاه در `/var/lib/sms/book.json` ذخیره می‌شوند و بعد از ری‌استارت سر جایشان هستند.
+The daemon still starts in dry-run. Set `SMS_DRY_RUN=0` and restart when you want live swaps. Trading rules match the panel: Scalp ledger at $100 with 50% then the remainder, dynamic +5% trail, -$20 day stop; My List chart stops; agent plans at confidence 60 on a trigger touch; Live Degen ledger and tiered exits; fake-data skips and the rug blacklist.

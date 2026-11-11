@@ -3,6 +3,17 @@ import { tokensMatch } from './keystore.js';
 import { log } from './util.js';
 
 const MODES = ['scalp', 'breakout', 'plans', 'degen', 'scan'];
+const PANEL_ORIGIN = 'https://vomidvari7-beep.github.io';
+
+function corsHeaders(req) {
+  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', vary: 'Origin' };
+  if (req.headers.origin === PANEL_ORIGIN) {
+    headers['access-control-allow-origin'] = PANEL_ORIGIN;
+    headers['access-control-allow-headers'] = 'authorization, content-type, x-sms-token';
+    headers['access-control-allow-methods'] = 'GET, POST, OPTIONS';
+  }
+  return headers;
+}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -25,8 +36,8 @@ function readBody(req) {
 export function startApi(cfg, state, engine) {
   const server = createServer(async (req, res) => {
     const send = (code, body) => {
-      const json = JSON.stringify(body);
-      res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' });
+      const json = body == null ? '' : JSON.stringify(body);
+      res.writeHead(code, corsHeaders(req));
       res.end(json);
     };
     if (req.method === 'OPTIONS') { send(204, {}); return; }

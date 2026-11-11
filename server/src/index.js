@@ -22,11 +22,13 @@ function loadConfig() {
     stateFile: join(stateDir, 'book.json'),
     encFile: join(stateDir, 'key.enc'),
     tokenFile: join(stateDir, 'api.token'),
+    setupFile: join(stateDir, 'setup.json'),
+    setupDone: join(stateDir, 'setup.done'),
     keyFile: env('SMS_KEY_FILE', '/etc/sms/key'),
     passFile: env('SMS_PASSPHRASE_FILE', '/etc/sms/passphrase'),
     repo: env('SMS_REPO', 'vomidvari7-beep/solana-meme-sinper'),
     rpc: env('SMS_RPC', 'https://solana-rpc.publicnode.com'),
-    bind: env('SMS_BIND', '0.0.0.0'),
+    bind: env('SMS_BIND', '127.0.0.1'),
     port: +env('SMS_PORT', '8787') || 8787,
     setupPort: +env('SMS_SETUP_PORT', '8788') || 8788,
     dryRun: env('SMS_DRY_RUN', '1') !== '0',
@@ -47,7 +49,7 @@ async function main() {
   mkdirSync(dirname(cfg.encFile), { recursive: true });
   let unlocked = unlockKey(cfg);
   if (unlocked.need) {
-    log('setup', unlocked.error || 'waiting for the local setup page');
+    log('setup', unlocked.error || 'waiting for the one-time /setup page');
     await serveSetup(cfg);
     unlocked = unlockKey(cfg);
     if (!unlocked.kp) throw new Error('setup finished without a usable key');

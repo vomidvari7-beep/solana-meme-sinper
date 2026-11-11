@@ -6235,7 +6235,7 @@ function mountServerMode() {
   const card = document.createElement('section');
   card.id = 'serverModeCard';
   card.className = 'mt-3 rounded-xl bg-ink-850 border border-white/5 p-3';
-  card.innerHTML = '<div class="text-xs font-semibold text-slate-300">Server mode</div><p class="mt-1 text-[11px] text-slate-500">When this is on, the phone only shows the VPS daemon and does not sign trades.</p><label class="mt-2 flex items-center gap-2 text-[12px] text-slate-300"><input id="srvOn" type="checkbox" class="accent-violet-500"/> Use the server</label><input id="srvUrl" placeholder="http://VPS:8787" class="mt-2 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]"/><input id="srvToken" type="password" placeholder="API token" autocomplete="off" class="mt-2 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]"/><div class="mt-2 flex gap-2"><button type="button" id="srvSave" class="rounded-lg px-2 py-1 text-[11px] border border-white/10">Save</button><button type="button" id="srvPause" class="rounded-lg px-2 py-1 text-[11px] border border-rose-500/40 text-rose-300">Pause all</button></div><div id="srvBody" class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">Server mode is off.</div>';
+  card.innerHTML = '<div class="text-xs font-semibold text-slate-300">Server mode</div><p class="mt-1 text-[11px] text-slate-500">This page is HTTPS, so Safari only talks to an https:// server. Paste the sslip.io address from install, not http://IP:8787. While this is on, the phone shows the VPS and does not sign trades.</p><label class="mt-2 flex items-center gap-2 text-[12px] text-slate-300"><input id="srvOn" type="checkbox" class="accent-violet-500"/> Use the server</label><input id="srvUrl" placeholder="https://1-2-3-4.sslip.io" class="mt-2 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]"/><input id="srvToken" type="password" placeholder="API token" autocomplete="off" class="mt-2 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]"/><div class="mt-2 flex gap-2"><button type="button" id="srvSave" class="rounded-lg px-2 py-1 text-[11px] border border-white/10">Save</button><button type="button" id="srvPause" class="rounded-lg px-2 py-1 text-[11px] border border-rose-500/40 text-rose-300">Pause all</button></div><div id="srvBody" class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">Server mode is off.</div>';
   host.appendChild(card);
   const cfg = serverCfg();
   $('srvOn').checked = cfg.on;
@@ -6269,6 +6269,7 @@ function mountServerMode() {
   }
   $('srvSave').addEventListener('click', () => {
     const next = { on: $('srvOn').checked, url: $('srvUrl').value.trim().replace(/\/$/, ''), token: $('srvToken').value.trim() };
+    if (next.on && !/^https:\/\//i.test(next.url)) { toast('Use the https:// address. Safari blocks http from this page.', 'err', 7000); return; }
     save('sms:server', next);
     if (serverModeOn()) { stopBrowserBots(); toast('Server mode on. Browser trading is off.', 'warn', 5000); }
     else toast('Server mode off. This browser can trade again.', 'ok');
