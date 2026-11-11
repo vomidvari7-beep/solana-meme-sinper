@@ -1,205 +1,238 @@
 {
-  "updatedAt": "2026-11-11T05:27:21.144Z",
+  "updatedAt": "2026-11-11T05:51:33.287Z",
   "source": "panel",
   "tokens": [
     {
       "mint": "Ai66LHZG9MCzg1WKdawwqduVAXpNDUuV8M3uyq5ppump",
       "symbol": "CATE",
       "name": "Catecoin",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
       "symbol": "WEALTH",
       "name": "Wealth Coin",
       "addedAt": null,
-      "manualStop": 0.0006
+      "manualStop": 0.0006,
+      "manualTp": "30:100"
     },
     {
       "mint": "9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump",
       "symbol": "ANSEM",
       "name": "The Black Bull",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "A13oRB9FFaiUjfi6LdCg6p9ka1u8SfGkUFs4SKvPpump",
       "symbol": "TOAD",
       "name": "The Toad Pepe",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "HcRLc9VDgjLeK154xDawfb1dmVJ98DoSqcwTHGqiDeJR",
       "symbol": "ZCAT",
       "name": "Anonymous Cat",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
       "symbol": "TROLL",
       "name": "TROLL",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "EJAxERvKU4kEVXn3NarjvRtgaMaJyP9ZuMeKA7JJpump",
       "symbol": "CHOO",
       "name": "Choo Choo",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "FZxHLUGiGchY5uvvoeqh1EKiXTrGdN67WUBhUc1fLoat",
       "symbol": "PUSSY",
       "name": "Pussycoin",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "HuAXPyDWDaMYFKuwQHpqL1oPnj93zdzWmtvFGzCeCUa7",
       "symbol": "MASK",
       "name": "Nullmask",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "5wsjHxT5nW5jQuVupXUNnYszF3WoWCfGGk9LMcsCJzY8",
       "symbol": "STANK",
       "name": "STANK",
-      "addedAt": null
+      "addedAt": null,
+      "manualTp": "30:100"
     },
     {
       "mint": "GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump",
       "symbol": "ACT",
       "name": "Act I : The AI Prophecy",
-      "addedAt": "2026-11-10T23:40:41.200Z"
+      "addedAt": "2026-11-10T23:40:41.200Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk",
       "symbol": "USELESS",
       "name": "USELESS COIN",
-      "addedAt": "2026-11-10T23:40:41.201Z"
+      "addedAt": "2026-11-10T23:40:41.201Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "6GmAFSYs4gk3FDao5FzzySQpPZaWsa4rUJHacpMpUNgx",
       "symbol": "STONK",
       "name": "STONK",
-      "addedAt": "2026-11-10T23:40:41.201Z"
+      "addedAt": "2026-11-10T23:40:41.201Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "Hg5Ja55T5wESq4vyFoiVCMeHXtGyVA69X2UHq8hgpump",
       "symbol": "baton",
       "name": "baton",
-      "addedAt": "2026-11-10T23:40:41.201Z"
+      "addedAt": "2026-11-10T23:40:41.201Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "Bv1a7cEj5aRnJQhMw4kRQqAFesMSd5LwcDnUzq52BMmr",
       "symbol": "FLOAT",
       "name": "FLOAT",
-      "addedAt": "2026-11-10T23:40:41.201Z"
+      "addedAt": "2026-11-10T23:40:41.201Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "4kjruqGHDsSqkMdFfCjV7Vb62HPFhtXyWc2t6JpQzDnz",
       "symbol": "GTA6",
       "name": "GTA VI",
-      "addedAt": "2026-11-10T23:40:41.201Z"
+      "addedAt": "2026-11-10T23:40:41.201Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "2j5SaS7xy776qCBpyPQbZjyQSAtKiFgrwjfErthnW2ZM",
       "symbol": "CLAUDIA",
       "name": "Claudia",
-      "addedAt": "2026-11-10T23:40:41.201Z"
+      "addedAt": "2026-11-10T23:40:41.201Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
       "symbol": "Fartcoin ",
       "name": "Fartcoin ",
-      "addedAt": "2026-11-10T23:48:31.405Z"
+      "addedAt": "2026-11-10T23:48:31.405Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
       "symbol": "JUP",
       "name": "Jupiter",
-      "addedAt": "2026-11-10T23:49:09.861Z"
+      "addedAt": "2026-11-10T23:49:09.861Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
       "symbol": "RAY",
       "name": "Raydium",
-      "addedAt": "2026-11-10T23:49:22.241Z"
+      "addedAt": "2026-11-10T23:49:22.241Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "Ce2gx9KGXJ6C9Mp5b5x1sn9Mg87JwEbrQby4Zqo3pump",
       "symbol": "neet",
       "name": "NotInEmploymentEducationTraining",
-      "addedAt": "2026-11-10T23:49:45.573Z"
+      "addedAt": "2026-11-10T23:49:45.573Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",
       "symbol": "BOME",
       "name": "BOOK OF MEME",
-      "addedAt": "2026-11-10T23:51:02.851Z"
+      "addedAt": "2026-11-10T23:51:02.851Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
       "symbol": "PUMP",
       "name": "Pump",
-      "addedAt": "2026-11-10T23:51:19.234Z"
+      "addedAt": "2026-11-10T23:51:19.234Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
       "symbol": "GATO",
       "name": "GTA6CAT",
-      "addedAt": "2026-11-10T23:51:46.400Z"
+      "addedAt": "2026-11-10T23:51:46.400Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "DtcicPCKTKeAh7TDEzTym3hXeoHAoMiBdYJhMYxZpump",
       "symbol": "CBUCKS",
       "name": "Cartoon Money",
-      "addedAt": "2026-11-10T23:52:09.947Z"
+      "addedAt": "2026-11-10T23:52:09.947Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "6mXFCoZ515w37YfmwXGJMPfQfiK5tr9WkihW3oN9pump",
       "symbol": "PIRATE",
       "name": "Pirate Shop Token",
-      "addedAt": "2026-11-10T23:53:05.541Z"
+      "addedAt": "2026-11-10T23:53:05.541Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "BWJfBNeXpapG7uoqByp5KSwWgCQba8QcDmA2DQiEpump",
       "symbol": "Leonida",
       "name": "State of Leonida",
-      "addedAt": "2026-11-10T23:53:18.142Z"
+      "addedAt": "2026-11-10T23:53:18.142Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv",
       "symbol": "PENGU",
       "name": "Pudgy Penguins",
-      "addedAt": "2026-11-10T23:53:56.276Z"
+      "addedAt": "2026-11-10T23:53:56.276Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
       "symbol": "$WIF",
       "name": "dogwifhat",
-      "addedAt": "2026-11-10T23:54:58.730Z"
+      "addedAt": "2026-11-10T23:54:58.730Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "9Pfync3ejPC9eHqVzq3nYQJAhyhjqpnB9UsaSfLxpump",
       "symbol": "KET",
       "name": "KET",
-      "addedAt": "2026-11-10T23:56:32.969Z"
+      "addedAt": "2026-11-10T23:56:32.969Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "63LfDmNb3MQ8mw9MtZ2To9bEA2M71kZUUGq5tiJxcqj9",
       "symbol": "GIGA",
       "name": "GIGACHAD",
-      "addedAt": "2026-11-10T23:57:32.292Z"
+      "addedAt": "2026-11-10T23:57:32.292Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "8RNUw4N655VSrZKuhGdywhbSMDTrheguFPfxbpE2NZHQ",
       "symbol": "PURR",
       "name": "Hypurr",
-      "addedAt": "2026-11-10T23:58:28.808Z"
+      "addedAt": "2026-11-10T23:58:28.808Z",
+      "manualTp": "30:100"
     },
     {
       "mint": "DvjbEsdca43oQcw2h3HW1CT7N3x5vRcr3QrvTUHnXvgV",
       "symbol": "DOOD",
       "name": "Doodles",
-      "addedAt": "2026-11-10T23:59:08.167Z"
+      "addedAt": "2026-11-10T23:59:08.167Z",
+      "manualTp": "30:100"
     }
   ]
 }
