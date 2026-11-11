@@ -1,33 +1,15 @@
 {
-  "pause_auto_buy": false,
-  "ts": 1794412790369,
-  "updated_utc": "2026-11-11T15:59:50Z",
-  "updated_tehran": "2026-11-11 19:29 Asia/Tehran",
+  "pause_auto_buy": true,
+  "ts": 1794413545206,
+  "updated_utc": "2026-11-11T16:12:25Z",
+  "updated_tehran": "2026-11-11 19:42 Asia/Tehran",
   "wallet": "4u2MpTT4WXLTaJFhqaXRHu6dw5zKiJc5iuUH1cuamKYU",
-  "wallet_usd": 216.3,
-  "sol_balance": 2.3096,
-  "sol_usd": 195.67,
-  "daily_pnl_usd": -21.02,
-  "daily_pnl_pct_of_wallet": -9.72,
-  "positions": [
-    {
-      "mint": "BWJfBNeXpapG7uoqByp5KSwWgCQba8QcDmA2DQiEpump",
-      "symbol": "Leonida",
-      "action": "exit_now",
-      "new_stop": 0.000333,
-      "reason": "Price $0.0003434 is ~3.1% above the 0.000333 stop after a sharp drop (5m -4.2%, 1h -9.2%); the current 15m candle already wicked to 0.000333, and 15m structure shows a lower high (0.000365 vs 0.000382) and lost the 0.00036 support. Liquidity is slipping (~$47.7k from $52.5k at entry). Hitting the stop with slippage would also push the daily loss past the 10% cap (now ~-9.7%). Exit now rather than wait for the stop.",
-      "timestamp": "2026-11-11T15:59:50Z",
-      "opened_tehran": "2026-11-11 17:27",
-      "price": 0.0003434,
-      "value_usd": 20.63,
-      "entry": 0.0004167,
-      "entry_sol": 0.295725,
-      "qty": 60067.222897,
-      "pnl_pct": -17.59,
-      "liquidity_usd": 47652.05,
-      "pair": "5GxdoPcK2LJ6QYcJ3uvtC37tgsFHma55ULFkufTYe49R"
-    }
-  ],
+  "wallet_usd": 215.74,
+  "sol_balance": 2.5456,
+  "sol_usd": 215.74,
+  "daily_pnl_usd": -21.68,
+  "daily_pnl_pct_of_wallet": -10.05,
+  "positions": [],
   "closed_today": [
     {
       "mint": "FZxHLUGiGchY5uvvoeqh1EKiXTrGdN67WUBhUc1fLoat",
@@ -67,6 +49,17 @@
       "pnl_sol": -0.0046,
       "pnl_pct": -9.3,
       "note": "quick round-trip, ~3.5 min hold"
+    },
+    {
+      "mint": "BWJfBNeXpapG7uoqByp5KSwWgCQba8QcDmA2DQiEpump",
+      "symbol": "Leonida",
+      "opened_tehran": "2026-11-11 17:27",
+      "closed_tehran": "2026-11-11 19:29-19:41",
+      "pnl_sol": -0.0597,
+      "pnl_pct": -20.2,
+      "note": "exited after risk exit_now at 19:29 (price ~3% above 0.000333 stop, broken 15m structure)"
     }
-  ]
+  ],
+  "pause_reason": "Daily loss ~-10.05% of wallet (USD basis incl. SOL price drift) exceeded the 10% cap after the Leonida exit; auto-buy paused for the rest of today (until 00:00 Tehran). Realized trading loss today is ~-0.2127 SOL.",
+  "pause_set_tehran": "2026-11-11 19:42 Asia/Tehran"
 }
