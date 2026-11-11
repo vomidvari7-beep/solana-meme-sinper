@@ -156,6 +156,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       </div>
     </div>
   <div id="botBar"></div>
+  <div id="degenCard"></div>
 
 <section id="readyNow">
   <div class="glass rounded-2xl p-4 sm:p-5">
@@ -256,6 +257,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       <div id="burnerBox" class="mt-3"></div>
       <div id="whaleBox" class="mt-3"></div>
       <div id="sniperBox" class="mt-3"></div>
+      <div id="degenBox" class="mt-3"></div>
       <div id="myListBox" class="mt-3"></div>
       <details id="settingsBox" class="mt-3 rounded-xl bg-ink-850 border border-white/5">
         <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white">⚙️ Safety guards &amp; settings</summary>
@@ -2594,7 +2596,7 @@ let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
 function blankPos(k, r) {
-  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null };
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null };
 }
 function profileStopPct() {
   let pct = 20;
@@ -2605,6 +2607,10 @@ function profileStopPct() {
   return pct;
 }
 function freshStop(p) {
+  if (p?.degen && isNum(p.avgUsd) && p.avgUsd > 0) {
+    const stopPct = isNum(p.plan?.stopPct) ? p.plan.stopPct : -25;
+    return p.avgUsd * (1 + stopPct / 100);
+  }
   const avg = p.avgUsd;
   const planStop = p.plan?.stop;
   const byPct = isNum(avg) && avg > 0 ? avg * (1 - profileStopPct() / 100) : null;
@@ -2635,6 +2641,7 @@ function positions() {
       if (r.plan) p.plan = r.plan;
       if (r.auto) p.auto = true;
       if (r.sniper) p.sniper = true;
+      if (r.degen || r.plan?.degen) p.degen = true;
       if (r.myList || r.plan?.myList) p.myList = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
       if (r.scale && r.scale.i) { p.scaleI = Math.max(p.scaleI || 0, +r.scale.i || 0); p.scaleOf = r.scale.of || p.scaleOf || 3; }
@@ -2646,6 +2653,7 @@ function positions() {
       if (r.exitTag && /^tp\d+$/.test(r.exitTag)) { p.tpDone = p.tpDone || {}; p.tpDone[r.exitTag] = true; }
       if (r.myList || r.plan?.myList) p.myList = true;
       if (r.sniper) p.sniper = true;
+      if (r.degen || r.plan?.degen) p.degen = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
     }
     p.symbol = r.symbol || p.symbol;
@@ -2744,7 +2752,7 @@ function clampAutoBuy(requested) {
   const sol = Math.min(+requested || 0, autoCap, globalCap, bc.byPct);
   return { sol, err: null, clamped: (+requested || 0) > sol + 1e-9, byPct: bc.byPct, stale: bc.stale, bal: bc.sol };
 }
-function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
+function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false } = {}) {
   const errs = []; const w = WALLETS[walletKey];
   if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
   if (walletKey === 'burner' && !w.kp) errs.push('Burner wallet is locked — unlock it first');
@@ -2763,8 +2771,8 @@ function buyGuards(walletKey, mint, sol, { auto = false } = {}) {
   if (dailyCap == null) errs.push('SOL price unavailable — USD daily cap can’t be converted');
   else if (spent + sol > dailyCap + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${dailyCap.toFixed(4)} SOL`);
   if (auto) { const as = spentToday(r => r.auto); const autoDaily = solCap(A.dailyCap); if (autoDaily == null) errs.push('SOL price unavailable — USD auto cap can’t be converted'); else if (as + sol > autoDaily + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${autoDaily.toFixed(4)} SOL`); }
-  const open = openPositions(); const held = open.some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
-  if (!held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
+  const open = openPositions().filter(p => !p.degen); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
+  if (!skipMaxOpen && !held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
   if (isNum(w.sol) && sol + S.reserveSol > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${S.reserveSol} reserve`);
   return errs;
 }
@@ -2976,6 +2984,7 @@ try { posTableView = localStorage.getItem('sms:posview') === 'table'; } catch { 
 try { const u = localStorage.getItem('sms:wealthunit'); if (u === 'sol' || u === 'usd') wealthUnit = u; } catch { /* usd */ }
 const posBarMem = {};
 function posSource(p) {
+  if (p.degen) return { label: 'DEGEN', cls: 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100' };
   if (p.myList || p.plan?.myList) return { label: 'MY LIST ⭐', cls: 'border-amber-300/40 bg-amber-400/15 text-amber-100' };
   if (p.sniper) return { label: 'SNIPE 🎯', cls: 'border-amber-400/40 bg-amber-500/15 text-amber-200' };
   if (p.copy) return { label: 'WHALE', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-200' };
@@ -3776,6 +3785,7 @@ function exitReasonLabel(tag) {
   return 'manual';
 }
 function closedSource(c) {
+  if (c.degen) return { id: 'degen', label: 'DEGEN', cls: 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100' };
   if (c.myList) return { id: 'mylist', label: 'MY LIST', cls: 'border-amber-300/40 bg-amber-400/15 text-amber-100' };
   if (c.sniper) return { id: 'snipe', label: 'SNIPE', cls: 'border-amber-400/40 bg-amber-500/15 text-amber-200' };
   if (c.copy) return { id: 'copy', label: 'COPY', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-200' };
@@ -3802,7 +3812,7 @@ function closedRounds(livePx) {
     if (c?.done) c = null;
     if (!c) {
       if (r.side !== 'buy') continue;
-      c = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol || short(r.mint), openTs: r.ts, closeTs: null, buys: [], sells: [], auto: false, copy: false, sniper: false, myList: false, bought: 0, sold: 0, done: false };
+      c = { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol || short(r.mint), openTs: r.ts, closeTs: null, buys: [], sells: [], auto: false, copy: false, sniper: false, myList: false, degen: false, bought: 0, sold: 0, done: false };
       open.set(k, c);
     }
     if (r.side === 'buy') {
@@ -3811,6 +3821,7 @@ function closedRounds(livePx) {
       if (r.auto) c.auto = true;
       if (r.copy) c.copy = true;
       if (r.sniper) c.sniper = true;
+      if (r.degen || r.plan?.degen) c.degen = true;
       if (r.myList || r.plan?.myList) c.myList = true;
     } else {
       c.sells.push(r);
@@ -3818,6 +3829,7 @@ function closedRounds(livePx) {
       if (r.auto) c.auto = true;
       if (r.copy) c.copy = true;
       if (r.sniper) c.sniper = true;
+      if (r.degen || r.plan?.degen) c.degen = true;
       if (r.myList || r.plan?.myList) c.myList = true;
     }
     c.symbol = r.symbol || c.symbol;
@@ -4429,7 +4441,32 @@ function notePositionCycles(list) {
     if (copyBooks) for (const mint of [...copyBooks.keys()]) if (!openCopy.has(mint)) copyBooks.delete(mint);
   } catch { /* copy books not ready */ }
 }
+function degenEffective(p, lp) {
+  const entry = p?.avgUsd;
+  const stopPct = isNum(p?.plan?.stopPct) ? p.plan.stopPct : -25;
+  const trail = isNum(p?.plan?.trail) ? p.plan.trail : 20;
+  const timeStopMin = isNum(p?.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
+  let high = Math.max(isNum(lp) ? lp : 0, autoHigh[p.key] || 0);
+  if (isNum(lp) && lp > (autoHigh[p.key] || 0)) { autoHigh[p.key] = lp; high = lp; save('sms:autohigh', autoHigh); }
+  let stop = isNum(entry) ? entry * (1 + stopPct / 100) : null;
+  let reason = 'degen ' + stopPct + '%';
+  if (p?.tp1Done && high > 0) {
+    const trailed = high * (1 - trail / 100);
+    if (!isNum(stop) || trailed > stop) { stop = trailed; reason = 'degen trail'; }
+  }
+  return { stop, tp1: isNum(entry) ? entry * 2 : null, tp2: null, trail, timeStopMin, reason, quick: false, high };
+}
+function degenExit(p, lp) {
+  if (!p?.degen || !isNum(lp) || !(p.avgUsd > 0)) return null;
+  const eff = degenEffective(p, lp);
+  if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'degen trail' ? 'trail' : 'stop' };
+  if (!p.tp1Done && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 50, tag: 'tp1' };
+  const ageMin = (Date.now() - p.firstTs) / 60000;
+  if (!p.tp1Done && ageMin >= eff.timeStopMin && lp <= p.avgUsd) return { pctSell: 100, tag: 'time' };
+  return null;
+}
 function effectiveStop(p, lp) {
+  if (p?.degen) return applyManualLevels(p, degenEffective(p, lp));
   if (p?.plan?.myList) return applyManualLevels(p, applyQuickOverlay(p, myListEffectiveStop(p, lp)));
   let eff;
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
@@ -4627,6 +4664,7 @@ function quickReentryBlock(mint, plan) {
   return '';
 }
 function applyQuickOverlay(p, eff) {
+  if (p?.degen) return eff;
   if (!quickOn() || !(p?.avgUsd > 0) || !eff) return eff;
   const man = manualLevelFlags(p);
   if (man.stop && man.tp) return eff;
@@ -4671,6 +4709,7 @@ function saveQuick(patch) {
   rememberBot('quick', A.quickOn !== false);
 }
 function priceExit(p, lp) {
+  if (p?.degen) return degenExit(p, lp);
   if (p?.plan?.myList) return myListExit(p, lp);
   if (!isNum(lp)) return null;
   if ((sellFails[p.key] || 0) >= 3) return null;
@@ -4791,7 +4830,7 @@ async function autoTick() {
     await refreshPrices(); await refreshBalances('burner');
     await ensureSolMarket();
     // ---- exits (always, even when the SOL filter pauses new buys)
-    if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper)) {
+    if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
       if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const ex = priceExit(p, lp); if (!ex) continue;
       await autoSell(p, ex.pctSell, ex.tag, lp);
     }
@@ -4922,7 +4961,7 @@ function enableAuto() {
 }
 const BOT_LS = 'sms:bots';
 function botPrefs() {
-  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false };
+  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false };
   try {
     const raw = localStorage.getItem(BOT_LS);
     if (!raw) { saveBotPrefs(fallback); return { ...fallback }; }
@@ -4943,24 +4982,27 @@ function botLive(key) {
   if (key === 'mylist') return typeof MYLIST !== 'undefined' && !!MYLIST.on;
   if (key === 'copy') return typeof COPY !== 'undefined' && !!COPY.on;
   if (key === 'sniper') return typeof SNIPER !== 'undefined' && !!SNIPER.on;
+  if (key === 'degen') return degenOn();
   return false;
 }
 function renderBotBar() {
   const box = $('botBar'); if (!box) return;
   const prefs = botPrefs();
   const locked = !WALLETS.burner.kp;
-  const liveKeys = ['auto', 'mylist', 'copy', 'sniper'];
+  const liveKeys = ['auto', 'mylist', 'copy', 'sniper', 'degen'];
   const items = [
     ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
-    ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%', '1:1']
+    ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%', '1:1'],
+    ['degen', 'Degen', 'شکارچی']
   ];
   const active = items.filter(([key]) => prefs[key]).length;
   const armed = items.some(([key]) => liveKeys.includes(key) && prefs[key] && locked);
-  const status = armed ? 'Armed, unlock to run' : active + '/8 active';
+  const status = armed ? 'Armed, unlock to run' : active + '/' + items.length + ' active';
   const row = ([key, label, sub], i) => {
     const on = !!prefs[key];
     const note = liveKeys.includes(key) && on && locked ? 'Unlock to run' : (sub || '');
-    const edge = (i < items.length - 2 ? 'border-b ' : '') + (i % 2 === 0 ? 'border-r ' : '');
+    const lastRow = Math.floor(i / 2) === Math.floor((items.length - 1) / 2);
+    const edge = (lastRow ? '' : 'border-b ') + (i % 2 === 0 ? 'border-r ' : '');
     return `<button type="button" data-bot="${key}" aria-pressed="${on}" class="${edge}flex items-center justify-between gap-2 px-3 text-left border-white/10" style="min-height:36px;touch-action:manipulation">
       <span class="min-w-0"><span class="block truncate text-[13px] text-slate-100">${label}</span>${note ? `<span class="block truncate text-[10px] text-slate-500">${note}</span>` : ''}</span>
       <span class="ios-sw${on ? ' on' : ''}" aria-hidden="true"><i></i></span>
@@ -5005,6 +5047,13 @@ function setExecBot(key, on) {
   } else if (key === 'sniper' && typeof SNIPER !== 'undefined') {
     if (!on) { SNIPER.on = false; clearInterval(sniperTimer); sniperTimer = null; saveSniper(); }
     else if (!locked) { SNIPER.on = true; startSniper(); }
+  } else if (key === 'degen') {
+    const d = degenCfg();
+    d.on = !!on;
+    saveDegen(d);
+    if (!on) stopDegen();
+    else if (!locked) startDegen();
+    renderDegen();
   }
   rememberBot(key, on);
   if (on && locked) toast(key + ' armed, unlock to run', 'warn');
@@ -5060,6 +5109,7 @@ function resumeArmedBots() {
   if (p.mylist && typeof MYLIST !== 'undefined' && !MYLIST.on) { MYLIST.on = true; startMyList(); setTimeout(myListTick, 500); }
   if (p.copy && typeof COPY !== 'undefined' && !COPY.on) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 600); }
   if (p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
+  if (p.degen) { const d = degenCfg(); d.on = true; saveDegen(d); startDegen(); }
   A.momentumOn = !!p.momentum;
   renderBotBar();
   renderKillFab();
@@ -5076,13 +5126,15 @@ function killSwitch(reason = 'manual') {
   if (wasS) stopSniper(reason, { quiet: true });
   const wasL = !!(typeof MYLIST !== 'undefined' && MYLIST.on);
   if (wasL) stopMyList(reason, { quiet: true });
+  stopDegen();
   if (was) { autoLog(`⛔ KILL SWITCH (${reason}) — auto-trading stopped`, 'err'); toast('⛔ Auto-trading stopped', 'err'); }
   else if (wasC) toast('⛔ Copy mode stopped', 'err');
   else if (wasS) toast('⛔ Launch sniper stopped', 'err');
   else if (wasL) toast('⛔ My List stopped', 'err');
   if (reason !== 'locked') {
     const prefs = botPrefs();
-    prefs.auto = false; prefs.mylist = false; prefs.copy = false; prefs.sniper = false; prefs.momentum = false;
+    prefs.auto = false; prefs.mylist = false; prefs.copy = false; prefs.sniper = false; prefs.momentum = false; prefs.degen = false;
+    const dOff = degenCfg(); dOff.on = false; saveDegen(dOff);
     saveBotPrefs(prefs);
     A.momentumOn = false;
     const { on, _solBadge, ...persist } = A;
@@ -5100,7 +5152,7 @@ function renderKillFab() {
   if (!f) { f = document.createElement('button'); f.id = 'killFab'; f.className = 'fixed bottom-4 left-4 z-50 rounded-full px-4 py-3 font-extrabold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-2xl animate-pulse'; f.addEventListener('click', () => killSwitch('fab')); document.body.appendChild(f); }
   f.textContent = (A.on ? '🤖 AUTO ON' : copyOn ? '🐋 COPY ON' : sniperOn ? '🎯 SNIPE ON' : '📋 LIST ON') + ' · ⛔ KILL';
 }
-window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on)) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
+window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on) || degenOn()) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
 
 
 /* ---------------- whale copy-trade ---------------- */
@@ -5754,21 +5806,29 @@ async function sniperPoll() {
     for (const p of ready) {
       if (LOG.some(r => r.sniper && r.side === 'buy' && r.mint === p.mint && ['pending', 'confirmed'].includes(r.status))) { sniperNote(p.symbol + ' already sniped', 'info'); continue; }
       if (gate.action === 'pause') { sniperNote(p.symbol + ' paused — ' + gate.badge, 'warn'); break; }
-      const openSnipes = openPositions().filter(x => x.sniper).length;
-      if (openSnipes >= SNIPER.maxOpen) { sniperNote('max concurrent snipes ' + openSnipes + '/' + SNIPER.maxOpen, 'warn'); break; }
-      const spent = spentToday(r => r.sniper);
-      let sol = solCap(SNIPER.sizeSol);
-      const sniperDaily = solCap(SNIPER.dailySol);
-      const globalMax = solCap(S.maxSolPerTrade);
-      if (sol == null || sniperDaily == null || globalMax == null) { sniperNote('SOL price unavailable — USD snipe size can’t be converted', 'warn'); break; }
-      if (gate.action === 'halve') sol = +(sol / 2).toFixed(6);
-      if (spent + sol > sniperDaily + 1e-9) { sniperNote('sniper daily cap ' + spent.toFixed(3) + ' / ' + sniperDaily.toFixed(3) + ' SOL', 'warn'); break; }
-      const bc = burnerTradeCap();
-      if (!bc.ok) { sniperNote(bc.err, 'warn'); break; }
-      sol = Math.min(sol, globalMax, bc.byPct);
-      sol = +sol.toFixed(6);
+      const viaDegen = degenOn();
+      let sol;
+      if (viaDegen) {
+        const block = degenBuyBlock();
+        if (block) { sniperNote(block, 'warn'); break; }
+        sol = degenTradeSol();
+      } else {
+        const openSnipes = openPositions().filter(x => x.sniper && !x.degen).length;
+        if (openSnipes >= SNIPER.maxOpen) { sniperNote('max concurrent snipes ' + openSnipes + '/' + SNIPER.maxOpen, 'warn'); break; }
+        const spent = spentToday(r => r.sniper && !r.degen);
+        sol = solCap(SNIPER.sizeSol);
+        const sniperDaily = solCap(SNIPER.dailySol);
+        const globalMax = solCap(S.maxSolPerTrade);
+        if (sol == null || sniperDaily == null || globalMax == null) { sniperNote('SOL price unavailable — USD snipe size can’t be converted', 'warn'); break; }
+        if (gate.action === 'halve') sol = +(sol / 2).toFixed(6);
+        if (spent + sol > sniperDaily + 1e-9) { sniperNote('sniper daily cap ' + spent.toFixed(3) + ' / ' + sniperDaily.toFixed(3) + ' SOL', 'warn'); break; }
+        const bc = burnerTradeCap();
+        if (!bc.ok) { sniperNote(bc.err, 'warn'); break; }
+        sol = Math.min(sol, globalMax, bc.byPct);
+        sol = +sol.toFixed(6);
+      }
       if (!(sol >= 0.001)) { sniperNote(p.symbol + ' size too small after caps', 'warn'); continue; }
-      const errs = buyGuards('burner', p.mint, sol);
+      const errs = buyGuards('burner', p.mint, sol, { skipMaxOpen: viaDegen });
       if (errs.length) { sniperNote(p.symbol + ' blocked — ' + errs[0], 'warn'); break; }
       const slip = Math.min(S.slippagePct, A.slipCap);
       let qo;
@@ -5778,9 +5838,9 @@ async function sniperPoll() {
       if (imp > A.maxImpact) { sniperNote(p.symbol + ' impact ' + imp.toFixed(2) + '% > ' + A.maxImpact + '%', 'warn'); continue; }
       if (!SNIPER.on) return;
       const entryGuess = p.price > 0 ? p.price : null;
-      const plan = { stop: entryGuess ? entryGuess * 0.85 : null, strat: 'Launch sniper', trail: 15, timeStopH: 0.5 };
+      const plan = viaDegen ? degenPlan(null, entryGuess) : { stop: entryGuess ? entryGuess * 0.85 : null, strat: 'Launch sniper', trail: 15, timeStopH: 0.5 };
       try {
-        const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, extra: { sniper: true, plan } });
+        const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, extra: viaDegen ? { sniper: true, degen: true, plan, entryReason: 'degen sniper' } : { sniper: true, plan } });
         sniperNote('SNIPE 🎯 ' + p.symbol + ' ' + sol + ' SOL @ ' + price(r.rec.priceUsd), 'ok');
         toast('🎯 Sniped ' + p.symbol + ' (' + sol + ' SOL)', 'ok', 8000);
       } catch (e) { sniperNote(p.symbol + ' buy failed — ' + e.message, 'err'); }
@@ -5811,7 +5871,7 @@ async function sniperExitTick() {
   if (!open.length) return;
   try { await refreshPrices(); } catch { /* price map may still be warm */ }
   let changed = false;
-  for (const p of openPositions().filter(x => x.sniper && x.wallet === 'burner')) {
+  for (const p of openPositions().filter(x => x.sniper && !x.degen && x.wallet === 'burner')) {
     const lp = livePrices.get(p.mint)?.price;
     const hi = Math.max(sniperHigh[p.key] || 0, isNum(lp) ? lp : 0);
     if (hi !== sniperHigh[p.key]) { sniperHigh[p.key] = hi; changed = true; }
@@ -5837,6 +5897,226 @@ function stopSniper(reason, opts) {
   if (reason !== 'locked') rememberBot('sniper', false);
   renderKillFab();
   if (!opts?.quiet) renderSniper();
+}
+
+const DEGEN_LS = 'sms:degen';
+const DEGEN = { picks: [], fetched: 0, error: '', note: '' };
+let degenTimer = null, degenExitTimer = null, degenBusy = false;
+function degenCfg() {
+  const d = { on: false, budgetUsd: 25, tradeUsd: 4, maxOpen: 3, dailyLossUsd: 15 };
+  try {
+    const v = JSON.parse(localStorage.getItem(DEGEN_LS) || 'null');
+    if (v && typeof v === 'object') Object.assign(d, v);
+  } catch { /* defaults */ }
+  d.on = !!d.on;
+  d.budgetUsd = Math.min(100000, Math.max(1, +d.budgetUsd || 25));
+  d.tradeUsd = Math.min(d.budgetUsd, Math.max(0.5, +d.tradeUsd || 4));
+  d.maxOpen = Math.min(10, Math.max(1, Math.round(+d.maxOpen || 3)));
+  d.dailyLossUsd = Math.min(d.budgetUsd, Math.max(1, +d.dailyLossUsd || 15));
+  return d;
+}
+function saveDegen(patch) {
+  const next = { ...degenCfg(), ...patch };
+  try { localStorage.setItem(DEGEN_LS, JSON.stringify(next)); } catch { /* ignore */ }
+  return degenCfg();
+}
+function degenOn() { return degenCfg().on; }
+function degenPlan(pick, entryGuess) {
+  const stopPct = isNum(+pick?.stop_pct) ? +pick.stop_pct : -25;
+  const timeStopMin = isNum(+pick?.time_stop_min) ? +pick.time_stop_min : 45;
+  const trail = isNum(+pick?.trail) ? +pick.trail : 20;
+  return { degen: true, stopPct, timeStopMin, trail, strat: 'Degen', stop: isNum(entryGuess) && entryGuess > 0 ? entryGuess * (1 + stopPct / 100) : null };
+}
+function degenRounds() { return closedRounds(liveSolPx()).filter(c => c.degen); }
+function degenOpenCost() {
+  return openPositions().filter(p => p.degen).reduce((s, p) => {
+    const frac = p.bought > 0 ? Math.max(0, Math.min(1, (p.bought - p.sold) / p.bought)) : 0;
+    return s + (p.costUsd || 0) * frac;
+  }, 0);
+}
+function degenRealized() { return degenRounds().reduce((s, c) => s + (isNum(c.pnlUsd) ? c.pnlUsd : 0), 0); }
+function degenTodayPnl() {
+  const day = tehranDayKey(Date.now());
+  return degenRounds().filter(c => tehranDayKey(c.closeTs) === day).reduce((s, c) => s + (isNum(c.pnlUsd) ? c.pnlUsd : 0), 0);
+}
+function degenLeft() {
+  const cfg = degenCfg();
+  const raw = cfg.budgetUsd - degenOpenCost() + degenRealized();
+  return Math.max(0, Math.min(cfg.budgetUsd, raw));
+}
+function degenBuyBlock() {
+  const cfg = degenCfg();
+  if (!cfg.on) return 'degen pot off';
+  if (!WALLETS.burner?.kp) return 'burner locked';
+  if (degenTodayPnl() <= -cfg.dailyLossUsd) return 'degen daily loss stop';
+  if (openPositions().filter(p => p.degen).length >= cfg.maxOpen) return 'degen max open';
+  if (degenLeft() + 1e-9 < Math.min(cfg.tradeUsd, 1)) return 'degen budget empty';
+  return '';
+}
+function degenTradeSol() {
+  const cfg = degenCfg();
+  const px = solPriceNow();
+  if (!(px > 0)) return null;
+  const usd = Math.min(cfg.tradeUsd, degenLeft());
+  if (!(usd > 0)) return null;
+  let sol = usd / px;
+  const cap = solCap(S.maxSolPerTrade);
+  if (cap != null) sol = Math.min(sol, cap);
+  return +sol.toFixed(6);
+}
+function degenNote(msg) { DEGEN.note = String(msg || '').slice(0, 180); }
+function degenPickBlock(pick, price) {
+  if (!pick || typeof pick.mint !== 'string' || pick.mint.length < 32) return 'bad mint';
+  if (pick.entry_now !== true && pick.entry_now !== 'true') return 'not entry now';
+  if (!(+pick.confidence >= 55)) return 'confidence';
+  const exp = typeof agentTime === 'function' ? agentTime(pick.expires) : null;
+  if (exp && exp < Date.now()) return 'expired';
+  if (!(+pick.max_entry_price > 0)) return 'no max price';
+  if (!(isNum(price) && price > 0 && price <= +pick.max_entry_price)) return 'above max entry';
+  if (openPositions().some(p => p.mint === pick.mint)) return 'already open';
+  if (LOG.some(r => r.mint === pick.mint && r.side === 'buy' && r.status === 'pending')) return 'buy pending';
+  return '';
+}
+async function degenSafety(mint) {
+  const checks = [];
+  try {
+    const info = await rpc('getAccountInfo', [mint, { encoding: 'base64' }]);
+    const data = info?.value?.data;
+    const b64 = Array.isArray(data) ? data[0] : null;
+    const flags = b64 ? decodeMintFlags(b64) : { ok: false, detail: 'account missing' };
+    if (!flags.ok || !flags.mintRevoked || !flags.freezeRevoked) return { ok: false, reason: !flags.ok ? (flags.detail || 'mint unreadable') : 'mint or freeze authority' };
+    const one = flags.decimals <= 9 ? (BigInt(10) ** BigInt(flags.decimals)) : 1000000n;
+    await getQuote({ inputMint: mint, outputMint: WSOL, amountRaw: one, slippageBps: 1000 });
+    checks.push('honeypot ok');
+  } catch (e) { return { ok: false, reason: e.message || 'honeypot' }; }
+  return { ok: true, reason: checks.join(' ') };
+}
+async function degenTokenPx(mint) {
+  const hit = livePrices.get(mint);
+  if (hit && isNum(hit.price) && Date.now() - (hit.at || 0) < 20000) return hit.price;
+  const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mint);
+  const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+  if (!best || !(+best.priceUsd > 0)) return null;
+  livePrices.set(mint, { price: +best.priceUsd, liq: best.liquidity?.usd ?? null, at: Date.now() });
+  return +best.priceUsd;
+}
+async function degenBuy(pick, opt) {
+  const price = isNum(opt?.price) ? opt.price : await degenTokenPx(pick.mint);
+  const why = opt?.skipPick ? '' : degenPickBlock(pick, price);
+  if (why) { degenNote((pick.symbol || short(pick.mint)) + ': ' + why); return; }
+  const block = degenBuyBlock();
+  if (block) { degenNote(block); return; }
+  if (!opt?.skipSafety) {
+    const safe = await degenSafety(pick.mint);
+    if (!safe.ok) { degenNote((pick.symbol || short(pick.mint)) + ' blocked — ' + safe.reason); return; }
+  }
+  const sol = degenTradeSol();
+  if (!(sol >= 0.001)) { degenNote('degen size too small'); return; }
+  const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true });
+  if (errs.length) { degenNote(errs[0]); return; }
+  const slip = Math.min(S.slippagePct, A.slipCap);
+  const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
+  const imp = impactPct(qo.quote);
+  if (imp > A.maxImpact) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
+  const plan = degenPlan(pick, price);
+  const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick' } });
+  degenNote('bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
+  toast('Degen buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
+  renderDegen();
+  return r;
+}
+async function degenSell(p, pct, tag, lp) {
+  const b = WALLETS.burner;
+  if (!b.kp) return;
+  let h = b.tokens.get(p.mint);
+  if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* ignore */ } h = b.tokens.get(p.mint); }
+  if (!h || h.raw === 0n) return;
+  const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
+  if (raw === 0n) return;
+  const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.min(15, Math.max(A.slipCap, S.slippagePct)) * 100) });
+  await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper } });
+  degenNote(p.symbol + ' ' + tag + ' ' + pct + '% at ' + price(lp));
+  renderDegen();
+}
+async function degenExitTick() {
+  const open = openPositions().filter(p => p.degen && p.wallet === 'burner');
+  if (!open.length || !WALLETS.burner?.kp) return;
+  try { await refreshPrices(); } catch { /* use the last price */ }
+  for (const p of openPositions().filter(x => x.degen && x.wallet === 'burner')) {
+    const lp = livePrices.get(p.mint)?.price;
+    const ex = degenExit(p, lp);
+    if (!ex) continue;
+    try { await degenSell(p, ex.pctSell, ex.tag, lp); } catch (e) { degenNote(p.symbol + ' sell failed — ' + e.message); }
+  }
+}
+async function degenPoll() {
+  if (!degenOn() || degenBusy) return;
+  if (!WALLETS.burner?.kp) { degenNote('armed, unlock to run'); renderDegen(); return; }
+  degenBusy = true;
+  try {
+    const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('degen ' + res.status);
+    const data = await res.json();
+    DEGEN.picks = Array.isArray(data) ? data : (Array.isArray(data?.picks) ? data.picks : []);
+    DEGEN.fetched = Date.now();
+    DEGEN.error = '';
+    for (const pick of DEGEN.picks) {
+      const block = degenBuyBlock();
+      if (block) { degenNote(block); break; }
+      let price = null;
+      try { price = await degenTokenPx(pick.mint); } catch (e) { degenNote((pick.symbol || 'pick') + ' price — ' + e.message); continue; }
+      const why = degenPickBlock(pick, price);
+      if (why) continue;
+      try { await degenBuy(pick, { price }); } catch (e) { degenNote((pick.symbol || 'pick') + ' — ' + e.message); }
+      break;
+    }
+  } catch (e) { DEGEN.error = e.message || String(e); }
+  finally { degenBusy = false; renderDegen(); }
+}
+function startDegen() {
+  clearInterval(degenTimer);
+  degenTimer = setInterval(degenPoll, 60000);
+  if (!degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
+  setTimeout(degenPoll, 800);
+}
+function stopDegen() { clearInterval(degenTimer); degenTimer = null; }
+function renderDegen() {
+  const cfg = degenCfg();
+  const left = degenLeft();
+  const open = openPositions().filter(p => p.degen);
+  const today = degenTodayPnl();
+  const rounds = degenRounds().filter(c => isNum(c.pnlUsd));
+  const wins = rounds.filter(c => c.pnlUsd > 0).length;
+  const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
+  const halted = cfg.on && degenTodayPnl() <= -cfg.dailyLossUsd;
+  const stats = `<div class="hero-card">
+    <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
+    <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Left</div><div class="font-mono text-lg">${usd(left, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today</div><div class="font-mono ${today < 0 ? 'text-rose-300' : 'text-emerald-300'}">${today > 0 ? '+' : ''}${isNum(today) ? usd(today, 2) : '—'}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${open.length}/${cfg.maxOpen}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
+    </div>
+    ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
+  </div>`;
+  const home = $('degenCard'); if (home) home.innerHTML = stats;
+  const box = $('degenBox'); if (!box) return;
+  box.innerHTML = stats + `<div class="mt-2 space-y-2 text-xs">
+    <button type="button" id="degenToggle" class="flex w-full items-center justify-between rounded-xl border border-white/10 px-3" style="min-height:44px"><span>Degen pot</span><span class="ios-sw${cfg.on ? ' on' : ''}"><i></i></span></button>
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block"><span class="text-slate-400">Budget USD</span><input id="degenBudget" type="number" min="1" step="1" value="${cfg.budgetUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+      <label class="block"><span class="text-slate-400">Per trade USD</span><input id="degenTrade" type="number" min="0.5" step="0.5" value="${cfg.tradeUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+      <label class="block"><span class="text-slate-400">Max open</span><input id="degenOpen" type="number" min="1" max="10" step="1" value="${cfg.maxOpen}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+      <label class="block"><span class="text-slate-400">Daily loss stop USD</span><input id="degenLoss" type="number" min="1" step="1" value="${cfg.dailyLossUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+    </div>
+    <button type="button" id="degenSave" class="w-full rounded-xl border border-white/10 py-2">Save degen limits</button>
+  </div>`;
+  $('degenToggle')?.addEventListener('click', () => setExecBot('degen', !degenOn()));
+  $('degenSave')?.addEventListener('click', () => {
+    saveDegen({ budgetUsd: +$('degenBudget').value, tradeUsd: +$('degenTrade').value, maxOpen: +$('degenOpen').value, dailyLossUsd: +$('degenLoss').value, on: degenOn() });
+    toast('Degen limits saved', 'ok');
+    renderDegen();
+  });
 }
 function readSniperForm() {
   const g = (id) => $(id) ? +$(id).value : undefined;
@@ -8162,7 +8442,8 @@ function mountApp() {
 }
 window.showTab = showTab;
 mountApp();
-fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
+fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
+if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
 syncAgentPreview();
 maybeLockSizeUnit();
 setInterval(() => { refreshHolderWatch(); }, 60 * 1000);
@@ -8181,7 +8462,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, degenCfg, degenLeft, degenExit, degenBuyBlock, degenPickBlock, degenPlan, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
