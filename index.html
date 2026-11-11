@@ -2910,10 +2910,13 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   if (fill && fill.tokDelta) { const tk = Math.abs(fill.tokDelta); patch.tokenAmount = tk; patch.fill = 'chain';
     const solReal = isBuy ? solAmount : (fill.solDelta != null ? Math.max(0, fill.solDelta + fill.fee) : solAmount);
     patch.solAmount = solReal; patch.priceSol = solReal / tk; patch.priceUsd = sp ? solReal * sp / tk : null; patch.feeSol = fill.fee; }
+  if (degenTrade && !isNum(patch.feeSol)) patch.feeSol = ((swap.prioritizationFeeLamports || 0) + 5000) / 1e9;
   updateTrade(rec.id, patch);
+  const done = LOG.find(x => x.id === rec.id);
+  if (degenTrade && done) applyDegenLedger(done);
   if (!isBuy && (extra?.degen || degenHeld)) noteDegenExit(mint);
   refreshBalances(walletKey);
-  return { sig, rec: LOG.find(x => x.id === rec.id) };
+  return { sig, rec: done };
 }
 
 /* ---------------- manual trade modal ---------------- */
@@ -3022,7 +3025,7 @@ function renderWallet() {
         : `<div class="mt-1 text-[11px] text-slate-500">Not created yet — see Burner wallet below.</div>`}
     </div>`;
   $('walletInfo').innerHTML = `<div class="space-y-2">${wRow(ph)}${wRow(bu)}</div>
-    ${anyConn ? `<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]"><span class="whitespace-normal break-words">Today: <b class="text-slate-200">${solWithUsd(spentToday())}</b> / ${esc(sizeHint(S.dailyMaxSol) || (S.dailyMaxSol + ' ' + unitWord()))} · max ${esc(sizeHint(S.maxSolPerTrade) || (S.maxSolPerTrade + ' ' + unitWord()))}</span><button data-act="refresh" class="text-violet-300 hover:underline">↻ Balances</button></div>` : ''}`;
+    ${anyConn ? `<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]"><span class="whitespace-normal break-words">Today: <b class="text-slate-200">${solWithUsd(spentToday(r => !isDegenFill(r)))}</b> / ${esc(sizeHint(S.dailyMaxSol) || (S.dailyMaxSol + ' ' + unitWord()))} · max ${esc(sizeHint(S.maxSolPerTrade) || (S.maxSolPerTrade + ' ' + unitWord()))}</span><button data-act="refresh" class="text-violet-300 hover:underline">↻ Balances</button></div>` : ''}`;
   $('walletInfo').querySelectorAll('input[name=activeW]').forEach(r => r.addEventListener('change', () => setActive(r.value)));
   $('walletInfo').querySelector('[data-act=connect]')?.addEventListener('click', () => connectPhantom(false));
   $('walletInfo').querySelector('[data-act=disconnect]')?.addEventListener('click', () => disconnectPhantom(false));
@@ -3189,7 +3192,7 @@ function schedulePaint() {
     const now = Date.now();
     const gap = paintGap();
     if (paneShown('tabTrades') && now - lastFullPaint.portfolio > gap) { lastFullPaint.portfolio = now; try { renderPortfolio(); } catch { /* portfolio hidden */ } }
-    if (paneShown('tabHome') && now - lastFullPaint.home > gap) { lastFullPaint.home = now; try { paintHomePositions(openPositions()); } catch { /* home not ready */ } }
+    if (paneShown('tabHome') && now - lastFullPaint.home > gap) { lastFullPaint.home = now; try { paintHomePositions(openPositions().filter(p => !p.degen)); } catch { /* home not ready */ } }
     if (paneShown('tabTokens') && tokenSeg !== 'degen' && !document.body.classList.contains('sheet-on') && $('tradeModal')?.classList.contains('hidden') && now - lastFullPaint.list > gap) { lastFullPaint.list = now; try { renderMyList(); } catch { /* list busy */ } }
     const degenOnScreen = paneShown('tabHome') || (paneShown('tabTokens') && tokenSeg === 'degen') || (paneShown('tabTrades') && tradeSeg === 'degen');
     if (degenOnScreen && !$('degenDesk')?.querySelector('details[open]') && now - lastFullPaint.degen > gap) { lastFullPaint.degen = now; try { renderDegen(); } catch { /* degen card not ready */ } }
@@ -3380,14 +3383,15 @@ function burnerEquity() {
   const px = solUsd();
   let posUsd = 0;
   for (const p of positions()) {
-    if (p.wallet !== 'burner' || !p.open) continue;
+    if (p.wallet !== 'burner' || !p.open || p.degen) continue;
     const lp = livePrices.get(p.mint)?.price;
     if (!isNum(lp) || !(p.qty > 0)) return null;
     posUsd += p.qty * lp;
   }
   if (posUsd > 0 && !(isNum(px) && px > 0)) return null;
-  const sol = bal + (posUsd > 0 ? posUsd / px : 0);
-  const usd = isNum(px) && px > 0 ? bal * px + posUsd : null;
+  const mainSol = bal - degenSolEffect();
+  const sol = mainSol + (posUsd > 0 ? posUsd / px : 0);
+  const usd = isNum(px) && px > 0 ? mainSol * px + posUsd : null;
   return { t: Date.now(), sol, usd };
 }
 function recordEquity(force) {
@@ -3415,7 +3419,7 @@ function logStillOpen(wallet, mint) {
   return bought > 0 && qty > bought * 0.001;
 }
 function noteTradeForEquity(rec) {
-  if (!rec || rec.wallet !== 'burner' || rec.status !== 'confirmed' || rec.side !== 'sell') return;
+  if (!rec || rec.wallet !== 'burner' || rec.status !== 'confirmed' || rec.side !== 'sell' || isDegenFill(rec)) return;
   if (logStillOpen('burner', rec.mint)) return;
   if (!LOG.some(r => r.status === 'confirmed' && r.wallet === 'burner' && r.mint === rec.mint && r.side === 'buy')) return;
   recordEquity(true);
@@ -3464,7 +3468,7 @@ function periodStats(fromTs, unit) {
   let realizedUsd = 0, realizedSol = 0, trades = 0, wins = 0;
   const daily = new Map();
   for (const r of LOG) {
-    if (r.status !== 'confirmed' || r.wallet !== 'burner') continue;
+    if (r.status !== 'confirmed' || r.wallet !== 'burner' || isDegenFill(r)) continue;
     let c = by.get(r.mint);
     if (!c || c.closed) c = { qty: 0, bought: 0, costUsd: 0, costSol: 0, pnlUsd: 0, pnlSol: 0, closed: false };
     if (r.side === 'buy') {
@@ -4229,7 +4233,7 @@ function closedTradeCard(c) {
 }
 function closedTradesHtml() {
   const live = liveSolPx();
-  const all = closedRounds(live).sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0));
+  const all = closedRounds(live).filter(c => !c.degen).sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0));
   const last = all[0];
   const list = all.filter(c => inClosedRange(c.closeTs, closedRange) && (closedSrc === 'all' || c.src.id === closedSrc));
   const s = closedSummary(list);
@@ -4261,7 +4265,7 @@ function renderPortfolio() {
   const ae = document.activeElement;
   if (posDragging) return;
   if (ae && ae.closest && ae.closest('[data-pos-edit]') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
-  const pos = positions(); const open = pos.filter(p => p.open); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
+  const pos = positions(); const open = pos.filter(p => p.open && !p.degen); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
   if (!LOG.length && !anyW && !AUTOLOG.length && !loadEquity().length) {
     el.classList.remove('hidden');
     el.dataset.view = tradeSeg;
@@ -4284,7 +4288,7 @@ function renderPortfolio() {
       <td class="pr-2 font-mono whitespace-normal break-words text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono whitespace-normal break-words text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
       <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}<button type="button" data-edit-stop="${esc(p.key)}" class="block mt-1 text-[10px] text-violet-300">Edit stop</button></td></tr>`; }).join('');
-  const logRows = [...LOG].reverse().slice(0, 200).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
+  const logRows = [...LOG].reverse().filter(r => !isDegenFill(r)).slice(0, 200).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
       <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}${r.entryReason ? ' · ' + esc(r.entryReason) : ''}</div></td>
       <td class="pr-2 font-mono whitespace-normal break-words">${solWithUsd(r.solAmount, r.solUsd)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
       <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
@@ -4297,7 +4301,7 @@ function renderPortfolio() {
     <div class="flex flex-wrap gap-3 text-[12px] text-slate-500 mb-2"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfRefresh" class="text-slate-300">Refresh</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div>
     ${equityCardHtml()}
     <div class="trade-open">
-    <div class="text-[12px] text-slate-500 mb-2 num">Open ${open.length}/${maxPos()} · today ${solWithUsd(spentToday())}</div>
+    <div class="text-[12px] text-slate-500 mb-2 num">Open ${open.length}/${maxPos()} · today ${solWithUsd(spentToday(r => !isDegenFill(r)))}</div>
     ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="empty-note">No open positions. Buys you confirm show up here with entry, stop, and P&amp;L.</p>'}
     </div>
     <div class="trade-closed">
@@ -4332,7 +4336,7 @@ function renderPortfolio() {
   $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
   $('pfCsv').addEventListener('click', () => {
     const cols = ['ts', 'wallet', 'auto', 'side', 'symbol', 'mint', 'solAmount', 'tokenAmount', 'priceUsd', 'status', 'signature', 'impactPct', 'route'];
-    const csv = [cols.join(','), ...LOG.map(r => cols.map(c => JSON.stringify(c === 'ts' ? new Date(r.ts).toISOString() : (r[c] ?? ''))).join(','))].join('\n');
+    const csv = [cols.join(','), ...LOG.filter(r => !isDegenFill(r)).map(r => cols.map(c => JSON.stringify(c === 'ts' ? new Date(r.ts).toISOString() : (r[c] ?? ''))).join(','))].join('\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'sms-trades.csv'; a.click(); });
   $('pfClear').addEventListener('click', () => { if (confirm('Clear the local trade log? (On-chain history is not affected.)')) { LOG = []; saveLog(); alerted = {}; save(LS.alerts, alerted); renderPortfolio(); } });
   renderAutoLog();
@@ -6548,10 +6552,125 @@ function degenLeft() {
   const raw = cfg.budgetUsd - degenOpenCost() + degenRealized();
   return Math.max(0, Math.min(cfg.budgetUsd, raw));
 }
+const DEGEN_LEDGER_LS = 'sms:degenledger';
+function usd6(n) { return Math.round((+n || 0) * 1e6) / 1e6; }
+function degenLedger() {
+  const raw = load(DEGEN_LEDGER_LS, null);
+  const book = { startUsd: 25, balanceUsd: 25, realizedUsd: 0, trades: [] };
+  if (raw && typeof raw === 'object') {
+    if (Number.isFinite(+raw.startUsd) && +raw.startUsd > 0) book.startUsd = +raw.startUsd;
+    if (Number.isFinite(+raw.balanceUsd)) book.balanceUsd = +raw.balanceUsd;
+    if (Number.isFinite(+raw.realizedUsd)) book.realizedUsd = +raw.realizedUsd;
+    if (Array.isArray(raw.trades)) book.trades = raw.trades.filter(t => t && t.mint && (t.side === 'buy' || t.side === 'sell')).slice(-200);
+  } else save(DEGEN_LEDGER_LS, book);
+  return book;
+}
+function saveDegenLedger(book) {
+  save(DEGEN_LEDGER_LS, { startUsd: book.startUsd, balanceUsd: usd6(book.balanceUsd), realizedUsd: usd6(book.realizedUsd), trades: (book.trades || []).slice(-200) });
+}
+function degenFeeEstimateUsd(px) {
+  const p = px > 0 ? px : (solPriceNow() || liveSolPx() || 0);
+  const feeSol = Math.max(0, +S.prioMaxSol || 0) + 0.000005;
+  return p > 0 ? feeSol * p : 0.25;
+}
+function degenBuyNeedUsd() { return degenCfg().tradeUsd + degenFeeEstimateUsd(); }
+function degenLedgerShort() { return degenLedger().balanceUsd + 1e-9 < degenBuyNeedUsd(); }
+let degenHaltAt = 0;
+function degenHaltFunds() {
+  const now = Date.now();
+  const quiet = now - degenHaltAt < 8000;
+  degenHaltAt = now;
+  degenNote('Degen out of funds');
+  if (degenOn()) setExecBot('degen', false);
+  if (typeof liveScanOn !== 'undefined' && liveScanOn) setExecBot('scan', false);
+  if (!quiet) toast('Degen out of funds', 'err', 6000);
+}
+function degenLots(trades) {
+  const map = new Map();
+  for (const t of trades || []) {
+    let lot = map.get(t.mint) || { tokens: 0, cost: 0 };
+    if (t.side === 'buy') {
+      lot.tokens += +t.tokenAmount || 0;
+      lot.cost += +t.usd || 0;
+    } else if (lot.tokens > 0 && +t.tokenAmount > 0) {
+      const frac = Math.min(1, (+t.tokenAmount) / lot.tokens);
+      lot.cost *= 1 - frac;
+      lot.tokens = Math.max(0, lot.tokens - +t.tokenAmount);
+    }
+    map.set(t.mint, lot);
+  }
+  return map;
+}
+function degenReleaseCost(trades, mint, tokens) {
+  const lot = degenLots(trades).get(mint) || { tokens: 0, cost: 0 };
+  if (!(lot.tokens > 0) || !(tokens > 0)) return 0;
+  return lot.cost * Math.min(1, tokens / lot.tokens);
+}
+function degenMarkValue(book) {
+  let mtm = 0;
+  for (const [mint, lot] of degenLots(book.trades)) {
+    if (!(lot.tokens > 0)) continue;
+    let px = livePrices.get(mint)?.price;
+    if (!(px > 0)) {
+      const last = [...(book.trades || [])].reverse().find(t => t.mint === mint && t.side === 'buy' && t.tokenAmount > 0 && t.usd > 0);
+      if (last) px = Math.max(0, last.usd - (last.feeUsd || 0)) / last.tokenAmount;
+    }
+    if (px > 0) mtm += lot.tokens * px;
+  }
+  return mtm;
+}
+function degenEquity() {
+  const book = degenLedger();
+  const mtm = degenMarkValue(book);
+  const equity = book.balanceUsd + mtm;
+  const pnl = equity - book.startUsd;
+  const pct = book.startUsd > 0 ? pnl / book.startUsd * 100 : null;
+  return { book, mtm, equity, pnl, pct };
+}
+function resetDegenLedger(startUsd) {
+  const start = Math.min(100000, Math.max(1, +startUsd || 25));
+  const book = { startUsd: start, balanceUsd: start, realizedUsd: 0, trades: [] };
+  saveDegenLedger(book);
+  return book;
+}
+function applyDegenLedger(rec) {
+  if (!isDegenFill(rec) || rec.status !== 'confirmed' || !rec.mint) return;
+  const book = degenLedger();
+  if (rec.signature && book.trades.some(t => t.sig === rec.signature && t.side === rec.side)) return;
+  const px = (isNum(rec.solUsd) && rec.solUsd > 0) ? rec.solUsd : (liveSolPx() || 0);
+  if (rec.side === 'buy') {
+    const feeUsd = isNum(rec.feeSol) && px > 0 ? rec.feeSol * px : degenFeeEstimateUsd(px);
+    const tradeUsd = degenCfg().tradeUsd;
+    const usd = tradeUsd + feeUsd;
+    book.balanceUsd = usd6(book.balanceUsd - usd);
+    book.trades.push({ ts: rec.ts || Date.now(), side: 'buy', mint: rec.mint, symbol: rec.symbol || '', usd: usd6(usd), feeUsd: usd6(feeUsd), tradeUsd, sol: rec.solAmount || 0, solUsd: px, sig: rec.signature || '', tokenAmount: rec.tokenAmount || 0 });
+  } else {
+    const feeSol = isNum(rec.feeSol) ? rec.feeSol : 0;
+    const solNet = Math.max(0, (rec.solAmount || 0) - feeSol);
+    const usd = px > 0 ? solNet * px : 0;
+    const costOut = degenReleaseCost(book.trades, rec.mint, rec.tokenAmount || 0);
+    book.balanceUsd = usd6(book.balanceUsd + usd);
+    book.realizedUsd = usd6(book.realizedUsd + usd - costOut);
+    book.trades.push({ ts: rec.ts || Date.now(), side: 'sell', mint: rec.mint, symbol: rec.symbol || '', usd: usd6(usd), feeUsd: usd6(px > 0 ? feeSol * px : 0), sol: solNet, solUsd: px, sig: rec.signature || '', tokenAmount: rec.tokenAmount || 0, tag: rec.exitTag || '' });
+  }
+  saveDegenLedger(book);
+  if (degenLedgerShort()) degenHaltFunds();
+}
+function degenSolEffect() {
+  let net = 0;
+  for (const r of LOG) {
+    if (r.status !== 'confirmed' || r.wallet !== 'burner' || !isDegenFill(r)) continue;
+    const fee = isNum(r.feeSol) ? r.feeSol : 0;
+    if (r.side === 'buy') net -= (r.solAmount || 0) + fee;
+    else net += Math.max(0, (r.solAmount || 0) - fee);
+  }
+  return net;
+}
 function degenBuyBlock() {
   const cfg = degenCfg();
   if (!cfg.on) return 'degen pot off';
   if (!WALLETS.burner?.kp) return 'burner locked';
+  if (degenLedgerShort()) { degenHaltFunds(); return 'Degen out of funds'; }
   if (cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd) return 'degen daily loss stop';
   if (cfg.maxOpen > 0 && openPositions().filter(p => p.degen).length >= cfg.maxOpen) return 'degen max open';
   if (cfg.budgetUsd > 0 && degenLeft() + 1e-9 < Math.min(cfg.tradeUsd, 1)) return 'degen budget empty';
@@ -6742,6 +6861,7 @@ async function degenExitTick(skipRefresh) {
 async function degenPoll() {
   if (!degenOn() || degenBusy) return;
   if (!WALLETS.burner?.kp) { degenNote('armed, unlock to run'); renderDegen(); return; }
+  if (degenLedgerShort()) { degenHaltFunds(); renderDegen(); return; }
   degenBusy = true;
   try {
     const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store' });
@@ -6972,6 +7092,7 @@ async function liveScanOnce() {
   if (!liveScanOn || liveScanBusy || document.hidden) return;
   liveScanBusy = true;
   try {
+    if (degenLedgerShort()) { degenHaltFunds(); noteScanHit({ mint: '', symbol: 'scanner', ok: false, status: 'BLOCK', conf: null, reason: 'Degen out of funds', at: Date.now() }); return; }
     const rows = await discoverLivePairs();
     liveScanGap = 4000;
     let deep = 0;
@@ -7030,26 +7151,28 @@ function startLiveScan() {
 function stopLiveScan() { clearTimeout(liveScanTimer); liveScanTimer = null; }
 function renderDegen() {
   const cfg = degenCfg();
-  const left = degenLeft();
+  const eq = degenEquity();
+  const pnlCls = eq.pnl > 0 ? 'text-emerald-300' : eq.pnl < 0 ? 'text-rose-300' : 'text-slate-300';
+  const pnlTxt = signedUsd(eq.pnl, false) + ' · ' + pct(eq.pct);
   const open = openPositions().filter(p => p.degen);
-  const today = degenTodayPnl();
   const rounds = degenRounds().filter(c => isNum(c.pnlUsd));
   const wins = rounds.filter(c => c.pnlUsd > 0).length;
   const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
   const halted = cfg.on && cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd;
-  const leftTxt = cfg.budgetUsd > 0 ? usd(left, 2) : 'Unlimited';
   const openTxt = cfg.maxOpen > 0 ? (open.length + '/' + cfg.maxOpen) : (open.length + ' · Unlimited');
+  const fundsShort = degenLedgerShort();
   const readS = DEGEN.fetched ? Math.max(0, Math.round((Date.now() - DEGEN.fetched) / 1000)) : null;
   const stamp = (DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—')) + (readS == null ? '' : ' · read ' + readS + 's ago');
   const removedTxt = Object.values(degenRemovedBook().removed).map(r => r && r.symbol).filter(Boolean).slice(0, 8).join(', ');
   const stats = `<button type="button" data-open-degen class="hero-card w-full text-left">
     <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Left</div><div class="font-mono text-lg">${esc(leftTxt)}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today</div><div class="font-mono ${today < 0 ? 'text-rose-300' : 'text-emerald-300'}">${today > 0 ? '+' : ''}${isNum(today) ? usd(today, 2) : '—'}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Balance</div><div class="font-mono text-lg">${usd(eq.equity, 2)}</div><div class="text-[10px] text-slate-500">open positions valued live</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Start</div><div class="font-mono text-lg">${usd(eq.book.startUsd, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L vs start</div><div class="font-mono ${pnlCls}">${pnlTxt}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div><div class="text-[10px] text-slate-500">win ${wr}</div></div>
     </div>
+    ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     ${removedTxt ? `<p class="mt-2 text-[11px] font-semibold text-rose-300 whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
   </button>`;
@@ -7114,11 +7237,12 @@ function renderDegen() {
   if (desk) desk.innerHTML = `<section class="hero-card">
     <div class="flex items-center justify-between gap-2"><h2 class="sec-title text-sm"><span class="ico">◎</span>Degen</h2><span class="text-[10px] text-slate-500">${esc(stamp)}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Cash left</div><div class="font-mono">${esc(leftTxt)}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today P&L</div><div class="font-mono ${today < 0 ? 'text-rose-300' : 'text-emerald-300'}">${today > 0 ? '+' : ''}${usd(today, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Balance</div><div class="font-mono">${usd(eq.equity, 2)}</div><div class="text-[10px] text-slate-500">open positions valued live</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Start</div><div class="font-mono">${usd(eq.book.startUsd, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L vs start</div><div class="font-mono ${pnlCls}">${pnlTxt}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
     </div>
+    ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
     ${picks || '<p class="empty-note mt-2">No hunter picks yet.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Live scanner ${liveScanOn ? '· on' : '· off'}</h3>
@@ -7143,15 +7267,25 @@ function renderDegen() {
     <div class="grid grid-cols-2 gap-2">
       <label class="block"><span class="text-slate-400">Budget USD · ${cfg.budgetUsd > 0 ? esc(usd(cfg.budgetUsd, 0)) : 'Unlimited'}</span><input id="degenBudget" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.budgetUsd > 0 ? cfg.budgetUsd : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Per trade USD</span><input id="degenTrade" type="number" min="0.5" step="0.5" value="${cfg.tradeUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+      <label class="block"><span class="text-slate-400">Degen start balance</span><input id="degenStart" type="number" min="1" step="1" value="${eq.book.startUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Max open · ${cfg.maxOpen > 0 ? cfg.maxOpen : 'Unlimited'}</span><input id="degenOpen" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.maxOpen > 0 ? cfg.maxOpen : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Daily loss stop USD · ${cfg.dailyLossUsd > 0 ? esc(usd(cfg.dailyLossUsd, 0)) : 'Unlimited'}</span><input id="degenLoss" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.dailyLossUsd > 0 ? cfg.dailyLossUsd : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
     </div>
     <p class="text-[11px] text-slate-500">Empty or 0 on budget, max open, and daily loss means Unlimited. Per trade stays $4 unless you change it.</p>
     <label class="flex items-center gap-2"><input id="degenHunterOnly" type="checkbox" ${cfg.hunterOnly !== false ? 'checked' : ''} class="accent-violet-500" /> Live scan: only Hunter-approved mints</label>
     <button type="button" id="degenSave" class="w-full rounded-xl border border-white/10 py-2">Save degen limits</button>
+    <button type="button" id="degenReset" class="w-full rounded-xl border border-rose-400/50 px-3 text-[13px] font-semibold text-rose-200" style="min-height:44px">Reset ledger</button>
   </div>`;
   $('degenToggle')?.addEventListener('click', () => setExecBot('degen', !degenOn()));
   $('degenStop')?.addEventListener('click', () => { setExecBot('degen', false); toast('Degen stopped', 'err'); });
+  $('degenReset')?.addEventListener('click', () => {
+    const start = +$('degenStart')?.value;
+    const n = Number.isFinite(start) && start > 0 ? start : eq.book.startUsd;
+    if (!confirm('Reset the Degen ledger to $' + n + '? This clears its cash balance and its trades. Main-book history stays.')) return;
+    resetDegenLedger(n);
+    toast('Degen ledger reset to $' + n, 'ok');
+    renderDegen();
+  });
   $('degenSave')?.addEventListener('click', () => {
     saveDegen({ budgetUsd: +$('degenBudget').value, tradeUsd: +$('degenTrade').value, maxOpen: +$('degenOpen').value, dailyLossUsd: +$('degenLoss').value, on: degenOn(), hunterOnly: !!$('degenHunterOnly')?.checked });
     toast('Degen limits saved', 'ok');
@@ -7877,10 +8011,10 @@ function listBuyBlocks(sol, mint) {
   if (maxTrade == null || daily == null) errs.push('SOL price unavailable — USD sizes can’t be converted');
   else {
     if (sol > maxTrade + 1e-9) errs.push('above max per trade');
-    if (spentToday() + sol > daily + 1e-9) errs.push('above daily cap');
+    if (spentToday(r => !isDegenFill(r)) + sol > daily + 1e-9) errs.push('above daily cap');
   }
-  const heldMint = mint && (openPositions().some(p => p.open && p.mint === mint) || (WALLETS.burner?.tokens?.get(mint)?.raw > 0n));
-  if (!heldMint && openPositions().filter(p => p.open).length >= maxPos()) errs.push('max positions');
+  const heldMint = mint && (openPositions().some(p => p.open && !p.degen && p.mint === mint) || (WALLETS.burner?.tokens?.get(mint)?.raw > 0n));
+  if (!heldMint && openPositions().filter(p => p.open && !p.degen).length >= maxPos()) errs.push('max positions');
   return errs;
 }
 function myListSpec(p) {
