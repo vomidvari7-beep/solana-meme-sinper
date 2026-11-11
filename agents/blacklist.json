@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T19:02:00Z",
-  "updated_tehran": "2026-11-11 22:32 IRST",
+  "updated_utc": "2026-11-11T20:10:00Z",
+  "updated_tehran": "2026-11-11 23:40 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -76,6 +76,26 @@
       "mint": "FjRPQ8dkH1jHtgqhKwWxxNrt9jTsTbJ4Quw59up7chU4",
       "symbol": "Bernie",
       "why": "Bernie copy, RugCheck danger"
+    },
+    {
+      "mint": "FgG48bFxxeDpaSjNxYKU9xLcf4U44zxQvL9Kq86moon",
+      "symbol": "HOTPANDA",
+      "why": "rugged"
+    },
+    {
+      "mint": "GyJgDT7zpASFmPMxTA3omXVuq5bA6ja158jVKp3hpump",
+      "symbol": "Bernie",
+      "why": "Bernie copy, drained-pool pattern"
+    },
+    {
+      "mint": "7nJKEbWKXJBqesd1YR1hfcbzMRsUhPB9k8a2NMd5pump",
+      "symbol": "BERNIAO",
+      "why": "bundled"
+    },
+    {
+      "mint": "3Tkm68nyJdiB8SejbhjufSWg1Kry4yG4xhvFD6W8pump",
+      "symbol": "GTA6TRUMP",
+      "why": "serial-rug creator"
     }
   ]
 }
