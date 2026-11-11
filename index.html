@@ -577,7 +577,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
             <label class="block"><span class="text-slate-400">Slippage % <span class="text-slate-600">(max 15)</span></span><input id="setSlip" type="number" min="0.1" max="15" step="0.1" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
             <label class="block"><span class="text-slate-400">Max / trade <span id="setMaxTradeUnit"></span></span><input id="setMaxTrade" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /><div id="setMaxTradeHint" class="text-[10px] text-slate-500 mt-0.5 whitespace-normal break-words"></div></label>
             <label class="block"><span class="text-slate-400">Daily max <span id="setDailyUnit"></span></span><input id="setDaily" type="number" min="0" step="any" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /><div id="setDailyHint" class="text-[10px] text-slate-500 mt-0.5 whitespace-normal break-words"></div></label>
-            <label class="block"><span class="text-slate-400">SOL reserve for fees</span><input id="setReserve" type="number" min="0.002" step="0.001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
+            <label class="block"><span class="text-slate-400">SOL reserve for fees</span><input id="setReserve" type="number" min="0.02" step="0.001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
             <label class="block"><span class="text-slate-400">Priority fee level</span><select id="setPrioLevel" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5"><option value="medium">Medium</option><option value="high">High</option><option value="veryHigh">Very high</option></select></label>
             <label class="block"><span class="text-slate-400">Max priority fee (SOL)</span><input id="setPrioMax" type="number" min="0" max="0.01" step="0.0001" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
           </div>
@@ -2687,7 +2687,7 @@ const QR_URL = 'https://esm.sh/qrcode@1.5.4';
 const WSOL = 'So11111111111111111111111111111111111111112';
 const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'];
 const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
-const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.01,
+const DEFAULTS = { rpc: 'https://solana-rpc.publicnode.com', slippagePct: 3, maxSolPerTrade: 0.1, dailyMaxSol: 0.3, maxOpenPositions: 2, reserveSol: 0.02,
   prioLevel: 'high', prioMaxSol: 0.001, jupBase: JUP_BASES[0], jupKey: '' };
 const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, minConviction: 65, maxImpact: 5, slipCap: 3, autoExit: false, autoScan: false, scanMin: 10, solFilter: false, sol1hMin: -3, sol24hMin: -7, solMode: 'pause', moodSource: 'both', solPauseBelow: 25, dexPauseBelow: 25, breakoutOnly: false, beAtPct: 25, earlyAtPct: 40, earlyTrailPct: 18, momentumOn: false, momentumMaxAgeH: 6, deepN: 20, insiderBlockAt: 20, srcBoost: true, srcTrend: true, srcVolume: true, srcNew: true, scaleIn: true, starterPct: 30, dontMiss: true, dontMissPct: 5, dontMissBars: 6, quickOn: true, quickTpPct: 15, quickStopPct: 15 };
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
@@ -2706,7 +2706,7 @@ function sanitizeSettings() {
   S.maxSolPerTrade = posNum(S.maxSolPerTrade, DEFAULTS.maxSolPerTrade);
   S.dailyMaxSol = posNum(S.dailyMaxSol, DEFAULTS.dailyMaxSol);
   { const n = Math.round(+S.maxOpenPositions); S.maxOpenPositions = Number.isFinite(n) ? Math.min(20, Math.max(1, n)) : DEFAULTS.maxOpenPositions; }
-  S.reserveSol = Math.max(0.002, +S.reserveSol || DEFAULTS.reserveSol);
+  S.reserveSol = Math.max(0.02, +S.reserveSol || DEFAULTS.reserveSol);
   S.prioMaxSol = Math.min(0.01, Math.max(0, isFinite(+S.prioMaxSol) ? +S.prioMaxSol : DEFAULTS.prioMaxSol));
   if (!/^https?:\/\//.test(S.rpc || '')) S.rpc = DEFAULTS.rpc;
   if (!JUP_BASES.includes(S.jupBase)) S.jupBase = JUP_BASES[0];
@@ -3350,12 +3350,12 @@ function clampAutoBuy(requested) {
 function isDegenFill(r) { return !!(r && (r.degen || r.plan?.degen)); }
 function isScalpFill(r) { return !!(r && (r.scalp || r.plan?.scalp)); }
 function mainBookFill(r) { return !isDegenFill(r) && !isScalpFill(r); }
-function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, degen = false, scalp = false } = {}) {
+function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, degen = false, scalp = false, skipCap = false } = {}) {
   const errs = []; const w = WALLETS[walletKey];
   if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
   if (walletKey === 'burner' && !burnerReady()) errs.push('Burner wallet is locked — unlock it first');
   if (!(sol > 0)) errs.push('Amount must be > 0');
-  if (!degen && !scalp) {
+  if (!degen && !scalp && !skipCap) {
     const tradeCap = solCap(S.maxSolPerTrade), autoCap = solCap(A.maxSolPerTrade);
     if (tradeCap == null || (auto && autoCap == null)) errs.push('SOL price unavailable — USD sizes can’t be converted. Switch Size unit to SOL to trade manually.');
     const cap = auto && tradeCap != null && autoCap != null ? Math.min(tradeCap, autoCap) : tradeCap;
@@ -3368,8 +3368,13 @@ function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, de
   }
   const open = openPositions().filter(p => !p.degen && !p.scalp); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
   if (!skipMaxOpen && !held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
-  if (isNum(w.sol) && sol + S.reserveSol > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${S.reserveSol} reserve`);
+  const keep = solKeep();
+  if (isNum(w.sol) && sol + keep > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${keep.toFixed(4)} reserve`);
   return errs;
+}
+function solKeep() {
+  const reserve = Math.max(0.02, isNum(S.reserveSol) ? +S.reserveSol : 0.02);
+  return reserve + 0.005;
 }
 
 /* ---------------- live test: $3, one position ---------------- */
@@ -3553,6 +3558,10 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   const dec = await getDecimals(mint).catch(() => null);
   const isBuy = side === 'buy';
   const solAmount = (isBuy ? +q.inAmount : +q.outAmount) / 1e9;
+  if (isBuy && walletKey === 'burner') {
+    const keep = solKeep();
+    if (!(isNum(w.sol) && solAmount + keep <= w.sol + 1e-9)) throw new Error('Blocked: keep at least ' + keep.toFixed(3) + ' SOL for fees');
+  }
   const tokRaw = isBuy ? +q.outAmount : +q.inAmount;
   const tokenAmount = dec != null ? tokRaw / 10 ** dec : null;
   const sp = solUsd();
@@ -6090,20 +6099,17 @@ async function momentumTick(b, solGate, held, recent) {
     if (isNum(px) && px > m.level * 1.15) { logMom(t, 'price already >15% above the broken level', 'warn'); continue; }
     const bsr = m5BuySell(t);
     if (!(bsr >= 1.5)) { logMom(t, '5m buy/sell ' + (bsr == null ? 'unavailable' : bsr.toFixed(2)) + ' < 1.5', 'warn'); continue; }
-    const sug = suggestedBuySol(t);
-    const base = sug.sol > 0 ? sug.sol : Math.min(A.maxSolPerTrade, S.maxSolPerTrade);
     const reentry = quickReentryBlock(t.mint, typeof agentPlanFor === 'function' ? agentPlanFor(t.mint) : null);
     if (reentry) { logMom(t, reentry, 'info'); continue; }
-    let sol = quickOn() ? +(+base).toFixed(6) : +(base / 3).toFixed(6);
+    const slot = myListWalletSize();
+    if (!slot.ok) { logMom(t, slot.error || 'size', 'warn'); continue; }
+    let sol = slot.sol;
     if (solGate.action === 'halve') sol = +(sol / 2).toFixed(6);
-    const sized = clampAutoBuy(sol);
-    if (sized.err) { autoLog(`${t.symbol}: momentum buy blocked — ${sized.err}`, 'warn'); break; }
-    sol = +sized.sol.toFixed(6);
     const test = liveTestTake(sol);
     if (!test.ok) { logMom(t, test.reason, 'info'); continue; }
     sol = test.sol;
-    if (!(sol >= 0.001)) { logMom(t, '1/3 size too small', 'warn'); continue; }
-    const errs = buyGuards('burner', t.mint, sol, { auto: true });
+    if (!(sol >= 0.001)) { logMom(t, 'size too small', 'warn'); continue; }
+    const errs = buyGuards('burner', t.mint, sol, { auto: true, skipCap: true });
     if (errs.length) { autoLog(`${t.symbol}: momentum buy blocked — ${errs[0]}`, 'warn'); break; }
     const entryPx = isNum(px) && px > 0 ? px : m.level;
     const stop = momentumStop(entryPx, m.level);
@@ -6112,7 +6118,7 @@ async function momentumTick(b, solGate, held, recent) {
     const quick = quickEntryCheck(entryPx, stop, plan.tp3);
     if (!quick.ok) { logMom(t, quick.reason, 'warn'); continue; }
     if (quick.tp) plan = stampQuickPlan(plan, quick);
-    autoLog(`${t.symbol}: MOMENTUM ⚡ ${m.reason}${lvl} → market buy ${sol} SOL${quickOn() ? '' : ' (1/3)'}, stop ${price(plan.stop || stop)}`, 'info');
+    autoLog(`${t.symbol}: MOMENTUM ⚡ ${m.reason}${lvl} → market buy ${sol} SOL, stop ${price(plan.stop || stop)}`, 'info');
     const slip = Math.min(S.slippagePct, A.slipCap);
     let qo;
     try { qo = await getQuote({ inputMint: WSOL, outputMint: t.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
@@ -6121,8 +6127,8 @@ async function momentumTick(b, solGate, held, recent) {
     if (imp > A.maxImpact) { autoLog(`${t.symbol}: momentum price impact ${imp.toFixed(2)}% > ${A.maxImpact}% — skipped`, 'warn'); continue; }
     if (!A.on) return;
     try {
-      const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan, test: test.test, entryReason: (quickOn() ? 'quick scalp · ' : 'starter 1/3 · ') + m.reason, scale: quickOn() ? null : { i: 1, of: 3, kind: 'starter' } } });
-      autoLog(`BUY ${t.symbol} ${sol} SOL momentum @ ${price(r.rec.priceUsd)} — ${quickOn() ? 'quick scalp' : 'starter 1/3'} · ${m.reason}`, 'ok', { sig: r.sig });
+      const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: t.mint, quoteObj: qo, t, auto: true, extra: { plan, test: test.test, entryReason: (quickOn() ? 'quick scalp · ' : 'momentum · ') + m.reason } });
+      autoLog(`BUY ${t.symbol} ${sol} SOL momentum @ ${price(r.rec.priceUsd)} — ${m.reason}`, 'ok', { sig: r.sig });
       toast(`⚡ Momentum buy ${t.symbol} (${sol} SOL)`, 'ok', 8000);
     } catch (e) { autoLog(`${t.symbol}: momentum buy failed — ${e.message}`, 'err'); }
     break;
@@ -6135,9 +6141,11 @@ async function cappedBuy(opt) {
   let sol = +opt.sol;
   if (!(sol > 0)) return 'skip';
   if (opt.halve) sol = +(sol / 2).toFixed(6);
-  const sized = clampAutoBuy(sol);
-  if (sized.err) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' blocked — ' + sized.err, 'warn'); return 'block'; }
-  sol = +sized.sol.toFixed(6);
+  if (!opt.walletHalf) {
+    const sized = clampAutoBuy(sol);
+    if (sized.err) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' blocked — ' + sized.err, 'warn'); return 'block'; }
+    sol = +sized.sol.toFixed(6);
+  } else sol = +(+sol).toFixed(6);
   const test = liveTestTake(sol);
   if (!test.ok) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' — ' + test.reason, 'info'); return 'skip'; }
   sol = test.sol;
@@ -6238,33 +6246,32 @@ async function autoTick() {
       if (!ap && zoneLost(t, px)) { noteBuyWhy(t.mint, t.symbol, 'auto', 'zone lost'); continue; }
       if (agentPlansOn() && ap && planCanFire(ap, px)) {
         if (isSplitPlan(ap) && splitEntryOn()) {
-          const full = sizedFull(t);
-          if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
+          const slot = myListWalletSize();
+          if (!slot.ok) { autoLog(`${t.symbol}: buy blocked — ${slot.error}`, 'warn'); continue; }
           const blocked = quickReentryBlock(t.mint, ap);
           if (blocked) { autoLog(t.symbol + ': ' + blocked, 'info'); continue; }
-          const hit = await attemptSplitBuy({ agent: ap, px, candles: null, fullSol: full.sol, t, myList: false, halve: solGate.action === 'halve', hasPos: false });
+          const hit = await attemptSplitBuy({ agent: ap, px, candles: null, fullSol: slot.sol, t, myList: false, halve: solGate.action === 'halve', hasPos: false, walletHalf: true });
           if (hit === 'bought') { boughtThisTick = true; toast('🤖 Split leg 1 ' + t.symbol, 'ok', 8000); }
           if (hit === 'block' || hit === 'bought') break;
           continue;
         }
         if (!planCanFire(ap, px)) continue;
-        const full = sizedFull(t);
-        if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
+        const slot = myListWalletSize();
+        if (!slot.ok) { autoLog(`${t.symbol}: buy blocked — ${slot.error}`, 'warn'); continue; }
         const blocked = quickReentryBlock(t.mint, ap);
         if (blocked) { autoLog(t.symbol + ': ' + blocked, 'info'); continue; }
-        const scaleOn = !quickOn() && agentScaleOn(ap, A.scaleIn !== false);
-        const sol = scaleOn ? trancheSol(full.sol, A.starterPct || 30) : full.sol;
         let plan = agentOrderPlan(planOf(t), ap, null);
         const quick = quickEntryCheck(px, plan.stop || ap.stop, nearestTarget(px, ap.tp1, ap.tp2, plan.tp1, plan.tp2));
         if (!quick.ok) { autoLog(t.symbol + ': ' + quick.reason, 'warn'); continue; }
         if (quick.tp) plan = stampQuickPlan(plan, quick);
-        const hit = await cappedBuy({ t, sol, reason: 'agent plan · ' + (ap.setup || ap.reason || 'ready') + (quick.tp ? ' · quick' : '') + (scaleOn ? ' · starter' : ''), scale: scaleOn ? { i: 1, of: 3, kind: 'starter' } : null, plan, halve: solGate.action === 'halve' });
+        const hit = await cappedBuy({ t, sol: slot.sol, reason: 'agent plan · ' + (ap.setup || ap.reason || 'ready') + (quick.tp ? ' · quick' : ''), plan, halve: solGate.action === 'halve', walletHalf: true });
         if (hit === 'bought') { boughtThisTick = true; toast(`🤖 Auto-bought ${t.symbol}`, 'ok', 8000); }
         if (hit === 'block' || hit === 'bought') break;
         continue;
       }
-      const full = sizedFull(t);
-      if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
+      const slot = myListWalletSize();
+      if (!slot.ok) { autoLog(`${t.symbol}: buy blocked — ${slot.error}`, 'warn'); continue; }
+      const full = { sol: slot.sol, err: '' };
       const zoneNow = inZone(t, px);
       const strong = strongRead({ px, holdersUp: isNum(holderTrend(t.mint)?.p1h) && holderTrend(t.mint).p1h > 0.4, volH1: t.vol?.h1, volH24: t.vol?.h24, trendUp: t.ta?.primary?.trend === 'up' || t.ta?.primary?.hLabel === 'HH' });
       let sol = full.sol, reason = 'in entry zone · ' + (t.entry?.strat || 'zone'), scale = null, plan = planOf(t);
@@ -6287,7 +6294,9 @@ async function autoTick() {
       const quick = quickEntryCheck(px, plan?.stop, nearestTarget(px, plan?.tp1, plan?.tp2, t.exit?.tp1, t.exit?.tp2));
       if (!quick.ok) { autoLog(t.symbol + ': ' + quick.reason, 'warn'); continue; }
       if (quick.tp) plan = stampQuickPlan(plan, quick);
-      const hit = await cappedBuy({ t, sol, reason: reason + (quick.tp ? ' · quick' : ''), scale, plan, halve: solGate.action === 'halve' });
+      sol = slot.sol;
+      scale = null;
+      const hit = await cappedBuy({ t, sol, reason: reason + (quick.tp ? ' · quick' : ''), scale, plan, halve: solGate.action === 'halve', walletHalf: true });
       if (hit === 'bought') { boughtThisTick = true; toast(`🤖 Auto-bought ${t.symbol}`, 'ok', 8000); }
       if (hit === 'block' || hit === 'bought') break;
     }
@@ -6310,13 +6319,13 @@ async function autoTick() {
           if (!(score >= 60)) { noteBuyWhy(ap.mint, sym, 'plans', 'no fresh scan and hunter safety ' + (score == null ? 'missing' : Math.round(score) + ' < 60')); continue; }
         }
         const t = scanned && scanned.mint ? scanned : { mint: ap.mint, symbol: sym, conviction: agentNum(ap.confidence) || 60 };
-        const full = sizedFull(t);
-        if (full.err) { noteBuyWhy(ap.mint, sym, 'plans', full.err); continue; }
+        const slot = myListWalletSize();
+        if (!slot.ok) { noteBuyWhy(ap.mint, sym, 'plans', slot.error); continue; }
         const quick = quickEntryCheck(px, ap.stop, nearestTarget(px, ap.tp1, ap.tp2));
         if (!quick.ok) { noteBuyWhy(ap.mint, sym, 'plans', quick.reason); continue; }
         let plan = agentOrderPlan({ stop: ap.stop, tp1: ap.tp1, tp2: ap.tp2 }, ap, null);
         if (quick.tp) plan = stampQuickPlan(plan, quick);
-        const hit = await cappedBuy({ t, sol: full.sol, reason: 'analyst plan · ' + (ap.setup || ap.status || 'trigger') + (quick.tp ? ' · quick' : ''), plan, halve: solGate.action === 'halve' });
+        const hit = await cappedBuy({ t, sol: slot.sol, reason: 'analyst plan · ' + (ap.setup || ap.status || 'trigger') + (quick.tp ? ' · quick' : ''), plan, halve: solGate.action === 'halve', walletHalf: true });
         if (hit === 'bought') { boughtThisTick = true; toast('🤖 Auto-bought ' + sym, 'ok', 8000); }
         if (hit === 'block') break;
       }
@@ -9491,7 +9500,7 @@ function maxBuyInput(solBal) {
   const cap = solCap(S.maxSolPerTrade);
   if (cap == null) return null;
   let sol = cap;
-  if (isNum(solBal) && solBal >= 0) sol = Math.min(sol, solBal);
+  if (isNum(solBal) && solBal >= 0) sol = Math.min(sol, Math.max(0, solBal - solKeep()));
   const px = solPriceNow();
   if (sizeStore === 'usd') return px > 0 ? Math.floor(sol * px * 100) / 100 : null;
   return Math.floor(sol * 10000) / 10000;
@@ -9614,16 +9623,21 @@ function listBuyBlocks(sol, mint) {
   if (!heldMint && openPositions().filter(p => p.open && !p.degen && !p.scalp).length >= maxPos()) errs.push('max positions');
   return errs;
 }
+function slotStillHeld(p) {
+  const bag = WALLETS.burner?.tokens?.get(p.mint);
+  if (bag && bag.raw === 0n) return false;
+  return true;
+}
 function myListOpenCount() {
-  return openPositions().filter(p => p.open && (p.myList || p.plan?.myList) && !p.degen && !p.scalp).length;
+  return openPositions().filter(p => p.open && slotStillHeld(p) && !p.degen && !p.scalp && !p.sniper && !p.copy && (p.myList || p.plan?.myList || p.auto)).length;
 }
 function myListWalletSize() {
   const open = myListOpenCount();
   const bal = isNum(WALLETS.burner?.sol) ? WALLETS.burner.sol : null;
-  const reserve = isNum(S.reserveSol) ? S.reserveSol : 0.01;
+  const keep = solKeep();
   if (open >= 2) return { ok: false, sol: 0, error: 'max 2 open', label: 'max 2 open' };
-  if (!(bal > reserve)) return { ok: false, sol: 0, error: 'balance under reserve', label: 'balance under reserve' };
-  const tradable = bal - reserve;
+  if (!(bal > keep)) return { ok: false, sol: 0, error: 'balance under reserve', label: 'balance under reserve' };
+  const tradable = bal - keep;
   if (open === 1) {
     const sol = +tradable.toFixed(6);
     return { ok: sol >= 0.001, sol, error: sol >= 0.001 ? '' : 'remainder under 0.001', label: 'remainder ' + sol.toFixed(3) + ' SOL · max 2' };
@@ -9636,7 +9650,7 @@ function listHalfBlocks(sol, mint) {
   if (!burnerReady()) errs.push('Burner wallet is locked — unlock it first');
   if (!(sol > 0)) errs.push('Amount must be > 0');
   const bal = WALLETS.burner?.sol;
-  const reserve = isNum(S.reserveSol) ? S.reserveSol : 0;
+  const reserve = solKeep();
   if (isNum(bal) && sol + reserve > bal + 1e-9) errs.push('Insufficient SOL: need the buy plus the reserve');
   if (mint && listPosition(mint)) errs.push('already open');
   else if (myListOpenCount() >= 2) errs.push('max 2 open');
@@ -10685,7 +10699,7 @@ async function myListBuys() {
     const reentry = !pos ? quickReentryBlock(row.mint, agent) : '';
     if (reentry) { autoLog((row.symbol || short(row.mint)) + ': ' + reentry, 'info'); continue; }
     if (agent && isSplitPlan(agent) && splitEntryOn() && agentPlansOn()) {
-      const hit = await attemptSplitBuy({ agent, px, candles, fullSol: full, t, myList: true, hasPos: !!pos });
+      const hit = await attemptSplitBuy({ agent, px, candles, fullSol: full, t, myList: true, hasPos: !!pos, walletHalf: !pos });
       if (hit === 'bought') {
         row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
         toast('My List buy ' + t.symbol + ' — split', 'ok', 8000);
@@ -11134,6 +11148,7 @@ async function mlBreakPass() {
     mlBreakByMint.set(r.mint, Object.assign({ mint: r.mint, symbol: r.symbol || '' }, sig));
     if ((r.mlFa || '') !== (sig.fa || '')) { r.mlFa = sig.fa || ''; painted = true; }
     if (!order || !order.buy || !MYLIST.on || !burnerReady()) continue;
+    try { await refreshBalances('burner'); } catch { /* size off the last balance */ }
     if (myListOpenCount() >= 2) { botLog('mylist', r.mint, 'max 2 open'); continue; }
     const flow = livePrices.get(r.mint) || {};
     const pair = r.dexPair || {};
@@ -11375,7 +11390,7 @@ async function attemptSplitBuy(ctx) {
   const sol = trancheSol(ctx.fullSol, which === 'leg1' ? pct : (100 - pct));
   const plan = stampSplitPlan(agent, ctx.px);
   if (ctx.myList) plan.myList = true;
-  const hit = await cappedBuy({ t: ctx.t, sol, reason: 'split leg ' + (which === 'leg1' ? 1 : 2) + ' · ' + filled.id, scale: { i: which === 'leg1' ? 1 : 2, of: 2, kind: 'split' }, plan, myList: !!ctx.myList, halve: !!ctx.halve });
+  const hit = await cappedBuy({ t: ctx.t, sol, reason: 'split leg ' + (which === 'leg1' ? 1 : 2) + ' · ' + filled.id, scale: { i: which === 'leg1' ? 1 : 2, of: 2, kind: 'split' }, plan, myList: !!ctx.myList, halve: !!ctx.halve, walletHalf: !!ctx.walletHalf });
   if (hit === 'bought') markSplitLeg(agent, which === 'leg1' ? 1 : 2);
   return hit;
 }

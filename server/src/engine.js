@@ -1,5 +1,5 @@
 import { tapeFromDex } from './net.js';
-import { CAPS, ceilingBreakSignal, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, lhBreakSignal, listWalletSize, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, pushSolSample, quoteImpact, resolveSolM15, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
+import { CAPS, ceilingBreakSignal, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, pushSolSample, quoteImpact, resolveSolM15, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
 import { isNum, log, tehranDayKey, WSOL } from './util.js';
 
 function pairTape(p) { return tapeFromDex(p); }
@@ -150,6 +150,9 @@ export function createEngine(cfg, state, net, swap) {
     plan = { ...(plan || {}), test: test.test };
     if (test.test && (mode === 'scan' || mode === 'degen')) plan.degenUsd = test.usd;
     if (test.test && mode === 'scalp') plan.scalpUsd = test.usd;
+    const balNow = await swap.balance();
+    const keep = keptForFees(CAPS.reserveSol);
+    if (!(balNow >= solAmt + keep - 1e-9)) { state.note(mode, mint, symbol, 'reserve ' + keep.toFixed(3) + ' SOL'); return; }
     const tape = live(mint) || {};
     const fake = guard(mint, tape);
     if (fake) { state.note(mode, mint, symbol, fake); return; }
@@ -278,11 +281,15 @@ export function createEngine(cfg, state, net, swap) {
     return false;
   }
 
+  function mainOpenCount() {
+    return state.open().filter(p => p.mode === 'breakout' || p.mode === 'plans' || p.mode === 'plan').length;
+  }
+
   async function breakoutTick() {
     if (!state.data.toggles.breakout || state.data.paused) return;
     const rows = agents.mylist?.tokens || [];
     if (!rows.length) return;
-    const openN = state.open().filter(p => p.mode === 'breakout').length;
+    const openN = mainOpenCount();
     if (openN >= 2) { state.note('breakout', '', '', 'max 2 open'); return; }
     const cursor = state.data.breakCursor || 0;
     const row = rows[cursor % rows.length];
@@ -336,6 +343,8 @@ export function createEngine(cfg, state, net, swap) {
     if (agents.risk?.pause_auto_buy) { state.note('plans', '', '', 'agent risk paused buys'); return; }
     await refreshSol();
     const bal = await swap.balance();
+    const openN = mainOpenCount();
+    if (openN >= 2) { state.note('plans', '', '', 'max 2 open'); return; }
     for (const p of agents.plans?.plans || []) {
       if (!planUsable(p)) continue;
       const tape = live(p.mint);
@@ -346,8 +355,8 @@ export function createEngine(cfg, state, net, swap) {
       const stamp = String(p.trigger_price || '') + ':' + String(p.ts || p.updatedAt || '');
       state.data.seenPlans = state.data.seenPlans || {};
       if (state.data.seenPlans[p.mint] === stamp) continue;
-      const sized = (await import('./state.js')).clampMainBuy(state, CAPS.autoMaxSol, bal);
-      if (sized.err) { state.note('plans', p.mint, p.symbol, sized.err); return; }
+      const sized = listWalletSize(bal, CAPS.reserveSol, openN);
+      if (!(sized.sol > 0)) { state.note('plans', p.mint, p.symbol, sized.label); return; }
       state.data.seenPlans[p.mint] = stamp;
       await safeBuy('plans', p.mint, p.symbol || tape.symbol, sized.sol, 100, { agent: true, stop: +p.stop || null, tp1: +p.tp1 || null, tp2: +p.tp2 || null, reason: 'agent plan ' + (p.setup || '') }, tape.liq);
       return;

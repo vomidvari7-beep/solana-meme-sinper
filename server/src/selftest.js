@@ -1,4 +1,4 @@
-import { ceilingBreakSignal, degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
+import { ceilingBreakSignal, degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
 import { lineAt, tehranDayKey } from './util.js';
 
@@ -144,9 +144,12 @@ assert(scalpSolBlockReason({ h1: -1, m5: -9, m15: viaOhlcv.m15, m15Source: 'ohlc
 
 const geo = lineAt({ i: 0, price: 1 }, { i: 2, price: 4 }, 1);
 assert(Math.abs(geo - 2) < 1e-9, 'trendline midpoint is the log midpoint');
-assert(Math.abs(listWalletSize(1.01, 0.01, 0).sol - 0.5) < 1e-9, 'first my list buy is half the tradable balance');
-assert(Math.abs(listWalletSize(0.51, 0.01, 1).sol - 0.5) < 1e-9, 'second my list buy is the remainder');
-assert(listWalletSize(1, 0.01, 2).label === 'max 2 open', 'third my list buy is blocked');
+assert(Math.abs(keptForFees(0.01) - 0.025) < 1e-12, 'reserve floor is 0.02 plus the fee cushion');
+assert(Math.abs(listWalletSize(1.025, 0.02, 0).sol - 0.5) < 1e-9, 'first buy is half of balance minus the keep');
+assert(Math.abs(listWalletSize(0.525, 0.02, 1).sol - 0.5) < 1e-9, 'second buy is the remainder after the keep');
+assert(listWalletSize(1, 0.01, 2).label === 'max 2 open', 'third buy is blocked');
+const drained = listWalletSize(2.005, 0.01, 1);
+assert(Math.abs(drained.sol - 1.98) < 1e-9 && 2.005 - drained.sol >= 0.025 - 1e-9, 'remainder keeps 0.02 even when the caller passes 0.01');
 
 function hourBars(spec) {
   const t0 = Date.parse('2026-11-11T00:00:00Z');

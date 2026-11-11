@@ -13,9 +13,18 @@ export const SCALP = {
 
 export const CAPS = {
   maxSolPerTrade: 0.1, dailyMaxSol: 0.3, autoMaxSol: 0.05, autoDaily: 0.2,
-  balancePct: 20, reserveSol: 0.01, maxOpen: 2, minBuySol: 0.001,
+  balancePct: 20, reserveSol: 0.02, maxOpen: 2, minBuySol: 0.001,
   degenStartUsd: 25, degenTradeUsd: 4, degenImpact: 15, listUsd: 5
 };
+
+/** Never spend this. A buy must leave it on the wallet. */
+export const MIN_RESERVE_SOL = 0.02;
+/** ATA rent plus priority fee. Kept on top of the reserve so the fee does not eat it. */
+export const FEE_CUSHION_SOL = 0.005;
+
+export function keptForFees(reserve) {
+  return Math.max(MIN_RESERVE_SOL, +reserve || 0) + FEE_CUSHION_SOL;
+}
 
 export function textHasRugFlag(s) {
   return /\brugged\b|\brug[\s-]?pull\b|\brug\b/i.test(String(s || '').replace(/rugcheck/ig, ' '));
@@ -677,7 +686,8 @@ export function htfRetestSignal(htf, h1, now = Date.now(), span = 4 * 3600e3) {
 
 export function listWalletSize(balance, reserve, openCount) {
   const n = +openCount || 0;
-  const tradable = (+balance || 0) - (+reserve || 0);
+  const keep = keptForFees(reserve);
+  const tradable = (+balance || 0) - keep;
   if (n >= 2) return { sol: 0, label: 'max 2 open' };
   if (!(tradable >= 0.002)) return { sol: 0, label: 'balance under reserve' };
   if (n === 1) return { sol: +tradable.toFixed(6), label: 'remainder ' + tradable.toFixed(3) + ' SOL · max 2' };
