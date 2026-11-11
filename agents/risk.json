@@ -1,44 +1,29 @@
 {
   "pause_auto_buy": false,
-  "ts": 1794360589000,
-  "updated_utc": "2026-11-11T01:29:49Z",
-  "updated_tehran": "2026-11-11 04:59 Asia/Tehran",
+  "ts": 1794361563000,
+  "updated_utc": "2026-11-11T01:46:03Z",
+  "updated_tehran": "2026-11-11 05:16 Asia/Tehran",
   "wallet": "4u2MpTT4WXLTaJFhqaXRHu6dw5zKiJc5iuUH1cuamKYU",
-  "wallet_usd": 227.12,
-  "sol_balance": 2.2934,
-  "sol_usd": 83.30,
-  "daily_pnl_usd": -8.6,
-  "daily_pnl_pct_of_wallet": -3.79,
+  "wallet_usd": 221.4,
+  "sol_balance": 2.3357,
+  "sol_usd": 83.72,
+  "daily_pnl_usd": -9.1,
+  "daily_pnl_pct_of_wallet": -4.11,
   "positions": [
     {
       "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
       "symbol": "WEALTH",
-      "action": "raise_stop",
+      "action": "hold",
       "new_stop": 0.000735,
       "partial_pct": 0,
-      "reason": "Bounce to -3.7% (5m +15%). Old stop 0.00072 was ~-26% from live (>25% limit); tightened to 0.000735, just above 4h swing low 0.00073. Liq $86.4k, LP locked, no dev sell.",
-      "ts": 1794360589000,
-      "timestamp": "2026-11-11T01:29:49Z",
-      "price": 0.0009749,
-      "value_usd": 28.93,
+      "reason": "Hold: -13.9% vs entry; stop 0.000735 (~-16% from live) unchanged. 5m -9%, 24h -31%, 1h sells>buys (115/99) - weak, watch 4h swing low 0.00073. Liq $81.9k, LP locked, no dev sell.",
+      "ts": 1794361563000,
+      "timestamp": "2026-11-11T01:46:03Z",
+      "price": 0.0008714,
+      "value_usd": 25.86,
       "entry": 0.00101259,
       "qty": 29672.160011,
-      "pnl_pct": -3.72
-    },
-    {
-      "mint": "6bFAqDnEQhwiZaoT4VFbwAGfFtg23DrB3bNKjPFji2QU",
-      "symbol": "BABYMINHAO",
-      "action": "raise_stop",
-      "new_stop": 0.00046,
-      "partial_pct": 0,
-      "reason": "Re-entered 01:18Z (0.0483 SOL, 10926 tokens, entry ~$0.000368). Now +78% - past +40% so trailing stop at 0.00046 (~-30% from live, locks ~+25%). Parabolic +306% 1h on a ~1h-old pair: consider taking 50% partial. Liq $146k, mint/freeze revoked, LP locked.",
-      "ts": 1794360589000,
-      "timestamp": "2026-11-11T01:29:49Z",
-      "price": 0.0006544,
-      "value_usd": 7.15,
-      "entry": 0.000368,
-      "qty": 10926.256643,
-      "pnl_pct": 77.8
+      "pnl_pct": -13.94
     }
   ],
   "closed_today": [
@@ -55,6 +40,14 @@
       "closed_tehran": "2026-11-11 04:31",
       "pnl_sol": 0.0001,
       "pnl_pct": 0.2
+    },
+    {
+      "mint": "6bFAqDnEQhwiZaoT4VFbwAGfFtg23DrB3bNKjPFji2QU",
+      "symbol": "BABYMINHAO",
+      "closed_tehran": "2026-11-11 05:01",
+      "pnl_sol": -0.006,
+      "pnl_pct": -12.4,
+      "note": "2nd entry; token then dumped -78% 1h"
     }
   ]
 }
