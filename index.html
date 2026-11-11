@@ -24,8 +24,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     --amber: #fbbf24;
     --muted: #8b95a8;
   }
-  body { background: radial-gradient(900px 420px at 0% -10%, rgba(124,58,237,.16), transparent 55%), #070b14; color: #e6ebf5; }
-  .glass { background: var(--card); backdrop-filter: blur(16px); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04); }
+  body { background: #0B0E14; color: #e8edf7; }
+  .glass { background: #12161F; border: 1px solid rgba(255,255,255,.06); box-shadow: 0 10px 28px rgba(0,0,0,.28); }
   .fa { font-family: 'Vazirmatn', sans-serif; direction: rtl; text-align: right; line-height: 1.75; unicode-bidi: plaintext; }
   .grad-text { color: #f4f6fb; }
   .btn-primary { background: var(--violet); color: #fff; box-shadow: 0 8px 18px rgba(124,58,237,.28); }
@@ -61,7 +61,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   button.bg-violet-600, button.bg-emerald-500, button.bg-emerald-600 { background: #7c3aed; color: #fff; border-radius: 12px; }
   button.bg-emerald-500, [data-mb-buy] { background: #059669; color: #fff; }
   button.bg-ink-700 { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
-  button.bg-rose-600 { background: #e11d48; color: #fff; border-radius: 12px; }
+  button.bg-rose-600 { background: transparent; color: #fb7185; border: 1px solid rgba(251,113,133,.45); border-radius: 12px; }
+  button.bg-amber-300, button.bg-amber-400, button.bg-orange-600 { background: transparent; color: #fbbf24; border: 1px solid rgba(251,191,36,.4); border-radius: 12px; }
   .manual-buy[data-compact="1"] > div { flex-wrap: wrap; }
   .manual-buy[data-compact="1"] input { height: 44px !important; border-radius: 12px; }
   .manual-buy[data-compact="1"] [data-mb-chip] { height: 36px; min-width: 36px; border-radius: 999px; }
@@ -73,7 +74,35 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .flash-down { animation: flashDown .22s ease; }
   @keyframes flashUp { from { color: #34d399; } }
   @keyframes flashDown { from { color: #fb7185; } }
-  #botBar .glass { box-shadow: 0 8px 24px rgba(0,0,0,.22); }
+  #botBar .glass { box-shadow: none; background: #181D28; }
+  .appbar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; background: rgba(11,14,20,.94); border-bottom: 1px solid rgba(255,255,255,.06); }
+  .bal-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 999px; background: #181D28; border: 1px solid rgba(255,255,255,.08); color: #fff; font-size: 12px; font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #3a4154; }
+  .dot.on { background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.16); }
+  .dot.armed { background: #fbbf24; }
+  .tab-pane { max-width: 720px; margin: 0 auto; padding: 64px 12px 104px; display: flex; flex-direction: column; gap: 12px; }
+  .tab-pane[hidden] { display: none !important; }
+  #tabBar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; background: #12161F; border-top: 1px solid rgba(255,255,255,.06); padding: 4px 4px calc(6px + env(safe-area-inset-bottom)); }
+  #tabBar button { min-height: 48px; border: 0; border-radius: 12px; background: transparent; color: #8b93a7; font-size: 10px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+  #tabBar button.on { color: #f8fafc; background: rgba(124,58,237,.16); }
+  .hero-card { background: #12161F; border: 1px solid rgba(255,255,255,.06); border-radius: 20px; padding: 16px; }
+  .hero-num { font-size: 34px; line-height: 1.1; font-weight: 650; letter-spacing: -.03em; }
+  .watch-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 64px; padding: 8px 2px; border: 0; border-bottom: 1px solid rgba(255,255,255,.06); background: transparent; color: inherit; text-align: left; }
+  .mono-logo { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: #181D28; color: #ddd6fe; font-size: 12px; font-weight: 700; overflow: hidden; flex: 0 0 auto; }
+  .chg-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 6px; font-size: 11px; font-weight: 650; }
+  .chg-up { color: #34d399; background: rgba(52,211,153,.12); }
+  .chg-down { color: #fb7185; background: rgba(251,113,133,.12); }
+  .token-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; max-height: 92vh; overflow: auto; background: #12161F; color: #e8edf7; border-radius: 22px 22px 0 0; border: 1px solid rgba(255,255,255,.08); padding: 8px 14px 100px; transform: translateY(105%); transition: transform .22s ease; box-shadow: 0 -20px 50px rgba(0,0,0,.45); }
+  .token-sheet.open { transform: translateY(0); }
+  #sheetScrim { display: none; position: fixed; inset: 0; z-index: 66; background: rgba(0,0,0,.55); }
+  body.sheet-on #sheetScrim { display: block; }
+  .sheet-grab { width: 36px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.18); margin: 4px auto 10px; }
+  .skel { height: 12px; border-radius: 8px; background: linear-gradient(90deg, #181D28 20%, #242b3a 50%, #181D28 80%); background-size: 200% 100%; animation: sk 1.2s ease infinite; }
+  @keyframes sk { to { background-position: -200% 0; } }
+  #toasts { top: 60px; bottom: auto; }
+  #killFab { bottom: 78px !important; }
+  details.adv { background: #12161F; border: 1px solid rgba(255,255,255,.06); border-radius: 16px; }
+  details.adv > summary { padding: 14px 16px; font-weight: 650; cursor: pointer; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
@@ -81,21 +110,17 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </head>
 <body class="text-slate-200 font-sans min-h-screen antialiased">
 
-<div id="botBar"></div>
+<header class="appbar">
+  <div class="flex items-center gap-2 min-w-0">
+    <div class="w-8 h-8 rounded-xl grid place-items-center font-bold text-sm shrink-0" style="background:#7c3aed;color:#fff">◎</div>
+    <div class="min-w-0"><h1 class="text-[15px] font-semibold tracking-tight truncate">SolanaMemeSniper</h1></div>
+  </div>
+  <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
+</header>
 
-<header class="sm:sticky top-0 z-30 border-b border-white/10 bg-[#070b14]/85 backdrop-blur">
-  <div class="max-w-7xl mx-auto px-4 py-2.5">
-    <div class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2 min-w-0">
-        <div class="w-8 h-8 rounded-xl btn-primary grid place-items-center font-extrabold text-base shrink-0">◎</div>
-        <div class="min-w-0">
-          <h1 class="text-[15px] font-semibold tracking-tight truncate"><span class="grad-text">SolanaMemeSniper</span></h1>
-          <p class="text-[10px] uppercase tracking-wide text-slate-500 truncate">Rug-avoidance · live data</p>
-        </div>
-      </div>
-      <button id="btnWallet" class="rounded-xl px-3 text-sm font-semibold btn-primary text-white flex items-center gap-2 shrink-0"><span>👻</span><span id="btnWalletLabel">Connect Phantom</span></button>
-    </div>
-    <div class="stat-strip mt-2">
+<div id="tabHome" class="tab-pane">
+  <div id="homeHero"><div class="hero-card"><div class="text-[11px] uppercase tracking-wide text-slate-500">Total wealth</div><div class="hero-num">—</div><div id="homePnl" class="chg-pill" style="margin-top:8px">24h —</div></div></div>
+  <div class="stat-strip">
       <div id="solTicker" class="stat-pill flex items-center gap-1.5 text-sm glass rounded-xl px-2 py-1.5">
         <div class="leading-tight min-w-0 flex-1">
           <div class="flex items-center gap-1.5"><span class="text-[10px] uppercase tracking-wide text-slate-500">SOL</span><span id="solPrice" class="font-mono font-semibold tabular">—</span></div>
@@ -130,10 +155,9 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
         <svg id="dexSpark" viewBox="0 0 64 28" class="w-10 h-6 shrink-0 hidden sm:block" role="img" aria-label="DEX mood last 24h, Tehran time"><path id="dexSparkPath" d="" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg>
       </div>
     </div>
-  </div>
-</header>
+  <div id="botBar"></div>
 
-<section id="readyNow" class="max-w-7xl mx-auto px-4 pt-4">
+<section id="readyNow">
   <div class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
       <h2 class="sec-title"><span class="ico">●</span>Ready now</h2>
@@ -145,10 +169,11 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     <div id="readyRows" class="empty-note">No token in entry zone right now</div>
   </div>
 </section>
+</div>
 
 <main class="max-w-7xl mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
   <section class="lg:col-span-4 space-y-4">
-    <div class="glass rounded-2xl p-4 sm:p-5">
+    <div id="inputsCard" class="glass rounded-2xl p-4 sm:p-5">
       <div class="flex items-center justify-between mb-3">
         <h2 class="sec-title"><span class="ico">⌘</span>Inputs</h2>
         <span id="lastIndicator" class="hidden text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"></span>
@@ -322,8 +347,21 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   </div>
 </footer>
 
+<div id="tabTokens" class="tab-pane" hidden></div>
+<div id="tabAgents" class="tab-pane" hidden></div>
+<div id="tabTrades" class="tab-pane" hidden></div>
+<div id="tabSettings" class="tab-pane" hidden></div>
+<nav id="tabBar" aria-label="Sections">
+  <button type="button" data-tab="home" class="on" aria-current="page"><span>⌂</span>Home</button>
+  <button type="button" data-tab="tokens"><span>☰</span>Tokens</button>
+  <button type="button" data-tab="agents"><span>◎</span>Agents</button>
+  <button type="button" data-tab="trades"><span>↔</span>Trades</button>
+  <button type="button" data-tab="settings"><span>⚙</span>Settings</button>
+</nav>
+<div id="sheetScrim"></div>
+
 <!-- TRADE CONFIRMATION MODAL -->
-<div id="tradeModal" class="hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm overflow-y-auto">
+<div id="tradeModal" class="hidden fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm overflow-y-auto">
   <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="w-full sm:max-w-lg bg-ink-900 border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl">
       <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
@@ -339,7 +377,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   </div>
 </div>
 
-<div id="toasts" class="fixed top-3 sm:top-auto sm:bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end pointer-events-none"></div>
+<div id="toasts" class="fixed top-16 right-3 left-3 sm:left-auto z-[80] flex flex-col gap-2 items-end pointer-events-none"></div>
 <script>
 'use strict';
 /* ============================ CONFIG ============================ */
@@ -2033,8 +2071,8 @@ function updateHints() {
 }
 function saveInputsDraft() { try { localStorage.setItem('sms:inputs', JSON.stringify(collectInputs())); } catch { } }
 
-$('btnAnalyze').addEventListener('click', () => runAnalysis());
-$('btnBoosted').addEventListener('click', () => runAnalysis({ boosted: true }));
+$('btnAnalyze').addEventListener('click', () => { window.showTab?.('tokens'); runAnalysis(); });
+$('btnBoosted').addEventListener('click', () => { window.showTab?.('tokens'); runAnalysis({ boosted: true }); });
 loadSourceBoxes();
 ['srcBoost', 'srcTrend', 'srcVolume', 'srcNew'].forEach(id => document.getElementById(id)?.addEventListener('change', persistSourceBoxes));
 $('btnDemo').addEventListener('click', () => {
@@ -2054,7 +2092,7 @@ $('btnPrompt').addEventListener('click', async () => {
   const ok = await copyText(buildPrompt(collectInputs(), lastResult));
   toast(ok ? 'AI prompt copied — paste it into your chatbot' : 'Copy failed — browser blocked clipboard', ok ? 'ok' : 'err');
 });
-$('btnLoadLast').addEventListener('click', () => loadLast(false));
+$('btnLoadLast').addEventListener('click', () => { window.showTab?.('tokens'); loadLast(false); });
 ['risk', 'focus', 'source', 'notes', 'account', 'useRug', 'minAgeH', 'maxAgeD'].forEach(id => $(id).addEventListener('change', () => { updateHints(); saveInputsDraft(); }));
 $('pasted').addEventListener('input', () => { updateHints(); saveInputsDraft(); });
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAnalysis(); } });
@@ -2852,7 +2890,8 @@ async function openTrade(side, mint, { sol, pct } = {}) {
 /* ---------------- rendering: wallet card, header, cards ---------------- */
 function renderWallet() {
   const ph = WALLETS.phantom, bu = WALLETS.burner, aw = active();
-  $('btnWalletLabel').textContent = ph.pubkey ? short(ph.pubkey) + (isNum(ph.sol) ? ' · ' + ph.sol.toFixed(3) + ' SOL' : '') : 'Connect Phantom';
+  const bal = (bu.pubkey && isNum(bu.sol)) ? bu.sol : (ph.pubkey && isNum(ph.sol) ? ph.sol : null);
+  $('btnWalletLabel').textContent = isNum(bal) ? bal.toFixed(3) + ' SOL' : (ph.pubkey || bu.pubkey ? 'Wallet' : 'Connect');
   const st = $('walletStatus');
   const anyConn = ph.pubkey || bu.pubkey;
   st.textContent = aw.pubkey ? `Active: ${aw.label}${aw.key === 'burner' ? (bu.kp ? ' (unlocked)' : ' (locked)') : ''}` : 'Not connected';
@@ -3962,6 +4001,7 @@ function renderPortfolio() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'sms-trades.csv'; a.click(); });
   $('pfClear').addEventListener('click', () => { if (confirm('Clear the local trade log? (On-chain history is not affected.)')) { LOG = []; saveLog(); alerted = {}; save(LS.alerts, alerted); renderPortfolio(); } });
   renderAutoLog();
+  syncHomeHero();
 }
 function renderAutoLog() {
   const box = $('autoLogBox'); if (!box) return; if (!AUTOLOG.length) { box.innerHTML = ''; return; }
@@ -4941,6 +4981,11 @@ function renderBotBar() {
   box.querySelectorAll('[data-bot]').forEach(b => b.addEventListener('click', () => toggleBot(b.dataset.bot)));
   $('botAllOn')?.addEventListener('click', allBotsOn);
   $('botAllOff')?.addEventListener('click', () => killSwitch('manual'));
+  const dot = $('appDot');
+  if (dot) {
+    const live = ['auto', 'mylist', 'copy', 'sniper'].some(k => prefs[k] && (botLive(k) || locked));
+    dot.className = 'dot' + (live && !locked ? ' on' : live ? ' armed' : '');
+  }
   if ($('aMom')) $('aMom').checked = !!A.momentumOn;
   if ($('agentUse')) $('agentUse').checked = agentPlansOn();
   if ($('agentExits')) $('agentExits').checked = agentExitsOn();
@@ -7056,6 +7101,7 @@ async function myListBuyNow(row, typed, onDone) {
     } });
 }
 function renderMyList() {
+  closeTokenSheet();
   const box = $('myListBox'); if (!box) return;
   const focus = document.activeElement;
   if (focus && box.contains(focus) && /^(INPUT|TEXTAREA|SELECT)$/.test(focus.tagName)) return;
@@ -7134,37 +7180,49 @@ function renderMyList() {
       const pl = effectiveStop(pos, lp);
       posHtml = `<button type="button" data-ml-pos="${esc(row.mint)}" class="mt-2 w-full rounded-xl border border-violet-400/30 bg-violet-500/10 px-2.5 py-2 text-left text-[11px] text-violet-100 whitespace-normal break-words">Open ${esc(pos.symbol)} · ${pct(money.pnl)} · stop ${price(pl.stop)} · tap to view</button>`;
     }
-    const glow = v.ready ? 'shadow-[0_0_22px_rgba(34,197,94,0.14)] border-emerald-500/25' : 'border-white/10';
     const dex = pair.url || ('https://dexscreener.com/solana/' + row.mint);
     const cell = (k, val) => `<div class="min-w-0"><div class="text-[9px] uppercase tracking-wide text-slate-500">${k}</div><div class="text-[12px] leading-tight text-slate-100 whitespace-normal break-words">${val || '—'}</div></div>`;
-    return `<article class="glass rounded-2xl p-2.5 ${glow}" data-row="${esc(row.id)}">
-      <div class="flex items-center gap-2">
-        ${info.imageUrl ? `<img src="${safeUrl(info.imageUrl)}" alt="" class="w-8 h-8 rounded-lg object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-8 h-8 rounded-lg bg-ink-700 grid place-items-center text-[10px] font-bold shrink-0">${esc((row.symbol || '?').slice(0, 3))}</div>`}
-        <div class="min-w-0 flex-1 flex items-center gap-1.5">
-          <b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b>
-          <span class="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
-          ${typeof quickOn === 'function' && quickOn() ? `<span class="shrink-0 rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-100">Quick 15% · 1:1</span>` : ''}
-        </div>
-        <div class="shrink-0 text-right leading-tight">
-          <div class="font-mono text-[13px] text-slate-100">${price(v.px)}</div>
-          <div class="text-[10px] ${h24cls}">${isNum(h24) ? pct(h24, 1) : ''}</div>
-        </div>
-        <label class="flex items-center gap-1 text-[11px] text-slate-300 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
+    const spark = listChartSvg(v.model, { w: 84, h: 32 });
+    const mono = esc((row.symbol || '?').slice(0, 2).toUpperCase());
+    if (!window.__pxSeen) window.__pxSeen = {};
+    const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
+    if (isNum(v.px)) window.__pxSeen[row.mint] = v.px;
+    const logo = `<span class="logo-slot shrink-0">${info.imageUrl ? `<img src="${safeUrl(info.imageUrl)}" alt="" class="mono-logo object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''}<span class="mono-logo" style="${info.imageUrl ? 'display:none' : ''}">${mono}</span></span>`;
+    return `<article data-row="${esc(row.id)}">
+      <div class="flex items-center gap-1">
+        <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
+          ${logo}
+          <span class="min-w-0 flex-1">
+            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b>${typeof quickOn === 'function' && quickOn() ? '<span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:1</span>' : ''}</span>
+            <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
+          </span>
+          <span class="shrink-0">${spark.empty ? '' : spark.svg}</span>
+          <span class="shrink-0 text-right">
+            <span class="block font-mono text-[13px] ${flash}">${price(v.px)}</span>
+            ${isNum(h24) ? `<span class="chg-pill ${h24 >= 0 ? 'chg-up' : 'chg-down'}">${pct(h24, 1)}</span>` : ''}
+          </span>
+        </button>
+        <label class="flex items-center text-[11px] text-slate-400 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
       </div>
-      <button type="button" data-ml-chart="${esc(row.id)}" class="chart-frame mt-1.5 block w-full rounded-xl border border-white/10 p-1.5 text-left" style="touch-action:manipulation" aria-label="Open chart">
+      <div class="token-sheet">
+        <div class="sheet-grab"></div>
+        <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">${esc(row.symbol || short(row.mint))}</b><button type="button" data-sheet-close class="text-sm text-slate-400">Close</button></div>
+        <span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
+        ${typeof quickOn === 'function' && quickOn() ? `<span class="ml-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">Quick 15% · 1:1</span>` : ''}
+      <button type="button" data-ml-chart="${esc(row.id)}" class="chart-frame mt-2 block w-full rounded-xl border border-white/10 p-1.5 text-left" style="touch-action:manipulation" aria-label="Open chart">
         ${drawn.empty ? '<div class="h-10 grid place-items-center text-[11px] text-slate-500">Chart waiting for candles</div>' : drawn.svg}
       </button>
-      <div class="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+      <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
         ${cell('Setup', esc(setupSum))}
         ${cell('Trigger', esc(trigSum))}
         ${cell('Stop', esc(stopSum))}
         ${cell('If breaks', potSum ? `<span class="text-emerald-300">${esc(potSum)}</span>` : '')}
       </div>
       ${typeof agentPlanChip === 'function' ? agentPlanChip(row.mint) : ''}
-      <p class="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold ${v.ready ? 'text-emerald-300' : 'text-amber-200'}"><span class="h-1.5 w-1.5 shrink-0 rounded-full ${v.ready ? 'bg-emerald-400' : 'bg-amber-400'}"></span><span class="min-w-0 truncate">${v.ready ? 'Ready' : 'Not ready: ' + esc(v.why)}</span></p>
+      <p class="mt-2 flex items-center gap-1.5 text-[12px] font-semibold ${v.ready ? 'text-emerald-300' : 'text-amber-200'}"><span class="h-1.5 w-1.5 shrink-0 rounded-full ${v.ready ? 'bg-emerald-400' : 'bg-amber-400'}"></span><span class="min-w-0 truncate">${v.ready ? 'Ready' : 'Not ready: ' + esc(v.why)}</span></p>
       ${posHtml}
       ${manualBuyHtml(row.id, listPrefill(v.spec), { compact: true })}
-      <div class="mt-1 flex items-center gap-3 text-[11px]">
+      <div class="mt-2 flex items-center gap-3 text-[11px]">
         <button type="button" data-ml-edit="${esc(row.id)}" class="text-violet-300">Strategy</button>
         <button type="button" data-ml-del="${esc(row.id)}" class="text-rose-300">Remove</button>
         <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-violet-300">DexScreener</a>
@@ -7184,6 +7242,7 @@ function renderMyList() {
           <div class="text-[11px] text-slate-500 whitespace-normal break-words">${esc(strategySizeText(v.spec))}${v.ready && !MYLIST.on ? ' · Auto-buy is off' : ''}</div>
         </div>
       </details>
+      </div>
     </article>`;
   }).join('');
   const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><b>${esc(v.row.symbol || short(v.row.mint))}</b></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" class="text-rose-300">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
@@ -7254,7 +7313,9 @@ function renderMyList() {
     row.detailsOpen = el.open;
     saveMyList();
   }));
-  box.querySelectorAll('[data-ml-pos]').forEach(el => el.addEventListener('click', () => { document.getElementById('sec-portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+  box.querySelectorAll('[data-ml-pos]').forEach(el => el.addEventListener('click', () => { showTab('trades'); document.getElementById('sec-portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+  box.querySelectorAll('[data-ml-open]').forEach(el => el.addEventListener('click', () => openTokenSheet(el.closest('article'))));
+  box.querySelectorAll('[data-sheet-close]').forEach(el => el.addEventListener('click', closeTokenSheet));
 }
 function addMintsToList(addrs) {
   let n = 0;
@@ -7681,6 +7742,7 @@ function renderAgentPicks() {
   const use = $('agentUse'), exits = $('agentExits');
   if (use && document.activeElement !== use) use.checked = agentPlansOn();
   if (exits && document.activeElement !== exits) exits.checked = agentExitsOn();
+  syncAgentPreview();
 }
 async function refreshAgents() {
   const names = ['candidates', 'mylist', 'plans', 'risk', 'config'];
@@ -8024,7 +8086,84 @@ function wireReadyNow() {
 }
 window.__smsReady = renderReadyNow;
 
+let sheetHost = null;
+function closeTokenSheet() {
+  document.body.classList.remove('sheet-on');
+  const sheet = document.querySelector('body > .token-sheet');
+  if (sheet) sheet.classList.remove('open');
+  if (sheet && sheetHost && sheetHost.isConnected) sheetHost.appendChild(sheet);
+  sheetHost = null;
+}
+function openTokenSheet(art) {
+  if (!art) return;
+  closeTokenSheet();
+  const sheet = art.querySelector('.token-sheet');
+  if (!sheet) return;
+  sheetHost = art;
+  document.body.appendChild(sheet);
+  document.body.classList.add('sheet-on');
+  requestAnimationFrame(() => sheet.classList.add('open'));
+}
+function showTab(name) {
+  const names = ['home', 'tokens', 'agents', 'trades', 'settings'];
+  if (!names.includes(name)) name = 'home';
+  names.forEach(n => {
+    const pane = document.getElementById('tab' + n.charAt(0).toUpperCase() + n.slice(1));
+    if (pane) pane.hidden = n !== name;
+  });
+  document.querySelectorAll('#tabBar [data-tab]').forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-current', on ? 'page' : 'false');
+  });
+  try { localStorage.setItem('sms:tab', name); } catch { /* ignore */ }
+}
+function syncHomeHero() {
+  const slot = $('homeHero'); if (!slot) return;
+  const card = $('equityCard');
+  if (card) slot.replaceChildren(card);
+}
+function syncAgentPreview() {
+  const slot = $('agentPreview'); const src = $('agentPicks');
+  if (!slot || !src) return;
+  const cards = [...src.querySelectorAll('article')].slice(0, 3);
+  if (!cards.length) slot.innerHTML = '<button type="button" data-go="agents" class="hero-card w-full text-left"><div class="text-[11px] uppercase tracking-wide text-slate-500">Agent picks</div><p class="empty-note mt-2">No hunter candidates yet</p></button>';
+  else slot.innerHTML = '<div class="text-[11px] uppercase tracking-wide text-slate-500">Agent picks</div>' + cards.map(c => {
+    const name = c.querySelector('b')?.textContent || 'Token';
+    return `<button type="button" data-go="agents" class="watch-row"><span class="mono-logo">${esc(name.slice(0, 2).toUpperCase())}</span><span class="min-w-0"><b class="block truncate text-sm">${esc(name)}</b></span></button>`;
+  }).join('');
+  slot.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.go)));
+}
+function mountApp() {
+  const home = $('tabHome'), tokens = $('tabTokens'), agents = $('tabAgents'), trades = $('tabTrades'), settings = $('tabSettings');
+  if (!home || home.dataset.mounted) return;
+  home.dataset.mounted = '1';
+  const preview = document.createElement('div');
+  preview.id = 'agentPreview';
+  home.appendChild(preview);
+  ['myListBox', 'emptyState', 'results'].forEach(id => { const n = $(id); if (n && tokens) tokens.appendChild(n); });
+  ['agentPicks', 'agentSettings', 'whaleBox', 'sniperBox'].forEach(id => { const n = $(id); if (n && agents) agents.appendChild(n); });
+  const port = $('portfolio'); if (port && trades) trades.appendChild(port);
+  const trade = $('tradeCard'); if (trade && settings) settings.appendChild(trade);
+  const inputs = $('inputsCard');
+  if (inputs && settings) {
+    const adv = document.createElement('details');
+    adv.id = 'advancedInputs'; adv.className = 'adv';
+    adv.innerHTML = '<summary>Advanced</summary>';
+    settings.appendChild(adv);
+    adv.appendChild(inputs);
+  }
+  const foot = document.querySelector('footer'); if (foot && settings) settings.appendChild(foot);
+  const main = document.querySelector('main'); if (main) main.hidden = true;
+  $('tabBar')?.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
+  $('sheetScrim')?.addEventListener('click', closeTokenSheet);
+  let saved = 'home'; try { saved = localStorage.getItem('sms:tab') || 'home'; } catch { /* ignore */ }
+  showTab(saved);
+}
+window.showTab = showTab;
+mountApp();
 fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
+syncAgentPreview();
 maybeLockSizeUnit();
 setInterval(() => { refreshHolderWatch(); }, 60 * 1000);
 setTimeout(() => { refreshHolderWatch(); }, 20000);
