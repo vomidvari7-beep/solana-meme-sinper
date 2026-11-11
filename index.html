@@ -3186,9 +3186,17 @@ async function evaluateExits() {
   if (typeof degenExitTick === 'function') await degenExitTick(true);
   if (typeof sniperExitTick === 'function') await sniperExitTick(true);
   if (typeof myListExits === 'function') await myListExits();
-  if (!(A.on && A.autoExit) || !burnerReady()) { if (A.on && A.autoExit) botLog('auto', 'panel', 'burner locked'); return; }
+  if (!burnerReady()) { botLog('exits', 'panel', 'burner locked'); return; }
+  if (!(A.on && A.autoExit)) {
+    for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
+      const lp = livePrices.get(p.mint)?.price;
+      if (priceExit(p, lp)) exitNote('exits', p.mint, p.symbol, 'exit due, auto-exit is off');
+    }
+    return;
+  }
   for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
     const lp = livePrices.get(p.mint)?.price;
+    if (!isNum(lp)) { exitNote('exits', p.mint, p.symbol, 'no live price for exit'); continue; }
     const ex = priceExit(p, lp);
     if (ex) await autoSell(p, ex.pctSell, ex.tag, lp);
   }
@@ -3280,7 +3288,9 @@ function startLiveLoop() {
   liveLoopOn = true;
   const step = async () => {
     await liveTick();
-    const wait = document.hidden ? 5000 : (window.__SMS_SAFE ? Math.max(3000, liveBackoff) : liveBackoff);
+    const openNow = openMints().length;
+    const baseWait = document.hidden ? 5000 : (window.__SMS_SAFE ? Math.max(2000, liveBackoff) : liveBackoff);
+    const wait = openNow && !document.hidden ? Math.min(2000, Math.max(1000, baseWait)) : baseWait;
     setTimeout(step, wait);
   };
   document.addEventListener('visibilitychange', () => {
@@ -5211,7 +5221,6 @@ function priceExit(p, lp) {
   if (p?.degen) return degenExit(p, lp);
   if (p?.plan?.myList) return myListExit(p, lp);
   if (!isNum(lp)) return null;
-  if ((sellFails[p.key] || 0) >= 3) return null;
   const eff = effectiveStop(p, lp); const pl = eff;
   const pnl = p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null; const ageH = (Date.now() - p.firstTs) / 3.6e6;
   if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: (eff.reason === 'trail' || eff.reason === 'early trail') ? 'trail' : 'stop' };
@@ -5455,10 +5464,26 @@ async function autoTick() {
   } catch (e) { autoLog('Tick error: ' + e.message, 'err'); }
   finally { autoBusy = false; const st = $('autoStatus'); if (st) st.textContent = autoStatusText(); }
 }
+const exitInflight = new Set();
+const exitNoteAt = {};
+function exitNote(bot, mint, symbol, reason) {
+  const key = bot + '|' + mint + '|' + reason;
+  if (exitNoteAt[key] && Date.now() - exitNoteAt[key] < 12000) return;
+  exitNoteAt[key] = Date.now();
+  botLog(bot, mint, reason);
+  if (bot === 'degen' && typeof degenLogEvent === 'function') degenLogEvent(mint, reason, symbol);
+  else autoLog((symbol || mint) + ': ' + reason, 'warn');
+}
 async function autoSell(p, pctSell, tag, lp, extra) {
-  if (p?.degen) { autoLog((p.symbol || p.mint) + ': skipped non-degen exit (' + tag + ')', 'warn'); return; }
-  const b = WALLETS.burner; const h = b.tokens.get(p.mint); if (!h || h.raw === 0n) return;
-  const raw = pctSell >= 100 ? h.raw : (h.raw * BigInt(pctSell)) / 100n; if (raw === 0n) return;
+  if (p?.degen) { exitNote('degen', p.mint, p.symbol, 'main exit skipped — degen path owns this position'); return; }
+  if (exitInflight.has(p.key)) { exitNote('exits', p.mint, p.symbol, tag + ' sell already sending'); return; }
+  if (!burnerReady()) { exitNote('exits', p.mint, p.symbol, 'burner locked'); return; }
+  const b = WALLETS.burner; let h = b.tokens.get(p.mint);
+  if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* retry next price */ } h = b.tokens.get(p.mint); }
+  if (!h || h.raw === 0n) { exitNote('exits', p.mint, p.symbol, tag + ' sell skipped — no balance'); return; }
+  const raw = pctSell >= 100 ? h.raw : (h.raw * BigInt(pctSell)) / 100n;
+  if (raw === 0n) { exitNote('exits', p.mint, p.symbol, tag + ' sell skipped — amount too small'); return; }
+  exitInflight.add(p.key);
   autoLog(`${p.symbol}: ${tag.toUpperCase()} trigger at ${price(lp)} → selling ${pctSell}%`, 'warn');
   try {
     const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.max(A.slipCap, tag === 'stop' ? Math.min(15, A.slipCap * 2) : A.slipCap) * 100) });
@@ -5467,7 +5492,8 @@ async function autoSell(p, pctSell, tag, lp, extra) {
     autoLog(`SELL ${pctSell}% ${p.symbol} (${tag}) → ${fmtSol(r.rec.solAmount)}`, 'ok', { sig: r.sig }); toast(`🤖 Auto-sold ${pctSell}% ${p.symbol} (${tag})`, tag === 'stop' ? 'warn' : 'ok', 8000);
     if (tag === 'stop' || tag === 'tp' || /^tp\d+$/.test(tag || '')) noteQuickExit(p.mint);
     delete sellFails[p.key];
-  } catch (e) { sellFails[p.key] = (sellFails[p.key] || 0) + 1; autoLog(`${p.symbol}: auto-sell failed (${sellFails[p.key]}/3) — ${e.message}`, 'err'); }
+  } catch (e) { sellFails[p.key] = (sellFails[p.key] || 0) + 1; exitNote('exits', p.mint, p.symbol, tag + ' sell failed — ' + (e.message || e) + ' — retrying'); }
+  finally { exitInflight.delete(p.key); }
 }
 async function autoScan() {
   if (!A.on || !A.autoScan) return;
@@ -6930,26 +6956,16 @@ async function agentHeadSha() {
   return agentTipPromise;
 }
 async function fetchAgentDoc(name) {
-  const grab = (url, headers) => {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 8000);
-    return fetch(url, { cache: 'no-store', signal: ctl.signal, headers: headers || { Accept: 'application/json' } })
-      .then(async (res) => { if (!res.ok) throw new Error(name + ' ' + res.status); return await res.json(); })
-      .finally(() => clearTimeout(timer));
-  };
   const sha = await agentHeadSha();
-  const jobs = [
-    grab('https://vomidvari7-beep.github.io/solana-meme-sinper/agents/' + name + '.json?t=' + Date.now()).catch(() => null)
-  ];
-  if (sha) {
-    jobs.push(grab('https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/' + sha + '/agents/' + name + '.json').catch(() => null));
-    jobs.push(grab('https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=' + sha, agentApiHeaders('application/vnd.github.raw')).catch(() => null));
-  } else {
-    jobs.push(grab('https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=main&t=' + Date.now(), agentApiHeaders('application/vnd.github.raw')).catch(() => null));
-  }
-  const bodies = (await Promise.all(jobs)).filter(Boolean);
-  if (!bodies.length) throw new Error(name + ' fetch failed');
-  return bodies.reduce((best, cur) => preferAgentDoc(best, cur));
+  if (!sha) throw new Error(name + ' no commit sha');
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const url = 'https://api.github.com/repos/vomidvari7-beep/solana-meme-sinper/contents/agents/' + name + '.json?ref=' + sha;
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal, headers: agentApiHeaders('application/vnd.github.raw') });
+    if (!res.ok) throw new Error(name + ' ' + res.status);
+    return await res.json();
+  } finally { clearTimeout(timer); }
 }
 async function fetchDegenDoc() { return fetchAgentDoc('degen'); }
 async function degenFetchFile() {
@@ -7043,34 +7059,39 @@ async function degenBuy(pick, opt) {
 }
 let degenSelling = false;
 async function degenSell(p, pct, tag, lp, reason) {
-  if (degenSelling) return;
+  if (degenSelling) { exitNote('degen', p.mint, p.symbol, tag + ' sell already sending — retrying next price'); return; }
   degenSelling = true;
   try {
     const b = WALLETS.burner;
-    if (!burnerReady()) { botLog('degen', p.mint, 'burner locked'); degenLogEvent(p.mint, 'burner locked', p.symbol); return; }
+    if (!burnerReady()) { exitNote('degen', p.mint, p.symbol, 'burner locked'); return; }
     let h = b.tokens.get(p.mint);
-    if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* ignore */ } h = b.tokens.get(p.mint); }
-    if (!h || h.raw === 0n) return;
+    if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* retry next price */ } h = b.tokens.get(p.mint); }
+    if (!h || h.raw === 0n) { exitNote('degen', p.mint, p.symbol, tag + ' sell skipped — no balance'); return; }
     const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
-    if (raw === 0n) return;
+    if (raw === 0n) { exitNote('degen', p.mint, p.symbol, tag + ' sell skipped — amount too small'); return; }
     const slipPct = tag === 'rug' ? 25 : Math.min(15, Math.max(A.slipCap, S.slippagePct));
     const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(slipPct * 100) });
     const why = reason || (tag + ' ' + pct + '% at ' + price(lp));
     await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper, entryReason: why } });
     degenNote(p.symbol + ' ' + why);
+    degenLogEvent(p.mint, 'sold ' + tag, p.symbol);
     renderDegen();
+  } catch (e) {
+    exitNote('degen', p.mint, p.symbol, tag + ' sell failed — ' + (e.message || e) + ' — retrying');
   } finally { degenSelling = false; }
 }
 async function degenExitTick(skipRefresh) {
   const open = openPositions().filter(p => p.degen && p.wallet === 'burner');
   if (!open.length) return;
-  if (!burnerReady()) { botLog('degen', 'panel', 'burner locked'); return; }
+  if (!burnerReady()) { open.forEach(p => exitNote('degen', p.mint, p.symbol, 'burner locked')); return; }
   if (!skipRefresh) { try { await refreshPrices(); } catch { /* use the last price */ } }
   for (const p of openPositions().filter(x => x.degen && x.wallet === 'burner')) {
     const lp = livePrices.get(p.mint)?.price;
+    if (!isNum(lp)) { exitNote('degen', p.mint, p.symbol, 'no live price for exit'); continue; }
+    if (!(p.avgUsd > 0)) { exitNote('degen', p.mint, p.symbol, 'no entry price for exit'); continue; }
     const ex = degenExit(p, lp);
     if (!ex) continue;
-    try { await degenSell(p, ex.pctSell, ex.tag, lp, ex.reason); } catch (e) { degenNote(p.symbol + ' sell failed — ' + e.message); }
+    await degenSell(p, ex.pctSell, ex.tag, lp, ex.reason);
   }
 }
 function degenShownPx(pick) {
@@ -7090,21 +7111,22 @@ async function degenEvaluate(picks) {
   if (!degenOn()) { degenNoteLive(list, 'degen pot off'); return; }
   if (!burnerReady()) { degenNoteLive(list, 'burner locked'); botLog('degen', 'panel', 'burner locked'); degenNote('armed, unlock to run'); return; }
   if (degenLedgerShort()) { degenHaltFunds(); degenNoteLive(list, 'Degen out of funds'); return; }
-  if (degenBusy && Date.now() - degenBusySince < 20000) { degenNoteLive(list, 'buy pass still running'); return; }
+  if (degenBusy && Date.now() - degenBusySince < 8000) { degenNoteLive(list, 'buy pass still running'); return; }
   const pass = ++degenPass;
   degenBusy = true;
   degenBusySince = Date.now();
   try {
     let filled = false;
     for (const pick of list) {
-      if (pass !== degenPass) return;
+      if (pass !== degenPass) { degenNoteLive(list, 'buy pass restarted'); return; }
       const shown = degenShownPx(pick);
-      if (degenStatus(pick, shown) !== 'READY' && !degenEntryLive(pick)) continue;
+      const shownStatus = degenStatus(pick, shown);
+      if (shownStatus !== 'READY' && !degenEntryLive(pick)) continue;
       const block = degenBuyBlock();
       if (block) { degenBlockNote(pick, block); continue; }
       let price = shown;
       try { price = await degenTokenPx(pick.mint, true); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
-      if (pass !== degenPass) return;
+      if (pass !== degenPass) { degenBlockNote(pick, 'buy pass restarted'); return; }
       const why = degenPickBlock(pick, price);
       if (why) { degenBlockNote(pick, why); continue; }
       if (filled) { degenBlockNote(pick, 'queued — one degen buy per pass'); continue; }
@@ -7124,7 +7146,7 @@ async function degenEvaluate(picks) {
 }
 let degenKickQueued = false;
 async function degenPoll() {
-  if (degenBusy) { degenKickQueued = true; return; }
+  if (degenBusy && Date.now() - degenBusySince < 8000) { degenKickQueued = true; degenNoteLive(DEGEN.picks, 'buy pass still running'); return; }
   try {
     const data = await fetchDegenDoc();
     const picks = applyDegenDoc(data);
@@ -8302,7 +8324,6 @@ function myListEffectiveStop(p, lp) {
 }
 function myListExit(p, lp) {
   if (!isNum(lp) || !(p?.avgUsd > 0)) return null;
-  if ((sellFails[p.key] || 0) >= 3) return null;
   const eff = effectiveStop(p, lp);
   if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'trail' ? 'trail' : (eff.reason === 'break-even' ? 'stop' : 'stop') };
   if (eff.quick && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 100, tag: 'tp' };
@@ -9259,6 +9280,7 @@ async function myListExits() {
   for (const p of openPositions()) {
     if (p.degen || !(p.myList || p.plan?.myList) || p.wallet !== 'burner') continue;
     const lp = livePrices.get(p.mint)?.price ?? MYLIST.rows.find(r => r.mint === p.mint)?.price;
+    if (!isNum(lp)) { exitNote('mylist', p.mint, p.symbol, 'no live price for exit'); continue; }
     const ex = myListExit(p, lp);
     if (ex) await autoSell(p, ex.pctSell, ex.tag, lp);
   }
@@ -9661,7 +9683,7 @@ async function refreshAgents() {
 function startAgents() {
   clearInterval(AG.timer);
   refreshAgents();
-  AG.timer = setInterval(refreshAgents, 30000);
+  AG.timer = setInterval(refreshAgents, 15000);
   setInterval(() => { if (ghToken()) pushMyListSync(); }, 10 * 60 * 1000);
 }
 const GH_TOKEN_LS = 'sms:ghtoken';
