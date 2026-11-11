@@ -516,6 +516,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           <div class="flex items-center justify-between rounded-lg bg-ink-800 px-2.5 py-2"><span class="text-slate-400">Max open positions <span class="text-slate-600">(hard cap)</span></span><b id="setMaxPos" class="font-mono text-slate-200">2</b></div>
           <label class="flex items-center gap-2 rounded-lg bg-ink-800 px-2.5 py-2"><input type="checkbox" checked disabled class="accent-emerald-500 w-4 h-4" /><span class="text-slate-300">Confirm every trade <span class="text-slate-500">(always on, can't be disabled)</span></span></label>
           <div class="flex gap-2"><button id="btnSaveSettings" class="flex-1 rounded-lg py-2 font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save settings</button><button id="btnResetSettings" class="rounded-lg px-3 py-2 bg-ink-700 hover:bg-ink-600 border border-white/10">Defaults</button></div>
+          <details class="rounded-lg bg-ink-800 px-2.5 py-2"><summary class="cursor-pointer text-slate-300">Auto-buy log</summary><div id="buyWhyBox" class="mt-2 space-y-1 text-[11px] text-slate-400">No decisions yet.</div></details>
         </div>
       </details>
       <details id="agentSettings" open class="mt-3 rounded-xl border border-violet-400/40 bg-ink-850">
@@ -3557,6 +3558,9 @@ function liveMints() {
   if (paneShown('tabTokens') && (typeof tokenSeg === 'undefined' || tokenSeg !== 'degen')) {
     try { (MYLIST?.rows || []).forEach(r => { if (r.mint) list.push(r.mint); }); } catch { /* list not ready */ }
   }
+  if (paneShown('tabAgents') || (typeof A !== 'undefined' && A.on)) {
+    try { (typeof AG !== 'undefined' ? [...AG.plans.values()] : []).forEach(p => { if (p?.mint) list.push(p.mint); }); } catch { /* plans not ready */ }
+  }
   const degenOnScreen = (paneShown('tabTokens') && typeof tokenSeg !== 'undefined' && tokenSeg === 'degen') || (paneShown('tabTrades') && typeof tradeSeg !== 'undefined' && tradeSeg === 'degen');
   if (degenOnScreen) {
     try { (DEGEN?.picks || []).forEach(p => { if (p?.mint) list.push(p.mint); }); } catch { /* degen not ready */ }
@@ -5416,13 +5420,41 @@ function armedEntries() {
   if (!lastResult?.tokens || Date.now() - lastResult.ts > 60 * 60e3) return [];
   return lastResult.tokens.filter(t => !staticEligible(t).length);
 }
+const ZONE_PAD = 0.015;
+function probePrices(mint, px) {
+  const out = [];
+  if (isNum(px) && px > 0) out.push(px);
+  try {
+    const bars = typeof tickBars === 'function' ? (tickBars(mint, '1s') || []) : [];
+    const cut = Date.now() - 60e3;
+    let low = null;
+    for (const b of bars) {
+      if (!b || b.t < cut || !(b.l > 0)) continue;
+      if (low == null || b.l < low) low = b.l;
+    }
+    if (low > 0) out.push(low);
+  } catch { /* tape not ready */ }
+  return out;
+}
 function zoneLost(t, px) {
   const e = t?.entry;
-  return !!(e && !e.noAnchor && isNum(px) && isNum(e.zoneLo) && px < e.zoneLo);
+  if (!e || e.noAnchor || !(e.zoneLo > 0)) return false;
+  const probes = probePrices(t?.mint, px);
+  if (!probes.length) return false;
+  return probes.every(p => p < e.zoneLo * (1 - ZONE_PAD));
 }
-function inZone(t, px) { const e = t.entry; if (!isNum(px) || !e || e.noAnchor || zoneLost(t, px)) return false;
-  if (/^Break/.test(e.strat)) return px <= (e.anchor === 'swing' ? e.zoneHi : e.zoneHi * 1.03);
-  return px <= e.zoneHi && px > e.stop; }
+function inZone(t, px) {
+  const e = t?.entry;
+  if (!e || e.noAnchor || zoneLost(t, px)) return false;
+  const probes = probePrices(t.mint, px);
+  if (!probes.length) return false;
+  const floor = e.zoneLo * (1 - ZONE_PAD);
+  if (/^Break/.test(e.strat || '')) {
+    const cap = (e.anchor === 'swing' ? e.zoneHi : e.zoneHi * 1.03) * (1 + ZONE_PAD);
+    return probes.some(p => p <= cap && p >= floor);
+  }
+  return probes.some(p => p <= e.zoneHi * (1 + ZONE_PAD) && p > e.stop && p >= floor);
+}
 function emaLast(values, n) {
   if (!values || values.length < n) return null;
   const k = 2 / (n + 1);
@@ -5501,7 +5533,8 @@ function manualLevelFlags(p) {
   };
 }
 function nearestTarget(entry, levels) {
-  const above = (levels || []).filter(v => isNum(+v) && +v > entry * 1.001).map(Number);
+  const list = Array.isArray(levels) ? levels : Array.prototype.slice.call(arguments, 1);
+  const above = list.filter(v => isNum(+v) && +v > entry * 1.001).map(Number);
   return above.length ? Math.min(...above) : null;
 }
 function quickStopPrice(entry, planStop) {
@@ -5799,10 +5832,10 @@ async function autoTick() {
       if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) continue;
       const px = livePrices.get(t.mint)?.price;
       const ap = agentPlanFor(t.mint);
-      if (ap && !agentPlanUsable(ap)) { autoLog(t.symbol + ': analyst plan ' + (ap.status || 'not ready'), 'info'); continue; }
-      if (ap && !agentPlansOn()) continue;
-      if (zoneLost(t, px)) continue;
-      if (agentPlansOn() && ap) {
+      if (ap && !agentPlansOn()) { noteBuyWhy(t.mint, t.symbol, 'plans', 'agent plans off'); continue; }
+      if (ap && !planCanFire(ap, px)) { const why = planBlockReason(ap, px); noteBuyWhy(t.mint, t.symbol, 'plans', why); autoLog(t.symbol + ': ' + why, 'info'); continue; }
+      if (!ap && zoneLost(t, px)) { noteBuyWhy(t.mint, t.symbol, 'auto', 'zone lost'); continue; }
+      if (agentPlansOn() && ap && planCanFire(ap, px)) {
         if (isSplitPlan(ap) && splitEntryOn()) {
           const full = sizedFull(t);
           if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
@@ -5813,7 +5846,7 @@ async function autoTick() {
           if (hit === 'block' || hit === 'bought') break;
           continue;
         }
-        if (!(agentPlanUsable(ap) && agentTriggerHit(ap, px))) continue;
+        if (!planCanFire(ap, px)) continue;
         const full = sizedFull(t);
         if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
         const blocked = quickReentryBlock(t.mint, ap);
@@ -5849,13 +5882,43 @@ async function autoTick() {
         reason = "don't miss: +" + ext.toFixed(1) + '% past the zone without a retest';
         scale = { i: 1, of: 3, kind: 'dontmiss' };
         plan = { ...(plan || {}), stop: px * 0.9, strat: (t.entry?.strat || 'Entry') + " · don't miss" };
-      } else if (!zoneNow) continue;
+      } else if (!zoneNow) { const lo = t.entry?.zoneLo; const away = isNum(px) && lo > 0 ? ((px / lo - 1) * 100) : null; noteBuyWhy(t.mint, t.symbol, 'auto', 'not in zone' + (away == null ? '' : ' · ' + (away > 0 ? '+' : '') + away.toFixed(1) + '% vs zone low')); continue; }
       const quick = quickEntryCheck(px, plan?.stop, nearestTarget(px, plan?.tp1, plan?.tp2, t.exit?.tp1, t.exit?.tp2));
       if (!quick.ok) { autoLog(t.symbol + ': ' + quick.reason, 'warn'); continue; }
       if (quick.tp) plan = stampQuickPlan(plan, quick);
       const hit = await cappedBuy({ t, sol, reason: reason + (quick.tp ? ' · quick' : ''), scale, plan, halve: solGate.action === 'halve' });
       if (hit === 'bought') { boughtThisTick = true; toast(`🤖 Auto-bought ${t.symbol}`, 'ok', 8000); }
       if (hit === 'block' || hit === 'bought') break;
+    }
+    if (!boughtThisTick && agentPlansOn()) {
+      for (const ap of AG.plans.values()) {
+        if (boughtThisTick) break;
+        if (!ap || !isAddr(ap.mint) || armedEntries().some(t => t.mint === ap.mint)) continue;
+        const sym = ap.symbol || short(ap.mint);
+        if (held.has(ap.mint) || recent.has(ap.mint) || b.tokens.get(ap.mint)?.raw > 0n) { noteBuyWhy(ap.mint, sym, 'plans', 'already held'); continue; }
+        const px = livePrices.get(ap.mint)?.price;
+        const why = planBlockReason(ap, px);
+        if (why) { noteBuyWhy(ap.mint, sym, 'plans', why); continue; }
+        const scanned = (lastResult?.tokens || []).find(t => t.mint === ap.mint);
+        if (scanned && lastResult?.ts && Date.now() - lastResult.ts < 60 * 60e3) {
+          const fails = staticEligible(scanned);
+          if (fails.length) { noteBuyWhy(ap.mint, sym, 'plans', fails[0]); continue; }
+        } else {
+          const cand = (AG.candidates || []).find(c => c.mint === ap.mint);
+          const score = cand ? agentNum(cand.score) : null;
+          if (!(score >= 60)) { noteBuyWhy(ap.mint, sym, 'plans', 'no fresh scan and hunter safety ' + (score == null ? 'missing' : Math.round(score) + ' < 60')); continue; }
+        }
+        const t = scanned && scanned.mint ? scanned : { mint: ap.mint, symbol: sym, conviction: agentNum(ap.confidence) || 60 };
+        const full = sizedFull(t);
+        if (full.err) { noteBuyWhy(ap.mint, sym, 'plans', full.err); continue; }
+        const quick = quickEntryCheck(px, ap.stop, nearestTarget(px, ap.tp1, ap.tp2));
+        if (!quick.ok) { noteBuyWhy(ap.mint, sym, 'plans', quick.reason); continue; }
+        let plan = agentOrderPlan({ stop: ap.stop, tp1: ap.tp1, tp2: ap.tp2 }, ap, null);
+        if (quick.tp) plan = stampQuickPlan(plan, quick);
+        const hit = await cappedBuy({ t, sol: full.sol, reason: 'analyst plan · ' + (ap.setup || ap.status || 'trigger') + (quick.tp ? ' · quick' : ''), plan, halve: solGate.action === 'halve' });
+        if (hit === 'bought') { boughtThisTick = true; toast('🤖 Auto-bought ' + sym, 'ok', 8000); }
+        if (hit === 'block') break;
+      }
     }
     if (!boughtThisTick && A.momentumOn && lastResult?.tokens) await momentumTick(b, solGate, held, recent);
   } catch (e) { autoLog('Tick error: ' + e.message, 'err'); }
@@ -7255,6 +7318,7 @@ function degenLastBlock(mint) {
 }
 function degenBlockNote(pick, reason) {
   const mint = pick?.mint;
+  if (typeof noteBuyWhy === 'function') noteBuyWhy(mint, pick?.symbol, 'degen', reason);
   degenNote((pick?.symbol || (mint ? short(mint) : 'pick')) + ': ' + reason);
   degenMark(mint, 'blocked', reason);
   degenLogEvent(mint, reason, pick?.symbol);
@@ -9946,17 +10010,79 @@ async function attemptSplitBuy(ctx) {
   return hit;
 }
 function agentTriggerHit(p, px) {
-  if (!(px > 0)) return false;
-  if (isSplitPlan(p)) return splitEntryOn() ? false : splitFallbackHit(p, px);
+  const probes = probePrices(p?.mint, px);
+  if (!probes.length) return false;
+  if (isSplitPlan(p)) return splitEntryOn() ? false : probes.some(v => splitFallbackHit(p, v));
   const mode = String(p.entry_mode || '').toLowerCase();
   const cond = String(p.trigger_condition || '').toLowerCase();
   const trig = agentNum(p.trigger_price);
   if (mode === 'immediate' || mode === 'now' || /immediate|market/.test(cond)) return true;
   if (!(trig > 0)) return false;
-  if (mode === 'retest' || /retest|pullback/.test(cond)) return px <= trig * 1.03 && px >= trig * 0.97;
-  if (mode === 'below' || /below|under|dip/.test(cond)) return px <= trig;
-  if (mode === 'break' || mode === 'above' || cond === 'above' || /break/.test(cond)) return px >= trig;
-  return px >= trig;
+  if (mode === 'retest' || /retest|pullback/.test(cond)) return probes.some(v => v <= trig * (1 + ZONE_PAD) && v >= trig * (1 - ZONE_PAD));
+  if (mode === 'below' || /below|under|dip/.test(cond)) return probes.some(v => v <= trig * (1 + ZONE_PAD));
+  return probes.some(v => v >= trig * (1 - ZONE_PAD));
+}
+function triggerDistPct(p, px) {
+  const trig = agentNum(p?.trigger_price);
+  if (!(trig > 0) || !(px > 0)) return null;
+  return (px / trig - 1) * 100;
+}
+const BUYWHY_LS = 'sms:buywhy';
+let buyWhy = [];
+try { const v = JSON.parse(localStorage.getItem(BUYWHY_LS) || '[]'); if (Array.isArray(v)) buyWhy = v.slice(0, 50); } catch { buyWhy = []; }
+const buyWhySeen = new Map();
+function renderBuyWhy() {
+  const box = $('buyWhyBox'); if (!box) return;
+  if (!buyWhy.length) { box.textContent = 'No decisions yet.'; return; }
+  box.innerHTML = buyWhy.slice(0, 50).map(r => `<div class="whitespace-normal break-words"><span class="text-slate-500">${esc(new Date(r.ts).toLocaleTimeString())}</span> <b class="text-slate-200">${esc(r.symbol || short(r.mint || ''))}</b> <span class="text-slate-500">${esc(r.bot || '')}</span> ${esc(r.reason || '')}</div>`).join('');
+}
+function noteBuyWhy(mint, symbol, bot, reason) {
+  const why = String(reason || '').slice(0, 180);
+  const key = (bot || '') + '|' + (mint || '');
+  const prev = buyWhySeen.get(key);
+  if (prev && prev.reason === why && Date.now() - prev.ts < 120000) return;
+  const row = { ts: Date.now(), mint: mint || '', symbol: symbol || '', bot: bot || 'auto', reason: why };
+  buyWhySeen.set(key, row);
+  buyWhy.unshift(row);
+  buyWhy = buyWhy.slice(0, 50);
+  try { localStorage.setItem(BUYWHY_LS, JSON.stringify(buyWhy)); } catch { /* keep memory */ }
+  renderBuyWhy();
+}
+function planBlockReason(p, px) {
+  if (!A.on) return 'AUTO is off (turns off on reload)';
+  if (typeof burnerReady === 'function' && !burnerReady()) return 'burner locked';
+  if (typeof agentPlansOn === 'function' && !agentPlansOn()) return 'agent plans off';
+  if (!p) return 'no analyst plan';
+  if (!planFresh(p)) return 'plan stale or expired';
+  if (String(p.status || '') === 'invalid') return 'plan invalid';
+  const conf = agentNum(p.confidence);
+  if (!(conf >= 60)) return 'confidence ' + (conf == null ? '—' : Math.round(conf)) + ' < 60';
+  if (!agentTriggerHit(p, px)) {
+    const d = triggerDistPct(p, px);
+    if (d == null) return 'no live price';
+    return 'trigger not touched · ' + (d > 0 ? '+' : '') + d.toFixed(1) + '% from trigger';
+  }
+  return '';
+}
+function planCanFire(p, px) { return planBlockReason(p, px) === ''; }
+function explainNoBuy(mint) {
+  const plan = typeof agentPlanFor === 'function' ? agentPlanFor(mint) : null;
+  const px = typeof livePrices !== 'undefined' ? livePrices.get(mint)?.price : null;
+  if (plan) return planBlockReason(plan, px) || 'trigger touched — next auto tick can buy';
+  if (!A.on) return 'AUTO is off (turns off on reload)';
+  if (typeof burnerReady === 'function' && !burnerReady()) return 'burner locked';
+  if (!lastResult?.tokens || Date.now() - (lastResult.ts || 0) > 60 * 60e3) return 'no scan in the last 60 min';
+  const t = lastResult.tokens.find(x => x.mint === mint);
+  if (!t) return 'not in the latest scan';
+  const fails = staticEligible(t);
+  if (fails.length) return fails[0];
+  if (t.entry?.noAnchor) return 'Zone: % estimate (no S/R)';
+  if (!inZone(t, px)) {
+    const lo = t.entry?.zoneLo;
+    const away = isNum(px) && lo > 0 ? (px / lo - 1) * 100 : null;
+    return 'not in zone' + (away == null ? '' : ' · ' + (away > 0 ? '+' : '') + away.toFixed(1) + '% vs zone low');
+  }
+  return 'in zone — next auto tick can buy';
 }
 function agentScaleOn(p, fallback) {
   const v = p?.scale_in;
@@ -10164,6 +10290,7 @@ function hunterCard(c, extra) {
     ${chips ? `<details class="hunt-details"><summary>Details</summary><div class="hunt-chips">${chips}</div></details>` : ''}
     ${hunterPlanBox(plan, live)}
     ${typeof botSkipHtml === 'function' ? botSkipHtml('plans', c.mint) : ''}
+    ${typeof explainNoBuy === 'function' ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">Why no buy: ${esc(explainNoBuy(c.mint))}</p>` : ''}
     <div class="hunt-actions"><button type="button" data-agent-add="${esc(c.mint)}" class="hunt-ghost">+ My List</button><button type="button" data-agent-buy="${esc(c.mint)}" class="hunt-buy">Buy</button></div>
   </article>`;
 }
@@ -10208,6 +10335,7 @@ function renderAgentPicks() {
   if (use && document.activeElement !== use) use.checked = agentPlansOn();
   if (exits && document.activeElement !== exits) exits.checked = agentExitsOn();
   syncAgentPreview();
+  renderBuyWhy();
   wantLogos(AG.candidates.map(c => c.mint), renderAgentPicks);
 }
 async function refreshAgents() {
