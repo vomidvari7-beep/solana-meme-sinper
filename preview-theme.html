@@ -116,8 +116,15 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   select, input, textarea { color-scheme: inherit; }
   .font-mono, .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
   .scroll-thin::-webkit-scrollbar { height: 6px; width: 6px; } .scroll-thin::-webkit-scrollbar-thumb { background:var(--tab-btn); border-radius: 6px; }
-  .spinner, .skel-line { height: 12px; border-radius: 8px; background: var(--elev); display: block; }
-  .spinner { width: 72px; border: 0; }
+  .skel-line { height: 12px; border-radius: 8px; background: var(--elev); display: block; }
+  .prog, .spinner { --prog-track: var(--line); --prog-fill: var(--accent); display: block; width: 100%; height: 4px; margin-top: 8px; border-radius: 999px; background: var(--prog-track); overflow: hidden; position: relative; }
+  .prog > i, .spinner::after { content: ""; display: block; height: 100%; border-radius: inherit; background: var(--prog-fill); }
+  .spinner::after, .prog.is-busy > i { width: 36%; animation: prog-slide 1.15s ease-in-out infinite; }
+  .prog:not(.is-busy) > i { width: var(--prog, 0%); }
+  @keyframes prog-slide { 0% { transform: translateX(-140%); } 100% { transform: translateX(320%); } }
+  #btnAnalyze { flex-direction: column; align-items: stretch; }
+  #analyzeLabel { display: flex; flex-direction: column; align-items: center; width: 100%; gap: 8px; text-align: center; }
+  #btnAnalyze .prog, #btnAnalyze .spinner { --prog-track: color-mix(in srgb, var(--knob) 34%, transparent); --prog-fill: var(--knob); margin-top: 0; align-self: stretch; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .toast-enter { animation: tin .22s ease-out; } @keyframes tin { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
   .toast-card { position: relative; overflow: hidden; background: var(--elev); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: none; }
@@ -457,7 +464,7 @@ window.__SMS_PREVIEW = true;
         <button id="btnClear" class="rounded-xl py-2 text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 transition">✕ Clear</button>
       </div>
       <p class="text-[10px] text-slate-600 mt-2">Tip: Ctrl/⌘ + Enter = Analyze</p>
-      <div id="progress" class="hidden mt-3 text-xs text-slate-400 flex items-center gap-2"><span class="spinner spinner-light"></span><span id="progressText">Working…</span></div>
+      <div id="progress" class="hidden mt-3 text-xs text-slate-400"><div id="progressText">Working…</div><span class="prog is-busy" id="progressBar" aria-hidden="true"><i></i></span></div>
     </div>
 
     <!-- WALLET & TRADING -->
@@ -771,7 +778,21 @@ async function copyText(text) {
   catch { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
     let ok = false; try { ok = document.execCommand('copy'); } catch {} ta.remove(); return ok; }
 }
-function setProgress(text) { if (text) { $('progress').classList.remove('hidden'); $('progressText').textContent = text; } else $('progress').classList.add('hidden'); }
+function applyProg(ratio) {
+  const known = typeof ratio === 'number' && isFinite(ratio);
+  const pct = known ? Math.max(0, Math.min(100, ratio * 100)) + '%' : '';
+  document.querySelectorAll('.prog').forEach(bar => {
+    bar.classList.toggle('is-busy', !known);
+    bar.style.setProperty('--prog', pct || '0%');
+  });
+}
+function setProgress(text, ratio) {
+  const box = $('progress'); if (!box) return;
+  if (!text) { box.classList.add('hidden'); applyProg(null); return; }
+  box.classList.remove('hidden');
+  const el = $('progressText'); if (el) el.textContent = text;
+  applyProg(ratio);
+}
 
 /* ============================ PARSING ============================ */
 const B58 = '1-9A-HJ-NP-Za-km-z';
@@ -818,7 +839,7 @@ async function fetchTokenPairs(mints) {
   const out = [];
   for (let i = 0; i < mints.length; i += 30) {
     const chunk = mints.slice(i, i + 30);
-    setProgress(`Fetching DexScreener tokens ${i + 1}–${i + chunk.length} of ${mints.length}…`);
+    setProgress(`Fetching DexScreener tokens ${i + 1}–${i + chunk.length} of ${mints.length}…`, 0.45 + ((i / 30 + 1) / Math.max(1, Math.ceil(mints.length / 30))) * 0.15);
     const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + chunk.join(','));
     if (Array.isArray(arr)) out.push(...arr);
   }
@@ -828,7 +849,7 @@ async function fetchPairs(pairAddrs) {
   const out = [];
   for (let i = 0; i < pairAddrs.length; i += 30) {
     const chunk = pairAddrs.slice(i, i + 30);
-    setProgress(`Fetching DexScreener pairs ${i + 1}–${i + chunk.length}…`);
+    setProgress(`Fetching DexScreener pairs ${i + 1}–${i + chunk.length}…`, 0.6 + ((i / 30 + 1) / Math.max(1, Math.ceil(pairAddrs.length / 30))) * 0.08);
     try { const j = await fetchJSON('https://api.dexscreener.com/latest/dex/pairs/solana/' + chunk.join(','));
       out.push(...(j?.pairs || (j?.pair ? [j.pair] : [])).filter(Boolean)); }
     catch (e) { console.warn('pairs fetch', e); }
@@ -917,6 +938,9 @@ async function discoverCandidates() {
   if (!src.boosted && !src.trending && !src.volume && !src.fresh) {
     return { list: [], warnings: ['No discovery source is selected.'], anyOk: false };
   }
+  const planned = (src.boosted ? 3 : 0) + (src.volume ? 5 : 0) + (src.trending ? 2 : 0) + (src.fresh ? 2 : 0);
+  let step = 0;
+  const note = (label) => { step += 1; setProgress(label, planned ? 0.05 + (step / planned) * 0.4 : null); };
   if (src.boosted) {
     const feeds = [
       ['Boosted latest', 'https://api.dexscreener.com/token-boosts/latest/v1'],
@@ -924,7 +948,7 @@ async function discoverCandidates() {
       ['Boosted profiles', 'https://api.dexscreener.com/token-profiles/latest/v1']
     ];
     for (const [label, url] of feeds) {
-      setProgress('Fetching ' + label + '…');
+      note('Fetching ' + label + '…');
       await pull(label, url, (data) => {
         if (!Array.isArray(data)) return 0;
         let n = 0;
@@ -935,7 +959,7 @@ async function discoverCandidates() {
   }
   if (src.volume) {
     for (const q of ['pumpswap', 'raydium', 'meteora']) {
-      setProgress('Searching DexScreener ' + q + '…');
+      note('Searching DexScreener ' + q + '…');
       await pull('Dex search ' + q, 'https://api.dexscreener.com/latest/dex/search?q=' + q, (data) => {
         const pairs = (data?.pairs || []).filter(p => p.chainId === 'solana' && p.baseToken?.address);
         const wanted = q === 'raydium' ? 'raydium' : q;
@@ -946,7 +970,7 @@ async function discoverCandidates() {
       });
     }
     for (const page of [1, 2]) {
-      setProgress('Fetching top volume page ' + page + '…');
+      note('Fetching top volume page ' + page + '…');
       await pull('Top volume page ' + page, 'https://api.geckoterminal.com/api/v2/networks/solana/pools?page=' + page + '&sort=h24_volume_usd_desc', (data) => {
         let n = 0;
         for (const row of data?.data || []) { const mint = geckoListMint(row); if (mint) { add(mint, 'Top volume'); n++; } }
@@ -956,7 +980,7 @@ async function discoverCandidates() {
   }
   if (src.trending) {
     for (const page of [1, 2]) {
-      setProgress('Fetching trending page ' + page + '…');
+      note('Fetching trending page ' + page + '…');
       await pull('Trending page ' + page, 'https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=' + page, (data) => {
         let n = 0;
         for (const row of data?.data || []) { const mint = geckoListMint(row); if (mint) { add(mint, 'Trending'); n++; } }
@@ -966,7 +990,7 @@ async function discoverCandidates() {
   }
   if (src.fresh) {
     for (const page of [1, 2]) {
-      setProgress('Fetching new pools page ' + page + '…');
+      note('Fetching new pools page ' + page + '…');
       await pull('New pools page ' + page, 'https://api.geckoterminal.com/api/v2/networks/solana/new_pools?page=' + page, (data) => {
         let n = 0;
         for (const row of data?.data || []) { const mint = geckoListMint(row); if (mint) { add(mint, 'New pools'); n++; } }
@@ -1882,7 +1906,7 @@ function applyInputs(i) { if (!i) return; $('risk').value = i.risk || 'Balanced'
   $('pasted').value = i.pasted || ''; $('notes').value = i.notes || ''; $('account').value = i.account || ''; $('useRug').checked = i.useRug !== false;
   $('minAgeH').value = (i.minAgeH ?? '') === '' ? '' : i.minAgeH; $('maxAgeD').value = (i.maxAgeD ?? '') === '' ? '' : i.maxAgeD; updateHints(); }
 function setBusy(b, label) { busy = b; $('btnAnalyze').disabled = b; $('btnBoosted').disabled = b;
-  $('analyzeLabel').innerHTML = b ? `<span class="spinner"></span> ${esc(label || 'Analyzing…')}` : '⚡ Analyze'; if (!b) setProgress(null); }
+  $('analyzeLabel').innerHTML = b ? `${esc(label || 'Analyzing…')}<span class="prog is-busy" id="scanProg" aria-hidden="true"><i></i></span>` : '⚡ Analyze'; if (!b) setProgress(null); }
 
 async function runAnalysis({ boosted = false } = {}) {
   if (busy) return;
@@ -1897,7 +1921,7 @@ async function runAnalysis({ boosted = false } = {}) {
   let sourceByMint = null;
   let discoverySources = [];
   try {
-    setProgress('Fetching SOL market context…');
+    setProgress('Fetching SOL market context…', 0.04);
     const solP = fetchSolContext();
     if (boosted) {
       const found = await discoverCandidates();
@@ -1963,7 +1987,7 @@ async function runAnalysis({ boosted = false } = {}) {
     publish(scoreAll(), targets.length ? `Deep checks 0/${targets.length}` : '');
     for (let i = 0; i < targets.length; i++) {
       const label = `Deep checks ${i + 1}/${targets.length}`;
-      setProgress(label);
+      setProgress(label, 0.7 + ((i + 1) / Math.max(1, targets.length)) * 0.25);
       publish(scoreAll(), label);
       if (inputs.useRug) {
         const rr = await fetchRugReport(targets[i].mint);
@@ -1990,7 +2014,7 @@ async function runAnalysis({ boosted = false } = {}) {
     if (inputs.useRug && pre.length > deepN) warnings.push(`RugCheck run on the top ${deepN} of ${pre.length} tokens only (rate limits). Others show "Unknown".`);
     if (taFail) warnings.push(`GeckoTerminal candles unavailable for ${taFail}/${targets.length} token(s) — those keep the %-change momentum read (TA: unavailable).`);
     if (pre.length > deepN) warnings.push(`Candle structure run on the top ${deepN} only (GeckoTerminal rate limit).`);
-    setProgress('Scoring…');
+    setProgress('Scoring…', 0.97);
     let analyzed = scoreAll();
     let momOn = false, momAge = 6;
     try {
@@ -2001,7 +2025,7 @@ async function runAnalysis({ boosted = false } = {}) {
     if (momOn) {
       const young = analyzed.filter(t => momentumGate(t, momAge) === null);
       for (let i = 0; i < young.length; i++) {
-        setProgress(`1m candles ${i + 1}/${young.length}: ${young[i].symbol}…`);
+        setProgress(`1m candles ${i + 1}/${young.length}: ${young[i].symbol}…`, 0.97 + ((i + 1) / Math.max(1, young.length)) * 0.03);
         try { young[i].momentum = momentumFromCandles(await fetchOhlcv(young[i].pairAddress, '1m', young[i].mint)); }
         catch (e) { young[i].momentum = { state: 'none', reason: e.message || '1m candles unavailable' }; }
       }
@@ -3164,7 +3188,7 @@ async function openTrade(side, mint, { sol, pct } = {}) {
       <p class="mt-3 text-[10px] text-slate-500">This is a real, irreversible on-chain swap routed by Jupiter. ${walletKey === 'phantom' ? 'Phantom will show the transaction — check it before approving.' : 'The burner key signs locally in this browser.'} Not financial advice.</p>`;
   };
   const doQuote = async () => {
-    qErr = null; qo = null; $('tmBody').innerHTML = body(); wire(); modalStatus('<span class="spinner spinner-light"></span> Fetching Jupiter quote…');
+    qErr = null; qo = null; $('tmBody').innerHTML = body(); wire(); modalStatus('Fetching Jupiter quote…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
     try { if (isBuy) await getDecimals(mint).catch(() => null); else await getDecimals(mint).catch(() => null);
       qo = await getQuote({ inputMint: inMint, outputMint: outMint, amountRaw, slippageBps: Math.round(slip * 100) }); }
     catch (e) { qErr = e.message; }
@@ -4591,7 +4615,7 @@ function createBurner() {
       <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="bpAck" type="checkbox" class="mt-0.5 accent-violet-500" /> I understand this is a hot wallet in my browser and I will only fund small amounts.</label>`,
     validate: () => ($('bpPass')?.value || '').length >= 10 && $('bpPass').value === $('bpPass2').value && $('bpAck').checked,
     onConfirm: async () => {
-      modalStatus('<span class="spinner spinner-light"></span> Generating & encrypting…');
+      modalStatus('Generating & encrypting…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
       const w = await loadWeb3(); const kp = w.Keypair.generate();
       const e = await encryptSecret(kp.secretKey, $('bpPass').value);
       save(LS.burner, { v: 1, pub: kp.publicKey.toBase58(), kdf: 'PBKDF2-SHA256-310000/AES-GCM-256', created: Date.now(), ...e });
@@ -4631,7 +4655,7 @@ function importBurner() {
     onClose: wipe,
     onConfirm: async () => {
       if (!sk || !derived) throw new Error('Derive the address first');
-      modalStatus('<span class="spinner spinner-light"></span> Encrypting…');
+      modalStatus('Encrypting…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
       const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(Uint8Array.from(sk));
       if (kp.publicKey.toBase58() !== derived) throw new Error('Key changed — derive again');
       const e = await encryptSecret(kp.secretKey, $('biPass').value);
@@ -4660,7 +4684,7 @@ function unlockBurner() {
   const rec = burnerRec(); if (!rec) return; resetModalButtons();
   openModal({ title: '🔓 Unlock burner wallet', confirmLabel: 'Unlock', html: `<p class="text-xs text-slate-400">Address <span class="font-mono">${esc(short(rec.pub))}</span>. The key stays in memory until you lock it or close the tab.</p><label class="block mt-2 text-xs text-slate-400">Passphrase${passField('buPass')}</label>`,
     validate: () => ($('buPass')?.value || '').length > 0,
-    onConfirm: async () => { modalStatus('<span class="spinner spinner-light"></span> Decrypting…');
+    onConfirm: async () => { modalStatus('Decrypting…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
       const sk = await decryptSecret(rec, $('buPass').value); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
       if (kp.publicKey.toBase58() !== rec.pub) throw new Error('Decrypted key does not match stored address');
       WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); resumeArmedBots(); } });
@@ -4688,7 +4712,7 @@ function withdrawBurner() {
     validate: () => isAddr($('bwDest')?.value) && $('bwDest').value.trim() !== b.pubkey && $('bwAck').checked,
     onConfirm: async () => {
       const w = await loadWeb3(); const dest = new w.PublicKey($('bwDest').value.trim());
-      killSwitch('withdraw'); modalStatus('<span class="spinner spinner-light"></span> Building transfer…');
+      killSwitch('withdraw'); modalStatus('Building transfer…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
       const bal = (await rpc('getBalance', [b.pubkey, { commitment: 'confirmed' }])).value; const lamports = bal - 5000;
       if (lamports <= 0) throw new Error('Balance too low to withdraw');
       const { value: bh } = await rpc('getLatestBlockhash', [{ commitment: 'confirmed' }]);
