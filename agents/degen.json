@@ -1,6 +1,6 @@
 {
- "updated_utc": "2026-11-11T18:25:17Z",
- "updated_tehran": "2026-11-11 21:55 IRST",
+ "updated_utc": "2026-11-11T18:34:28Z",
+ "updated_tehran": "2026-11-11 22:04 IRST",
  "pot": {
   "budget_usd": 25,
   "per_trade_usd": 12.5,
@@ -8,6 +8,23 @@
   "max_trades": null
  },
  "picks": [
+  {
+   "mint": "8AP8cp2ZwdqgiDUjjXnGT2omzUsqhYzkWDxWQnncpump",
+   "symbol": "BERNIE",
+   "pair": "AKd1nc31vg35SJtpBp5KJfDTpkm1YwGt2JWKKUpXgRzr",
+   "dex": "pumpswap",
+   "age_h": 0.2,
+   "liq_usd": 15603,
+   "mcap_usd": 42512,
+   "reason": "VAHID MANUAL REQUEST 22:04 IRST (buy the hype). Elon 'Bernie is the meme' narrative, main token. Safety minimum passes (mint/freeze revoked, pool is only holder >15%, creator not Schoen) BUT RugCheck shows 22 insider wallets (bundle) and price is dumping: top 0.000121 -> 0.0000426, m5 -22%, liq 19.4k->15.6k. High risk.",
+   "entry_now": true,
+   "max_entry_price": 4.47e-05,
+   "stop_pct": 25,
+   "tp_plan": "sell 50% at 2x, trail rest 20%",
+   "time_stop_min": 45,
+   "confidence": 60,
+   "expires": 1794423868166
+  },
   {
    "mint": "bn5DhJnkB8EVDoAgV9qCV3Kbv7XmEEp7mxW4npDpump",
    "dex": "pumpswap",
@@ -68,23 +85,6 @@
    "symbol": "mihao (copy)",
    "pair": "2Pe2URnY4AoSiZG89TRqYuzQwMZWC1fqA2xCBXoozdLc",
    "reason": "AVOID: copycat, dust-buy bot pattern (h1 7359 buys vs 192 sells)",
-   "entry_now": false,
-   "max_entry_price": null,
-   "stop_pct": 25,
-   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
-   "time_stop_min": 45,
-   "confidence": 0,
-   "expires": 1794423317152
-  },
-  {
-   "mint": "HNzme8WWXsUyWFN2c14iQDH6nw1zJKZEyAag3TXkBAGS",
-   "dex": "pumpswap",
-   "age_h": 0.03,
-   "liq_usd": 107714,
-   "mcap_usd": 113828,
-   "symbol": "Gridking",
-   "pair": "8r6Yxa6xzPxEX4LhABFfogWWBWH6j92mxwApc2Aai24x",
-   "reason": "AVOID: RugCheck danger (large LP unlocked, low LP providers), tiny holder count",
    "entry_now": false,
    "max_entry_price": null,
    "stop_pct": 25,
