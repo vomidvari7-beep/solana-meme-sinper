@@ -1926,7 +1926,7 @@ function render(R) {
       ${t.ta?.line ? `<div class="mt-2 text-[11px] leading-snug ${t.ta.ok ? 'text-slate-300' : 'text-slate-500'}">${esc(t.ta.line)}</div>` : ''}
       ${taCacheLabel(t.ta) ? `<div class="mt-1 text-[11px] text-amber-200">${esc(taCacheLabel(t.ta))}</div>` : ''}
       ${typeof agentPlanChip === 'function' ? agentPlanChip(t.mint) : ''}
-      ${t.entry ? `<div class="mt-2 font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-xs text-slate-300"><span class="text-slate-500">${t.entry.strat && String(t.entry.strat).startsWith('Break') ? 'Trigger zone' : 'Entry zone'}</span><span class="block">from ${price(t.entry.zoneLo)}</span><span class="block">to ${price(t.entry.zoneHi)}</span><span class="block text-rose-300">stop ${price(t.entry.stop)}</span></div>` : ''}
+      ${entryZoneHtml(t)}
       ${zoneAnchorLabel(t.entry) ? `<div class="mt-1 text-[11px] whitespace-normal break-words ${t.entry.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(t.entry))}</div>` : ''}
       ${t.flags.length ? `<div class="flex flex-wrap gap-1 mt-3">${t.flags.slice(0, 4).map(f => `<span class="text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}" title="${esc(f.text)}">${esc(f.text.split(' — ')[0])}</span>`).join('')}${t.flags.length > 4 ? `<span class="text-[10px] text-slate-500 self-center">+${t.flags.length - 4} more</span>` : ''}</div>` : '<div class="text-[11px] text-emerald-300 mt-3">✔ No red flags detected</div>'}
       ${t.fails.length ? `<div class="text-[10px] text-rose-300/80 mt-2">Filter fail: ${esc(t.fails.join(' · '))}</div>` : ''}
@@ -1982,12 +1982,12 @@ function render(R) {
 
   // Entry
   html += section('sec-entry', 'Entry Strategy', '07', `
-    <div class="space-y-3">${list.map(t => { const e = t.entry; return `<div class="rounded-xl bg-ink-850 border border-white/5 p-3">
-        <div class="flex flex-wrap items-center gap-2"><b>${esc(t.symbol)}</b><span class="text-[11px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-200 border border-violet-500/30">${esc(e.strat)}</span>${t.verdict === 'Rejected' ? '<span class="text-[11px] text-rose-300">✖ Do not enter</span>' : t.verdict === 'Watchlist' ? '<span class="text-[11px] text-amber-300">Watch only — no position until it qualifies</span>' : '<span class="text-[11px] text-emerald-300">✔ Tradeable setup</span>'}</div>
+    <div class="space-y-3">${list.map(t => { const e = t.entry; const analyst = agentPlanFor(t.mint); const livePx = livePrices.get(t.mint)?.price ?? t.priceUsd; const lost = !analyst && zoneLost(t, livePx); const shown = analyst ? planDisplay(analyst) : null; const stratLabel = analyst ? (shown.setup + ' · ' + (agentPlanUsable(analyst) ? 'ready' : (shown.status || 'waiting'))) : (lost ? 'Zone lost' : e.strat); const zoneLo = analyst ? shown.zoneLo : e.zoneLo; const zoneHi = analyst ? shown.zoneHi : e.zoneHi; const stopPx = analyst ? shown.stop : e.stop; return `<div class="rounded-xl bg-ink-850 border border-white/5 p-3">
+        <div class="flex flex-wrap items-center gap-2"><b>${esc(t.symbol)}</b><span class="text-[11px] px-2 py-0.5 rounded-md ${lost ? 'bg-rose-500/15 text-rose-200 border border-rose-500/30' : 'bg-violet-500/15 text-violet-200 border border-violet-500/30'}">${esc(stratLabel)}</span>${analyst ? '<span class="text-[11px] text-amber-200">Analyst plan</span>' : ''}${t.verdict === 'Rejected' ? '<span class="text-[11px] text-rose-300">✖ Do not enter</span>' : lost ? '<span class="text-[11px] text-rose-300">Zone lost — price is below the zone</span>' : t.verdict === 'Watchlist' ? '<span class="text-[11px] text-amber-300">Watch only — no position until it qualifies</span>' : '<span class="text-[11px] text-emerald-300">✔ Tradeable setup</span>'}</div>
         <p class="text-xs text-slate-400 mt-1">${esc(e.reason)}</p>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-2">
-          ${statWrap(e.strat.startsWith('Break') ? 'Trigger zone' : 'Entry zone', zoneRangeHtml(e.zoneLo, e.zoneHi))}
-          ${statWrap('Invalidation stop', `<span class="block">${price(e.stop)}</span><span class="block text-[10px] text-slate-500">(−${isNum(e.stopPct) ? e.stopPct.toFixed(0) : '—'}%)</span>`, 'text-rose-300')}
+          ${statWrap(lost ? 'Zone lost' : (String(stratLabel).startsWith('Break') ? 'Trigger zone' : 'Entry zone'), zoneRangeHtml(zoneLo, zoneHi))}
+          ${statWrap('Invalidation stop', `<span class="block">${price(stopPx)}</span><span class="block text-[10px] text-slate-500">(−${isNum(e.stopPct) ? e.stopPct.toFixed(0) : '—'}%)</span>`, 'text-rose-300')}
           ${stat('Risk / token', e.riskPct ? e.riskPct.toFixed(2) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.riskPct / 100)}</span>` : '') : '0 — no trade')}
           ${stat('Position size', e.notionalPct ? e.notionalPct.toFixed(1) + '%' + (hasAcct ? ` <span class="text-[10px] text-slate-500">${usd(acct * e.notionalPct / 100)}</span>` : '') : '—')}
         </div>
@@ -4949,8 +4949,12 @@ function armedEntries() {
   if (!lastResult?.tokens || Date.now() - lastResult.ts > 60 * 60e3) return [];
   return lastResult.tokens.filter(t => !staticEligible(t).length);
 }
-function inZone(t, px) { const e = t.entry; if (!isNum(px) || !e || e.noAnchor) return false;
-  if (/^Break/.test(e.strat)) return px >= e.zoneLo && px <= (e.anchor === 'swing' ? e.zoneHi : e.zoneHi * 1.03);
+function zoneLost(t, px) {
+  const e = t?.entry;
+  return !!(e && !e.noAnchor && isNum(px) && isNum(e.zoneLo) && px < e.zoneLo);
+}
+function inZone(t, px) { const e = t.entry; if (!isNum(px) || !e || e.noAnchor || zoneLost(t, px)) return false;
+  if (/^Break/.test(e.strat)) return px <= (e.anchor === 'swing' ? e.zoneHi : e.zoneHi * 1.03);
   return px <= e.zoneHi && px > e.stop; }
 function emaLast(values, n) {
   if (!values || values.length < n) return null;
@@ -5173,6 +5177,7 @@ async function momentumTick(b, solGate, held, recent) {
     if (gate === '') continue;
     if (gate) { logMom(t, gate, 'warn'); continue; }
     if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) { logMom(t, 'already held', 'info'); continue; }
+    if (agentPlanFor(t.mint)) { logMom(t, 'analyst plan overrides momentum', 'info'); continue; }
     let cs;
     try { cs = await fetchOhlcv(t.pairAddress, '1m'); }
     catch (e) {
@@ -5290,6 +5295,8 @@ async function autoTick() {
     };
     for (const p of openNow) {
       if (boughtThisTick) continue;
+      const heldPlan = agentPlanFor(p.mint);
+      if (heldPlan && !agentPlanUsable(heldPlan)) continue;
       const splitPlan = agentPlanFor(p.mint);
       if (splitPlan && isSplitPlan(splitPlan) && splitEntryOn() && agentPlansOn()) {
         const t = tokenInfo(p.mint);
@@ -5324,6 +5331,9 @@ async function autoTick() {
       if (held.has(t.mint) || recent.has(t.mint) || b.tokens.get(t.mint)?.raw > 0n) continue;
       const px = livePrices.get(t.mint)?.price;
       const ap = agentPlanFor(t.mint);
+      if (ap && !agentPlanUsable(ap)) { autoLog(t.symbol + ': analyst plan ' + (ap.status || 'not ready'), 'info'); continue; }
+      if (ap && !agentPlansOn()) continue;
+      if (zoneLost(t, px)) continue;
       if (agentPlansOn() && ap) {
         if (isSplitPlan(ap) && splitEntryOn()) {
           const full = sizedFull(t);
@@ -8291,6 +8301,7 @@ function listContext(row) {
   else if (spec.mode === 'momentum' && row.momState !== 'trigger') why = model.mom?.reason || 'momentum trigger is not confirmed';
   else if (spec.mode === 'range' && !(isNum(spec.rangeLo) && isNum(spec.rangeHi))) why = 'set a price range';
   else if (spec.mode === 'range') why = 'price is outside the range';
+  else if (spec.mode === 'zone' && row.zone && isNum(px) && isNum(row.zone.lo) && px < row.zone.lo) why = 'Zone lost';
   else if (spec.mode === 'zone') why = 'price is outside the entry zone';
   if (gate.ready && badge === 'Waiting') {
     const blocks = listBuyBlocks(+listSolSize(spec).toFixed(6));
@@ -8298,6 +8309,17 @@ function listContext(row) {
     else if (blocks.length) { badge = 'In zone'; why = blocks[0]; }
     else { badge = 'READY — entering'; why = ''; ready = true; }
   } else if (badge === 'Waiting' && (row.inZone || (spec.mode === 'momentum' && row.momState === 'trigger') || (spec.mode === 'range' && isNum(px) && isNum(spec.rangeLo) && isNum(spec.rangeHi) && px >= spec.rangeLo && px <= spec.rangeHi))) badge = 'In zone';
+  const analyst = agentPlanFor(row.mint);
+  if (analyst && !agentPlanUsable(analyst)) {
+    const shown = planDisplay(analyst);
+    badge = shown.status || 'waiting';
+    why = shown.setup + (isNum(shown.zoneLo) ? ' · zone ' + price(shown.zoneLo) + (shown.zoneHi !== shown.zoneLo ? '–' + price(shown.zoneHi) : '') : '');
+    ready = false;
+  } else if (analyst && !(agentPlansOn() && (agentTriggerHit(analyst, px) || (isSplitPlan(analyst) && splitEntryOn() && splitDecision(analyst, px, model.candles, { hasPos: open, ...splitLegs(analyst) }) !== 'skip')))) {
+    badge = analyst.status || 'ready';
+    why = 'waiting for the analyst trigger';
+    ready = false;
+  }
   const trendLevel = isNum(row.trendLevel) ? row.trendLevel : model.trendLevel;
   const bandTop = spec.mode === 'ath' ? model.ath?.hi : (isNum(row.bandTop) ? row.bandTop : model.bandTop);
   const dist = listDistance({ ...spec, breakLevel: row.breakLevel || model.trigger, trendLevel, bandTop }, px, row.zone);
@@ -8913,6 +8935,8 @@ async function myListBuys() {
     if (gate.state === 'disabled' || gate.state === 'cooldown') continue;
     const model = listChartModel(row, spec, px);
     const agent = agentPlanFor(row.mint);
+    if (agent && !agentPlanUsable(agent)) { autoLog((row.symbol || short(row.mint)) + ': analyst plan ' + (agent.status || 'not ready'), 'info'); continue; }
+    if (agent && !agentPlansOn()) continue;
     if (agentPlansOn() && agent && !pos && !(isSplitPlan(agent) && splitEntryOn())) {
       if (!(agentPlanUsable(agent) && agentTriggerHit(agent, px))) continue;
     }
@@ -9076,6 +9100,27 @@ function agentPlanUsable(p) {
   if (!p || !planFresh(p)) return false;
   const conf = agentNum(p.confidence);
   return p.status === 'ready' && conf >= 60;
+}
+function planDisplay(p) {
+  const z = splitZone(p);
+  const trig = agentNum(p?.trigger_price);
+  const lo = z ? z.lo : (trig > 0 ? trig : null);
+  const hi = z ? z.hi : lo;
+  return { status: p?.status || 'waiting', setup: p?.setup || 'Analyst plan', zoneLo: lo, zoneHi: hi, stop: agentNum(p?.stop), tp1: agentNum(p?.tp1) || agentNum(p?.target), conf: agentNum(p?.confidence) };
+}
+function entryZoneHtml(t) {
+  const plan = agentPlanFor(t?.mint);
+  if (plan) {
+    const d = planDisplay(plan);
+    const status = agentPlanUsable(plan) ? 'ready' : (d.status || 'waiting');
+    const zone = isNum(d.zoneLo) ? (d.zoneHi != null && d.zoneHi !== d.zoneLo ? price(d.zoneLo) + '–' + price(d.zoneHi) : price(d.zoneLo)) : '—';
+    return `<div class="mt-2 text-[11px] leading-snug whitespace-normal break-words text-slate-300"><span class="text-amber-200">Analyst plan · ${esc(status)}</span><span class="block">${esc(d.setup)}</span><span class="block font-mono">zone ${zone}</span><span class="block font-mono text-rose-300">stop ${price(d.stop)}</span>${isNum(d.tp1) ? `<span class="block font-mono text-emerald-300">TP1 ${price(d.tp1)}</span>` : ''}${isNum(d.conf) ? `<span class="block">conf ${Math.round(d.conf)}</span>` : ''}</div>`;
+  }
+  const px = livePrices.get(t?.mint)?.price ?? t?.priceUsd;
+  if (t?.entry && zoneLost(t, px)) return `<div class="mt-2 text-[11px] font-semibold text-rose-300">Zone lost · price ${price(px)} is below ${price(t.entry.zoneLo)}</div>`;
+  if (!t?.entry) return '';
+  const e = t.entry;
+  return `<div class="mt-2 font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-xs text-slate-300"><span class="text-slate-500">${e.strat && String(e.strat).startsWith('Break') ? 'Trigger zone' : 'Entry zone'}</span><span class="block">from ${price(e.zoneLo)}</span><span class="block">to ${price(e.zoneHi)}</span><span class="block text-rose-300">stop ${price(e.stop)}</span></div>`;
 }
 const SPLIT_LS = 'sms:splitlegs';
 function splitEntryOn() { return botPrefs().split !== false; }
@@ -9371,6 +9416,7 @@ async function refreshAgents() {
   try { if (paneShown('tabTokens')) renderMyList(); } catch { /* list not ready */ }
   try { if (lastResult && paneShown('tabTokens')) render(lastResult); } catch { /* scan not on screen */ }
   try { if (paneShown('tabTrades') || paneShown('tabHome')) renderPortfolio(); } catch { /* portfolio hidden */ }
+  try { renderReadyNow(); } catch { /* ready list not ready */ }
   AG.fetching = false;
 }
 function startAgents() {
@@ -9620,12 +9666,15 @@ function readyTokens() {
   if (!lastResult?.tokens || Date.now() - lastResult.ts > 60 * 60e3) return [];
   const minC = A.minConviction;
   return lastResult.tokens.filter(t => {
+    const px = livePrices.get(t.mint)?.price ?? t.priceUsd;
+    const plan = agentPlanFor(t.mint);
+    if (plan) return agentPlanUsable(plan) && (agentTriggerHit(plan, px) || (isSplitPlan(plan) && splitEntryOn() && splitDecision(plan, px, null, { hasPos: false, ...splitLegs(plan) }) !== 'skip'));
     if (t.verdict !== 'Candidate') return false;
     if (!(t.conviction >= minC)) return false;
     if ((t.flags || []).some(f => f.sev === 'critical' || f.sev === 'high' || f.sev === 'med')) return false;
     if (t.entry?.noAnchor) return false;
     if (t.ta?.cached && isNum(t.ta.cachedAt) && Date.now() - t.ta.cachedAt >= 60 * 60e3) return false;
-    const px = livePrices.get(t.mint)?.price ?? t.priceUsd;
+    if (zoneLost(t, px)) return false;
     return inZone(t, px);
   }).sort((a, b) => b.conviction - a.conviction);
 }
@@ -9639,22 +9688,25 @@ function renderReadyNow() {
   if (!rows.length) { box.className = 'empty-note'; box.textContent = 'No token in entry zone right now'; return; }
   box.className = 'space-y-1.5';
   box.innerHTML = rows.map(t => {
-    const e = t.entry || {};
+    const plan = agentPlanFor(t.mint);
+    const shown = plan ? planDisplay(plan) : null;
+    const e = shown ? { zoneLo: shown.zoneLo, zoneHi: shown.zoneHi, stop: shown.stop, strat: shown.setup + ' · ' + (shown.status || 'ready') } : (t.entry || {});
     const px = livePrices.get(t.mint)?.price ?? t.priceUsd;
     const mid = isNum(e.zoneLo) && isNum(e.zoneHi) ? (e.zoneLo + e.zoneHi) / 2 : null;
-    const tp1 = isNum(t.exit?.tp1) ? t.exit.tp1 : (isNum(mid) ? mid * 1.5 : null);
+    const tp1 = shown && isNum(shown.tp1) ? shown.tp1 : (isNum(t.exit?.tp1) ? t.exit.tp1 : (isNum(mid) ? mid * 1.5 : null));
     const stopDist = isNum(px) && isNum(e.stop) && px ? (e.stop - px) / px * 100 : null;
     const tpDist = isNum(px) && isNum(tp1) && px ? (tp1 - px) / px * 100 : null;
     const sug = suggestedBuySol(t);
     const sol = sug.sol > 0 ? sug.sol : 0.05;
+    const score = shown && isNum(shown.conf) ? Math.round(shown.conf) : t.conviction;
     return `<div class="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl bg-ink-850 border border-white/5 px-3 py-2 text-[11px] sm:text-xs">
       <b class="text-sm text-slate-100">${esc(t.symbol)}</b>
       <span class="font-mono whitespace-normal break-words">${price(px)}</span>
-      <span class="min-w-0 text-slate-400 whitespace-normal break-words leading-snug">Zone <span class="font-mono text-slate-200"><span class="block">from ${price(e.zoneLo)}</span><span class="block">to ${price(e.zoneHi)}</span></span></span>
+      <span class="min-w-0 text-slate-400 whitespace-normal break-words leading-snug">${plan ? 'Analyst' : 'Zone'} <span class="font-mono text-slate-200"><span class="block">from ${price(e.zoneLo)}</span><span class="block">to ${price(e.zoneHi)}</span></span></span>
       <span class="min-w-0 text-slate-400 whitespace-normal break-words leading-snug">Stop <span class="block font-mono text-rose-300">${price(e.stop)} (${pct(stopDist)})</span></span>
       <span class="text-slate-400">TP1 <span class="font-mono text-emerald-300">${price(tp1)} (${pct(tpDist)})</span></span>
       <span class="text-slate-300">${esc(e.strat || '')}</span>
-      <span class="font-mono text-slate-200">${t.conviction}</span>
+      <span class="font-mono text-slate-200">${score}</span>
       <span class="ml-auto flex items-center gap-2">
         <button type="button" class="ready-buy rounded-lg px-2 py-1 font-bold bg-emerald-500 hover:bg-emerald-400 text-ink-950" data-mint="${esc(t.mint)}" data-sol="${sol}">Buy</button>
         <a href="${safeUrl(t.url)}" target="_blank" rel="noopener" class="text-violet-300 hover:underline">DexScreener</a>
