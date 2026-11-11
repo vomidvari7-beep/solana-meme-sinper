@@ -2,6 +2,7 @@
 <!--
 CHANGELOG
 - 2026-11-11: First beta of the panel. Preview only: Unlock and every buy/sell are disabled, and nothing is signed or sent. Storage writes use sms_beta: so the live panel's sms: keys stay untouched. Navy night and calm day themes, the sun/moon toggle, and the floating tab bar stay. This pass tightens type, spacing, empty states, the token sheet, and P&L contrast.
+- 2026-11-11: Design iteration 2. Status strip under the header, clearer token cards with a Why-no-buy chip and sparkline, Degen cards with a confidence ring and a stop-to-target bar, 44px targets, safe areas, and skeleton empty states. Still preview-only.
 -->
 <html lang="en" class="dark sms-beta">
 <head>
@@ -324,7 +325,22 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   html.sms-beta .token-sheet { border-radius: 28px 28px 0 0; padding-top: 12px; }
   html.sms-beta .skel { background: linear-gradient(90deg, var(--elev), color-mix(in srgb, var(--accent) 18%, var(--elev)), var(--elev)); background-size: 200% 100%; animation: sk 1.3s linear infinite; }
   html.sms-beta .pnl-up, html.sms-beta .pnl-down { font-weight: 750; }
-  html.sms-beta .hunt-card, html.sms-beta .hero-card { transition: transform .18s ease, border-color .18s ease; }
+  html.sms-beta .hunt-card, html.sms-beta .hero-card { transition: transform .22s ease, border-color .22s ease, opacity .22s ease; animation: card-in .28s ease both; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .beta-strip { position: sticky; top: calc(80px + env(safe-area-inset-top)); z-index: 30; display: flex; gap: 8px; align-items: center; overflow-x: auto; margin: 0 0 4px; padding: 8px 2px 4px; }
+  .beta-pill { display: inline-flex; align-items: center; min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--elev); color: var(--text); font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .beta-pill.on { color: var(--up); background: var(--up-soft); border-color: transparent; }
+  .beta-pill.off { color: var(--muted); }
+  .why-chip { display: inline-flex; align-items: center; min-height: 28px; margin-top: 8px; padding: 4px 10px; border-radius: 999px; background: var(--elev); border: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.35; }
+  .mini-spark { width: 72px; height: 28px; flex: 0 0 auto; }
+  .conf-ring { width: 40px; height: 40px; flex: 0 0 auto; }
+  .range-track { height: 4px; margin-top: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .range-track > i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+  .range-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: var(--muted); }
+  .deg-suggest { padding: 12px 0; }
+  html.sms-beta .hunt-ghost, html.sms-beta .hunt-buy, html.sms-beta button[data-degen-sell], html.sms-beta #lockUnlock { min-height: 44px; }
+  html.sms-beta .tab-pane { padding-bottom: calc(168px + env(safe-area-inset-bottom)); }
+  html.sms-beta #tabBar { bottom: calc(12px + env(safe-area-inset-bottom)); }
 </style>
 </head>
 <body class="text-slate-200 font-sans min-h-screen antialiased">
@@ -357,6 +373,11 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
   </div>
 </header>
+<div id="betaStrip" class="beta-strip" aria-label="Status">
+  <span id="betaSol" class="beta-pill">SOL —</span>
+  <span id="betaPnl" class="beta-pill">Today —</span>
+  <span id="betaPills" class="beta-strip"></span>
+</div>
 <div id="pullHint">Release to refresh</div>
 <div id="safeBanner" class="safe-banner" hidden>Safe mode is on because the last open did not finish starting. Live scan and 1-second candles are paused. Prices refresh every 3 seconds. Stops on open positions still run. <button type="button" id="safeLeave">Full speed</button></div>
 
@@ -7942,12 +7963,16 @@ function renderDegen() {
     const px = isNum(q.price) ? q.price : livePrices.get(pick.mint)?.price;
     const st = degenStatus(pick, px);
     if (q.image) rememberLogo(pick.mint, q.image, { src: 'dex' });
-    return `<article class="border-b border-white/10 py-2.5">
+    const conf = isNum(+pick.confidence) ? Math.round(+pick.confidence) : 0;
+    const ringC = 2 * Math.PI * 15;
+    const ringDash = (Math.max(0, Math.min(100, conf)) / 100) * ringC;
+    const ring = `<svg class="conf-ring" viewBox="0 0 40 40" aria-label="Confidence ${conf}"><circle cx="20" cy="20" r="15" fill="none" stroke="var(--line)" stroke-width="3"/><circle cx="20" cy="20" r="15" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="${ringDash.toFixed(1)} ${ringC.toFixed(1)}" transform="rotate(-90 20 20)"/><text x="20" y="23" text-anchor="middle" font-size="10" fill="var(--text)" font-weight="700">${conf}</text></svg>`;
+    return `<article class="deg-suggest">
       <div class="flex items-center gap-2">
         ${logoHtml(pick.mint, pick.symbol, 2)}
         <span class="min-w-0 flex-1"><b class="block truncate text-sm">${esc(pick.symbol || short(pick.mint))}</b><span class="block text-[10px] text-slate-500">${degenAgeLabel(pick.age_h)} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
-        <span class="deg-chip">HUNTER</span>
-        <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
+        ${ring}
+        <span class="${chipCls[st] || 'deg-chip'}">${st === 'READY' ? 'READY' : st === 'WATCH' ? 'WATCH' : st}</span>
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
@@ -7981,6 +8006,7 @@ function renderDegen() {
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Time stop</div><div class="font-mono">${timeTxt}</div></div>
       </div>
       <p class="mt-1 text-[11px] text-slate-500">${trailTxt}</p>
+      ${(() => { if (!(stopPx > 0) || !(tpPx > stopPx) || !(lp > 0)) return '<div class="range-track"><i style="width:0%"></i></div>'; const w = Math.max(0, Math.min(100, (lp - stopPx) / (tpPx - stopPx) * 100)); return `<div class="range-track" aria-hidden="true"><i style="width:${w.toFixed(1)}%"></i></div><div class="range-labels"><span>Stop</span><span>Now</span><span>2x</span></div>`; })()}
       ${protLog ? `<p class="mt-1 text-[11px] text-slate-400 whitespace-normal break-words">${protLog}</p>` : ''}
       <button type="button" data-degen-sell="${esc(p.mint)}" class="mt-2 rounded-xl border border-rose-400/40 px-3 text-[12px] font-semibold text-rose-200" style="min-height:44px">Sell</button>
     </article>`;
@@ -8003,7 +8029,7 @@ function renderDegen() {
     </div>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
-    ${picks || '<p class="empty-note mt-2">No hunter picks yet.</p>'}
+    ${DEGEN.fetched ? (picks || '<p class="empty-note mt-2">No hunter picks yet. The pot is waiting for the next degen file.</p>') : '<div class="skel" style="height:64px;margin-top:12px"></div><div class="skel" style="height:64px;margin-top:8px"></div>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Live scanner ${liveScanOn ? '· on' : '· off'}</h3>
     ${scanHitsHtml() || '<p class="empty-note mt-2">No live-scan hits yet.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open positions</h3>
@@ -10302,14 +10328,25 @@ function hunterCard(c, extra) {
   const plan = typeof agentPlanFor === 'function' ? agentPlanFor(c.mint) : null;
   const chips = safetyChips(c.safety);
   const shown = isNum(live) && live > 0 ? (typeof priceHtml === 'function' ? priceHtml(live) : price(live)) : '—';
+  let spark = '<svg class="mini-spark" viewBox="0 0 72 28" aria-hidden="true"><path d="M2 14 H70" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 3"/></svg>';
+  try {
+    const bars = typeof tickBars === 'function' ? (tickBars(c.mint, '1s') || []) : [];
+    const pts = bars.slice(-24).map(b => b && b.c).filter(n => n > 0);
+    if (pts.length >= 2) {
+      const lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts), span = (hi - lo) || 1;
+      const d = pts.map((v, i) => (i ? 'L' : 'M') + (2 + (i / (pts.length - 1)) * 68).toFixed(1) + ' ' + (24 - ((v - lo) / span) * 20).toFixed(1)).join(' ');
+      spark = `<svg class="mini-spark" viewBox="0 0 72 28" aria-hidden="true"><path d="${d}" fill="none" stroke="${pts[pts.length - 1] >= pts[0] ? 'var(--up)' : 'var(--down)'}" stroke-width="1.75" stroke-linecap="round"/></svg>`;
+    }
+  } catch { /* flat spark */ }
+  const why = typeof explainNoBuy === 'function' ? explainNoBuy(c.mint) : '';
   return `<article class="hero-card hunt-card">
-    <div class="hunt-head">${logo}<span class="min-w-0"><b class="block truncate text-[16px]">${esc(c.symbol || short(c.mint))}</b><span class="block text-[12px] text-slate-500">${esc(age)}</span></span><span class="hunt-px"><span class="block num">${shown}</span>${chg}</span></div>
+    <div class="hunt-head">${logo}<span class="min-w-0"><b class="block truncate text-[16px]">${esc(c.symbol || short(c.mint))}</b><span class="block text-[12px] text-slate-500">${esc(age)}</span></span>${spark}<span class="hunt-px"><span class="block num">${shown}</span>${chg}</span></div>
     <div class="hunt-stats">${tile('Liq', facts.liq)}${tile('MCap', facts.mcap)}${tile('Vol24', facts.vol, facts.vl ? 'V/L ' + facts.vl : '')}${tile('Age', facts.age)}</div>
     <div class="hunt-badges">${scoreBadge('Safety', x.safety, false)}${scoreBadge('Trend', x.trend, !!x.down)}</div>
     ${chips ? `<details class="hunt-details"><summary>Details</summary><div class="hunt-chips">${chips}</div></details>` : ''}
     ${hunterPlanBox(plan, live)}
     ${typeof botSkipHtml === 'function' ? botSkipHtml('plans', c.mint) : ''}
-    ${typeof explainNoBuy === 'function' ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">Why no buy: ${esc(explainNoBuy(c.mint))}</p>` : ''}
+    ${why ? `<span class="why-chip">${esc(why)}</span>` : ''}
     <div class="hunt-actions"><button type="button" data-agent-add="${esc(c.mint)}" class="hunt-ghost">+ My List</button><button type="button" data-agent-buy="${esc(c.mint)}" class="hunt-buy">Buy</button></div>
   </article>`;
 }
@@ -10336,7 +10373,7 @@ function renderAgentPicks() {
   box.innerHTML = `<div class="space-y-3">
     <details class="hunt-status"><summary>Agent files · candidates ${ageOf('candidates')} · plans ${ageOf('plans')}</summary><div class="mt-2 text-[11px] text-slate-500 whitespace-normal break-words">${status}</div></details>
     ${banner}
-    ${cards || '<p class="empty-note">No hunter candidates yet.</p>'}
+    ${AG.fetched && AG.fetched.candidates ? (cards || '<p class="empty-note">No hunter candidates yet. Pull to refresh when the next file lands.</p>') : '<div class="skel" style="height:120px"></div><div class="skel" style="height:120px;margin-top:12px"></div>'}
   </div>`;
   box.querySelectorAll('[data-agent-add]').forEach(b => b.addEventListener('click', () => {
     const c = AG.candidates.find(x => x.mint === b.dataset.agentAdd);
@@ -11103,6 +11140,30 @@ window.__smsScanChart = T.openScanChart;
   const blockAsync = async () => { say(); throw new Error('BETA preview only'); };
   ['unlockBurner', 'createBurner', 'importBurner', 'exportBurner', 'enableAuto', 'openTrade', 'myListBuyNow', 'withdrawBurner'].forEach((name) => { try { window[name] = block; } catch (e) {} });
   ['executeSwap', 'cappedBuy', 'degenBuy', 'autoSell', 'degenSell', 'attemptSplitBuy'].forEach((name) => { try { window[name] = blockAsync; } catch (e) {} });
+  const paintBetaStrip = () => {
+    const sol = $('betaSol'), pnl = $('betaPnl'), pills = $('betaPills');
+    if (!sol || !pnl || !pills) return;
+    let bal = null;
+    try { bal = isNum(WALLETS.burner.sol) ? WALLETS.burner.sol : (isNum(WALLETS.phantom.sol) ? WALLETS.phantom.sol : null); } catch { bal = null; }
+    sol.textContent = bal == null ? 'SOL —' : bal.toFixed(3) + ' SOL';
+    let today = null;
+    try {
+      const s = periodStats(rangeStart('day'), 'usd');
+      const eq = typeof burnerEquity === 'function' ? burnerEquity() : null;
+      const base = eq && eq.usd > 0 ? eq.usd - (s.realizedUsd || 0) : null;
+      if (base > 0 && isNum(s.realizedUsd)) today = s.realizedUsd / base * 100;
+      else if (s && s.realizedUsd === 0) today = 0;
+    } catch { today = null; }
+    pnl.textContent = today == null ? 'Today —' : 'Today ' + (today >= 0 ? '+' : '') + today.toFixed(1) + '%';
+    pnl.className = 'beta-pill ' + (today == null ? '' : today >= 0 ? 'on' : 'off');
+    const bits = [];
+    try {
+      bits.push(['AUTO', !!(A && A.on)], ['LIST', !!(typeof MYLIST !== 'undefined' && MYLIST.on)], ['DEGEN', typeof degenOn === 'function' && degenOn()], ['SNIPE', !!(typeof SNIPER !== 'undefined' && SNIPER.on)]);
+    } catch { /* bots not ready */ }
+    pills.innerHTML = bits.map(([name, on]) => `<span class="beta-pill ${on ? 'on' : 'off'}">${name}</span>`).join('');
+  };
+  setInterval(paintBetaStrip, 2000);
+  setTimeout(paintBetaStrip, 400);
   document.addEventListener('click', (e) => {
     const el = e.target.closest && e.target.closest('#lockUnlock,#bUnlock,#bCreate,#bImport,#aOn,[data-agent-buy],[data-mb-buy],[data-sell],[data-degen-sell]');
     if (!el) return;
