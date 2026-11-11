@@ -1,14 +1,14 @@
 {
   "pause_auto_buy": false,
-  "ts": 1794364428000,
-  "updated_utc": "2026-11-11T02:33:48Z",
-  "updated_tehran": "2026-11-11 06:03 Asia/Tehran",
+  "ts": 1794373323913,
+  "updated_utc": "2026-11-11T05:02:03Z",
+  "updated_tehran": "2026-11-11 08:32 Asia/Tehran",
   "wallet": "4u2MpTT4WXLTaJFhqaXRHu6dw5zKiJc5iuUH1cuamKYU",
-  "wallet_usd": 216.88,
-  "sol_balance": 2.6116,
-  "sol_usd": 83.045,
-  "daily_pnl_usd": -16.1,
-  "daily_pnl_pct_of_wallet": -7.42,
+  "wallet_usd": 215.52,
+  "sol_balance": 2.607,
+  "sol_usd": 82.67,
+  "daily_pnl_usd": -16.48,
+  "daily_pnl_pct_of_wallet": -7.65,
   "positions": [],
   "closed_today": [
     {
@@ -40,6 +40,15 @@
       "pnl_sol": -0.084,
       "pnl_pct": -23.3,
       "note": "stopped out (~$0.00077, stop 0.000735) before -34% 1h dump"
+    },
+    {
+      "mint": "Hg3w7GdPViZ5URuCNnK6EwXLzSTmVwX6UXLeD6Pbpump",
+      "symbol": "咪好",
+      "opened_tehran": "2026-11-11 08:16",
+      "closed_tehran": "2026-11-11 08:20",
+      "pnl_sol": -0.0046,
+      "pnl_pct": -9.3,
+      "note": "quick round-trip, ~3.5 min hold"
     }
   ]
 }
