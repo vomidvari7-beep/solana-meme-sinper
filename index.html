@@ -7638,7 +7638,7 @@ function renderSniper() {
 /* ---------------- My List (pasted watchlist, own entries and exits) ---------------- */
 const MYLIST_DEFAULTS = {
   on: false, mode: 'confluence', sizeMode: 'sol', sizePct: 10, stopPct: 15, stopPx: null,
-  tps: [{ gainPct: 15, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: 10,
+  tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: 10,
   timeStopMin: null, timeMinGain: 0, reentry: true, cooldownMin: 5, maxReentries: 3,
   tf: '4h', earlyBreak: false, sizeSol: 5, athEntry: 'retest', athHold: 2, athExpire: 12,
   scaleIn: true, starterPct: 30, dontMiss: true, dontMissPct: 5, dontMissBars: 6
@@ -7691,7 +7691,8 @@ async function resolveCandleTf(pool, preferred, token) {
   return { tf: pick.tf, candles: got[pick.tf] || null, note: pick.note };
 }
 let MYLIST = loadMyList();
-if (MYLIST._tfMigrated || MYLIST._sizeMigrated || MYLIST._modeMigrated) { delete MYLIST._tfMigrated; delete MYLIST._sizeMigrated; delete MYLIST._modeMigrated; saveMyList(); }
+migrateOpenMyListExits();
+if (MYLIST._tfMigrated || MYLIST._sizeMigrated || MYLIST._modeMigrated || MYLIST._exitMigrated) { delete MYLIST._tfMigrated; delete MYLIST._sizeMigrated; delete MYLIST._modeMigrated; delete MYLIST._exitMigrated; saveMyList(); }
 let listTimer = null, listBusy = false;
 function parseTps(text) {
   const out = [];
@@ -7953,10 +7954,20 @@ function listBreakRead(candles, tf, kind, px, now, opt) {
   if (liveAbove) return { state: 'waiting', level, reason: 'waiting for ' + tf + ' close', early: false };
   return { state: 'none', level, reason: kind === 'resist' ? 'price is under the resistance' : 'price is under the trendline', early: false };
 }
+function isLegacyMyListTp(tps) {
+  const clean = cleanTps(tps);
+  return clean.length === 1 && +clean[0].gainPct === 15 && +clean[0].sellPct === 100;
+}
+function myListOneToTwo() { return [{ gainPct: 30, sellPct: 100 }]; }
 function loadMyList() {
   const raw = load('sms:mylist', {});
   const rows = Array.isArray(raw.rows) ? raw.rows.slice(0, 40) : [];
   const base = { ...MYLIST_DEFAULTS, ...raw, on: false, tps: cleanTps(raw.tps).length ? cleanTps(raw.tps) : MYLIST_DEFAULTS.tps.slice() };
+  if (raw.exitDefault !== '1:2') {
+    if (isLegacyMyListTp(base.tps) || !cleanTps(base.tps).length) base.tps = myListOneToTwo();
+    base.exitDefault = '1:2';
+    base._exitMigrated = true;
+  }
   if (raw.tfDefault !== '4h') {
     if (!raw.tf || raw.tf === '5m') base.tf = '4h';
     base.tfDefault = '4h';
@@ -7975,6 +7986,11 @@ function loadMyList() {
     base._sizeMigrated = true;
   }
   base.rows = rows.map(sanitizeListRow).filter(Boolean);
+  if (raw.exitDefault !== '1:2') {
+    base.rows.forEach(r => {
+      if (!r.tps || !r.tps.length || isLegacyMyListTp(r.tps)) r.tps = myListOneToTwo();
+    });
+  }
   return base;
 }
 function sanitizeListRow(r) {
@@ -8025,10 +8041,56 @@ function sanitizeListRow(r) {
     boughtOnce: !!r.boughtOnce, sawOpen: !!r.sawOpen
   };
 }
+const LIST_DROP_LS = 'sms:mylistdrop';
+function listDropBook() { const v = load(LIST_DROP_LS, {}); return v && typeof v === 'object' ? v : {}; }
+function listDropped(mint) { return !!(mint && listDropBook()[mint]); }
+function tombstoneMints(mints) {
+  const book = listDropBook();
+  let dirty = false;
+  for (const mint of mints) {
+    if (!mint || book[mint]) continue;
+    book[mint] = { at: Date.now() };
+    dirty = true;
+  }
+  if (dirty) save(LIST_DROP_LS, book);
+}
+function clearListTombstone(mint) {
+  const book = listDropBook();
+  if (!mint || !book[mint]) return;
+  delete book[mint];
+  save(LIST_DROP_LS, book);
+}
 function saveMyList() {
   const rows = MYLIST.rows.map(r => { const { dexPair, ...rest } = r; return rest; });
   save('sms:mylist', { ...MYLIST, on: false, rows });
   if (typeof scheduleMyListSync === 'function') scheduleMyListSync();
+}
+function dropListRows(match) {
+  const gone = MYLIST.rows.filter(match);
+  if (!gone.length) return false;
+  tombstoneMints(gone.map(r => r.mint));
+  const ids = new Set(gone.map(r => r.id));
+  MYLIST.rows = MYLIST.rows.filter(r => !ids.has(r.id));
+  saveMyList();
+  renderMyList({ force: true });
+  return true;
+}
+function migrateOpenMyListExits() {
+  if (typeof LOG === 'undefined' || !Array.isArray(LOG)) return;
+  let dirty = false;
+  for (const r of LOG) {
+    if (!r || r.side !== 'buy' || r.status === 'failed') continue;
+    const mine = !!(r.myList || r.plan?.myList);
+    if (!mine || r.degen || r.plan?.degen) continue;
+    const tps = r.plan?.exit?.tps;
+    if (!r.plan?.quick && !isLegacyMyListTp(tps)) continue;
+    const entry = isNum(r.priceUsd) && r.priceUsd > 0 ? r.priceUsd : null;
+    const stop = entry ? entry * 0.85 : (r.plan?.stop || null);
+    r.plan = { ...(r.plan || {}), myList: true, quick: false, stop, tp1: entry ? entry * 1.3 : null, tp2: null };
+    r.plan.exit = { ...(r.plan.exit || {}), stopPx: stop, stopPct: 15, tps: myListOneToTwo(), trailAtPct: null, trailPct: null, beAtPct: null };
+    dirty = true;
+  }
+  if (dirty && typeof LS !== 'undefined') save(LS.log, LOG);
 }
 function listPosition(mint) { return openPositions().find(p => p.wallet === 'burner' && p.mint === mint && p.open) || null; }
 function stopMyList(reason, opts) {
@@ -8049,7 +8111,7 @@ function listStrategy(row) {
     sizePct: (row && isNum(row.sizePct) && row.sizePct > 0) ? row.sizePct : ((isNum(d.sizePct) && d.sizePct > 0) ? d.sizePct : 10),
     stopPct: (row && isNum(row.stopPct) && row.stopPct > 0 && row.stopPct < 100) ? row.stopPct : ((isNum(d.stopPct) && d.stopPct > 0 && d.stopPct < 100) ? d.stopPct : 15),
     stopPx: row && isNum(row.stopPx) && row.stopPx > 0 ? row.stopPx : null,
-    tps: tps && tps.length ? tps : [{ gainPct: 15, sellPct: 100 }],
+    tps: tps && tps.length ? tps : [{ gainPct: 30, sellPct: 100 }],
     beAtPct: row && row.beAtPct != null ? row.beAtPct : d.beAtPct,
     trailAtPct: row && row.trailAtPct != null ? row.trailAtPct : d.trailAtPct,
     trailPct: row && row.trailPct != null ? row.trailPct : d.trailPct,
@@ -8868,21 +8930,17 @@ async function myListBuyNow(row, typed, onDone) {
       if (!qo?.quote) throw new Error('no Jupiter route');
       const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
       let plan = listPlan(spec, isNum(px) && px > 0 ? px : null, listChartModel(row, spec, px));
-      const customTp = Array.isArray(row.tps) && row.tps.length;
-      const customStop = (isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0);
-      if (quickOn() && isNum(px) && px > 0 && !customTp) {
-        const check = quickManualShape(px, plan.stop, customStop);
-        if (check) plan = stampQuickPlan(plan, check);
-      }
       await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: true, extra: { plan, myList: true } });
       row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
       saveMyList(); renderMyList(); toast('Bought ' + (row.symbol || short(row.mint)) + ' · ' + again.label, 'ok', 8000);
       } catch (e) { toast(e.message || String(e), 'err', 8000); throw e; }
     } });
 }
-function renderMyList() {
-  if (document.body.classList.contains('sheet-on')) return;
-  closeTokenSheet();
+function renderMyList(opts) {
+  if (document.body.classList.contains('sheet-on')) {
+    if (!opts || !opts.force) return;
+    closeTokenSheet();
+  }
   const box = $('myListBox'); if (!box) return;
   const focus = document.activeElement;
   if (focus && box.contains(focus) && /^(INPUT|TEXTAREA|SELECT)$/.test(focus.tagName)) return;
@@ -9002,7 +9060,7 @@ function renderMyList() {
       ${manualBuyHtml(row.id, listPrefill(v.spec), { compact: true })}
       <div class="mt-2 flex items-center gap-3 text-[11px]">
         <button type="button" data-ml-edit="${esc(row.id)}" class="text-violet-300">Strategy</button>
-        <button type="button" data-ml-del="${esc(row.id)}" class="text-rose-300">Remove</button>
+        <button type="button" data-ml-del="${esc(row.id)}" data-ml-mint="${esc(row.mint)}" class="text-rose-300">Remove</button>
         <a href="${safeUrl(dex)}" target="_blank" rel="noopener" class="ml-auto text-violet-300">DexScreener</a>
       </div>
       <details class="mt-1" data-ml-details="${esc(row.id)}" ${row.detailsOpen ? 'open' : ''}>
@@ -9023,7 +9081,7 @@ function renderMyList() {
       </div>
     </article>`;
   }).join('');
-  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><b>${esc(v.row.symbol || short(v.row.mint))}</b></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" class="text-rose-300">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
+  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><b>${esc(v.row.symbol || short(v.row.mint))}</b></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" data-ml-mint="${esc(v.row.mint)}" class="text-rose-300">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
   const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="rounded-full border px-2.5 py-1 text-[11px] ${listSort === key ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
   box.innerHTML = `<div class="rounded-2xl border ${MYLIST.on ? 'border-amber-300/40' : 'border-white/10'} bg-ink-900/30 p-3">
     <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3>
@@ -9042,7 +9100,7 @@ function renderMyList() {
     <div class="mt-3 ${listTable ? '' : 'space-y-3'}">${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
   </div>`;
   $('mlView')?.addEventListener('click', () => { listTable = !listTable; renderMyList(); });
-  $('mlClear')?.addEventListener('click', () => { MYLIST.rows = []; saveMyList(); renderMyList(); });
+  $('mlClear')?.addEventListener('click', () => { dropListRows(() => true); });
   $('mlEditDefault')?.addEventListener('click', () => openListDefaults());
   $('mlOff')?.addEventListener('click', () => stopMyList('manual'));
   $('mlOn')?.addEventListener('click', () => {
@@ -9062,8 +9120,12 @@ function renderMyList() {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlOn); if (!row) return;
     row.enabled = el.checked; saveMyList(); renderMyList();
   }));
-  box.querySelectorAll('[data-ml-del]').forEach(el => el.addEventListener('click', () => {
-    MYLIST.rows = MYLIST.rows.filter(r => r.id !== el.dataset.mlDel); saveMyList(); renderMyList();
+  box.querySelectorAll('[data-ml-del]').forEach(el => el.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = el.dataset.mlDel;
+    const mint = el.dataset.mlMint;
+    if (!dropListRows(r => r.id === id || (mint && r.mint === mint))) toast('That token is already off My List', 'info');
   }));
   box.querySelectorAll('[data-ml-edit]').forEach(el => el.addEventListener('click', () => {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlEdit); if (row) openListEditor(row);
@@ -9099,6 +9161,7 @@ function addMintsToList(addrs) {
   let n = 0;
   for (const mint of addrs) {
     if (!isAddr(mint) || IGNORE.has(mint) || MYLIST.rows.some(r => r.mint === mint)) continue;
+    clearListTombstone(mint);
     MYLIST.rows.push(sanitizeListRow({ id: 'ml' + Date.now() + n, mint, enabled: true, addedAt: new Date().toISOString() }));
     n++;
   }
@@ -9282,15 +9345,8 @@ async function myListBuys() {
       }
     }
     if (!(sol > 0)) continue;
-    const customTp = Array.isArray(row.tps) && row.tps.length;
-    const customStop = (isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0);
-    const target = nearestTarget(px, plan?.tp1, plan?.tp2, model.tp1, model.resist?.mid, agent?.tp1);
-    const quick = quickEntryCheck(px, customStop ? null : (plan.stop || agent?.stop), customTp ? null : target);
-    if (!quick.ok) { autoLog((row.symbol || short(row.mint)) + ': ' + quick.reason, 'warn'); continue; }
-    if (quick.tp && !customTp) plan = stampQuickPlan(plan, { ...quick, stop: customStop ? plan.stop : quick.stop });
-    else if (quick.stop && !customStop) plan = { ...plan, stop: quick.stop, exit: { ...(plan.exit || {}), stopPx: quick.stop } };
     try {
-      const hit = await cappedBuy({ t, sol, reason: reason + (quick.tp && !customTp ? ' · quick' : ''), scale, plan, myList: true });
+      const hit = await cappedBuy({ t, sol, reason, scale, plan, myList: true });
       if (hit === 'bought') {
         row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
         toast('My List buy ' + t.symbol + ' — ' + reason, 'ok', 8000);
