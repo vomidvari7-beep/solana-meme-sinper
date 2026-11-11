@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T18:35:00Z",
-  "updated_tehran": "2026-11-11 22:05 IRST",
+  "updated_utc": "2026-11-11T18:38:00Z",
+  "updated_tehran": "2026-11-11 22:08 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -46,6 +46,11 @@
       "mint": "Z5ijNneoDubKBEhzTumUgfm18m6PjUDred4gp7Xpump",
       "symbol": "mihao",
       "why": "mihao copy, bot buying"
+    },
+    {
+      "mint": "8AP8cp2ZwdqgiDUjjXnGT2omzUsqhYzkWDxWQnncpump",
+      "symbol": "BERNIE",
+      "why": "Vahid: do not buy"
     }
   ]
 }
