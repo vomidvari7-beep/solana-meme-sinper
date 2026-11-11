@@ -11,6 +11,7 @@ assert(fakeDataReason('Rug', {}, book) === 'fake-data: rug flag', 'rug flag');
 assert(fakeDataReason('Ok', { m5b: 10, m5s: 0 }, book) === 'fake-data: m5 sells 0', 'zero sells');
 assert(fakeDataReason('Ok', { liq: 1_600_000, vol24: 1000 }, book).includes('20x'), 'liq vs volume');
 assert(fakeDataReason('Ok', { liq: 50_000, vol24: 200_000, m5b: 20, m5s: 10 }, book) === '', 'clean tape');
+assert(fakeDataReason('J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump', {}, { blacklist: { J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump: { why: 'rugged' } }, degenPicks: [], agentRows: {} }) === 'fake-data: blacklisted rug', 'seed rug');
 assert(!textHasRugFlag('RugCheck danger: Single holder ownership'), 'rugcheck is not a rug flag');
 assert(quoteImpact({}).reason.startsWith('fake-data'), 'missing quote');
 assert(quoteImpact({ outAmount: '1' }).reason.includes('impact'), 'missing impact');

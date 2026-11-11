@@ -12,7 +12,7 @@ export function createEngine(cfg, state, net, swap) {
   const agentRows = {};
 
   function bookView() {
-    return { blacklist: state.data.blacklist, degenPicks: agents.degen?.picks || [], agentRows };
+    return { blacklist: { ...(agents.blacklist || {}), ...(state.data.blacklist || {}) }, degenPicks: agents.degen?.picks || [], agentRows };
   }
   function live(mint) { return prices.get(mint) || null; }
   function watchMints() {
@@ -38,6 +38,14 @@ export function createEngine(cfg, state, net, swap) {
     if (Array.isArray(data?.[key])) return data[key];
     return [];
   }
+  function seedBlacklist(data) {
+    const out = {};
+    for (const row of asList(data, 'mints')) {
+      const mint = typeof row === 'string' ? row : row?.mint;
+      if (mint) out[mint] = { why: (row && row.why) || 'seed rug', symbol: row?.symbol || '' };
+    }
+    return out;
+  }
   async function refreshAgents() {
     try {
       const raw = await net.agents();
@@ -48,7 +56,8 @@ export function createEngine(cfg, state, net, swap) {
         candidates: { candidates: asList(raw.candidates, 'candidates') },
         mylist: { tokens: asList(raw.mylist, 'tokens') },
         mylist_scores: { tokens: asList(raw.mylist_scores, 'tokens') },
-        risk: raw.risk && typeof raw.risk === 'object' ? raw.risk : {}
+        risk: raw.risk && typeof raw.risk === 'object' ? raw.risk : {},
+        blacklist: seedBlacklist(raw.blacklist)
       };
       indexAgents();
       log('agents', 'read ' + (agents.sha || '').slice(0, 8));

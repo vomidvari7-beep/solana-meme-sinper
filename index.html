@@ -8008,7 +8008,18 @@ function rugBlackBook() {
   const v = load(RUG_BLACK_LS, {});
   return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 }
-function rugBlackHas(mint) { return !!(mint && rugBlackBook()[mint]); }
+let SEED_RUG = {};
+function applySeedBlacklist(data) {
+  const next = {};
+  const list = Array.isArray(data) ? data : (Array.isArray(data?.mints) ? data.mints : []);
+  for (const row of list) {
+    const mint = typeof row === 'string' ? row : row?.mint;
+    if (!mint) continue;
+    next[mint] = { why: String((row && row.why) || 'seed rug').slice(0, 120), symbol: String((row && row.symbol) || '').slice(0, 32) };
+  }
+  SEED_RUG = next;
+}
+function rugBlackHas(mint) { return !!(mint && (rugBlackBook()[mint] || SEED_RUG[mint])); }
 function rugBlackAdd(mint, why) {
   if (!mint || rugBlackHas(mint)) return;
   const book = rugBlackBook();
@@ -10890,7 +10901,7 @@ async function refreshAgents() {
   if (document.hidden || AG.fetching) return;
   AG.fetching = true;
   const ctl = beginFetch('agents');
-  const names = ['candidates', 'mylist', 'plans', 'risk', 'config', 'mylist_scores'];
+  const names = ['candidates', 'mylist', 'plans', 'risk', 'config', 'mylist_scores', 'blacklist'];
   await Promise.all(names.map(async (name) => {
     try {
       const data = await fetchAgentDoc(name, ctl.signal);
@@ -10902,6 +10913,7 @@ async function refreshAgents() {
       AG.pulled[name] = Date.now();
       AG.fetched[name] = Date.now();
       AG.errors[name] = '';
+      if (name === 'blacklist') applySeedBlacklist(data);
       if (name === 'candidates') {
         AG.candidates = Array.isArray(data) ? data : (Array.isArray(data?.candidates) ? data.candidates : []);
         const written = agentTime(data?.updated_utc) || agentTime(data?.ts);

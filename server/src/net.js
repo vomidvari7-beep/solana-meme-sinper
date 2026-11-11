@@ -18,7 +18,7 @@ export function createNet(cfg) {
     } finally { clearTimeout(t); }
   }
   async function agents() {
-    const names = ['degen', 'plans', 'candidates', 'mylist', 'mylist_scores', 'risk'];
+    const names = ['degen', 'plans', 'candidates', 'mylist', 'mylist_scores', 'risk', 'blacklist'];
     const shaRes = await getJSON('https://api.github.com/repos/' + cfg.repo + '/commits?sha=main&per_page=1&t=' + Date.now(), 8000);
     const sha = shaRes && shaRes[0] && shaRes[0].sha;
     if (!sha) throw new Error('no commit sha');
