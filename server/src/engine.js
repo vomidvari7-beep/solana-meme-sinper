@@ -1,0 +1,367 @@
+import { tapeFromDex } from './net.js';
+import { CAPS, fakeDataReason, liveConfidence, livePreReason, mlGeometry, mlStop, mlStrongCandle, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision } from './rules.js';
+import { isNum, lineAt, log, tehranDayKey, WSOL } from './util.js';
+
+function pairTape(p) { return tapeFromDex(p); }
+
+export function createEngine(cfg, state, net, swap) {
+  const prices = new Map();
+  let agents = {};
+  let sol = { price: null, h1: null, m15: null, at: 0 };
+  let busy = false;
+  const agentRows = {};
+
+  function bookView() {
+    return { blacklist: state.data.blacklist, degenPicks: agents.degen?.picks || [], agentRows };
+  }
+  function live(mint) { return prices.get(mint) || null; }
+  function watchMints() {
+    const set = new Set(state.open().map(p => p.mint));
+    for (const t of agents.mylist?.tokens || []) if (t?.mint) set.add(t.mint);
+    for (const p of agents.plans?.plans || []) if (p?.mint) set.add(p.mint);
+    for (const c of agents.candidates?.candidates || []) if (c?.mint) set.add(c.mint);
+    for (const p of agents.degen?.picks || []) if (p?.mint) set.add(p.mint);
+    return [...set].slice(0, 50);
+  }
+  function indexAgents() {
+    for (const k of Object.keys(agentRows)) delete agentRows[k];
+    const add = (mint, row) => { if (!mint) return; (agentRows[mint] = agentRows[mint] || []).push(row); };
+    for (const p of agents.degen?.picks || []) add(p.mint, p);
+    for (const p of agents.plans?.plans || []) add(p.mint, p);
+    for (const c of agents.candidates?.candidates || []) add(c.mint, c);
+    for (const t of agents.mylist_scores?.tokens || []) add(t.mint, t);
+    for (const t of agents.mylist?.tokens || []) add(t.mint, t);
+    for (const p of agents.risk?.positions || []) add(p.mint, p);
+  }
+  function asList(data, key) {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.[key])) return data[key];
+    return [];
+  }
+  async function refreshAgents() {
+    try {
+      const raw = await net.agents();
+      agents = {
+        sha: raw.sha || '',
+        degen: { picks: asList(raw.degen, 'picks') },
+        plans: { plans: asList(raw.plans, 'plans') },
+        candidates: { candidates: asList(raw.candidates, 'candidates') },
+        mylist: { tokens: asList(raw.mylist, 'tokens') },
+        mylist_scores: { tokens: asList(raw.mylist_scores, 'tokens') },
+        risk: raw.risk && typeof raw.risk === 'object' ? raw.risk : {}
+      };
+      indexAgents();
+      log('agents', 'read ' + (agents.sha || '').slice(0, 8));
+    } catch (e) { log('agents', e.message || e); }
+  }
+  async function refreshPrices() {
+    const mints = watchMints();
+    if (!mints.length) return;
+    const best = await net.dex(mints);
+    for (const [mint, p] of best) {
+      const t = pairTape(p);
+      prices.set(mint, t);
+      if (noteRugDrop(state.data, mint, t.px, t.h1)) {
+        state.note('safety', mint, t.symbol, 'fake-data: blacklisted rug');
+        log('safety', (t.symbol || mint.slice(0, 4)) + ' blacklisted after -80%');
+      }
+    }
+    state.touch();
+  }
+  async function refreshSol() {
+    if (Date.now() - (sol.at || 0) < 20000 && sol.price && isNum(sol.h1) && isNum(sol.m15)) return sol;
+    const next = await net.sol();
+    let m15 = isNum(sol.m15) ? sol.m15 : null;
+    if (next.pool && Date.now() - (sol.m15at || 0) > 60000) {
+      try {
+        const cs = await net.ohlcv(next.pool, '15m');
+        if (cs.length >= 2 && cs.at(-2).c > 0) m15 = (cs.at(-1).c / cs.at(-2).c - 1) * 100;
+      } catch { m15 = null; }
+      sol.m15at = Date.now();
+    }
+    sol = { price: next.price, h1: next.h1, pool: next.pool, m15, m15at: sol.m15at || 0, at: Date.now() };
+    return sol;
+  }
+  function guard(mint, tape) {
+    const why = fakeDataReason(mint, tape, bookView());
+    return why;
+  }
+  async function safeBuy(mode, mint, symbol, solAmt, slipBps, plan, liq) {
+    if (state.data.paused || !state.data.toggles[mode === 'scan' ? 'scan' : mode]) return;
+    if (state.findOpen(mint)) { state.note(mode, mint, symbol, 'already open'); return; }
+    const tape = live(mint) || {};
+    const fake = guard(mint, tape);
+    if (fake) { state.note(mode, mint, symbol, fake); return; }
+    const flags = await swap.mintFlags(mint);
+    if (!flags.ok) { state.note(mode, mint, symbol, flags.reason || 'mint'); return; }
+    const max = mode === 'scalp' ? SCALP.IMPACT_MAX : mode === 'breakout' ? 1 : mode === 'degen' || mode === 'scan' ? CAPS.degenImpact : 5;
+    let bought;
+    try { bought = await swap.buy(mint, solAmt, slipBps, max); }
+    catch (e) {
+      const msg = String(e.message || e);
+      state.note(mode, mint, symbol, msg.startsWith('fake-data') || msg.startsWith('price impact') ? msg : 'fake-data: jupiter quote failed');
+      log(mode, msg);
+      return;
+    }
+    const px = sol.price || 0;
+    const usd = solAmt * (px || 0);
+    const tokenAmount = bought.tokenAmount || (bought.quote?.outAmount && flags.decimals != null ? +bought.quote.outAmount / 10 ** flags.decimals : 0);
+    const priceUsd = tokenAmount > 0 && px > 0 ? usd / tokenAmount : (tape.px || 0);
+    if (cfg.dryRun) {
+      state.note(mode, mint, symbol, 'dry-run buy ' + solAmt + ' SOL · ' + (plan.reason || mode));
+      return;
+    }
+    state.recordBuy({ mode: mode === 'scan' ? 'degen' : mode, mint, symbol, sol: solAmt, usd, tokenAmount, priceUsd, sig: bought.sig, plan, liq: liq ?? tape.liq, feeUsd: (bought.feeSol || 0) * (px || 0), feeSol: bought.feeSol || 0 });
+    state.note(mode, mint, symbol, 'bought');
+    log(mode, 'bought ' + (symbol || mint.slice(0, 4)));
+  }
+
+  async function scalpTick() {
+    if (!state.data.toggles.scalp || state.data.paused) return;
+    const sized = scalpSizeUsd(state.data, state.data.positions, (m) => live(m)?.px);
+    if (!(sized.usd >= SCALP.MIN_FREE)) { state.note('scalp', '', '', sized.label); return; }
+    await refreshSol();
+    if (!isNum(sol.h1)) { state.note('scalp', 'SOL', 'SOL', 'SOL 1h unavailable'); return; }
+    if (sol.h1 < SCALP.SOL_1H_MIN) { state.note('scalp', 'SOL', 'SOL', 'SOL 1h ' + sol.h1.toFixed(1) + '%'); return; }
+    if (!isNum(sol.m15)) { state.note('scalp', 'SOL', 'SOL', 'SOL 15m unavailable'); return; }
+    if (sol.m15 < SCALP.SOL_15M_MIN) { state.note('scalp', 'SOL', 'SOL', 'SOL 15m ' + sol.m15.toFixed(1) + '%'); return; }
+    const block = scalpDayBlock(state.data);
+    if (block) { state.note('scalp', '', '', block); return; }
+    const ids = watchMints();
+    const ranked = ids.map(mint => ({ mint, t: live(mint) })).filter(x => x.t && x.t.liq > 0).sort((a, b) => (b.t.vol24 || 0) - (a.t.vol24 || 0));
+    let top = null;
+    for (const row of ranked) {
+      const fake = guard(row.mint, row.t);
+      if (fake) { state.note('scalp', row.mint, row.t.symbol, fake); continue; }
+      top = row;
+      break;
+    }
+    if (!top) return;
+    const logBook = state.data.scalpLog;
+    const day = tehranDayKey();
+    if (logBook.dayKey !== day) { logBook.dayKey = day; logBook.pausesToday = 0; logBook.counts = {}; }
+    const cd = logBook.cooldowns?.[top.mint];
+    if (cd > Date.now()) { state.note('scalp', top.mint, top.t.symbol, 'cooldown'); return; }
+    const count = logBook.counts?.[top.mint];
+    if (count && count.day === day && count.n >= SCALP.MAX_PER_DAY) { state.note('scalp', top.mint, top.t.symbol, '3 scalps today'); return; }
+    const openOne = state.open('scalp');
+    if (openOne.length === 1 && openOne[0].mint === top.mint) { state.note('scalp', top.mint, top.t.symbol, 'same token already open'); return; }
+    let bars;
+    try {
+      bars = { m1: await net.ohlcv(top.t.pool, '1m'), m15: await net.ohlcv(top.t.pool, '15m'), h1: await net.ohlcv(top.t.pool, '1h') };
+    } catch (e) { state.note('scalp', top.mint, top.t.symbol, 'candles unavailable'); return; }
+    const resist = (agents.plans?.plans || []).find(p => p.mint === top.mint);
+    const ctx = scalpContext(bars, top.t.px, {
+      ageH: top.t.ageH, curve: /pumpfun|bonding/i.test(top.t.dex) && !/pumpswap/i.test(top.t.dex),
+      dexOk: scalpDexOk(top.t.dex), liq: top.t.liq, vol24: top.t.vol24, m5: top.t.m5, h1: top.t.h1,
+      buys: top.t.m5b, sells: top.t.m5s, resist: +resist?.trigger_price || 0, flag: ''
+    });
+    const why = scalpEntryFail(ctx);
+    if (why) { state.note('scalp', top.mint, top.t.symbol, why); return; }
+    if (!(sol.price > 0)) { state.note('scalp', top.mint, top.t.symbol, 'SOL price unavailable'); return; }
+    const solAmt = +((sized.usd) / sol.price).toFixed(6);
+    const bal = await swap.balance();
+    if (solAmt + CAPS.reserveSol > bal) { state.note('scalp', top.mint, top.t.symbol, 'insufficient SOL'); return; }
+    let q;
+    try { q = await swap.quote(WSOL, top.mint, BigInt(Math.round(solAmt * 1e9)), SCALP.SLIP_BPS); }
+    catch { state.note('scalp', top.mint, top.t.symbol, 'fake-data: jupiter quote failed'); return; }
+    const impact = quoteImpact(q);
+    if (!impact.ok) { state.note('scalp', top.mint, top.t.symbol, impact.reason); return; }
+    ctx.impact = impact.pct;
+    let drift = null;
+    try {
+      const flags = await swap.mintFlags(top.mint);
+      const tokens = flags.decimals != null ? +q.outAmount / 10 ** flags.decimals : 0;
+      const implied = tokens > 0 ? (solAmt * sol.price) / tokens : 0;
+      if (implied > 0 && top.t.px > 0) drift = implied / top.t.px - 1;
+    } catch { drift = null; }
+    ctx.drift = drift;
+    const why2 = scalpEntryFail(ctx);
+    if (why2) { state.note('scalp', top.mint, top.t.symbol, why2); return; }
+    await safeBuy('scalp', top.mint, top.t.symbol, solAmt, SCALP.SLIP_BPS, { breakLow: ctx.breakLow, entryLiq: ctx.liq, pool: top.t.pool, reason: 'scalp breakout' }, ctx.liq);
+  }
+
+  async function breakoutTick() {
+    if (!state.data.toggles.breakout || state.data.paused) return;
+    const rows = agents.mylist?.tokens || [];
+    if (!rows.length) return;
+    const cursor = state.data.breakCursor || 0;
+    const row = rows[cursor % rows.length];
+    state.data.breakCursor = cursor + 1;
+    const tape = live(row.mint);
+    if (!tape?.pool || !(tape.px > 0)) return;
+    const fake = guard(row.mint, tape);
+    if (fake) { state.note('breakout', row.mint, row.symbol || tape.symbol, fake); return; }
+    let h1, m15, m1;
+    try {
+      h1 = await net.ohlcv(tape.pool, '1h');
+      m15 = await net.ohlcv(tape.pool, '15m');
+      m1 = await net.ohlcv(tape.pool, '1m');
+    } catch { return; }
+    const geo = mlGeometry(h1);
+    if (!geo) return;
+    const minute = m1.length ? m1[m1.length - 2] : null;
+    const close = minute?.c || 0;
+    if (!(close > geo.line && close > geo.zoneHi)) return;
+    if (!(tape.m5b >= tape.m5s) || tape.m5b + tape.m5s === 0) return;
+    const key = Math.round(geo.line * 1e6) + ':' + Math.round(geo.zoneHi * 1e6);
+    state.data.seenBreaks = state.data.seenBreaks || {};
+    if (state.data.seenBreaks[row.mint] === key) return;
+    const lineOf = (i) => lineAt(geo.a, geo.b, i);
+    const strong = mlStrongCandle(h1, lineOf) || mlStrongCandle(m15, () => geo.line);
+    const entry = tape.px;
+    const stop = mlStop(entry, strong ? strong.l : 0);
+    await refreshSol();
+    if (!(sol.price > 0)) return;
+    const want = CAPS.listUsd / sol.price;
+    const bal = await swap.balance();
+    const sized = (await import('./state.js')).clampMainBuy(state, want, bal);
+    if (sized.err) { state.note('breakout', row.mint, row.symbol, sized.err); return; }
+    state.data.seenBreaks[row.mint] = key;
+    await safeBuy('breakout', row.mint, row.symbol || tape.symbol, sized.sol, 100, { myList: true, mlBreak: true, stop, tp: entry * 1.3, reason: '1h breakout' }, tape.liq);
+  }
+
+  async function plansTick() {
+    if (!state.data.toggles.plans || state.data.paused) return;
+    if (agents.risk?.pause_auto_buy) { state.note('plans', '', '', 'agent risk paused buys'); return; }
+    await refreshSol();
+    const bal = await swap.balance();
+    for (const p of agents.plans?.plans || []) {
+      if (!planUsable(p)) continue;
+      const tape = live(p.mint);
+      if (!tape || !(tape.px > 0)) continue;
+      const fake = guard(p.mint, tape);
+      if (fake) { state.note('plans', p.mint, p.symbol, fake); continue; }
+      if (!planTriggerHit(p, tape.px)) continue;
+      const stamp = String(p.trigger_price || '') + ':' + String(p.ts || p.updatedAt || '');
+      state.data.seenPlans = state.data.seenPlans || {};
+      if (state.data.seenPlans[p.mint] === stamp) continue;
+      const sized = (await import('./state.js')).clampMainBuy(state, CAPS.autoMaxSol, bal);
+      if (sized.err) { state.note('plans', p.mint, p.symbol, sized.err); return; }
+      state.data.seenPlans[p.mint] = stamp;
+      await safeBuy('plans', p.mint, p.symbol || tape.symbol, sized.sol, 100, { agent: true, stop: +p.stop || null, tp1: +p.tp1 || null, tp2: +p.tp2 || null, reason: 'agent plan ' + (p.setup || '') }, tape.liq);
+      return;
+    }
+  }
+
+  async function scanTick() {
+    if (!state.data.toggles.scan && !state.data.toggles.degen) return;
+    if (state.data.paused || !state.data.toggles.scan) return;
+    const led = state.data.ledgers.degen;
+    const need = (state.data.degenTradeUsd || CAPS.degenTradeUsd) + 0.25;
+    if (led.balanceUsd + 1e-9 < need) { state.note('scan', '', '', 'Degen out of funds'); return; }
+    let rows = [];
+    try { rows = await net.newPools(); } catch (e) { state.note('scan', '', '', e.message || 'source failed'); return; }
+    let looked = 0;
+    for (const raw of rows.slice(0, 20)) {
+      const ageH = raw.created ? (Date.now() - raw.created) / 3.6e6 : null;
+      if (!(isNum(ageH) && ageH < 6 && isNum(raw.liq) && raw.liq >= 40000)) continue;
+      if (looked >= 3) break;
+      looked++;
+      let tape = live(raw.mint);
+      if (!tape?.h1b) {
+        const best = await net.dex([raw.mint]);
+        const p = best.get(raw.mint);
+        if (p) { tape = pairTape(p); prices.set(raw.mint, tape); }
+      }
+      tape = tape || { ...raw, m5: null, h1: null, vol24: null, mcap: null, h1b: 0, h1s: 0, h1vol: 0, m5b: raw.m5b, m5s: raw.m5s };
+      const fake = guard(raw.mint, tape);
+      if (fake) { state.note('scan', raw.mint, raw.symbol, fake); continue; }
+      const pre = livePreReason({ ...tape, ageH: tape.ageH ?? ageH, m5vol: tape.m5vol || raw.m5vol, h1vol: tape.h1vol });
+      if (pre) { state.note('scan', raw.mint, raw.symbol, pre); continue; }
+      const pick = (agents.degen?.picks || []).find(x => x.mint === raw.mint);
+      if (pick && !(pick.entry_now === true || pick.entry_now === 'true') && /\breject\b|\bwash\b/i.test(String(pick.reason || ''))) {
+        state.note('scan', raw.mint, raw.symbol, 'hunter: ' + String(pick.reason).slice(0, 80));
+        continue;
+      }
+      const conf = liveConfidence(tape);
+      if (conf < 60) { state.note('scan', raw.mint, raw.symbol, 'confidence ' + conf + ' < 60'); continue; }
+      await refreshSol();
+      if (!(sol.price > 0)) return;
+      const solAmt = +((state.data.degenTradeUsd || CAPS.degenTradeUsd) / sol.price).toFixed(6);
+      const bal = await swap.balance();
+      if (solAmt + CAPS.reserveSol > bal) { state.note('scan', raw.mint, raw.symbol, 'insufficient SOL'); return; }
+      await safeBuy('scan', raw.mint, raw.symbol || tape.symbol, solAmt, 300, { degen: true, stopPct: 25, timeStopMin: 45, trail: 20, reason: 'live scan · conf ' + conf }, tape.liq);
+      return;
+    }
+  }
+
+  async function exits() {
+    await refreshSol();
+    const pxSol = sol.price || 0;
+    for (const p of state.open()) {
+      const tape = live(p.mint) || {};
+      const lp = tape.px;
+      if (!(lp > 0)) continue;
+      let decision = null;
+      if (p.mode === 'scalp') {
+        let candles = [];
+        try { if (p.plan?.pool) candles = await net.ohlcv(p.plan.pool, '1m'); } catch { candles = []; }
+        const why = scalpExitReason(p, lp, candles, { liq: tape.liq, m5b: tape.m5b, m5s: tape.m5s });
+        if (why) decision = { pct: 100, tag: why, reason: why };
+      } else if (p.mode === 'degen') {
+        decision = degenExitDecision(p, lp, { liq: tape.liq, m5b: tape.m5b, m5s: tape.m5s });
+      } else if (p.mode === 'breakout') {
+        const stop = +p.plan?.stop || 0;
+        const tp = +p.plan?.tp || (p.avgUsd > 0 ? p.avgUsd * 1.3 : 0);
+        if (stop > 0 && lp <= stop) decision = { pct: 100, tag: 'stop', reason: 'chart stop' };
+        else if (tp > 0 && lp >= tp) decision = { pct: 100, tag: 'tp', reason: 'tp +30%' };
+      } else if (p.mode === 'plans') {
+        const stop = +p.plan?.stop || (p.avgUsd > 0 ? p.avgUsd * 0.85 : 0);
+        const tp1 = +p.plan?.tp1 || (p.avgUsd > 0 ? p.avgUsd * 1.15 : 0);
+        if (stop > 0 && lp <= stop) decision = { pct: 100, tag: 'stop', reason: 'plan stop' };
+        else if (!p.tp1Done && tp1 > 0 && lp >= tp1) decision = { pct: 50, tag: 'tp1', reason: 'plan tp1' };
+        else if (p.tp1Done && +p.plan?.tp2 > 0 && lp >= +p.plan.tp2) decision = { pct: 100, tag: 'tp2', reason: 'plan tp2' };
+      }
+      if (!decision) continue;
+      if (state.data.paused) { state.note(p.mode, p.mint, p.symbol, 'paused · would ' + decision.reason); continue; }
+      try {
+        const held = await swap.tokenRaw(p.mint);
+        const part = decision.pct >= 100 ? held.raw : (held.raw * BigInt(decision.pct)) / 100n;
+        if (part <= 0n) continue;
+        const sold = await swap.sell(p.mint, part, decision.reason === 'liquidity pull' ? 400 : 200);
+        const solOut = sold.solOut || (+sold.quote?.outAmount || 0) / 1e9;
+        const usd = solOut * (pxSol || 0);
+        if (cfg.dryRun) { state.note(p.mode, p.mint, p.symbol, 'dry-run exit ' + decision.reason); continue; }
+        const full = held.ui || p.qty || 0;
+        const tokens = decision.pct >= 100 ? full : full * decision.pct / 100;
+        state.recordSell(p, { tokenAmount: tokens, fullQty: full, sol: solOut, usd, priceUsd: lp, sig: sold.sig, tag: decision.tag, feeSol: sold.feeSol || 0 });
+        state.note(p.mode, p.mint, p.symbol, decision.reason);
+        log(p.mode, 'exit ' + (p.symbol || '') + ' ' + decision.reason);
+      } catch (e) { log(p.mode, 'sell failed ' + (e.message || e)); }
+    }
+    state.touch();
+  }
+
+  async function tick(kind) {
+    if (busy) return;
+    busy = true;
+    try {
+      if (kind === 'agents') await refreshAgents();
+      else if (kind === 'prices') { await refreshPrices(); await exits(); }
+      else if (kind === 'scalp') await scalpTick();
+      else if (kind === 'breakout') await breakoutTick();
+      else if (kind === 'plans') await plansTick();
+      else if (kind === 'scan') await scanTick();
+    } catch (e) { log(kind, e.message || e); }
+    finally { busy = false; }
+  }
+
+  function status() {
+    const d = state.data;
+    const pos = d.positions.filter(p => p.open).map(p => ({
+      mode: p.mode, mint: p.mint, symbol: p.symbol, qty: p.qty, avgUsd: p.avgUsd,
+      px: live(p.mint)?.px || null, pnlPct: p.avgUsd > 0 && live(p.mint)?.px ? (live(p.mint).px / p.avgUsd - 1) * 100 : null
+    }));
+    return {
+      ok: true, paused: !!d.paused, dryRun: !!cfg.dryRun, pubkey: swap.owner,
+      toggles: d.toggles, positions: pos,
+      ledgers: { scalp: d.ledgers.scalp, degen: d.ledgers.degen },
+      decisions: d.decisions.slice(0, 20),
+      blacklist: Object.keys(d.blacklist || {}).length,
+      sol, agentsSha: agents.sha || '', at: Date.now()
+    };
+  }
+
+  return { tick, status, refreshAgents, refreshPrices };
+}

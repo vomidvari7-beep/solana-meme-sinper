@@ -1,0 +1,425 @@
+import { emaLast, isNum, lineAt, swingPoints, tehranDayKey, usd6 } from './util.js';
+
+export const SCALP = {
+  START_USD: 100, MIN_FREE: 5, MAX_OPEN: 2, DAY_LOSS: 20,
+  LIQ_MIN: 50000, VOL24_MIN: 100000, AGE_MIN_H: 2, TOP10_MAX: 30, INSIDER_MAX: 20,
+  M5_MIN: 1, M5_MAX: 10, H1_MAX: 60, BODY_MAX: 0.04, EMA20_MAX_ABOVE: 0.03, LAST3_MAX: 0.08,
+  VOL_MULT: 2, FLOW: 1.2, BUYS_MIN: 15, IMPACT_MAX: 0.5, SLIP_BPS: 150, QUOTE_DRIFT: 0.01,
+  SOL_15M_MIN: -1.5, SOL_1H_MIN: -3, STOP_PCT: 0.03, STOP_BUF: 0.003, STOP_TICKS: 2, STOP_MS: 5000,
+  BE_ARM: 0.03, BE_STOP: 0.005, TIME_FLAT_MIN: 4, TIME_FLAT_NEED: 0.015, TIME_HARD_MIN: 10,
+  RUNNER_AT: 0.05, TRAIL: 0.03, TRAIL_TIGHT: 0.02, TRAIL_TIGHT_AT: 0.15, FLOOR: 0.03, ROOM: 0.05,
+  CD_LOSS_MS: 15 * 60e3, CD_WIN_MS: 60e3, MAX_PER_DAY: 3, LOSS_STREAK: 3, PAUSE_MS: 30 * 60e3, MAX_PAUSES: 2
+};
+
+export const CAPS = {
+  maxSolPerTrade: 0.1, dailyMaxSol: 0.3, autoMaxSol: 0.05, autoDaily: 0.2,
+  balancePct: 20, reserveSol: 0.01, maxOpen: 2, minBuySol: 0.001,
+  degenStartUsd: 25, degenTradeUsd: 4, degenImpact: 15, listUsd: 5
+};
+
+export function textHasRugFlag(s) {
+  return /\brugged\b|\brug[\s-]?pull\b|\brug\b/i.test(String(s || '').replace(/rugcheck/ig, ' '));
+}
+
+export function blobText(v) {
+  if (v == null) return '';
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return v.map(blobText).join(' ');
+  if (typeof v === 'object') return Object.keys(v).map(k => k + ' ' + blobText(v[k])).join(' ');
+  return '';
+}
+
+export function fakeDataReason(mint, tape, book) {
+  const t = tape || {};
+  const black = book?.blacklist || {};
+  if (mint && black[mint]) return 'fake-data: blacklisted rug';
+  const pick = (book?.degenPicks || []).find(p => p && p.mint === mint);
+  if (pick && +pick.confidence === 0) return 'fake-data: confidence 0';
+  if (pick && /\bAVOID\b/i.test(String(pick.reason || '') + ' ' + String(pick.status || ''))) return 'fake-data: AVOID';
+  const rows = book?.agentRows?.[mint] || (pick ? [pick] : []);
+  if (rows.some(row => textHasRugFlag(blobText(row)))) return 'fake-data: rug flag';
+  if (isNum(t.m5b) && t.m5b > 0 && isNum(t.m5s) && t.m5s === 0) return 'fake-data: m5 sells 0';
+  if (isNum(t.h1b) && t.h1b > 0 && isNum(t.h1s) && t.h1s === 0) return 'fake-data: h1 sells 0';
+  if (isNum(t.liq) && t.liq > 0 && isNum(t.vol24) && t.vol24 >= 0 && t.liq > t.vol24 * 20) return 'fake-data: liquidity > 20x 24h volume';
+  if (isNum(t.liq) && t.liq > 0 && isNum(t.mcap) && t.mcap > 0 && t.liq > t.mcap) return 'fake-data: liquidity > mcap';
+  return '';
+}
+
+export function noteRugDrop(book, mint, px, h1) {
+  if (!mint) return false;
+  book.blacklist = book.blacklist || {};
+  book.rugPx = book.rugPx || {};
+  if (isNum(h1) && h1 <= -80) {
+    book.blacklist[mint] = { at: Date.now(), why: 'price -80% within 1h' };
+    return true;
+  }
+  if (!(px > 0) || book.blacklist[mint]) return false;
+  const now = Date.now();
+  let rows = (book.rugPx[mint] || []).filter(x => x && now - x.t <= 3600e3 && x.p > 0);
+  const last = rows[rows.length - 1];
+  if (!last || now - last.t >= 5000) rows.push({ t: now, p: px });
+  book.rugPx[mint] = rows.slice(-80);
+  const prior = rows.filter(x => now - x.t >= 15000);
+  if (!prior.length) return false;
+  const hi = Math.max(...prior.map(x => x.p));
+  if (hi > 0 && px <= hi * 0.2) {
+    book.blacklist[mint] = { at: now, why: 'price -80% within 1h' };
+    return true;
+  }
+  return false;
+}
+
+export function quoteImpact(quote) {
+  if (!quote || !quote.outAmount) return { ok: false, reason: 'fake-data: jupiter quote failed', pct: null };
+  if (quote.priceImpactPct == null || quote.priceImpactPct === '' || !Number.isFinite(+quote.priceImpactPct)) {
+    return { ok: false, reason: 'fake-data: impact cannot be computed', pct: null };
+  }
+  return { ok: true, reason: '', pct: +quote.priceImpactPct * 100 };
+}
+
+export function scalpLedgerOf(book) {
+  const raw = book.ledgers?.scalp;
+  const led = { startUsd: SCALP.START_USD, balanceUsd: SCALP.START_USD, realizedUsd: 0, trades: [] };
+  if (raw && typeof raw === 'object') {
+    if (raw.startUsd > 0) led.startUsd = raw.startUsd;
+    if (Number.isFinite(+raw.balanceUsd)) led.balanceUsd = +raw.balanceUsd;
+    if (Number.isFinite(+raw.realizedUsd)) led.realizedUsd = +raw.realizedUsd;
+    if (Array.isArray(raw.trades)) led.trades = raw.trades.slice(-200);
+  }
+  return led;
+}
+
+export function scalpSizeUsd(book, positions, livePx) {
+  const free = scalpLedgerOf(book).balanceUsd;
+  const open = (positions || []).filter(p => p.open && p.mode === 'scalp');
+  if (open.length >= SCALP.MAX_OPEN) return { usd: 0, label: 'max 2 open' };
+  if (!(free >= SCALP.MIN_FREE)) return { usd: 0, label: 'free balance under $5' };
+  if (open.length === 1) {
+    const p = open[0];
+    const lp = livePx(p.mint);
+    if (!(isNum(lp) && p.avgUsd > 0 && lp + 1e-12 >= p.avgUsd)) return { usd: 0, label: 'first scalp under breakeven' };
+    const usd = free - 0.25;
+    if (usd < SCALP.MIN_FREE) return { usd: 0, label: 'remainder under $5' };
+    return { usd, label: 'remainder $' + usd.toFixed(2) };
+  }
+  const half = free * 0.5;
+  if (half < SCALP.MIN_FREE) return { usd: 0, label: '50% under $5' };
+  return { usd: half, label: '50% · $' + half.toFixed(2) + ' of $' + free.toFixed(2) };
+}
+
+export function scalpTodayPnl(book) {
+  const day = tehranDayKey();
+  return (scalpLedgerOf(book).trades || []).filter(t => t.side === 'sell' && tehranDayKey(t.ts) === day).reduce((s, t) => s + (isNum(t.pnlUsd) ? t.pnlUsd : 0), 0);
+}
+
+export function scalpDayBlock(book) {
+  const log = book.scalpLog || {};
+  const day = tehranDayKey();
+  if (log.dayKey !== day) return '';
+  if (log.haltDay === day) return 'scalp stopped for the day';
+  if ((+log.pausesToday || 0) >= SCALP.MAX_PAUSES) return 'two pauses today';
+  if (scalpTodayPnl(book) <= -SCALP.DAY_LOSS) return 'daily -$20 stop';
+  if (log.pauseUntil > Date.now()) return 'paused 30m after 3 losses';
+  return '';
+}
+
+function scalpStrongBreak(m1) {
+  const src = (m1 || []).filter(c => c && c.c > 0 && c.l > 0);
+  const win = src.slice(-5);
+  let best = null, score = -1;
+  for (let i = 0; i < win.length; i++) {
+    const c = win[i];
+    const idx = src.length - win.length + i;
+    const before = src.slice(Math.max(0, idx - 5), idx);
+    if (!before.length) continue;
+    const resist = Math.max(...before.map(x => x.h));
+    if (!(c.c > resist)) continue;
+    const body = c.o > 0 ? Math.abs(c.c - c.o) : Math.abs(c.c - c.l);
+    const vol = c.v > 0 ? c.v : 1;
+    if (body * vol > score) { score = body * vol; best = c; }
+  }
+  return best;
+}
+
+export function scalpContext(bars, px, meta) {
+  const m1 = (bars?.m1 || []).filter(c => c && c.c > 0);
+  const m15 = (bars?.m15 || []).filter(c => c && c.c > 0);
+  const h1 = (bars?.h1 || []).filter(c => c && c.c > 0);
+  const last = m1[m1.length - 1];
+  const prior5 = m1.slice(-6, -1);
+  const broke = !!(last && prior5.length === 5 && last.c > Math.max(...prior5.map(c => c.h)));
+  const prior20 = m1.slice(-21, -1);
+  const avg = prior20.length ? prior20.reduce((s, c) => s + (c.v || 0), 0) / prior20.length : 0;
+  const volX = avg > 0 && last ? (last.v || 0) / avg : 0;
+  const body = last && last.o > 0 ? Math.abs(last.c - last.o) / last.o : 1;
+  const closes = m1.map(c => c.c);
+  const ema20 = closes.length >= 20 ? emaLast(closes, 20) : null;
+  const base = m1.length >= 4 ? m1[m1.length - 4].c : 0;
+  const last3 = base > 0 && last ? last.c / base - 1 : 1;
+  const c15 = m15.map(c => c.c);
+  const ema15 = c15.length >= 20 ? emaLast(c15, 20) : null;
+  const ema15Prev = c15.length >= 21 ? emaLast(c15.slice(0, -1), 20) : null;
+  let lowerLow = false;
+  const bars4 = h1.slice(-4);
+  if (bars4.length >= 3) {
+    const start = Math.max(1, bars4.length - 3);
+    for (let i = start; i < bars4.length; i++) if (bars4[i].l < bars4[i - 1].l) lowerLow = true;
+  }
+  const strong = scalpStrongBreak(m1);
+  const breakLow = strong && strong.l > 0 ? strong.l * (1 - SCALP.STOP_BUF) : (last && last.l > 0 ? last.l * (1 - SCALP.STOP_BUF) : null);
+  const level = +meta?.resist || 0;
+  let room = '';
+  if (level > px && px > 0 && level / px - 1 <= SCALP.ROOM) {
+    if (!(last && last.o <= level && last.c > level)) room = 'resistance within +5%';
+  }
+  return { ...meta, px, broke, volX, body, ema20, last3, ema15, ema15Prev, lowerLow, breakLow, room, m1 };
+}
+
+export function scalpEntryFail(ctx) {
+  const R = SCALP;
+  if (!(ctx.ageH >= R.AGE_MIN_H)) return 'pair age < 2h';
+  if (ctx.curve) return 'bonding curve';
+  if (!ctx.dexOk) return 'not a graduated pool';
+  if (!(ctx.liq >= R.LIQ_MIN)) return 'liquidity < $50k';
+  if (!(ctx.vol24 >= R.VOL24_MIN)) return '24h volume < $100k';
+  if (ctx.flag) return ctx.flag;
+  if (isNum(ctx.top10) && ctx.top10 > R.TOP10_MAX) return 'top10 ' + ctx.top10.toFixed(0) + '%';
+  if (isNum(ctx.insiders) && ctx.insiders > R.INSIDER_MAX) return 'insiders ' + ctx.insiders.toFixed(0) + '%';
+  if (!(ctx.px > ctx.ema15)) return 'price below 15m EMA20';
+  if (!(ctx.ema15 > ctx.ema15Prev)) return '15m EMA20 not rising';
+  if (ctx.lowerLow) return '1h lower low';
+  if (ctx.room) return ctx.room;
+  if (!ctx.broke) return 'no 1m breakout';
+  if (!(ctx.volX >= R.VOL_MULT)) return 'breakout volume under 2x';
+  if (!(ctx.body <= R.BODY_MAX)) return 'breakout body > 4%';
+  if (!(ctx.px > ctx.ema20)) return 'price below 1m EMA20';
+  if (!(ctx.px <= ctx.ema20 * (1 + R.EMA20_MAX_ABOVE))) return 'more than 3% above 1m EMA20';
+  if (!(ctx.last3 <= R.LAST3_MAX)) return 'last 3 candles > +8%';
+  if (!(ctx.m5 >= R.M5_MIN && ctx.m5 <= R.M5_MAX)) return 'm5 change out of +1% to +10%';
+  if (isNum(ctx.h1) && ctx.h1 > R.H1_MAX) return 'h1 > +60%';
+  if (!(ctx.buys >= ctx.sells * R.FLOW)) return 'm5 buys < 1.2x sells';
+  if (!(ctx.buys >= R.BUYS_MIN)) return 'm5 buy txns < 15';
+  if (isNum(ctx.impact) && ctx.impact > R.IMPACT_MAX) return 'price impact ' + ctx.impact.toFixed(2) + '%';
+  if (isNum(ctx.drift) && Math.abs(ctx.drift) > R.QUOTE_DRIFT) return 'quote differs from last price > 1%';
+  return '';
+}
+
+export function scalpStopLevel(entry, breakLow, lp, high, runner) {
+  const hard = entry * (1 - SCALP.STOP_PCT);
+  let stop = hard;
+  if (isNum(breakLow) && breakLow > 0 && breakLow < entry) stop = Math.max(breakLow, hard);
+  const peak = Math.max(entry, isNum(high) ? high : 0, isNum(lp) ? lp : 0);
+  const up = peak / entry - 1;
+  if (up >= SCALP.BE_ARM) stop = Math.max(stop, entry * (1 + SCALP.BE_STOP));
+  const ran = !!runner || up >= SCALP.RUNNER_AT;
+  if (ran) {
+    const trailPct = up > SCALP.TRAIL_TIGHT_AT ? SCALP.TRAIL_TIGHT : SCALP.TRAIL;
+    stop = Math.max(stop, entry * (1 + SCALP.FLOOR), peak * (1 - trailPct));
+  }
+  return { stop, runner: ran, peak };
+}
+
+export function scalpFadeReason(candles, m5b, m5s) {
+  if (isNum(m5b) && isNum(m5s) && m5s >= m5b && (m5b + m5s) > 0) return 'm5 sells >= buys';
+  const cs = candles || [];
+  if (cs.length >= 2) {
+    const prev = cs[cs.length - 2], last = cs[cs.length - 1];
+    if (last.h < prev.h) return '1m lower high';
+    if ((last.v || 0) < (prev.v || 0)) return '1m volume dropping';
+  }
+  return '';
+}
+
+export function scalpExitReason(p, lp, candles, flow) {
+  const entry = p.avgUsd;
+  if (!(entry > 0) || !(lp > 0)) return '';
+  const prot = p.prot || {};
+  if (isNum(prot.entryLiq) && prot.entryLiq > 0 && isNum(flow?.liq) && flow.liq <= prot.entryLiq * 0.5) return 'liquidity pull';
+  const high = Math.max(prot.high || 0, entry, lp);
+  const runner = !!prot.runner || high >= entry * (1 + SCALP.RUNNER_AT);
+  const ageMin = (Date.now() - (p.firstTs || Date.now())) / 60000;
+  if (!runner && ageMin >= SCALP.TIME_FLAT_MIN && high < entry * (1 + SCALP.TIME_FLAT_NEED)) return 'no +1.5% in 4m';
+  if (!runner && ageMin >= SCALP.TIME_HARD_MIN) return 'time stop 10m';
+  if (runner) {
+    const closes = (candles || []).map(c => c.c).filter(n => n > 0);
+    const ema9 = closes.length >= 9 ? emaLast(closes, 9) : null;
+    const last = candles && candles[candles.length - 1];
+    if (isNum(ema9) && last && last.c < ema9) return '1m close below EMA9';
+    const fade = scalpFadeReason(candles, flow?.m5b, flow?.m5s);
+    if (fade) return fade;
+  }
+  const lvl = scalpStopLevel(entry, p.plan?.breakLow, lp, high, runner);
+  const arm = p.stopArm || { ticks: 0, since: 0 };
+  if (lp <= lvl.stop) {
+    arm.ticks = (arm.ticks || 0) + 1;
+    if (!arm.since) arm.since = Date.now();
+    p.stopArm = arm;
+    if (arm.ticks >= SCALP.STOP_TICKS || Date.now() - arm.since >= SCALP.STOP_MS) return runner ? 'trail stop' : (lvl.stop >= entry ? 'stop to +0.5%' : 'stop -3%');
+  } else p.stopArm = { ticks: 0, since: 0 };
+  p.prot = { ...prot, high, runner, entryLiq: prot.entryLiq };
+  return '';
+}
+
+export function scalpDexOk(dex) {
+  const d = String(dex || '').toLowerCase();
+  if (!d) return false;
+  if (/pumpfun|pump\.fun|moonshot|launchlab|bonding/.test(d)) return false;
+  if (d.includes('pump') && !d.includes('pumpswap')) return false;
+  return /pumpswap|raydium|meteora/.test(d);
+}
+
+export function mlGeometry(candles) {
+  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0).slice(-48);
+  if (cs.length < 15) return null;
+  const { highs } = swingPoints(cs, 2);
+  if (highs.length < 2) return null;
+  let use = highs.slice(-2);
+  const tail = highs.slice(-3);
+  if (tail.length === 3 && tail[1].price < tail[0].price && tail[2].price < tail[1].price) use = tail;
+  else if (!(highs.at(-1).price < highs.at(-2).price)) return null;
+  const a = use[0], b = use[use.length - 1];
+  if (!(b.price < a.price)) return null;
+  const line = lineAt(a, b, cs.length - 1);
+  let best = null;
+  for (const h of highs) {
+    const cluster = highs.filter(x => Math.abs(x.price - h.price) / h.price <= 0.015);
+    if (cluster.length < 2) continue;
+    const lo = Math.min(...cluster.map(x => x.price));
+    const hi = Math.max(...cluster.map(x => x.price));
+    const mid = (lo + hi) / 2;
+    if (!best || cluster.length > best.n || (cluster.length === best.n && Math.abs(mid - line) < Math.abs(best.mid - line))) best = { lo, hi, mid, n: cluster.length };
+  }
+  if (!best) {
+    const h = highs.at(-1);
+    best = { lo: h.price * 0.992, hi: h.price * 1.008, mid: h.price, n: 1 };
+  }
+  return { line, zoneLo: best.lo, zoneHi: best.hi, a, b };
+}
+
+export function mlStrongCandle(candles, lineOf) {
+  const cs = (candles || []).filter(c => c && c.c > 0 && c.l > 0);
+  let best = null, score = -1;
+  for (let i = 2; i < cs.length; i++) {
+    const lv = lineOf(i);
+    if (!(lv > 0) || !(cs[i].c > lv)) continue;
+    const body = cs[i].o > 0 ? Math.abs(cs[i].c - cs[i].o) : Math.abs(cs[i].c - cs[i].l);
+    const vol = cs[i].v > 0 ? cs[i].v : 1;
+    if (body * vol > score) { score = body * vol; best = cs[i]; }
+  }
+  return best;
+}
+
+export function mlStop(entry, candleLow) {
+  if (!(entry > 0)) return null;
+  const raw = (candleLow > 0 ? candleLow : entry) * (1 - 0.015);
+  const floor = entry * (1 - 0.15);
+  const stop = Math.max(raw, floor);
+  return stop < entry ? stop : floor;
+}
+
+export function planFresh(p, now = Date.now()) {
+  const ts = +p?.ts || +p?.updatedAt || 0;
+  const stamp = ts > 0 && ts < 1e12 ? ts * 1000 : ts;
+  if (!(stamp > 0) || now - stamp > 2 * 3600e3) return false;
+  const exp = +p?.expires || 0;
+  const expiry = exp > 0 && exp < 1e12 ? exp * 1000 : exp;
+  if (expiry > 0 && now > expiry) return false;
+  return true;
+}
+
+export function planTriggerHit(p, px) {
+  if (!(px > 0)) return false;
+  const mode = String(p?.entry_mode || '').toLowerCase();
+  const cond = String(p?.trigger_condition || '').toLowerCase();
+  const trig = +p?.trigger_price || 0;
+  if (mode === 'immediate' || mode === 'now' || /immediate|market/.test(cond)) return true;
+  if (!(trig > 0)) return false;
+  const pad = 0.015;
+  if (mode === 'retest' || /retest|pullback/.test(cond)) return px <= trig * (1 + pad) && px >= trig * (1 - pad);
+  if (mode === 'below' || /below|under|dip/.test(cond)) return px <= trig * (1 + pad);
+  return px >= trig * (1 - pad);
+}
+
+export function planUsable(p) {
+  return !!(p && planFresh(p) && p.status === 'ready' && +p.confidence >= 60);
+}
+
+export function degenLossPct(v) {
+  const n = Math.abs(+v);
+  return isNum(n) && n > 0 && n < 100 ? n : 25;
+}
+
+export function degenExitDecision(p, lp, flow) {
+  if (!(p?.avgUsd > 0) || !(lp > 0)) return null;
+  const entry = p.avgUsd;
+  const prot = p.prot || {};
+  const high = Math.max(prot.high || 0, entry, lp);
+  const entryLiq = prot.entryLiq;
+  if (high > 0 && lp <= high * 0.65) return { pct: 100, tag: 'rug', reason: 'rug exit' };
+  if (isNum(entryLiq) && entryLiq > 0 && isNum(flow?.liq) && flow.liq <= entryLiq * 0.5) return { pct: 100, tag: 'rug', reason: 'liquidity pull' };
+  const gain = lp / entry - 1;
+  const loss = degenLossPct(p.plan?.stopPct);
+  let stop = entry * (1 - loss / 100);
+  let rule = 'degen -' + loss + '%';
+  if (gain >= 0.5 || prot.be) stop = Math.max(stop, entry * 1.01), rule = stop >= entry ? 'BE@+50' : rule;
+  if (gain >= 0.8 || prot.trail80) stop = Math.max(stop, high * 0.8), rule = 'trail@+80';
+  const trail = isNum(+p.plan?.trail) ? Math.abs(+p.plan.trail) : 20;
+  if (p.tp1Done && high > 0 && trail > 0 && trail < 100) stop = Math.max(stop, high * (1 - trail / 100)), rule = 'TP1 trail';
+  p.prot = { ...prot, high, be: gain >= 0.5 || !!prot.be, trail80: gain >= 0.8 || !!prot.trail80, entryLiq: isNum(flow?.liq) && prot.entryLiq == null ? flow.liq : entryLiq };
+  if (lp <= stop) return { pct: 100, tag: /trail|BE/.test(rule) ? 'trail' : 'stop', reason: rule };
+  if (!p.tp1Done && gain > 0.6) {
+    const pressure = isNum(flow?.m5s) && isNum(flow?.m5b) && flow.m5s > flow.m5b;
+    const offHigh = high > 0 && lp <= high * 0.85;
+    if (pressure || offHigh) return { pct: 50, tag: 'tp1', reason: pressure ? 'early 50% (sells>buys)' : 'early 50% (-15% from high)' };
+  }
+  if (!p.tp1Done && lp >= entry * 2) {
+    p.tpStreak = (p.tpStreak || 0) + 1;
+    if (p.tpStreak >= 2) return { pct: 50, tag: 'tp1', reason: '2x' };
+  } else if (!p.tp1Done) p.tpStreak = 0;
+  const ageMin = (Date.now() - (p.firstTs || Date.now())) / 60000;
+  const timeStop = isNum(+p.plan?.timeStopMin) ? +p.plan.timeStopMin : 45;
+  if (!p.tp1Done && ageMin >= timeStop && lp <= entry) return { pct: 100, tag: 'time', reason: 'time' };
+  return null;
+}
+
+export function livePreReason(p) {
+  const ageH = isNum(p.ageH) ? p.ageH : null;
+  if (!(isNum(ageH) && ageH < 6)) return 'age ' + (ageH == null ? 'unknown' : ageH.toFixed(1) + 'h');
+  if (!(isNum(p.liq) && p.liq >= 40000)) return 'liquidity under $40k';
+  const m5b = +p.m5b || 0, h1b = +p.h1b || 0, m5v = +p.m5vol || 0, h1v = +p.h1vol || 0;
+  if (!(h1b > 0) || !(h1v > 0)) return 'no h1 baseline';
+  if (!((m5b * 12) / h1b > 1.15 && (m5v * 12) / h1v > 1.1 && m5b > (+p.m5s || 0))) return 'volume or buys not accelerating';
+  if (isNum(p.h1) && p.h1 > 1000 && !(isNum(p.m5) && p.m5 <= 0)) return 'extended +' + Math.round(p.h1) + '% 1h';
+  return '';
+}
+
+export function liveConfidence(p) {
+  let s = 45;
+  if (p.liq >= 80000) s += 8;
+  const buyAccel = p.h1b > 0 ? (p.m5b * 12) / p.h1b : 1;
+  const volAccel = p.h1vol > 0 ? (p.m5vol * 12) / p.h1vol : 1;
+  if (buyAccel > 1.5) s += 12;
+  if (volAccel > 1.5) s += 8;
+  if (p.m5b > p.m5s * 1.3) s += 8;
+  if (isNum(p.h1) && p.h1 > 0 && p.h1 < 300) s += 6;
+  return Math.max(0, Math.min(95, Math.round(s)));
+}
+
+export function applyLedgerSell(led, mint, tokens, usdBack, feeUsd) {
+  const lot = { tokens: 0, cost: 0 };
+  for (const t of led.trades || []) {
+    if (t.mint !== mint) continue;
+    if (t.side === 'buy') { lot.tokens += +t.tokenAmount || 0; lot.cost += +t.usd || 0; }
+    else if (lot.tokens > 0 && +t.tokenAmount > 0) {
+      const frac = Math.min(1, (+t.tokenAmount) / lot.tokens);
+      lot.cost *= 1 - frac;
+      lot.tokens = Math.max(0, lot.tokens - +t.tokenAmount);
+    }
+  }
+  const costOut = lot.tokens > 0 && tokens > 0 ? lot.cost * Math.min(1, tokens / lot.tokens) : 0;
+  led.balanceUsd = usd6(led.balanceUsd + usdBack);
+  led.realizedUsd = usd6((led.realizedUsd || 0) + usdBack - costOut);
+  return { costOut, pnlUsd: usd6(usdBack - costOut), feeUsd };
+}
+
+export { tehranDayKey, usd6 };

@@ -5913,6 +5913,7 @@ async function cappedBuy(opt) {
   }
 }
 async function autoTick() {
+  if (serverModeOn()) return;
   if (!A.on || autoBusy) return; const b = WALLETS.burner;
   if (!burnerReady()) { botLog('auto', 'panel', 'burner locked'); return; }
   autoBusy = true; lastTick = Date.now();
@@ -6211,7 +6212,78 @@ function renderBotBar() {
   if (typeof paintQuickInputs === 'function') paintQuickInputs();
   if (typeof paintLockBanner === 'function') paintLockBanner();
 }
+function serverModeOn() {
+  try {
+    const v = load('sms:server', {});
+    return !!(v && v.on && v.url && v.token);
+  } catch { return false; }
+}
+function serverCfg() {
+  const v = load('sms:server', {});
+  return { on: !!v.on, url: String(v.url || '').replace(/\/$/, ''), token: String(v.token || '') };
+}
+function stopBrowserBots() {
+  try { if (typeof stopScalp === 'function') stopScalp(); } catch { /* later */ }
+  try { if (typeof stopDegen === 'function') stopDegen(); } catch { /* later */ }
+  try { if (typeof stopLiveScan === 'function') stopLiveScan(); } catch { /* later */ }
+  try { A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); } catch { /* auto later */ }
+  try { if (typeof MYLIST !== 'undefined') { MYLIST.on = false; clearInterval(listTimer); } } catch { /* list later */ }
+}
+function mountServerMode() {
+  const host = $('tradeCard');
+  if (!host || $('serverModeCard')) return;
+  const card = document.createElement('section');
+  card.id = 'serverModeCard';
+  card.className = 'mt-3 rounded-xl bg-ink-850 border border-white/5 p-3';
+  card.innerHTML = '<div class="text-xs font-semibold text-slate-300">Server mode</div><p class="mt-1 text-[11px] text-slate-500">When this is on, the phone only shows the VPS daemon and does not sign trades.</p><label class="mt-2 flex items-center gap-2 text-[12px] text-slate-300"><input id="srvOn" type="checkbox" class="accent-violet-500"/> Use the server</label><input id="srvUrl" placeholder="http://VPS:8787" class="mt-2 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]"/><input id="srvToken" type="password" placeholder="API token" autocomplete="off" class="mt-2 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]"/><div class="mt-2 flex gap-2"><button type="button" id="srvSave" class="rounded-lg px-2 py-1 text-[11px] border border-white/10">Save</button><button type="button" id="srvPause" class="rounded-lg px-2 py-1 text-[11px] border border-rose-500/40 text-rose-300">Pause all</button></div><div id="srvBody" class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">Server mode is off.</div>';
+  host.appendChild(card);
+  const cfg = serverCfg();
+  $('srvOn').checked = cfg.on;
+  $('srvUrl').value = cfg.url;
+  $('srvToken').value = cfg.token;
+  const paint = (data, err) => {
+    const box = $('srvBody');
+    if (!box) return;
+    if (!serverModeOn()) { box.textContent = 'Server mode is off. This browser trades as usual.'; return; }
+    if (err) { box.textContent = 'Server: ' + err; return; }
+    if (!data) { box.textContent = 'Reading the server…'; return; }
+    const modes = data.toggles || {};
+    const toggles = ['scalp', 'breakout', 'plans', 'degen', 'scan'].map(k => '<label class="mr-2"><input data-srv-mode="' + k + '" type="checkbox" ' + (modes[k] ? 'checked' : '') + ' class="accent-violet-500"/> ' + k + '</label>').join('');
+    const rows = (data.positions || []).map(p => (p.symbol || p.mint.slice(0, 4)) + ' ' + p.mode + ' ' + (p.pnlPct == null ? '' : (p.pnlPct >= 0 ? '+' : '') + p.pnlPct.toFixed(1) + '%')).join(' · ');
+    const scalp = data.ledgers && data.ledgers.scalp;
+    const degen = data.ledgers && data.ledgers.degen;
+    box.innerHTML = '<div>' + (data.paused ? 'PAUSED' : 'running') + (data.dryRun ? ' · dry-run' : ' · live') + ' · ' + (data.pubkey || '') + '</div><div class="mt-1">' + toggles + '</div><div class="mt-1">Scalp $' + (scalp ? (+scalp.balanceUsd).toFixed(2) : '—') + ' · Degen $' + (degen ? (+degen.balanceUsd).toFixed(2) : '—') + '</div><div class="mt-1">' + (rows || 'No open server positions.') + '</div><div class="mt-1 text-slate-500">' + ((data.decisions || [])[0] ? (data.decisions[0].mode + ': ' + data.decisions[0].reason) : '') + '</div>';
+    box.querySelectorAll('[data-srv-mode]').forEach(el => el.addEventListener('change', async () => {
+      const body = {};
+      box.querySelectorAll('[data-srv-mode]').forEach(x => { body[x.dataset.srvMode] = x.checked; });
+      try { await serverCall('/api/mode', body); } catch (e) { paint(null, e.message || 'mode failed'); }
+    }));
+  };
+  async function serverCall(path, body) {
+    const c = serverCfg();
+    const res = await fetch(c.url + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + c.token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    paint(data);
+    return data;
+  }
+  $('srvSave').addEventListener('click', () => {
+    const next = { on: $('srvOn').checked, url: $('srvUrl').value.trim().replace(/\/$/, ''), token: $('srvToken').value.trim() };
+    save('sms:server', next);
+    if (serverModeOn()) { stopBrowserBots(); toast('Server mode on. Browser trading is off.', 'warn', 5000); }
+    else toast('Server mode off. This browser can trade again.', 'ok');
+    paint(null);
+    if (serverModeOn()) serverCall('/api/status').catch(e => paint(null, e.message || 'unreachable'));
+  });
+  $('srvPause').addEventListener('click', () => {
+    if (!serverModeOn()) { toast('Turn server mode on first', 'warn'); return; }
+    serverCall('/api/pause', {}).catch(e => paint(null, e.message || 'pause failed'));
+  });
+  setInterval(() => { if (serverModeOn() && !document.hidden) serverCall('/api/status').catch(e => paint(null, e.message || 'unreachable')); }, 4000);
+  paint(null);
+}
 function setExecBot(key, on) {
+  if (on && serverModeOn()) { toast('Server mode is on. This browser will not trade.', 'warn', 6000); return; }
   const locked = !burnerReady();
   if (key === 'auto') {
     if (!on) { A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null; }
@@ -7749,6 +7821,7 @@ function degenNoteLive(list, reason) {
   });
 }
 async function degenEvaluate(picks) {
+  if (serverModeOn()) return;
   const list = Array.isArray(picks) ? picks : (DEGEN.picks || []);
   if (!degenOn()) { degenNoteLive(list, 'degen pot off'); return; }
   if (!burnerReady()) { degenNoteLive(list, 'burner locked'); botLog('degen', 'panel', 'burner locked'); degenNote('armed, unlock to run'); return; }
@@ -8092,6 +8165,7 @@ async function enrichLive(p) {
   } catch { return p; }
 }
 async function liveScanOnce() {
+  if (serverModeOn()) return;
   if (!liveScanOn || liveScanBusy || document.hidden) return;
   liveScanBusy = true;
   try {
@@ -10025,6 +10099,7 @@ async function myListTick() {
   finally { listBusy = false; }
 }
 async function myListBuys() {
+  if (serverModeOn()) return;
   if (!MYLIST.on) return;
   if (!burnerReady()) { (MYLIST.rows || []).forEach(r => r && r.mint && botLog('mylist', r.mint, 'burner locked')); return; }
   for (const row of MYLIST.rows) {
@@ -10205,6 +10280,7 @@ function mlBreakSpark(geo) {
   return `<svg viewBox="0 0 140 36" class="mt-1 h-9 w-full" role="img" aria-label="Breakout line and zone"><rect x="0" y="${Math.min(y(geo.zoneHi), y(geo.zoneLo)).toFixed(1)}" width="140" height="${Math.max(2, Math.abs(y(geo.zoneHi) - y(geo.zoneLo))).toFixed(1)}" fill="rgba(122,162,214,0.18)"/><line x1="8" y1="${y(geo.line * 1.02).toFixed(1)}" x2="132" y2="${y(geo.line).toFixed(1)}" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
 }
 async function mlBreakPass() {
+  if (serverModeOn()) return;
   const rows = (MYLIST.rows || []).filter(r => r && r.enabled !== false && r.pool && r.mint);
   if (!rows.length) return;
   const row = rows[mlBreakCursor % rows.length];
@@ -11581,6 +11657,7 @@ function scalpFlag(mint) {
   return '';
 }
 async function scalpTick() {
+  if (serverModeOn()) return;
   if (!SCALP_ON || scalpBusy || document.hidden || window.__SMS_SAFE) return;
   const sized = scalpSizeUsd();
   if (!(sized.usd >= SCALP_RULE.MIN_FREE)) { scalpWhy.symbol = ''; scalpWhy.reason = sized.label; scalpWhy.at = Date.now(); renderScalp(); return; }
@@ -12187,6 +12264,7 @@ if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = s
 try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
 updateSolFilterBadge();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
+mountServerMode();
 if (WALLETS.burner.pubkey) refreshBalances('burner');
 if (openPositions().length) setTimeout(refreshPrices, 1500);
 setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
