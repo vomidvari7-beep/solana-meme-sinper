@@ -2864,6 +2864,8 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
     if (!extra.entryReason) extra.entryReason = 'manual sell';
   }
   const sig = await signAndSend(walletKey, tx);
+  const degenTrade = !!(extra?.degen || extra?.plan?.degen || degenHeld);
+  if (degenTrade && typeof noteDegenExit === 'function') noteDegenExit(mint);
   const rec = logTrade({ id: 'tr' + Date.now() + Math.random().toString(36).slice(2, 6), ts: Date.now(), wallet: walletKey, auto, side, mint, symbol: t?.symbol || short(mint),
     solAmount, tokenAmount, priceSol: tokenAmount ? solAmount / tokenAmount : null, priceUsd: tokenAmount && sp ? solAmount * sp / tokenAmount : null, solUsd: sp,
     impactPct: impactPct(q), slippageBps: q.slippageBps, route: routeLabel(q), prioFeeLamports: swap.prioritizationFeeLamports ?? null,
@@ -2871,7 +2873,8 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   onStatus(`Sent ✓ <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} on Solscan ↗</a> · waiting for confirmation…`);
   const conf = await waitForConfirmation(sig, (st) => onStatus(`Sent ✓ <a class="text-violet-300 underline" target="_blank" rel="noopener" href="${solscanTx(sig)}">${short(sig)} ↗</a> · ${esc(st)}…`));
   if (!conf.ok) { updateTrade(rec.id, { status: /not confirmed/.test(conf.err) ? 'unknown' : 'failed', error: conf.err }); throw new Error('Transaction ' + (conf.err || 'failed') + ` — ${sig}`); }
-  const fill = await getFill(sig, w.pubkey, mint);
+  let fill = null;
+  try { fill = await getFill(sig, w.pubkey, mint); } catch { fill = null; }
   const patch = { status: 'confirmed' };
   if (fill && fill.tokDelta) { const tk = Math.abs(fill.tokDelta); patch.tokenAmount = tk; patch.fill = 'chain';
     const solReal = isBuy ? solAmount : (fill.solDelta != null ? Math.max(0, fill.solDelta + fill.fee) : solAmount);
@@ -3224,7 +3227,7 @@ function levelState(p) {
   if (isNum(eff.stop) && lp <= eff.stop) return { cls: 'text-rose-300 font-bold', label: '⛔ STOP HIT · ' + eff.reason, lvl: 'stop', eff };
   if (isNum(eff.tp3) && lp >= eff.tp3) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP3 (5x) hit', lvl: 'tp3', eff };
   if (isNum(eff.tp2) && lp >= eff.tp2) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP2 (+100%) hit', lvl: 'tp2', eff };
-  if (isNum(eff.tp1) && lp >= eff.tp1) return { cls: 'text-emerald-300 font-bold', label: '🎯 TP1 (+50%) hit', lvl: 'tp1', eff };
+  if (p?.tp1Done) return { cls: 'text-emerald-300 font-bold', label: p.degen ? '2x filled' : 'TP1 filled', eff };
   if (isNum(eff.stop) && lp <= eff.stop * 1.1) return { cls: 'text-amber-300', label: 'near stop', eff };
   return { cls: 'text-slate-400', label: 'in range', eff };
 }
@@ -3903,7 +3906,7 @@ function posCard(p) {
   const up = isNum(m.pnl) && m.pnl >= 0;
   const glow = !isNum(m.pnl) ? '' : up ? 'shadow-[0_0_22px_rgba(34,197,94,0.14)] border-emerald-500/25' : 'shadow-[0_0_22px_rgba(244,63,94,0.14)] border-rose-500/25';
   const stop = pl.stop, tp1 = pl.tp1, tp2 = pl.tp2, entry = p.avgUsd;
-  const tp1Hit = p.tp1Done || (isNum(lp) && isNum(tp1) && lp >= tp1);
+  const tp1Hit = !!p.tp1Done;
   const tp2Hit = p.tp2Done || (isNum(lp) && isNum(tp2) && lp >= tp2);
   const frac = tp1SellFrac(p, pl);
   const solPx = solUsd();
@@ -3912,7 +3915,7 @@ function posCard(p) {
   const moneyChip = (kind, px, hit) => {
     const o = outcome(kind, px);
     const phrase = o ? pnlPhrase(o) : '';
-    const name = kind === 'stop' ? 'stop' : kind === 'tp1' ? 'TP1' : 'TP2';
+    const name = kind === 'stop' ? 'stop' : kind === 'tp1' ? (p.degen ? '2x' : 'TP1') : 'TP2';
     const state = kind === 'stop' || (o && o.hit) ? '' : (hit ? ' · hit' : ' · pending');
     const cls = o && !o.hit && isNum(o.usd) && o.usd < 0 ? 'border-rose-400/40 bg-rose-500/10 text-rose-200' : (o && isNum(o.usd) && o.usd > 0 ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-300');
     const sol = o && isNum(o.sol) ? `<span class="block text-[9px] text-slate-400">${fmtPnlSol(o.sol)}</span>` : '';
@@ -3922,20 +3925,21 @@ function posCard(p) {
   const stopOut = outcome('stop', stop);
   let bar = '';
   if (isNum(entry) && entry > 0 && isNum(stop) && isNum(tp1)) {
-    let lo = Math.min(stop, entry, isNum(lp) ? lp : entry);
-    let hi = Math.max(isNum(tp2) ? tp2 : tp1, tp1, entry, isNum(lp) ? lp : entry);
+    const barStop = p.degen ? degenStopPx(entry, p.plan?.stopPct) : stop;
+    let lo = p.degen ? Math.min(barStop, entry) : Math.min(stop, entry, isNum(lp) ? lp : entry);
+    let hi = p.degen ? Math.max(tp1, entry) : Math.max(isNum(tp2) ? tp2 : tp1, tp1, entry, isNum(lp) ? lp : entry);
     const pad = (hi - lo) * 0.08 || entry * 0.05;
     lo -= pad; hi += pad;
     const pctOf = (v) => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
     const lineOf = (id, px) => {
       const o = id === 'entry' || id === 'live' ? null : outcome(id, px);
-      const name = id === 'tp1' ? 'TP1' : id === 'tp2' ? 'TP2' : id;
+      const name = id === 'tp1' ? (p.degen ? '2x' : 'TP1') : id === 'tp2' ? 'TP2' : id;
       const text = name + ' ' + price(px) + (o ? ' · ' + pnlPhrase(o) : '');
       const sol = o && isNum(o.sol) ? fmtPnlSol(o.sol) : '';
       return { text, sol, cls: o && !o.hit ? pnlColor(o.usd) : (id === 'entry' ? 'text-amber-200' : id === 'live' ? 'text-slate-100' : 'text-slate-300') };
     };
     const marks = [
-      { id: 'stop', pct: pctOf(stop), ...lineOf('stop', stop) },
+      { id: 'stop', pct: pctOf(barStop), ...lineOf('stop', barStop) },
       { id: 'entry', pct: pctOf(entry), ...lineOf('entry', entry) },
       ...(isNum(lp) ? [{ id: 'live', pct: pctOf(lp), ...lineOf('live', lp) }] : []),
       { id: 'tp1', pct: pctOf(tp1), ...lineOf('tp1', tp1) },
@@ -3946,14 +3950,14 @@ function posCard(p) {
     const rowH = solPx > 0 ? 34 : 16;
     const rows = (side) => marks.filter(it => it.side === side).reduce((n, it) => Math.max(n, it.row + 1), 0);
     const lab = (it) => `<div data-lab="${it.id}" data-half="${it.half.toFixed(2)}" class="absolute text-[9px] leading-tight" style="left:${it.pct}%;top:${it.side === 'above' ? (rows('above') - 1 - it.row) * rowH : it.row * rowH}px;transform:${labelShift(it.pct, it.half)}"><span class="bar-main block whitespace-nowrap ${it.cls}">${esc(it.text)}</span>${it.sol ? `<span class="bar-sol block whitespace-nowrap text-[8px] text-slate-400">${esc(it.sol)}</span>` : ''}</div>`;
-    bar = `<div class="posbar relative mt-1 select-none" data-posbar data-key="${esc(p.key)}" data-lo="${lo}" data-hi="${hi}" data-entry="${entry}" data-live="${isNum(lp) ? lp : ''}" data-stop="${stop}" data-tp1="${tp1}" data-tp2="${isNum(tp2) ? tp2 : ''}" data-qty="${p.qty || 0}" data-tp1frac="${frac}" data-sol="${solPx || ''}" data-tp1done="${p.tp1Done ? '1' : '0'}" data-sold="${Math.max(0, (p.bought || 0) - (p.qty || 0))}" style="touch-action:none">
+    bar = `<div class="posbar relative mt-1 select-none" data-posbar data-key="${esc(p.key)}" data-lo="${lo}" data-hi="${hi}" data-entry="${entry}" data-live="${isNum(lp) ? lp : ''}" data-stop="${barStop}" data-tp1="${tp1}" data-tp2="${isNum(tp2) ? tp2 : ''}" data-qty="${p.qty || 0}" data-tp1frac="${frac}" data-sol="${solPx || ''}" data-tp1done="${p.tp1Done ? '1' : '0'}" data-sold="${Math.max(0, (p.bought || 0) - (p.qty || 0))}" style="touch-action:none">
       <div class="relative" style="height:${rows('above') * rowH}px">${marks.filter(it => it.side === 'above').map(lab).join('')}</div>
       <div class="pos-track relative h-8">
         <div class="absolute left-0 right-0 top-3 h-2 rounded-full bg-gradient-to-r from-rose-500/40 via-slate-600/40 to-emerald-500/50"></div>
         ${isNum(lp) ? `<div class="pos-fill absolute left-0 top-3 h-2 rounded-full bg-gradient-to-r from-rose-400/80 to-white/70" style="width:${pctOf(lp)}%"></div>` : ''}
         <div data-at="entry" class="absolute top-1 h-6 w-0.5 -ml-px bg-amber-300" style="left:${pctOf(entry)}%" title="entry"></div>
         ${isNum(lp) ? `<div data-at="live" class="absolute top-2 h-4 w-4 -ml-2 rounded-full bg-white shadow pointer-events-none" style="left:${pctOf(lp)}%" title="live"></div>` : ''}
-        <button type="button" data-drag="stop" data-at="stop" class="absolute top-1.5 z-20 h-5 w-5 -ml-2.5 rounded-full bg-rose-500 border-2 border-white shadow cursor-grab" style="left:${pctOf(stop)}%;touch-action:none" aria-label="Drag stop"></button>
+        <button type="button" data-drag="stop" data-at="stop" class="absolute top-1.5 z-20 h-5 w-5 -ml-2.5 rounded-full bg-rose-500 border-2 border-white shadow cursor-grab" style="left:${pctOf(barStop)}%;touch-action:none" aria-label="Drag stop"></button>
         <button type="button" data-drag="tp1" data-at="tp1" class="absolute top-1.5 z-20 h-5 w-4 -ml-2 rounded-sm bg-emerald-400 border-2 border-white shadow cursor-grab" style="left:${pctOf(tp1)}%;touch-action:none" aria-label="Drag TP1"></button>
         ${isNum(tp2) ? `<button type="button" data-drag="tp2" data-at="tp2" class="absolute top-1.5 z-20 h-5 w-4 -ml-2 rounded-sm bg-emerald-300 border-2 border-emerald-950 shadow cursor-grab" style="left:${pctOf(tp2)}%;touch-action:none" aria-label="Drag TP2"></button>` : ''}
         <div class="pos-tip hidden absolute z-30 -top-1 -translate-y-full rounded bg-ink-950/95 border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-100 whitespace-nowrap pointer-events-none"></div>
@@ -3963,7 +3967,8 @@ function posCard(p) {
         <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-full bg-rose-500"></i>stop</span>
         <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 bg-amber-300"></i>entry</span>
         <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-full bg-white"></i>live</span>
-        <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-sm bg-emerald-400"></i>TP</span>
+        <span class="inline-flex items-center gap-1"><i class="inline-block w-2 h-2 rounded-sm bg-emerald-400"></i>${p.degen ? '2x' : 'TP'}</span>
+        ${p.degen && p.tp1Done ? `<span class="num">Trail ${price(stop)}</span>` : ''}
       </div>
     </div>`;
   }
@@ -4741,8 +4746,44 @@ function degenLossPct(v) {
 function degenStopPx(entry, stopPct) {
   return entry * (1 - degenLossPct(stopPct) / 100);
 }
+function degenChainEntry(p) {
+  if (!p?.mint) return null;
+  let qty = 0, cost = 0;
+  for (const r of LOG) {
+    if (r.mint !== p.mint || r.wallet !== p.wallet || r.side !== 'buy' || r.status !== 'confirmed' || r.fill !== 'chain') continue;
+    if (isNum(p.firstTs) && r.ts + 1500 < p.firstTs) continue;
+    const q = +r.tokenAmount || 0, px = +r.priceUsd || 0;
+    if (q > 0 && px > 0) { qty += q; cost += q * px; }
+  }
+  return qty > 0 ? cost / qty : null;
+}
+const degenTpStreak = {};
+const degenTape = {};
+function degenNoteTape(p, lp) {
+  if (!p?.key || !(lp > 0)) return;
+  const liq = livePrices.get(p.mint)?.liq;
+  const arr = degenTape[p.key] || (degenTape[p.key] = []);
+  arr.push({ t: Date.now(), px: lp, liq: isNum(liq) ? liq : null });
+  const cut = Date.now() - 60000;
+  while (arr.length && arr[0].t < cut) arr.shift();
+  if (arr.length > 40) arr.splice(0, arr.length - 40);
+}
+function degenRugReason(p, lp) {
+  if (!p?.tp1Done || !(lp > 0)) return '';
+  const arr = degenTape[p.key] || [];
+  let hi = 0, liqThen = null;
+  for (const s of arr) {
+    if (isNum(s.px)) hi = Math.max(hi, s.px);
+    if (liqThen == null && isNum(s.liq)) liqThen = s.liq;
+  }
+  if (hi > 0 && lp <= hi * 0.65) return 'price drop';
+  const liqNow = livePrices.get(p.mint)?.liq;
+  if (isNum(liqNow) && isNum(liqThen) && liqThen > 0 && liqNow <= liqThen * 0.5) return 'liquidity drop';
+  return '';
+}
 function degenEffective(p, lp) {
-  const entry = p?.avgUsd;
+  const chain = degenChainEntry(p);
+  const entry = chain || p?.avgUsd;
   const loss = degenLossPct(p?.plan?.stopPct);
   const trail = isNum(p?.plan?.trail) ? Math.abs(p.plan.trail) : 20;
   const timeStopMin = isNum(p?.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
@@ -4754,14 +4795,21 @@ function degenEffective(p, lp) {
     const trailed = high * (1 - trail / 100);
     if (!isNum(stop) || trailed > stop) { stop = trailed; reason = 'degen trail'; }
   }
-  return { stop, tp1: isNum(entry) ? entry * 2 : null, tp2: null, trail, timeStopMin, reason, quick: false, high };
+  return { stop, tp1: isNum(entry) ? entry * 2 : null, tp2: null, trail, timeStopMin, reason, quick: false, high, chainEntry: chain };
 }
 function degenExit(p, lp) {
   if (!p?.degen || !isNum(lp) || !(p.avgUsd > 0)) return null;
+  degenNoteTape(p, lp);
+  const rug = degenRugReason(p, lp);
+  if (rug) return { pctSell: 100, tag: 'rug' };
   const eff = degenEffective(p, lp);
   if (p.tp1Done && eff.reason === 'degen trail' && isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: 'trail' };
   if (!p.tp1Done && isNum(eff.stop) && eff.stop < p.avgUsd && lp <= eff.stop) return { pctSell: 100, tag: 'stop' };
-  if (!p.tp1Done && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 50, tag: 'tp1' };
+  const chain = eff.chainEntry;
+  if (!p.tp1Done && isNum(chain) && chain > 0 && lp >= chain * 2) {
+    degenTpStreak[p.key] = (degenTpStreak[p.key] || 0) + 1;
+    if (degenTpStreak[p.key] >= 2) return { pctSell: 50, tag: 'tp1' };
+  } else if (!p.tp1Done) degenTpStreak[p.key] = 0;
   const ageMin = (Date.now() - p.firstTs) / 60000;
   if (!p.tp1Done && ageMin >= eff.timeStopMin && lp <= p.avgUsd) return { pctSell: 100, tag: 'time' };
   return null;
@@ -6257,6 +6305,7 @@ function degenCfg() {
     if (v && typeof v === 'object') Object.assign(d, v);
   } catch { /* defaults */ }
   d.on = !!d.on;
+  d.hunterOnly = d.hunterOnly !== false;
   d.budgetUsd = Math.min(100000, Math.max(1, +d.budgetUsd || 25));
   d.tradeUsd = Math.min(d.budgetUsd, Math.max(0.5, +d.tradeUsd || 4));
   d.maxOpen = Math.min(10, Math.max(1, Math.round(+d.maxOpen || 3)));
@@ -6276,6 +6325,37 @@ function noteDegenExit(mint) {
   const book = degenCooldownBook();
   book[mint] = Date.now() + 60 * 60e3;
   save(DEGEN_CD_LS, book);
+}
+const DEGEN_VETO_LS = 'sms:degenveto';
+function hunterVetoBook() {
+  const v = load(DEGEN_VETO_LS, {});
+  const book = v && typeof v === 'object' ? v : {};
+  const now = Date.now();
+  let dirty = false;
+  for (const mint of Object.keys(book)) {
+    const until = book[mint] && book[mint].until;
+    if (!(until > now)) { delete book[mint]; dirty = true; }
+  }
+  if (dirty) save(DEGEN_VETO_LS, book);
+  return book;
+}
+function noteHunterSticky(mint, reason) {
+  if (!mint) return;
+  const book = hunterVetoBook();
+  const prev = book[mint];
+  const until = Date.now() + 24 * 3600e3;
+  if (prev && prev.until > until - 60000 && prev.reason === reason) return;
+  book[mint] = { until, reason: String(reason || 'hunter veto').slice(0, 160) };
+  save(DEGEN_VETO_LS, book);
+}
+function absorbHunterVetoes(picks) {
+  for (const pick of picks || []) {
+    if (!pick?.mint) continue;
+    const now = pick.entry_now === true || pick.entry_now === 'true';
+    if (now) continue;
+    const reason = String(pick.reason || '');
+    if (/watch|reject|skip|avoid|wait|wash|insider/i.test(reason)) noteHunterSticky(pick.mint, reason);
+  }
 }
 function degenCooled(mint) {
   const until = degenCooldownBook()[mint];
@@ -6370,6 +6450,7 @@ async function degenFetchFile() {
   DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
   DEGEN.fetched = Date.now();
   DEGEN.error = '';
+  absorbHunterVetoes(picks);
   return picks;
 }
 async function degenTokenPx(mint, force) {
@@ -6402,7 +6483,10 @@ async function degenBuy(pick, opt) {
     const imp = impactPct(qo.quote);
     if (imp > A.maxImpact) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
     const plan = degenPlan({ stop_pct: 25, time_stop_min: 45, trail: 20 }, price);
-    const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, plan, entryReason: 'live scan · conf ' + (opt.conf ?? '') } });
+    let r;
+    try {
+      r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, plan, entryReason: 'live scan · conf ' + (opt.conf ?? '') } });
+    } catch (e) { noteDegenExit(pick.mint); throw e; }
     degenNote('live scan bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
     toast('Live scan buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
     renderDegen();
@@ -6433,7 +6517,10 @@ async function degenBuy(pick, opt) {
   const imp = impactPct(qo.quote);
   if (imp > A.maxImpact) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
   const plan = degenPlan(pick, price);
-  const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick · READY @ ' + price(price) } });
+  let r;
+  try {
+    r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick · READY @ ' + price(price) } });
+  } catch (e) { noteDegenExit(pick.mint); throw e; }
   degenNote('bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
   toast('Degen buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
   renderDegen();
@@ -6451,7 +6538,8 @@ async function degenSell(p, pct, tag, lp) {
     if (!h || h.raw === 0n) return;
     const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
     if (raw === 0n) return;
-    const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.min(15, Math.max(A.slipCap, S.slippagePct)) * 100) });
+    const slipPct = tag === 'rug' ? 15 : Math.min(15, Math.max(A.slipCap, S.slippagePct));
+    const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(slipPct * 100) });
     const why = tag + ' ' + pct + '% at ' + price(lp);
     await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper, entryReason: why } });
     degenNote(p.symbol + ' ' + why);
@@ -6482,6 +6570,7 @@ async function degenPoll() {
     DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
     DEGEN.fetched = Date.now();
     DEGEN.error = '';
+    absorbHunterVetoes(DEGEN.picks);
     for (const pick of DEGEN.picks) {
       const block = degenBuyBlock();
       if (block) { degenNote(block); break; }
@@ -6489,7 +6578,7 @@ async function degenPoll() {
       try { price = await degenTokenPx(pick.mint); } catch (e) { degenNote((pick.symbol || 'pick') + ' price — ' + e.message); continue; }
       const why = degenPickBlock(pick, price);
       if (why) continue;
-      try { await degenBuy(pick, { price }); } catch (e) { degenNote((pick.symbol || 'pick') + ' — ' + e.message); }
+      try { await degenBuy(pick, { price }); } catch (e) { noteDegenExit(pick.mint); degenNote((pick.symbol || 'pick') + ' — ' + e.message); }
       break;
     }
   } catch (e) { DEGEN.error = e.message || String(e); }
@@ -6530,6 +6619,7 @@ async function degenWatch() {
     DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
     DEGEN.fetched = Date.now();
     DEGEN.error = '';
+    absorbHunterVetoes(DEGEN.picks);
     DEGEN.quotes = DEGEN.quotes || {};
     const quoteList = (DEGEN.picks || []).filter(p => p?.mint);
     const take = window.__SMS_SAFE ? 3 : 6;
@@ -6593,10 +6683,12 @@ function noteScanHit(row) {
   if (liveScanHits.length > 20) liveScanHits.length = 20;
 }
 function hunterVeto(mint) {
+  const sticky = hunterVetoBook()[mint];
+  if (sticky && sticky.until > Date.now()) return sticky.reason || 'hunter veto';
   const pick = (DEGEN.picks || []).find(p => p && p.mint === mint);
-  if (!pick) return '';
-  const now = pick.entry_now === true || pick.entry_now === 'true';
-  if (now) return '';
+  const now = pick && (pick.entry_now === true || pick.entry_now === 'true');
+  if (degenCfg().hunterOnly !== false && !now) return pick ? 'not hunter entry' : 'not in hunter file';
+  if (!pick || now) return '';
   const reason = String(pick.reason || '');
   if (/watch|reject|skip|avoid|wait|wash|insider/i.test(reason)) return reason.slice(0, 160);
   return '';
@@ -6731,7 +6823,7 @@ async function liveScanOnce() {
       noteScanHit({ mint: p.mint, symbol: p.symbol, ok: true, status: 'PASS', conf, reason: 'buying from degen pot', at: Date.now() });
       try {
         await degenBuy({ mint: p.mint, symbol: p.symbol, stop_pct: 25, time_stop_min: 45, trail: 20, max_entry_price: p.price }, { live: true, price: p.price, conf });
-      } catch (e) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: e.message || 'buy failed', at: Date.now() }); }
+      } catch (e) { noteDegenExit(p.mint); noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: e.message || 'buy failed', at: Date.now() }); }
       break;
     }
   } catch (e) {
@@ -6792,9 +6884,11 @@ function renderDegen() {
   const posHtml = open.map(p => {
     const lp = livePrices.get(p.mint)?.price;
     const money = posMoney(p, lp);
-    const stopPx = isNum(p.avgUsd) ? degenStopPx(p.avgUsd, p.plan?.stopPct) : null;
-    const tpPx = isNum(p.avgUsd) ? p.avgUsd * 2 : null;
-    const trail = isNum(p.plan?.trail) ? p.plan.trail : 20;
+    const eff = effectiveStop(p, lp);
+    const chain = degenChainEntry(p) || p.avgUsd;
+    const stopPx = eff.stop;
+    const tpPx = isNum(chain) ? chain * 2 : null;
+    const trail = isNum(eff.trail) ? eff.trail : 20;
     const mins = isNum(p.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
     const leftMin = p.tp1Done ? null : Math.ceil((mins * 60000 - (Date.now() - p.firstTs)) / 60000);
     const trailTxt = p.tp1Done ? 'trailing ' + trail + '% off the high' : 'trail arms after 2x';
@@ -6806,7 +6900,7 @@ function renderDegen() {
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Entry</div><div class="font-mono">${price(p.avgUsd)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Now</div><div class="font-mono">${price(lp)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L</div><div class="font-mono ${pnlCls}">${isNum(money.pnlUsd) ? (money.pnlUsd >= 0 ? '+' : '') + usd(money.pnlUsd, 2) : '—'} · ${pct(money.pnl)}</div></div>
-        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Stop</div><div class="font-mono text-rose-300">${price(stopPx)}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Stop</div><div class="font-mono text-rose-300">${price(stopPx)}</div><div class="text-[10px] text-slate-500">${esc(eff.reason || '')}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">2x</div><div class="font-mono text-emerald-300">${price(tpPx)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Time stop</div><div class="font-mono">${timeTxt}</div></div>
       </div>
@@ -6856,11 +6950,12 @@ function renderDegen() {
       <label class="block"><span class="text-slate-400">Max open</span><input id="degenOpen" type="number" min="1" max="10" step="1" value="${cfg.maxOpen}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Daily loss stop USD</span><input id="degenLoss" type="number" min="1" step="1" value="${cfg.dailyLossUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
     </div>
+    <label class="flex items-center gap-2"><input id="degenHunterOnly" type="checkbox" ${cfg.hunterOnly !== false ? 'checked' : ''} class="accent-violet-500" /> Live scan: only Hunter-approved mints</label>
     <button type="button" id="degenSave" class="w-full rounded-xl border border-white/10 py-2">Save degen limits</button>
   </div>`;
   $('degenToggle')?.addEventListener('click', () => setExecBot('degen', !degenOn()));
   $('degenSave')?.addEventListener('click', () => {
-    saveDegen({ budgetUsd: +$('degenBudget').value, tradeUsd: +$('degenTrade').value, maxOpen: +$('degenOpen').value, dailyLossUsd: +$('degenLoss').value, on: degenOn() });
+    saveDegen({ budgetUsd: +$('degenBudget').value, tradeUsd: +$('degenTrade').value, maxOpen: +$('degenOpen').value, dailyLossUsd: +$('degenLoss').value, on: degenOn(), hunterOnly: !!$('degenHunterOnly')?.checked });
     toast('Degen limits saved', 'ok');
     renderDegen();
   });
