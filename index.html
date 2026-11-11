@@ -12,48 +12,97 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 }}};
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { background: radial-gradient(1200px 600px at 10% -10%, rgba(153,69,255,.18), transparent 60%), radial-gradient(900px 500px at 110% 0%, rgba(20,241,149,.12), transparent 60%), #07090f; }
-  .glass { background: rgba(15,20,34,.78); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.06); }
-  .fa { font-family: 'Vazirmatn', sans-serif; direction: rtl; }
-  .grad-text { background: linear-gradient(90deg,#9945FF,#14F195); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .btn-primary { background: linear-gradient(90deg,#9945FF,#14F195); color:#07090f; }
+  :root {
+    --bg: #070b14;
+    --card: rgba(14, 19, 32, .86);
+    --line: rgba(255,255,255,.08);
+    --violet: #7c3aed;
+    --emerald: #34d399;
+    --rose: #fb7185;
+    --amber: #fbbf24;
+    --muted: #8b95a8;
+  }
+  body { background: radial-gradient(900px 420px at 0% -10%, rgba(124,58,237,.16), transparent 55%), #070b14; color: #e6ebf5; }
+  .glass { background: var(--card); backdrop-filter: blur(16px); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04); }
+  .fa { font-family: 'Vazirmatn', sans-serif; direction: rtl; text-align: right; line-height: 1.75; unicode-bidi: plaintext; }
+  .grad-text { color: #f4f6fb; }
+  .btn-primary { background: var(--violet); color: #fff; box-shadow: 0 8px 18px rgba(124,58,237,.28); }
   .btn-primary:hover { filter: brightness(1.08); }
   select, input, textarea { color-scheme: dark; }
+  .font-mono, .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
   .scroll-thin::-webkit-scrollbar { height: 6px; width: 6px; } .scroll-thin::-webkit-scrollbar-thumb { background:#2a3456; border-radius: 6px; }
   .spinner { width:18px;height:18px;border:2px solid rgba(7,9,15,.3);border-top-color:#07090f;border-radius:50%;animation:spin .8s linear infinite; display:inline-block; }
-  .spinner-light { border-color: rgba(255,255,255,.2); border-top-color:#14F195; }
+  .spinner-light { border-color: rgba(255,255,255,.2); border-top-color:#a78bfa; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .toast-enter { animation: tin .25s ease-out; } @keyframes tin { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+  .toast-enter { animation: tin .22s ease-out; } @keyframes tin { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+  .toast-card { position: relative; overflow: hidden; background: rgba(14,19,32,.94); color: #e6ebf5; border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0,0,0,.4); }
+  .toast-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #a78bfa; }
+  .toast-card[data-kind="ok"]::before { background: var(--emerald); }
+  .toast-card[data-kind="err"]::before { background: var(--rose); }
+  .toast-card[data-kind="warn"]::before { background: var(--amber); }
   section[id^="sec-"], #results { scroll-margin-top: 12px; } @media (min-width:640px){ section[id^="sec-"], #results { scroll-margin-top: 84px; } }
   details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+  details[open] > :not(summary) { animation: detailIn .2s ease; }
+  @keyframes detailIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   .ios-sw { width: 44px; height: 26px; border-radius: 13px; background: #39393D; position: relative; flex: 0 0 auto; transition: background-color 200ms ease; }
   .ios-sw.on { background: #34C759; }
   .ios-sw i { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform 200ms ease; }
   .ios-sw.on i { transform: translateX(18px); }
+  .sec-title { display: flex; align-items: center; gap: .45rem; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+  .sec-title .ico { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: rgba(124,58,237,.18); color: #ddd6fe; font-size: 12px; flex: 0 0 auto; }
+  .kicker, label > span:first-child { letter-spacing: .04em; }
+  .stat-strip { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .stat-pill { min-width: 0; }
+  button, .btn-primary { transition: transform .18s ease, filter .18s ease, background-color .18s ease, border-color .18s ease, opacity .18s ease; }
+  button:active:not(:disabled):not([data-drag]) { transform: scale(.98); }
+  #btnAnalyze, #btnWallet, #tmConfirm, #tmCancel, #btnSaveSettings, [data-mb-buy] { min-height: 44px; }
+  button.bg-violet-600, button.bg-emerald-500, button.bg-emerald-600 { background: #7c3aed; color: #fff; border-radius: 12px; }
+  button.bg-emerald-500, [data-mb-buy] { background: #059669; color: #fff; }
+  button.bg-ink-700 { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
+  button.bg-rose-600 { background: #e11d48; color: #fff; border-radius: 12px; }
+  .manual-buy[data-compact="1"] > div { flex-wrap: wrap; }
+  .manual-buy[data-compact="1"] input { height: 44px !important; border-radius: 12px; }
+  .manual-buy[data-compact="1"] [data-mb-chip] { height: 36px; min-width: 36px; border-radius: 999px; }
+  button[data-ml-chart], .chart-frame { border-radius: 12px; background: linear-gradient(180deg, rgba(8,12,22,.95), rgba(16,22,36,.95)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
+  article span.rounded-full { font-weight: 600; letter-spacing: .01em; }
+  .empty-note { display: flex; align-items: center; gap: .5rem; color: #94a3b8; font-size: 13px; }
+  .empty-note::before { content: "◌"; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: rgba(255,255,255,.04); border: 1px solid var(--line); color: #c4b5fd; flex: 0 0 auto; }
+  .flash-up { animation: flashUp .22s ease; }
+  .flash-down { animation: flashDown .22s ease; }
+  @keyframes flashUp { from { color: #34d399; } }
+  @keyframes flashDown { from { color: #fb7185; } }
+  #botBar .glass { box-shadow: 0 8px 24px rgba(0,0,0,.22); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body class="text-slate-200 font-sans min-h-screen antialiased">
 
 <div id="botBar"></div>
 
-<header class="sm:sticky top-0 z-30 border-b border-white/5 bg-ink-950/80 backdrop-blur">
-  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-xl btn-primary grid place-items-center font-extrabold text-lg">◎</div>
-      <div>
-        <h1 class="text-lg sm:text-xl font-extrabold tracking-tight"><span class="grad-text">SolanaMemeSniper</span> <span class="text-slate-400 font-medium text-sm">Panel</span></h1>
-        <p class="text-[11px] text-slate-500 -mt-0.5">Rug-avoidance first · Live DexScreener + RugCheck</p>
-      </div>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-      <div id="solTicker" class="flex items-center gap-2 text-sm glass rounded-xl px-2.5 py-1.5">
-        <div class="leading-tight min-w-0">
-          <div class="flex items-center gap-1.5"><span class="text-slate-400">SOL</span><span id="solPrice" class="font-mono font-semibold">—</span><span id="solChg" class="font-mono text-xs text-slate-500">loading…</span></div>
-          <div id="solGaugeState" class="text-[10px] text-slate-400 truncate max-w-[8.5rem] sm:max-w-none"></div>
+<header class="sm:sticky top-0 z-30 border-b border-white/10 bg-[#070b14]/85 backdrop-blur">
+  <div class="max-w-7xl mx-auto px-4 py-2.5">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-8 h-8 rounded-xl btn-primary grid place-items-center font-extrabold text-base shrink-0">◎</div>
+        <div class="min-w-0">
+          <h1 class="text-[15px] font-semibold tracking-tight truncate"><span class="grad-text">SolanaMemeSniper</span></h1>
+          <p class="text-[10px] uppercase tracking-wide text-slate-500 truncate">Rug-avoidance · live data</p>
         </div>
-        <svg id="solGauge" viewBox="0 0 80 46" class="w-14 h-8 sm:w-[4.25rem] sm:h-9 shrink-0" role="img" aria-label="SOL fear and greed">
+      </div>
+      <button id="btnWallet" class="rounded-xl px-3 text-sm font-semibold btn-primary text-white flex items-center gap-2 shrink-0"><span>👻</span><span id="btnWalletLabel">Connect Phantom</span></button>
+    </div>
+    <div class="stat-strip mt-2">
+      <div id="solTicker" class="stat-pill flex items-center gap-1.5 text-sm glass rounded-xl px-2 py-1.5">
+        <div class="leading-tight min-w-0 flex-1">
+          <div class="flex items-center gap-1.5"><span class="text-[10px] uppercase tracking-wide text-slate-500">SOL</span><span id="solPrice" class="font-mono font-semibold tabular">—</span></div>
+          <div id="solChg" class="font-mono text-[10px] text-slate-500">loading…</div>
+          <div id="solGaugeState" class="text-[10px] text-slate-400 truncate"></div>
+        </div>
+        <svg id="solGauge" viewBox="0 0 80 46" class="w-12 h-7 shrink-0" role="img" aria-label="SOL fear and greed">
           <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="butt"/>
           <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="#f97316" stroke-width="6"/>
           <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="#eab308" stroke-width="6"/>
@@ -63,13 +112,13 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           <circle cx="40" cy="40" r="2.4" fill="#f8fafc"/>
         </svg>
       </div>
-      <div id="dexTicker" class="flex items-center gap-2 text-sm glass rounded-xl px-2.5 py-1.5" title="DEX Mood from the latest scan">
-        <div class="leading-tight min-w-0">
-          <div class="text-[10px] uppercase tracking-wide text-slate-500">DEX Mood</div>
-          <div id="dexGaugeState" class="text-[10px] text-slate-300 truncate max-w-[8.5rem] sm:max-w-none">—</div>
-          <div id="dexTrend" class="text-[10px] text-slate-500">1h — · 24h —</div>
+      <div id="dexTicker" class="stat-pill flex items-center gap-1.5 text-sm glass rounded-xl px-2 py-1.5" title="DEX Mood from the latest scan">
+        <div class="leading-tight min-w-0 flex-1">
+          <div class="text-[10px] uppercase tracking-wide text-slate-500">DEX mood</div>
+          <div id="dexGaugeState" class="text-[11px] text-slate-200 truncate">—</div>
+          <div id="dexTrend" class="text-[10px] text-slate-500 font-mono">1h — · 24h —</div>
         </div>
-        <svg id="dexGauge" viewBox="0 0 80 46" class="w-14 h-8 sm:w-[4.25rem] sm:h-9 shrink-0" role="img" aria-label="DEX mood">
+        <svg id="dexGauge" viewBox="0 0 80 46" class="w-12 h-7 shrink-0" role="img" aria-label="DEX mood">
           <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="butt"/>
           <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="#f97316" stroke-width="6"/>
           <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="#eab308" stroke-width="6"/>
@@ -78,9 +127,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           <line id="dexGaugeNeedle" x1="40" y1="40" x2="40" y2="16" stroke="#f8fafc" stroke-width="2" stroke-linecap="round"/>
           <circle cx="40" cy="40" r="2.4" fill="#f8fafc"/>
         </svg>
-        <svg id="dexSpark" viewBox="0 0 64 28" class="w-14 h-7 shrink-0 hidden sm:block" role="img" aria-label="DEX mood last 24h, Tehran time"><path id="dexSparkPath" d="" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg>
+        <svg id="dexSpark" viewBox="0 0 64 28" class="w-10 h-6 shrink-0 hidden sm:block" role="img" aria-label="DEX mood last 24h, Tehran time"><path id="dexSparkPath" d="" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg>
       </div>
-      <button id="btnWallet" class="rounded-xl px-3 py-1.5 text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white transition flex items-center gap-2"><span>👻</span><span id="btnWalletLabel">Connect Phantom</span></button>
     </div>
   </div>
 </header>
@@ -88,13 +136,13 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 <section id="readyNow" class="max-w-7xl mx-auto px-4 pt-4">
   <div class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-      <h2 class="font-bold text-base">Ready now 🟢</h2>
+      <h2 class="sec-title"><span class="ico">●</span>Ready now</h2>
       <div class="flex flex-wrap items-center gap-2 text-xs">
         <label class="flex items-center gap-1.5 text-slate-300"><input id="readyAlertOn" type="checkbox" class="accent-emerald-500" checked /> Sound and alerts</label>
         <button id="readyNotify" type="button" class="rounded-lg px-2 py-1 bg-ink-700 hover:bg-ink-600 border border-white/10">Enable notifications</button>
       </div>
     </div>
-    <div id="readyRows" class="text-sm text-slate-400">No token in entry zone right now</div>
+    <div id="readyRows" class="empty-note">No token in entry zone right now</div>
   </div>
 </section>
 
@@ -102,7 +150,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   <section class="lg:col-span-4 space-y-4">
     <div class="glass rounded-2xl p-4 sm:p-5">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="font-bold text-base">Inputs</h2>
+        <h2 class="sec-title"><span class="ico">⌘</span>Inputs</h2>
         <span id="lastIndicator" class="hidden text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"></span>
       </div>
       <div class="grid grid-cols-2 gap-3">
@@ -176,7 +224,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     <!-- WALLET & TRADING -->
     <div id="tradeCard" class="glass rounded-2xl p-4 sm:p-5">
       <div class="flex items-center justify-between mb-2">
-        <h2 class="font-bold text-base">Wallet &amp; Trading</h2>
+        <h2 class="sec-title"><span class="ico">◈</span>Wallet &amp; Trading</h2>
         <span id="walletStatus" class="text-[11px] px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">Not connected</span>
       </div>
       <div id="walletInfo" class="text-xs text-slate-400"></div>
@@ -243,8 +291,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           </div>
         </div>
       </details>
-      <p class="mt-3 text-[10px] leading-relaxed text-rose-200/70">🔐 No private keys, no auto-trading. Every trade is shown in a confirmation window and must be signed by you in Phantom. Swaps are routed by Jupiter. Meme coins can go to zero within minutes.
-        <span class="fa block mt-1">هیچ کلید خصوصی‌ای گرفته نمی‌شود و هیچ معامله‌ای خودکار نیست؛ هر معامله را خودت در Phantom امضا می‌کنی.</span></p>
+      <p class="mt-3 text-[11px] leading-relaxed text-slate-400">Burner hot wallet · auto-trading within your caps · keep small amounts.
+        <span class="fa block mt-1 text-slate-500">کیف داغ برنر · معامله خودکار داخل سقف‌های خودت · مبلغ کم نگه دار.</span></p>
     </div>
   </section>
 
@@ -252,7 +300,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     <div id="agentPicks"></div>
     <div id="portfolio" class="hidden"></div>
     <div id="emptyState" class="glass rounded-2xl p-8 text-center">
-      <div class="text-4xl mb-3">🎯</div>
+      <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-white/5 text-2xl">◎</div>
       <h3 class="font-bold text-lg">No analysis yet</h3>
       <p class="text-sm text-slate-400 mt-1">Paste tokens and hit <b>Analyze</b>, load <b>Demo data</b>, or <b>Scan sources</b> (boosted, trending, top volume, and new pools).</p>
       <p class="fa text-xs text-slate-500 mt-2">برای شروع، «Demo data» یا «Scan latest boosted» را بزن.</p>
@@ -267,7 +315,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] text-amber-200/80 leading-relaxed">
+  <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
     <span class="fa block mt-1">فقط تحلیل است، توصیه‌ی مالی نیست. قبل از هر ورود دوباره چک کن.</span>
@@ -354,12 +402,24 @@ function scoreCls(s) { return s >= 65 ? 'emerald' : s >= 45 ? 'amber' : 'rose'; 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function fmtTime(ts) { try { return new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' }); } catch { return new Date(ts).toString(); } }
 
+function flashValue(el, text) {
+  if (!el) return;
+  const prev = el.getAttribute('data-v');
+  el.textContent = text;
+  if (prev != null && prev !== text) {
+    const num = (s) => parseFloat(String(s).replace(/[^0-9.\-]/g, ''));
+    const a = num(prev), b = num(text);
+    el.classList.remove('flash-up', 'flash-down');
+    if (isFinite(a) && isFinite(b) && a !== b) { void el.offsetWidth; el.classList.add(b > a ? 'flash-up' : 'flash-down'); }
+  }
+  el.setAttribute('data-v', text);
+}
 function toast(msg, type = 'info', ms = 4200) {
-  const colors = { info: 'border-violet-500/30 bg-ink-800', ok: 'border-emerald-500/30 bg-emerald-950/90', err: 'border-rose-500/40 bg-rose-950/90', warn: 'border-amber-500/40 bg-amber-950/90' };
   const el = document.createElement('div');
-  el.className = `toast-enter max-w-sm w-full sm:w-auto rounded-xl border px-4 py-2.5 text-sm shadow-2xl ${colors[type] || colors.info}`;
+  el.dataset.kind = type || 'info';
+  el.className = 'toast-enter toast-card max-w-sm w-full sm:w-auto rounded-xl px-4 py-2.5 text-sm';
   el.textContent = msg; $('toasts').appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, ms);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .22s'; setTimeout(() => el.remove(), 220); }, ms);
 }
 const paceState = {
   gecko: { gap: 2500, next: 0, tail: Promise.resolve() },
@@ -446,9 +506,9 @@ async function fetchSolContext() {
 }
 function renderTicker(ctx) {
   if (ctx) { if (!ctx.at) ctx.at = Date.now(); window.__SMS_SOL = ctx; if (typeof window.__smsSizePrice === 'function') window.__smsSizePrice(); }
-  if (!ctx || !isNum(ctx.price)) { $('solPrice').textContent = '—'; $('solChg').textContent = 'unavailable'; if (typeof window.__smsSolBadge === 'function') window.__smsSolBadge(); return; }
-  $('solPrice').textContent = '$' + ctx.price.toFixed(2);
-  $('solChg').className = 'font-mono text-xs ' + pctCls(ctx.h24); $('solChg').textContent = pct(ctx.h24) + ' 24h';
+  if (!ctx || !isNum(ctx.price)) { flashValue($('solPrice'), '—'); flashValue($('solChg'), 'unavailable'); if (typeof window.__smsSolBadge === 'function') window.__smsSolBadge(); return; }
+  flashValue($('solPrice'), '$' + ctx.price.toFixed(2));
+  $('solChg').className = 'font-mono text-[10px] tabular ' + pctCls(ctx.h24); flashValue($('solChg'), pct(ctx.h24) + ' 24h');
   if (typeof window.__smsSolBadge === 'function') window.__smsSolBadge();
 }
 async function fetchTokenPairs(mints) {
@@ -1672,7 +1732,7 @@ const REG = { emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300
 function badge(score) { return `<div class="shrink-0 w-14 h-14 rounded-2xl grid place-items-center border ${BADGE[scoreCls(score)]}"><div class="text-center leading-none"><div class="text-xl font-extrabold">${score}</div><div class="text-[9px] opacity-70 mt-0.5">/100</div></div></div>`; }
 function icon(status) { return { ok: '<span class="text-emerald-400">✔</span>', bad: '<span class="text-rose-400">✖</span>', warn: '<span class="text-amber-400">▲</span>', unknown: '<span class="text-slate-500">?</span>' }[status]; }
 function section(id, title, num, body, sub = '') {
-  return `<section id="${id}" class="glass rounded-2xl p-4 sm:p-5"><div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">${num}</span>${title}</h2>${sub ? `<span class="text-[11px] text-slate-500">${sub}</span>` : ''}</div>${body}</section>`;
+  return `<section id="${id}" class="glass rounded-2xl p-4 sm:p-5"><div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="sec-title"><span class="ico">${num}</span>${title}</h2>${sub ? `<span class="text-[11px] text-slate-500">${sub}</span>` : ''}</div>${body}</section>`;
 }
 function exitProtect() {
   let be = 25, early = 40, trail = 18;
@@ -3184,10 +3244,10 @@ function equityCardHtml() {
   const names = [['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['all', 'All']];
   const glow = up == null ? '' : up ? 'shadow-[0_0_28px_rgba(34,197,94,0.14)]' : 'shadow-[0_0_28px_rgba(244,63,94,0.14)]';
   const seg = (on) => on ? 'bg-white/10 text-slate-100' : 'text-slate-400';
-  return `<div id="equityCard" class="rounded-2xl bg-ink-850/80 border border-white/10 p-3.5 mb-3 ${glow}">
+  return `<div id="equityCard" class="glass rounded-2xl p-3.5 mb-3 ${glow}">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
-        <div class="text-[10px] uppercase tracking-wide text-slate-500">Wealth growth</div>
+        <div class="sec-title text-[13px]"><span class="ico">◈</span>Wealth</div>
         <div class="mt-1 font-mono text-2xl sm:text-3xl whitespace-normal break-words text-slate-100">${fmtEquity(cur, unit, false)}</div>
         <div class="mt-1 font-mono text-sm whitespace-normal break-words ${up == null ? 'text-slate-400' : up ? 'text-emerald-300' : 'text-rose-300'}">${fmtEquity(change, unit, true)}${isNum(changePct) ? ' · ' + pct(changePct) : ''} <span class="text-slate-500">${rangeLabel}</span></div>
       </div>
@@ -3603,7 +3663,7 @@ function posCard(p) {
       </div>
     </div>`;
   }
-  return `<article class="rounded-2xl bg-ink-850/80 border border-white/10 p-3.5 ${glow}">
+  return `<article class="glass rounded-2xl p-3.5 ${glow}">
     <div class="flex items-start gap-3">
       ${info?.image ? `<img src="${safeUrl(info.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs font-bold shrink-0">${esc((p.symbol || '?').slice(0, 3))}</div>`}
       <div class="min-w-0 flex-1">
@@ -3821,7 +3881,7 @@ function closedTradesHtml() {
   const lastHtml = last ? `<div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] whitespace-normal break-words">Last trade: <b>${esc(last.symbol || short(last.mint))}</b> <span class="${isNum(last.pnlUsd) && last.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300'}">${signedUsd(last.pnlUsd, last.approx)} (${pct(last.pnlPct, 0)})</span></div>` : '';
   const pf = s.pf == null ? '—' : s.pf === Infinity ? '∞' : s.pf.toFixed(2);
   return `<div class="mt-4">
-    <h3 class="font-bold text-sm mb-2">Closed trades</h3>
+    <h3 class="sec-title text-sm mb-2"><span class="ico">✓</span>Closed trades</h3>
     ${lastHtml}
     <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-xl border border-white/10 bg-ink-900/40 p-3">
       ${stat('Realized', signedUsd(s.usd, s.approx) + '<span class="block text-[10px] text-slate-400">' + signedSol(s.sol) + '</span>', isNum(s.usd) && s.usd < 0 ? 'text-rose-300' : 'text-emerald-300')}
@@ -3836,7 +3896,7 @@ function closedTradesHtml() {
     <div class="mt-2 flex flex-wrap gap-1.5">${chip('range', 'today', 'Today')}${chip('range', 'week', 'Week')}${chip('range', 'month', 'Month')}${chip('range', 'all', 'All')}</div>
     <div class="mt-1.5 flex flex-wrap gap-1.5">${chip('src', 'all', 'All sources')}${chip('src', 'auto', 'AUTO')}${chip('src', 'manual', 'MANUAL')}${chip('src', 'copy', 'COPY')}${chip('src', 'snipe', 'SNIPE')}${chip('src', 'mylist', 'MY LIST')}</div>
     <p class="mt-1 text-[10px] text-slate-600 whitespace-normal break-words">USD uses the SOL price saved on each fill. A missing price uses the live SOL price and is marked ≈.</p>
-    <div class="mt-2 space-y-2">${list.length ? list.map(closedTradeCard).join('') : '<p class="text-[11px] text-slate-500">No closed trades for this filter.</p>'}</div>
+    <div class="mt-2 space-y-2">${list.length ? list.map(closedTradeCard).join('') : '<p class="empty-note">No closed trades for this filter.</p>'}</div>
   </div>`;
 }
 function renderPortfolio() {
@@ -3864,11 +3924,11 @@ function renderPortfolio() {
   const cards = open.map(posCard).join('');
   const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>Qty</th><th>Avg entry</th><th>Price</th><th>PnL</th><th>Stop</th><th>TP1/TP2</th><th>Status</th><th>Sell</th></tr></thead><tbody>${posRows}</tbody></table></div>`;
   el.innerHTML = `<section id="sec-portfolio" class="glass rounded-2xl p-4 sm:p-5">
-    <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="font-bold text-base flex items-center gap-2"><span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400">$$</span>Positions &amp; Trade Log</h2>
+    <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3"><h2 class="sec-title"><span class="ico">$$</span>Positions &amp; Trade Log</h2>
       <div class="flex flex-wrap gap-2 text-[11px]"><button id="pfView" class="text-violet-300 hover:underline">${posTableView ? 'Cards' : 'Table view'}</button><button id="pfRefresh" class="text-violet-300 hover:underline">↻ Prices</button><button id="pfCsv" class="text-violet-300 hover:underline">⬇ CSV</button><button id="pfClear" class="text-rose-300 hover:underline">Clear log</button></div></div>
     ${equityCardHtml()}
     <div class="text-[11px] text-slate-500 mb-2 whitespace-normal break-words">Open positions ${open.length}/${maxPos()} · spent today ${solWithUsd(spentToday())} / ${esc(sizeHint(S.dailyMaxSol) || S.dailyMaxSol + ' ' + unitWord())} (auto ${solWithUsd(spentToday(r => r.auto))} / ${esc(sizeHint(A.dailyCap) || A.dailyCap + ' ' + unitWord())}) · stop ratchets up (initial / break-even / early trail / trail) · TP1 +50% / TP2 +100% of avg entry · <b>alerts only</b> unless burner auto-exit is ON</div>
-    ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="text-xs text-slate-500">No open positions.</p>'}
+    ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="empty-note">No open positions.</p>'}
     ${closedTradesHtml()}
     ${LOG.length ? `<details class="mt-3" open><summary class="cursor-pointer text-xs text-slate-400">▸ Trade log (${LOG.length})</summary><div class="overflow-x-auto scroll-thin mt-2"><table class="w-full text-xs min-w-[720px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Time</th><th>Side</th><th>Token</th><th>SOL</th><th>Tokens</th><th>Price</th><th>Status</th><th>Tx</th></tr></thead><tbody>${logRows}</tbody></table></div></details>` : ''}
     <div id="autoLogBox"></div>
@@ -7077,7 +7137,7 @@ function renderMyList() {
     const glow = v.ready ? 'shadow-[0_0_22px_rgba(34,197,94,0.14)] border-emerald-500/25' : 'border-white/10';
     const dex = pair.url || ('https://dexscreener.com/solana/' + row.mint);
     const cell = (k, val) => `<div class="min-w-0"><div class="text-[9px] uppercase tracking-wide text-slate-500">${k}</div><div class="text-[12px] leading-tight text-slate-100 whitespace-normal break-words">${val || '—'}</div></div>`;
-    return `<article class="rounded-2xl bg-ink-850/80 border p-2.5 ${glow}" data-row="${esc(row.id)}">
+    return `<article class="glass rounded-2xl p-2.5 ${glow}" data-row="${esc(row.id)}">
       <div class="flex items-center gap-2">
         ${info.imageUrl ? `<img src="${safeUrl(info.imageUrl)}" alt="" class="w-8 h-8 rounded-lg object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-8 h-8 rounded-lg bg-ink-700 grid place-items-center text-[10px] font-bold shrink-0">${esc((row.symbol || '?').slice(0, 3))}</div>`}
         <div class="min-w-0 flex-1 flex items-center gap-1.5">
@@ -7091,7 +7151,7 @@ function renderMyList() {
         </div>
         <label class="flex items-center gap-1 text-[11px] text-slate-300 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /> On</label>
       </div>
-      <button type="button" data-ml-chart="${esc(row.id)}" class="mt-1.5 block w-full rounded-lg border border-white/10 bg-ink-900/70 p-1 text-left" style="touch-action:manipulation" aria-label="Open chart">
+      <button type="button" data-ml-chart="${esc(row.id)}" class="chart-frame mt-1.5 block w-full rounded-xl border border-white/10 p-1.5 text-left" style="touch-action:manipulation" aria-label="Open chart">
         ${drawn.empty ? '<div class="h-10 grid place-items-center text-[11px] text-slate-500">Chart waiting for candles</div>' : drawn.svg}
       </button>
       <div class="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
@@ -7129,7 +7189,7 @@ function renderMyList() {
   const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><b>${esc(v.row.symbol || short(v.row.mint))}</b></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" class="text-rose-300">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
   const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="rounded-full border px-2.5 py-1 text-[11px] ${listSort === key ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
   box.innerHTML = `<div class="rounded-2xl border ${MYLIST.on ? 'border-amber-300/40' : 'border-white/10'} bg-ink-900/30 p-3">
-    <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="font-bold text-sm">My List ⭐</h3>
+    <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3>
       <div class="flex flex-wrap gap-2 text-[11px]"><button type="button" id="mlView" class="text-violet-300">${listTable ? 'Cards' : 'Table view'}</button><button type="button" id="mlClear" class="text-rose-300">Clear list</button></div></div>
     <p class="mt-1 text-[11px] text-slate-500 whitespace-normal break-words">Flags are info only. Auto-buy skips RugCheck, insider, liquidity, age, and conviction. A Jupiter route plus the position, balance, and daily caps still apply. The auto-buy switch resets on reload.</p>
     <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -7602,9 +7662,9 @@ function renderAgentPicks() {
     </article>`;
   }).join('');
   box.innerHTML = `<section class="glass rounded-2xl p-3">
-    <h2 class="font-bold text-sm mb-1">Agent picks</h2>
+    <h2 class="sec-title text-sm mb-1"><span class="ico">◎</span>Agent picks</h2>
     ${status}${banner}
-    ${cards ? `<div class="mt-2 space-y-2">${cards}</div>` : '<p class="mt-1 text-[11px] text-slate-500">No hunter candidates in the shared file yet.</p>'}
+    ${cards ? `<div class="mt-2 space-y-2">${cards}</div>` : '<p class="empty-note mt-2">No hunter candidates yet.</p>'}
   </section>`;
   box.querySelectorAll('[data-agent-add]').forEach(b => b.addEventListener('click', () => {
     const c = AG.candidates.find(x => x.mint === b.dataset.agentAdd);
@@ -7923,7 +7983,7 @@ function renderReadyNow() {
   if (readyPrimed) for (const t of rows) if (!readyShown.has(t.mint)) announceReady(t, livePrices.get(t.mint)?.price ?? t.priceUsd);
   readyShown = next;
   readyPrimed = true;
-  if (!rows.length) { box.className = 'text-sm text-slate-400'; box.textContent = 'No token in entry zone right now'; return; }
+  if (!rows.length) { box.className = 'empty-note'; box.textContent = 'No token in entry zone right now'; return; }
   box.className = 'space-y-1.5';
   box.innerHTML = rows.map(t => {
     const e = t.entry || {};
