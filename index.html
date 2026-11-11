@@ -6284,6 +6284,7 @@ async function sniperPoll() {
       if (viaDegen) {
         const block = degenBuyBlock();
         if (block) { sniperNote(block, 'warn'); break; }
+        if (hunterRemoved(p.mint)) { sniperNote(p.symbol + ' removed by Hunter', 'warn'); continue; }
         if (degenCooled(p.mint) || openPositions().some(x => x.open && x.mint === p.mint) || (WALLETS.burner?.tokens?.get(p.mint)?.raw > 0n)) { sniperNote(p.symbol + ' degen cooldown or already held', 'warn'); continue; }
         if (!solPriceNow()) await refreshSolPrice();
         sol = degenTradeSol();
@@ -6460,6 +6461,65 @@ function absorbHunterVetoes(picks) {
     if (/\breject\b|\bwash\b/i.test(reason)) noteHunterSticky(pick.mint, reason);
   }
 }
+const DEGEN_REMOVED_LS = 'sms:degenremoved';
+const DEGEN_REMOVED_SEED = [
+  ['8tbfkL8LZYUN3ygzWMKfffqVd7tLRpWkuh2fowsepump', 'HAOBIBI'],
+  ['8AAVuQpJcqpvCuutxyBTVvgBEXZJSkZoNv1sExpBpump', 'NOBUSHIBA']
+];
+function degenRemovedBook() {
+  const v = load(DEGEN_REMOVED_LS, {});
+  const book = v && typeof v === 'object' ? v : {};
+  if (!book.removed || typeof book.removed !== 'object') book.removed = {};
+  if (!book.seen || typeof book.seen !== 'object') book.seen = {};
+  const now = Date.now();
+  let dirty = false;
+  for (const mint of Object.keys(book.removed)) {
+    const until = book.removed[mint] && book.removed[mint].until;
+    if (!(until > now)) { delete book.removed[mint]; dirty = true; }
+  }
+  if (!book.seeded) {
+    for (const [mint, symbol] of DEGEN_REMOVED_SEED) {
+      if (!book.removed[mint]) book.removed[mint] = { until: now + 24 * 3600e3, symbol, reason: 'seed' };
+    }
+    book.seeded = true;
+    dirty = true;
+  }
+  if (dirty) save(DEGEN_REMOVED_LS, book);
+  return book;
+}
+function hunterRemoved(mint) {
+  const row = mint && degenRemovedBook().removed[mint];
+  return !!(row && row.until > Date.now());
+}
+function absorbHunterRemoved(picks) {
+  const book = degenRemovedBook();
+  const list = (picks || []).filter(p => p && typeof p.mint === 'string' && p.mint.length >= 32);
+  const nowSet = new Set(list.map(p => p.mint));
+  const until = Date.now() + 24 * 3600e3;
+  let dirty = false;
+  const touch = (mint, symbol, reason) => {
+    const prev = book.removed[mint];
+    const sym = String(symbol || prev?.symbol || '').slice(0, 32);
+    const why = String(reason || 'removed').slice(0, 80);
+    if (prev && prev.symbol === sym && prev.reason === why && prev.until > until - 60000) return;
+    book.removed[mint] = { until, symbol: sym, reason: why };
+    dirty = true;
+  };
+  for (const mint of Object.keys(book.seen)) {
+    if (!nowSet.has(mint)) touch(mint, book.seen[mint] && book.seen[mint].symbol, 'missing');
+  }
+  for (const pick of list) {
+    const entryNow = pick.entry_now === true || pick.entry_now === 'true';
+    const reason = String(pick.reason || '').trim();
+    if (entryNow) {
+      if (book.removed[pick.mint]) { delete book.removed[pick.mint]; dirty = true; }
+    } else if (/^(WITHDRAWN|DROPPED)\b/i.test(reason)) touch(pick.mint, pick.symbol, reason.slice(0, 80));
+    const sym = String(pick.symbol || (book.seen[pick.mint] && book.seen[pick.mint].symbol) || '').slice(0, 32);
+    if (!book.seen[pick.mint] || book.seen[pick.mint].symbol !== sym) dirty = true;
+    book.seen[pick.mint] = { symbol: sym, at: Date.now() };
+  }
+  if (dirty) save(DEGEN_REMOVED_LS, book);
+}
 function degenCooled(mint) {
   const until = degenCooldownBook()[mint];
   return !!(until && Date.now() < until);
@@ -6525,6 +6585,7 @@ function degenLogHtml() {
 }
 function degenPickBlock(pick, price) {
   if (!pick || typeof pick.mint !== 'string' || pick.mint.length < 32) return 'bad mint';
+  if (hunterRemoved(pick.mint)) return 'removed by Hunter';
   if (pick.entry_now !== true && pick.entry_now !== 'true') return 'not entry now';
   if (!(+pick.confidence >= 55)) return 'confidence';
   const exp = typeof agentTime === 'function' ? agentTime(pick.expires) : null;
@@ -6564,6 +6625,7 @@ async function degenFetchFile() {
   DEGEN.fetched = Date.now();
   DEGEN.error = '';
   absorbHunterVetoes(picks);
+  absorbHunterRemoved(picks);
   return picks;
 }
 async function degenTokenPx(mint, force) {
@@ -6576,6 +6638,7 @@ async function degenTokenPx(mint, force) {
   return +best.priceUsd;
 }
 async function degenBuy(pick, opt) {
+  if (hunterRemoved(pick?.mint)) { degenBlockNote(pick, 'removed by Hunter'); return; }
   if (opt?.live) {
     const price = isNum(opt.price) ? opt.price : await degenTokenPx(pick.mint, true);
     if (degenCooled(pick.mint) || openPositions().some(p => p.open && p.mint === pick.mint) || (WALLETS.burner?.tokens?.get(pick.mint)?.raw > 0n)) { degenBlockNote(pick, 'cooldown or already held'); return; }
@@ -6690,6 +6753,7 @@ async function degenPoll() {
     DEGEN.fetched = Date.now();
     DEGEN.error = '';
     absorbHunterVetoes(DEGEN.picks);
+    absorbHunterRemoved(DEGEN.picks);
     for (const pick of DEGEN.picks) {
       const block = degenBuyBlock();
       if (block) { degenBlockNote(pick, block); break; }
@@ -6739,6 +6803,7 @@ async function degenWatch() {
     DEGEN.fetched = Date.now();
     DEGEN.error = '';
     absorbHunterVetoes(DEGEN.picks);
+    absorbHunterRemoved(DEGEN.picks);
     DEGEN.quotes = DEGEN.quotes || {};
     const quoteList = (DEGEN.picks || []).filter(p => p?.mint);
     const take = window.__SMS_SAFE ? 3 : 6;
@@ -6922,6 +6987,7 @@ async function liveScanOnce() {
       if (cheap) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: cheap, at: Date.now() }); continue; }
       if (deep >= 1) continue;
       deep++;
+      if (hunterRemoved(p.mint)) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: 'removed by Hunter', at: Date.now() }); continue; }
       const veto = hunterVeto(p.mint);
       if (veto) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: 'hunter: ' + veto, at: Date.now() }); continue; }
       let report;
@@ -6975,6 +7041,7 @@ function renderDegen() {
   const openTxt = cfg.maxOpen > 0 ? (open.length + '/' + cfg.maxOpen) : (open.length + ' · Unlimited');
   const readS = DEGEN.fetched ? Math.max(0, Math.round((Date.now() - DEGEN.fetched) / 1000)) : null;
   const stamp = (DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—')) + (readS == null ? '' : ' · read ' + readS + 's ago');
+  const removedTxt = Object.values(degenRemovedBook().removed).map(r => r && r.symbol).filter(Boolean).slice(0, 8).join(', ');
   const stats = `<button type="button" data-open-degen class="hero-card w-full text-left">
     <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
@@ -6983,6 +7050,7 @@ function renderDegen() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
     </div>
+    ${removedTxt ? `<p class="mt-2 text-[11px] font-semibold text-rose-300 whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
   </button>`;
   const chipCls = { READY: 'deg-chip deg-ready', WATCH: 'deg-chip deg-watch', EXPIRED: 'deg-chip deg-expired', 'ABOVE MAX': 'deg-chip deg-above' };
@@ -7001,7 +7069,7 @@ function renderDegen() {
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
-      ${(() => { const st = DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
+      ${(() => { const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
     </article>`;
   }).join('');
@@ -9766,6 +9834,7 @@ window.showTab = showTab;
 mountApp();
 fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
 if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
+degenRemovedBook();
 setTimeout(degenWatch, 700);
 setInterval(() => { if (!document.hidden) degenWatch(); }, 15000);
 startLiveLoop();
