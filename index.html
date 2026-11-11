@@ -6563,29 +6563,31 @@ async function degenTokenPx(mint, force) {
 async function degenBuy(pick, opt) {
   if (opt?.live) {
     const price = isNum(opt.price) ? opt.price : await degenTokenPx(pick.mint, true);
-    if (degenCooled(pick.mint) || openPositions().some(p => p.open && p.mint === pick.mint) || (WALLETS.burner?.tokens?.get(pick.mint)?.raw > 0n)) { degenNote((pick.symbol || short(pick.mint)) + ': cooldown or already held'); return; }
+    if (degenCooled(pick.mint) || openPositions().some(p => p.open && p.mint === pick.mint) || (WALLETS.burner?.tokens?.get(pick.mint)?.raw > 0n)) { degenBlockNote(pick, 'cooldown or already held'); return; }
     const veto = hunterVeto(pick.mint);
-    if (veto) { degenNote((pick.symbol || short(pick.mint)) + ': hunter ' + veto); return; }
+    if (veto) { degenBlockNote(pick, 'hunter ' + veto); return; }
     const block = degenBuyBlock();
-    if (block) { degenNote(block); return; }
+    if (block) { degenBlockNote(pick, block); return; }
     if (!opt.skipSafety) {
       const safe = await degenSafety(pick.mint);
-      if (!safe.ok) { degenNote((pick.symbol || short(pick.mint)) + ' blocked — ' + safe.reason); return; }
+      if (!safe.ok) { degenBlockNote(pick, safe.reason); return; }
     }
     if (!solPriceNow()) await refreshSolPrice();
     const sol = degenTradeSol();
-    if (!(sol >= 0.001)) { degenNote('degen size too small'); return; }
+    if (!(sol >= 0.001)) { degenBlockNote(pick, 'degen size too small'); return; }
     const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
-    if (errs.length) { degenNote(errs[0]); return; }
+    if (errs.length) { degenBlockNote(pick, errs[0]); return; }
     const slip = Math.min(S.slippagePct, A.slipCap);
     const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
     const imp = impactPct(qo.quote);
-    if (imp > 15) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
+    if (imp > 15) { degenBlockNote(pick, 'impact ' + imp.toFixed(1) + '%'); return; }
+    degenMark(pick.mint, 'buying', '');
     const plan = degenPlan({ stop_pct: 25, time_stop_min: 45, trail: 20 }, price);
     let r;
     try {
       r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, plan, entryReason: 'live scan · conf ' + (opt.conf ?? '') } });
     } catch (e) { noteDegenExit(pick.mint); throw e; }
+    degenMark(pick.mint, 'bought', '');
     degenNote('live scan bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
     toast('Live scan buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
     renderDegen();
@@ -6594,33 +6596,35 @@ async function degenBuy(pick, opt) {
   if (!opt?.sniper) {
     const picks = await degenFetchFile();
     const fresh = picks.find(p => p && p.mint === pick.mint);
-    if (!fresh) { degenNote((pick.symbol || short(pick.mint)) + ': pick not in fresh degen.json'); return; }
+    if (!fresh) { degenBlockNote(pick, 'pick not in fresh degen.json'); return; }
     pick = fresh;
   }
   const price = await degenTokenPx(pick.mint, true);
-  if (!opt?.sniper && degenStatus(pick, price) !== 'READY') { degenNote((pick.symbol || short(pick.mint)) + ': not READY on fresh file'); return; }
+  if (!opt?.sniper && degenStatus(pick, price) !== 'READY') { degenBlockNote(pick, 'not READY on fresh file'); return; }
   const why = degenPickBlock(pick, price);
-  if (why) { degenNote((pick.symbol || short(pick.mint)) + ': ' + why); return; }
+  if (why) { degenBlockNote(pick, why); return; }
   const block = degenBuyBlock();
-  if (block) { degenNote(block); return; }
+  if (block) { degenBlockNote(pick, block); return; }
   if (!opt?.skipSafety) {
     const safe = await degenSafety(pick.mint);
-    if (!safe.ok) { degenNote((pick.symbol || short(pick.mint)) + ' blocked — ' + safe.reason); return; }
+    if (!safe.ok) { degenBlockNote(pick, safe.reason); return; }
   }
   if (!solPriceNow()) await refreshSolPrice();
   const sol = degenTradeSol();
-  if (!(sol >= 0.001)) { degenNote('degen size too small'); return; }
+  if (!(sol >= 0.001)) { degenBlockNote(pick, 'degen size too small'); return; }
   const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
-  if (errs.length) { degenNote(errs[0]); return; }
+  if (errs.length) { degenBlockNote(pick, errs[0]); return; }
   const slip = Math.min(S.slippagePct, A.slipCap);
   const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
   const imp = impactPct(qo.quote);
-  if (imp > 15) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
+  if (imp > 15) { degenBlockNote(pick, 'impact ' + imp.toFixed(1) + '%'); return; }
+  degenMark(pick.mint, 'buying', '');
   const plan = degenPlan(pick, price);
   let r;
   try {
     r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick · READY @ ' + price(price) } });
   } catch (e) { noteDegenExit(pick.mint); throw e; }
+  degenMark(pick.mint, 'bought', '');
   degenNote('bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
   toast('Degen buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
   renderDegen();
@@ -6673,12 +6677,12 @@ async function degenPoll() {
     absorbHunterVetoes(DEGEN.picks);
     for (const pick of DEGEN.picks) {
       const block = degenBuyBlock();
-      if (block) { degenNote(block); break; }
+      if (block) { degenBlockNote(pick, block); break; }
       let price = null;
-      try { price = await degenTokenPx(pick.mint); } catch (e) { degenNote((pick.symbol || 'pick') + ' price — ' + e.message); continue; }
+      try { price = await degenTokenPx(pick.mint); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
       const why = degenPickBlock(pick, price);
-      if (why) continue;
-      try { await degenBuy(pick, { price }); } catch (e) { noteDegenExit(pick.mint); degenNote((pick.symbol || 'pick') + ' — ' + e.message); }
+      if (why) { degenBlockNote(pick, why); continue; }
+      try { await degenBuy(pick, { price }); } catch (e) { noteDegenExit(pick.mint); degenBlockNote(pick, e.message); }
       break;
     }
   } catch (e) { DEGEN.error = e.message || String(e); }
@@ -6980,6 +6984,7 @@ function renderDegen() {
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
       ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
+      ${(() => { const st = DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'text-rose-300' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
     </article>`;
   }).join('');
