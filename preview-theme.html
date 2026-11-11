@@ -103,12 +103,12 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a4154; flex: 0 0 auto; }
   .dot.on, .status-dot.on { background: var(--up); }
   .dot.armed, .status-dot.armed { background: #C4A35A; }
-  .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+  .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(128px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
   .tab-pane[hidden] { display: none !important; }
-  #tabBar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card); border-top: 1px solid var(--line); padding: 4px 6px calc(6px + env(safe-area-inset-bottom)); }
-  #tabBar button { min-height: 48px; border: 0; border-radius: 12px; background: transparent; color: #6E7686; font-size: 10px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  #tabBar { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 45; display: flex; align-items: center; justify-content: space-evenly; height: 76px; padding: 0 14px; border-radius: 32px; background: rgba(26,31,39,.7); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 32px rgba(0,0,0,.38); }
+  #tabBar button { width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 50%; background: #232A35; color: #8B98A9; font-size: 0; line-height: 0; display: grid; place-items: center; }
   #tabBar button svg { width: 22px; height: 22px; }
-  #tabBar button.on { color: var(--text); background: transparent; }
+  #tabBar button.on { background: #C6F432; color: #14180C; transform: translateY(-3px); box-shadow: 0 8px 18px rgba(198,244,50,.38); }
   .hero-card { background: var(--elev); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
   .hero-num { font-size: 40px; line-height: 1.05; font-weight: 600; letter-spacing: -.035em; }
   .safe-banner { margin: 0 0 8px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--elev); color: var(--text); font-size: 13px; line-height: 1.4; }
@@ -152,7 +152,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .border-white\/5, .border-white\/10 { border-color: var(--line); }
   @keyframes sk { to { background-position: -200% 0; } }
   #toasts { top: 60px; bottom: auto; }
-  #killFab { bottom: 78px !important; }
+  #killFab { bottom: calc(108px + env(safe-area-inset-bottom)) !important; }
   details.adv { background: #12161F; border: 1px solid rgba(255,255,255,.06); border-radius: 16px; }
   details.adv > summary { padding: 14px 16px; font-weight: 650; cursor: pointer; }
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 3px; border-radius: 12px; background: var(--elev); border: 1px solid var(--line); }
