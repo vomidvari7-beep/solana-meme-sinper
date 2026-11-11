@@ -1,4 +1,4 @@
-import { ceilingBreakSignal, degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
+import { ceilingBreakSignal, degenLossPct, degenPotLimits, degenReservedSol, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
 import { lineAt, tehranDayKey } from './util.js';
 
@@ -150,6 +150,12 @@ assert(Math.abs(listWalletSize(0.525, 0.02, 1).sol - 0.5) < 1e-9, 'second buy is
 assert(listWalletSize(1, 0.01, 2).label === 'max 2 open', 'third buy is blocked');
 const drained = listWalletSize(2.005, 0.01, 1);
 assert(Math.abs(drained.sol - 1.98) < 1e-9 && 2.005 - drained.sol >= 0.025 - 1e-9, 'remainder keeps 0.02 even when the caller passes 0.01');
+assert(Math.abs(degenReservedSol(100, 0, 25) - 0.25) < 1e-12, 'Degen lock is $25 in SOL');
+assert(Math.abs(degenReservedSol(100, 0.125, 25) - 0.125) < 1e-12, 'deployed Degen SOL comes out of the lock');
+assert(degenReservedSol(0, 0, 25) == null, 'no Degen lock without a SOL price');
+assert(listWalletSize(0.2, 0.02, 0, 0.25).label === 'Degen lock', 'my list waits while the free balance is inside the lock');
+const refilled = listWalletSize(1.275, 0.02, 0, 0.25);
+assert(Math.abs(refilled.sol - 0.5) < 1e-9, 'a sale refills the Degen lock before the first slot takes half');
 
 function hourBars(spec) {
   const t0 = Date.parse('2026-11-11T00:00:00Z');

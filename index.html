@@ -417,7 +417,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 <div id="tabHome" class="tab-pane">
   <h1 class="large-title">Home</h1>
   <div id="homeHero"><div class="hero-card"><div class="text-[13px] text-slate-500">Portfolio</div><div class="hero-num num">—</div><div id="homePnl" class="chg-pill" style="margin-top:8px">Today —</div><div class="skel" style="margin-top:16px;height:72px"></div></div></div>
-  <button type="button" id="botStatus" class="status-row"><span class="status-dot"></span><span class="min-w-0"><b>Bot controls</b><span id="botStatusLabel">Off</span></span><span aria-hidden="true" style="margin-left:auto;color:#8E95A3">›</span></button>
+  <button type="button" id="botStatus" class="status-row"><span class="status-dot"></span><span class="min-w-0"><b>Bot controls</b><span id="botStatusLabel">Off</span><span id="degenLockLine" class="block truncate font-mono text-[11px] text-slate-500">Degen locked $25 · free — SOL</span></span><span aria-hidden="true" style="margin-left:auto;color:#8E95A3">›</span></button>
   <div id="homePositions"></div>
   <div class="stat-strip">
       <div id="solTicker" class="stat-pill flex items-center gap-1.5 text-sm glass rounded-xl px-2 py-1.5">
@@ -3368,13 +3368,63 @@ function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, de
   }
   const open = openPositions().filter(p => !p.degen && !p.scalp); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
   if (!skipMaxOpen && !held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
-  const keep = solKeep();
-  if (isNum(w.sol) && sol + keep > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${keep.toFixed(4)} reserve`);
+  if (degen || scalp) {
+    const keep = solKeep();
+    if (isNum(w.sol) && sol + keep > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${keep.toFixed(4)} reserve`);
+    if (degen && sol > degenSpendRoomSol() + 1e-9) errs.push('Degen lock');
+  } else {
+    const room = mainTradableSol(w.sol);
+    if (!room.ok) errs.push(room.error);
+    else if (sol > room.sol + 1e-9) errs.push('Degen lock');
+  }
   return errs;
 }
 function solKeep() {
   const reserve = Math.max(0.02, isNum(S.reserveSol) ? +S.reserveSol : 0.02);
   return reserve + 0.005;
+}
+function degenDeployedSol() {
+  return openPositions().filter(p => p.open && p.degen && slotStillHeld(p)).reduce((s, p) => {
+    const frac = p.bought > 0 ? Math.max(0, Math.min(1, (p.bought - p.sold) / p.bought)) : 1;
+    return s + Math.max(0, p.costSol || 0) * frac;
+  }, 0);
+}
+function degenLockQuote() {
+  const px = solPriceNow() || liveSolPx();
+  if (!(px > 0)) return null;
+  const usd = typeof degenLimits === 'function' ? degenLimits().budgetUsd : 25;
+  const lock = usd / px;
+  const deployed = degenDeployedSol();
+  return { px, usd, lock, deployed, reserved: Math.max(0, lock - deployed) };
+}
+function mainTradableSol(balance) {
+  const keep = solKeep();
+  const q = degenLockQuote();
+  if (!q) return { ok: false, sol: 0, keep, reserved: null, error: 'SOL price unavailable — can’t reserve the Degen lock', label: 'Degen lock' };
+  if (!isNum(balance)) return { ok: false, sol: 0, keep, reserved: q.reserved, error: 'balance under reserve', label: 'balance under reserve' };
+  const tradable = balance - keep - q.reserved;
+  if (!(tradable >= 0.002)) return { ok: false, sol: 0, keep, reserved: q.reserved, error: 'Degen lock', label: 'Degen lock' };
+  return { ok: true, sol: tradable, keep, reserved: q.reserved, error: '', label: '' };
+}
+function degenSpendRoomSol() {
+  const q = degenLockQuote();
+  const bal = WALLETS.burner?.sol;
+  if (!q || !isNum(bal)) return 0;
+  return Math.max(0, Math.min(q.reserved, bal - solKeep()));
+}
+function degenLockStatus() {
+  const q = degenLockQuote();
+  const bal = WALLETS.burner?.sol;
+  const usd = q ? q.usd : 25;
+  const usdTxt = Math.abs(usd - Math.round(usd)) < 1e-9 ? String(Math.round(usd)) : usd.toFixed(2);
+  const free = q && isNum(bal) ? Math.max(0, bal - solKeep() - q.reserved) : null;
+  return 'Degen locked $' + usdTxt + ' · free ' + (free == null ? '—' : free.toFixed(3)) + ' SOL';
+}
+function paintDegenLock() {
+  const text = degenLockStatus();
+  const line = $('degenLockLine');
+  if (line) line.textContent = text;
+  document.querySelectorAll('[data-degen-lock]').forEach(el => { el.textContent = text; });
 }
 
 /* ---------------- live test: $3, one position ---------------- */
@@ -3559,8 +3609,15 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   const isBuy = side === 'buy';
   const solAmount = (isBuy ? +q.inAmount : +q.outAmount) / 1e9;
   if (isBuy && walletKey === 'burner') {
-    const keep = solKeep();
-    if (!(isNum(w.sol) && solAmount + keep <= w.sol + 1e-9)) throw new Error('Blocked: keep at least ' + keep.toFixed(3) + ' SOL for fees');
+    const degenBuy = !!(extra?.degen || extra?.plan?.degen);
+    if (degenBuy) {
+      const keep = solKeep();
+      if (!(isNum(w.sol) && solAmount + keep <= w.sol + 1e-9)) throw new Error('Blocked: keep at least ' + keep.toFixed(3) + ' SOL for fees');
+      if (solAmount > degenSpendRoomSol() + 1e-9) throw new Error('Blocked: Degen lock');
+    } else {
+      const room = mainTradableSol(w.sol);
+      if (!room.ok || solAmount > room.sol + 1e-9) throw new Error('Blocked: ' + (room.error || 'Degen lock'));
+    }
   }
   const tokRaw = isBuy ? +q.outAmount : +q.inAmount;
   const tokenAmount = dec != null ? tokRaw / 10 ** dec : null;
@@ -3720,6 +3777,7 @@ function renderWallet() {
   $('walletInfo').querySelector('[data-act=refresh]')?.addEventListener('click', () => refreshBalances());
   $('walletInfo').querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { if (await copyText(b.dataset.copy)) toast('Address copied', 'ok', 1500); }));
   $('setMaxPos').textContent = maxPos();
+  paintDegenLock();
 }
 let lastBalTs = null;
 function hydrate() {
@@ -6458,7 +6516,7 @@ function renderBotBar() {
   };
   box.innerHTML = `<section>
       <div class="flex items-center justify-between gap-3 px-1 pb-3">
-        <div class="min-w-0"><div class="text-[17px] font-semibold">Bot controls</div><div class="text-[12px] text-slate-500">${status}</div></div>
+        <div class="min-w-0"><div class="text-[17px] font-semibold">Bot controls</div><div class="text-[12px] text-slate-500">${status}</div><div class="font-mono text-[12px] text-slate-400" data-degen-lock>${esc(degenLockStatus())}</div></div>
         <div class="seg" style="min-width:148px"><button type="button" id="botAllOn">All ON</button><button type="button" id="botAllOff">All OFF</button></div>
       </div>
       <div class="hero-card" style="padding:0;overflow:hidden">${items.map(row).join('')}</div>
@@ -6472,6 +6530,7 @@ function renderBotBar() {
   box.querySelectorAll('[data-bot]').forEach(b => b.addEventListener('click', () => toggleBot(b.dataset.bot)));
   $('botAllOn')?.addEventListener('click', allBotsOn);
   $('botAllOff')?.addEventListener('click', () => { killSwitch('manual'); paintRunDesk(); });
+  paintDegenLock();
   const dot = $('appDot');
   if (dot) {
     const live = ['auto', 'mylist', 'copy', 'sniper', 'scalp'].some(k => prefs[k] && (botLive(k) || locked));
@@ -6666,7 +6725,8 @@ function paintRunDesk() {
     const why = switchReason(key);
     const on = key === 'unlocked' ? !why : !why;
     return `<b class="${on ? 'on' : 'off'}">${esc(label)}${why ? ' · ' + esc(why) : ''}</b>`;
-  }).join('');
+  }).join('') + `<span class="block font-mono text-[11px] text-slate-400" data-degen-lock>${esc(degenLockStatus())}</span>`;
+  paintDegenLock();
   const banner = $('runBanner');
   const prefs = botPrefs();
   const armed = prefs.auto || prefs.mylist || prefs.scalp || prefs.degen;
@@ -7863,6 +7923,9 @@ function degenBuyBlock() {
   if (degenLedgerShort()) { degenHaltFunds(); return 'Degen out of funds'; }
   if (openPositions().filter(p => p.degen && p.open).length >= cfg.maxOpen) return 'max ' + cfg.maxOpen + ' open';
   if (degenOpenCost() + cfg.tradeUsd > cfg.budgetUsd + 1e-6) return 'pot deployed cap';
+  const px = solPriceNow() || liveSolPx();
+  if (!(px > 0)) return 'SOL price unavailable';
+  if (cfg.tradeUsd / px > degenSpendRoomSol() + 1e-9) return 'Degen lock';
   return '';
 }
 function degenTradeSol() {
@@ -7874,7 +7937,9 @@ function degenTradeSol() {
   const cash = degenLedger().balanceUsd - degenFeeEstimateUsd(px);
   if (usdAmt > cash + 1e-6) return null;
   if (!(usdAmt > 0)) return null;
-  return +(usdAmt / px).toFixed(6);
+  const sol = +(usdAmt / px).toFixed(6);
+  if (sol > degenSpendRoomSol() + 1e-9) return null;
+  return sol;
 }
 function degenNote(msg) { DEGEN.note = String(msg || '').slice(0, 180); }
 function degenMark(mint, state, reason) {
@@ -8644,7 +8709,7 @@ function startLiveScan() {
 function stopLiveScan() { clearTimeout(liveScanTimer); liveScanTimer = null; }
 function degenViewSig(eq) {
   const picks = DEGEN.picks || [];
-  let s = (degenOn() ? '1' : '0') + ':' + Math.round(eq?.equity || 0) + ':' + Math.floor(Date.now() / 60000) + ':' + (DEGEN.updatedAt || '') + ':' + (DEGEN.error || '') + ':' + (DEGEN.note || '') + ':' + liveScanHits.length + ':' + (liveScanOn ? 1 : 0) + ':' + degenTradesToday() + ':' + degenCfg().tradeUsd;
+  let s = (degenOn() ? '1' : '0') + ':' + Math.round(eq?.equity || 0) + ':' + Math.floor(Date.now() / 60000) + ':' + (DEGEN.updatedAt || '') + ':' + (DEGEN.error || '') + ':' + (DEGEN.note || '') + ':' + liveScanHits.length + ':' + (liveScanOn ? 1 : 0) + ':' + degenTradesToday() + ':' + degenCfg().tradeUsd + ':' + degenLockStatus();
   for (const p of picks) {
     const px = (DEGEN.quotes && DEGEN.quotes[p.mint] && DEGEN.quotes[p.mint].price) || livePrices.get(p.mint)?.price;
     s += '|' + p.mint + degenStatus(p, px) + (p.confidence || '') + (hunterRemoved(p.mint) ? 'r' : '');
@@ -8655,6 +8720,7 @@ function degenViewSig(eq) {
   return s;
 }
 function renderDegen() {
+  paintDegenLock();
   const cfg = degenCfg();
   const eq = degenEquity();
   const degSig = degenViewSig(eq);
@@ -8685,6 +8751,7 @@ function renderDegen() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div><div class="text-[10px] text-slate-500">win ${wr}</div></div>
     </div>
     <p class="mt-2 text-[12px] text-slate-300">${esc(potLine)}</p>
+    <p class="mt-1 font-mono text-[12px] text-slate-300" data-degen-lock>${esc(degenLockStatus())}</p>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     ${removedTxt ? `<p class="block-note mt-2 text-[11px] font-semibold whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
@@ -8782,6 +8849,7 @@ function renderDegen() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
     </div>
     <p class="mt-2 text-[12px] text-slate-300">${esc(potLine)}</p>
+    <p class="mt-1 font-mono text-[12px] text-slate-300" data-degen-lock>${esc(degenLockStatus())}</p>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
     ${picks ? `<div class="deg-picks">${picks}</div>` : '<p class="empty-note mt-2">No hunter picks yet.</p>'}
@@ -8813,7 +8881,7 @@ function renderDegen() {
       <label class="block"><span class="text-slate-400">Max open · ${cfg.maxOpen > 0 ? cfg.maxOpen : 'Unlimited'}</span><input id="degenOpen" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.maxOpen > 0 ? cfg.maxOpen : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Daily loss stop USD · ${cfg.dailyLossUsd > 0 ? esc(usd(cfg.dailyLossUsd, 0)) : 'Unlimited'}</span><input id="degenLoss" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.dailyLossUsd > 0 ? cfg.dailyLossUsd : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
     </div>
-    <p class="text-[11px] text-slate-500">Pot $25, $12.50 per entry, max 2 open. The agent file can only tighten those. A closed slot can be refilled immediately. Trades today is a count, not a cap.</p>
+    <p class="text-[11px] text-slate-500">Pot $25, $12.50 per entry, max 2 open. That $25 stays locked in the burner. My List and AUTO size from what is left after the lock and the fee reserve. The agent file can only tighten the pot. A closed slot can be refilled immediately. Trades today is a count, not a cap.</p>
     <label class="flex items-center gap-2"><input id="degenHunterOnly" type="checkbox" ${cfg.hunterOnly !== false ? 'checked' : ''} class="accent-violet-500" /> Live scan: only Hunter-approved mints</label>
     <button type="button" id="degenSave" class="w-full rounded-xl border border-white/10 py-2">Save degen limits</button>
     <button type="button" id="degenReset" class="w-full rounded-xl border border-rose-400/50 px-3 text-[13px] font-semibold text-rose-200" style="min-height:44px">Reset ledger</button>
@@ -9634,10 +9702,10 @@ function myListOpenCount() {
 function myListWalletSize() {
   const open = myListOpenCount();
   const bal = isNum(WALLETS.burner?.sol) ? WALLETS.burner.sol : null;
-  const keep = solKeep();
   if (open >= 2) return { ok: false, sol: 0, error: 'max 2 open', label: 'max 2 open' };
-  if (!(bal > keep)) return { ok: false, sol: 0, error: 'balance under reserve', label: 'balance under reserve' };
-  const tradable = bal - keep;
+  const room = mainTradableSol(bal);
+  if (!room.ok) return { ok: false, sol: 0, error: room.error, label: room.label };
+  const tradable = room.sol;
   if (open === 1) {
     const sol = +tradable.toFixed(6);
     return { ok: sol >= 0.001, sol, error: sol >= 0.001 ? '' : 'remainder under 0.001', label: 'remainder ' + sol.toFixed(3) + ' SOL · max 2' };
@@ -9650,8 +9718,9 @@ function listHalfBlocks(sol, mint) {
   if (!burnerReady()) errs.push('Burner wallet is locked — unlock it first');
   if (!(sol > 0)) errs.push('Amount must be > 0');
   const bal = WALLETS.burner?.sol;
-  const reserve = solKeep();
-  if (isNum(bal) && sol + reserve > bal + 1e-9) errs.push('Insufficient SOL: need the buy plus the reserve');
+  const room = mainTradableSol(bal);
+  if (!room.ok) errs.push(room.error);
+  else if (sol > room.sol + 1e-9) errs.push('Degen lock');
   if (mint && listPosition(mint)) errs.push('already open');
   else if (myListOpenCount() >= 2) errs.push('max 2 open');
   return errs;

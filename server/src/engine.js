@@ -1,5 +1,5 @@
 import { tapeFromDex } from './net.js';
-import { CAPS, ceilingBreakSignal, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, pushSolSample, quoteImpact, resolveSolM15, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
+import { CAPS, ceilingBreakSignal, degenReservedSol, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, pushSolSample, quoteImpact, resolveSolM15, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
 import { isNum, log, tehranDayKey, WSOL } from './util.js';
 
 function pairTape(p) { return tapeFromDex(p); }
@@ -152,7 +152,15 @@ export function createEngine(cfg, state, net, swap) {
     if (test.test && mode === 'scalp') plan.scalpUsd = test.usd;
     const balNow = await swap.balance();
     const keep = keptForFees(CAPS.reserveSol);
-    if (!(balNow >= solAmt + keep - 1e-9)) { state.note(mode, mint, symbol, 'reserve ' + keep.toFixed(3) + ' SOL'); return; }
+    const reserved = mainReservedSol();
+    const degenMode = mode === 'degen' || mode === 'scan';
+    if (degenMode) {
+      const room = reserved == null ? 0 : Math.min(reserved, Math.max(0, balNow - keep));
+      if (!(solAmt <= room + 1e-9)) { state.note(mode, mint, symbol, 'Degen lock'); return; }
+    } else if (!(reserved != null && balNow + 1e-9 >= solAmt + keep + reserved)) {
+      state.note(mode, mint, symbol, reserved == null ? 'SOL price unavailable' : 'Degen lock');
+      return;
+    }
     const tape = live(mint) || {};
     const fake = guard(mint, tape);
     if (fake) { state.note(mode, mint, symbol, fake); return; }
@@ -285,6 +293,20 @@ export function createEngine(cfg, state, net, swap) {
     return state.open().filter(p => p.mode === 'breakout' || p.mode === 'plans' || p.mode === 'plan').length;
   }
 
+  function degenDeployedSol() {
+    return state.open('degen').reduce((s, p) => {
+      const last = [...(state.data.fills || [])].reverse().find(f => f && f.mint === p.mint && f.side === 'buy' && (f.mode === 'degen' || f.mode === 'scan'));
+      const bought = last && last.tokenAmount > 0 ? last.tokenAmount : 0;
+      const frac = bought > 0 ? Math.max(0, Math.min(1, (p.qty || 0) / bought)) : 1;
+      return s + Math.max(0, p.costSol || 0) * frac;
+    }, 0);
+  }
+
+  function mainReservedSol() {
+    const lim = degenPotLimits(agents.degen?.pot);
+    return degenReservedSol(sol.price, degenDeployedSol(), lim.budgetUsd);
+  }
+
   async function breakoutTick() {
     if (!state.data.toggles.breakout || state.data.paused) return;
     const rows = agents.mylist?.tokens || [];
@@ -330,7 +352,7 @@ export function createEngine(cfg, state, net, swap) {
     state.data.seenBreaks = state.data.seenBreaks || {};
     if (state.data.seenBreaks[row.mint] === sig.key) return;
     const bal = await swap.balance();
-    const sized = listWalletSize(bal, CAPS.reserveSol, openN);
+    const sized = listWalletSize(bal, CAPS.reserveSol, openN, mainReservedSol());
     if (!(sized.sol > 0)) { state.note('breakout', row.mint, row.symbol || tape.symbol, sized.label); return; }
     state.data.seenBreaks[row.mint] = sig.key;
     const kind = sig.kind || 'breakout1h';
@@ -355,7 +377,7 @@ export function createEngine(cfg, state, net, swap) {
       const stamp = String(p.trigger_price || '') + ':' + String(p.ts || p.updatedAt || '');
       state.data.seenPlans = state.data.seenPlans || {};
       if (state.data.seenPlans[p.mint] === stamp) continue;
-      const sized = listWalletSize(bal, CAPS.reserveSol, openN);
+      const sized = listWalletSize(bal, CAPS.reserveSol, openN, mainReservedSol());
       if (!(sized.sol > 0)) { state.note('plans', p.mint, p.symbol, sized.label); return; }
       state.data.seenPlans[p.mint] = stamp;
       await safeBuy('plans', p.mint, p.symbol || tape.symbol, sized.sol, 100, { agent: true, stop: +p.stop || null, tp1: +p.tp1 || null, tp2: +p.tp2 || null, reason: 'agent plan ' + (p.setup || '') }, tape.liq);
@@ -408,7 +430,9 @@ export function createEngine(cfg, state, net, swap) {
       if (drop) { state.note('scan', raw.mint, raw.symbol, drop); continue; }
       const solAmt = +(lim.tradeUsd / sol.price).toFixed(6);
       const bal = await swap.balance();
-      if (solAmt + CAPS.reserveSol > bal) { state.note('scan', raw.mint, raw.symbol, 'insufficient SOL'); return; }
+      const room = mainReservedSol();
+      const keep = keptForFees(CAPS.reserveSol);
+      if (!(room != null && solAmt <= Math.min(room, Math.max(0, bal - keep)) + 1e-9)) { state.note('scan', raw.mint, raw.symbol, 'Degen lock'); return; }
       await safeBuy('scan', raw.mint, raw.symbol || tape.symbol, solAmt, 300, { degen: true, stopPct: 25, timeStopMin: 45, trail: 20, reason: 'live scan · conf ' + conf, degenUsd: lim.tradeUsd }, tape.liq);
       return;
     }

@@ -684,12 +684,21 @@ export function htfRetestSignal(htf, h1, now = Date.now(), span = 4 * 3600e3) {
   return { ...view, buy: true, phase: 'buy', entry: hold.c, stop, target: hold.c * 1.3, reason: 'htfretest' };
 }
 
-export function listWalletSize(balance, reserve, openCount) {
+/** SOL still sitting in the wallet for the $25 Degen lock. Deployed Degen cost is already out of the balance. */
+export function degenReservedSol(solPriceUsd, deployedSol, budgetUsd = 25) {
+  if (!(+solPriceUsd > 0)) return null;
+  const lock = Math.max(0, +budgetUsd || 0) / +solPriceUsd;
+  return Math.max(0, lock - Math.max(0, +deployedSol || 0));
+}
+
+export function listWalletSize(balance, reserve, openCount, reservedSol = 0) {
   const n = +openCount || 0;
   const keep = keptForFees(reserve);
-  const tradable = (+balance || 0) - keep;
+  if (reservedSol == null) return { sol: 0, label: 'Degen lock' };
+  const reserved = Math.max(0, +reservedSol || 0);
+  const tradable = (+balance || 0) - keep - reserved;
   if (n >= 2) return { sol: 0, label: 'max 2 open' };
-  if (!(tradable >= 0.002)) return { sol: 0, label: 'balance under reserve' };
+  if (!(tradable >= 0.002)) return { sol: 0, label: reserved > 0 ? 'Degen lock' : 'balance under reserve' };
   if (n === 1) return { sol: +tradable.toFixed(6), label: 'remainder ' + tradable.toFixed(3) + ' SOL · max 2' };
   const half = tradable * 0.5;
   return { sol: +half.toFixed(6), label: '50% · ' + half.toFixed(3) + ' SOL of ' + tradable.toFixed(3) + ' · max 2' };
