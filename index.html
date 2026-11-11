@@ -122,7 +122,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 <header class="appbar">
   <div class="flex items-center gap-2 min-w-0">
     <div class="w-8 h-8 rounded-xl grid place-items-center font-bold text-sm shrink-0" style="background:#7c3aed;color:#fff">◎</div>
-    <div class="min-w-0"><h1 class="text-[15px] font-semibold tracking-tight truncate">SolanaMemeSniper</h1></div>
+    <div class="min-w-0"><h1 class="text-[15px] font-semibold tracking-tight truncate">SolanaMemeSniper</h1><div id="liveStat" class="text-[10px] text-slate-500 font-mono">Live —</div></div>
   </div>
   <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
 </header>
@@ -2975,6 +2975,119 @@ async function refreshPrices() {
     checkAlerts(); renderPortfolio();
   }
   renderReadyNow();
+}
+const tickBook = {};
+function tickBars(mint, tf) {
+  const key = tf === '5s' ? '5s' : '1s';
+  return (tickBook[mint] && tickBook[mint][key]) || [];
+}
+function pushTick(mint, px, ts) {
+  if (!mint || !(px > 0)) return;
+  const book = tickBook[mint] || (tickBook[mint] = { '1s': [], '5s': [] });
+  for (const sec of [1, 5]) {
+    const key = sec + 's';
+    const bucket = Math.floor(ts / (sec * 1000)) * sec * 1000;
+    const arr = book[key];
+    const last = arr[arr.length - 1];
+    if (!last || last.t !== bucket) arr.push({ t: bucket, o: px, h: px, l: px, c: px, v: 0 });
+    else { last.h = Math.max(last.h, px); last.l = Math.min(last.l, px); last.c = px; }
+    if (arr.length > 360) arr.shift();
+  }
+}
+function paintLive(ageMs, latency) {
+  const el = $('liveStat'); if (!el) return;
+  if (document.hidden) { el.textContent = 'Live paused'; return; }
+  if (!isNum(ageMs)) { el.textContent = 'Live —'; return; }
+  const age = ageMs < 1000 ? Math.max(0, Math.round(ageMs)) + 'ms' : (ageMs / 1000).toFixed(1) + 's';
+  el.textContent = 'Live ' + age + (isNum(latency) ? ' · ' + Math.round(latency) + 'ms' : '');
+}
+let liveBackoff = 1500;
+let liveBusy = false;
+let liveAt = 0;
+async function livePriceBatch(mints) {
+  const out = new Map();
+  for (let i = 0; i < mints.length; i += 30) {
+    const chunk = mints.slice(i, i + 30);
+    const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + chunk.join(','), { timeout: 4000 });
+    const best = new Map();
+    for (const p of arr || []) {
+      const m = p.baseToken?.address;
+      if (!m) continue;
+      if (!best.has(m) || (p.liquidity?.usd || 0) > (best.get(m).liquidity?.usd || 0)) best.set(m, p);
+    }
+    for (const [m, p] of best) if (+p.priceUsd > 0) out.set(m, +p.priceUsd);
+  }
+  const missing = mints.filter(m => !out.has(m));
+  if (missing.length) {
+    try {
+      const j = await fetchJSONOnce('https://lite-api.jup.ag/price/v2?ids=' + missing.slice(0, 50).join(','), { timeout: 4000 });
+      const data = j?.data || {};
+      for (const m of missing) { const px = +data[m]?.price; if (px > 0) out.set(m, px); }
+    } catch { /* DexScreener prices still stand */ }
+  }
+  return out;
+}
+function liveMints() {
+  const list = [];
+  try { openPositions().forEach(p => { if (p.open && p.mint) list.push(p.mint); }); } catch { /* positions not ready */ }
+  try { (MYLIST?.rows || []).forEach(r => { if (r.mint) list.push(r.mint); }); } catch { /* list not ready */ }
+  try { (DEGEN?.picks || []).forEach(p => { if (p?.mint) list.push(p.mint); }); } catch { /* degen not ready */ }
+  return [...new Set(list)];
+}
+async function evaluateExits() {
+  if (typeof degenExitTick === 'function') await degenExitTick(true);
+  if (typeof sniperExitTick === 'function') await sniperExitTick(true);
+  if (typeof myListExits === 'function') await myListExits();
+  if (!(A.on && A.autoExit) || !WALLETS.burner?.kp) return;
+  for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
+    const lp = livePrices.get(p.mint)?.price;
+    const ex = priceExit(p, lp);
+    if (ex) await autoSell(p, ex.pctSell, ex.tag, lp);
+  }
+}
+let exitBusy = false;
+async function liveTick() {
+  if (document.hidden || liveBusy) { paintLive(liveAt ? Date.now() - liveAt : null, null); return; }
+  const mints = liveMints();
+  if (!mints.length) { paintLive(null); return; }
+  liveBusy = true;
+  const t0 = performance.now();
+  try {
+    const got = await livePriceBatch(mints);
+    const now = Date.now();
+    got.forEach((px, mint) => {
+      livePrices.set(mint, { price: px, liq: livePrices.get(mint)?.liq ?? null, at: now });
+      pushTick(mint, px, now);
+      try {
+        const row = (MYLIST?.rows || []).find(r => r.mint === mint);
+        if (row) row.price = px;
+      } catch { /* list not ready */ }
+    });
+    liveAt = now;
+    liveBackoff = 1500;
+    paintLive(0, performance.now() - t0);
+    checkAlerts();
+    try { renderPortfolio(); } catch { /* portfolio hidden */ }
+    try { if (!document.body.classList.contains('sheet-on') && $('tradeModal')?.classList.contains('hidden')) renderMyList(); } catch { /* list busy */ }
+    try { if (!$('degenDesk')?.querySelector('details[open]')) renderDegen(); } catch { /* degen card not ready */ }
+    try { renderReadyNow(); } catch { /* ready list not ready */ }
+    if (!exitBusy) {
+      exitBusy = true;
+      try { await evaluateExits(); } finally { exitBusy = false; }
+    }
+  } catch (e) {
+    if (e && (e.status === 429 || e.status === 0)) liveBackoff = Math.min(15000, Math.max(3000, liveBackoff * 2));
+    paintLive(liveAt ? Date.now() - liveAt : null, null);
+  } finally { liveBusy = false; }
+}
+function startLiveLoop() {
+  const step = async () => {
+    await liveTick();
+    setTimeout(step, document.hidden ? 4000 : liveBackoff);
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) liveTick(); paintLive(liveAt ? Date.now() - liveAt : null, null); });
+  setTimeout(step, 800);
+  setInterval(() => { if (liveAt) paintLive(Date.now() - liveAt, null); }, 500);
 }
 function levelState(p) {
   const lp = livePrices.get(p.mint)?.price; const eff = effectiveStop(p, lp);
@@ -5891,10 +6004,10 @@ async function sniperSell(p, pct, tag, lp) {
     return r;
   } catch (e) { sniperNote(p.symbol + ' sell failed — ' + e.message, 'err'); }
 }
-async function sniperExitTick() {
+async function sniperExitTick(skipRefresh) {
   const open = openPositions().filter(p => p.sniper && p.wallet === 'burner');
   if (!open.length) return;
-  try { await refreshPrices(); } catch { /* price map may still be warm */ }
+  if (!skipRefresh) { try { await refreshPrices(); } catch { /* price map may still be warm */ } }
   let changed = false;
   for (const p of openPositions().filter(x => x.sniper && !x.degen && x.wallet === 'burner')) {
     const lp = livePrices.get(p.mint)?.price;
@@ -6090,24 +6203,29 @@ async function degenBuy(pick, opt) {
   renderDegen();
   return r;
 }
+let degenSelling = false;
 async function degenSell(p, pct, tag, lp) {
-  const b = WALLETS.burner;
-  if (!b.kp) return;
-  let h = b.tokens.get(p.mint);
-  if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* ignore */ } h = b.tokens.get(p.mint); }
-  if (!h || h.raw === 0n) return;
-  const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
-  if (raw === 0n) return;
-  const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.min(15, Math.max(A.slipCap, S.slippagePct)) * 100) });
-  const why = tag + ' ' + pct + '% at ' + price(lp);
-  await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper, entryReason: why } });
-  degenNote(p.symbol + ' ' + why);
-  renderDegen();
+  if (degenSelling) return;
+  degenSelling = true;
+  try {
+    const b = WALLETS.burner;
+    if (!b.kp) return;
+    let h = b.tokens.get(p.mint);
+    if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* ignore */ } h = b.tokens.get(p.mint); }
+    if (!h || h.raw === 0n) return;
+    const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
+    if (raw === 0n) return;
+    const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.min(15, Math.max(A.slipCap, S.slippagePct)) * 100) });
+    const why = tag + ' ' + pct + '% at ' + price(lp);
+    await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper, entryReason: why } });
+    degenNote(p.symbol + ' ' + why);
+    renderDegen();
+  } finally { degenSelling = false; }
 }
-async function degenExitTick() {
+async function degenExitTick(skipRefresh) {
   const open = openPositions().filter(p => p.degen && p.wallet === 'burner');
   if (!open.length || !WALLETS.burner?.kp) return;
-  try { await refreshPrices(); } catch { /* use the last price */ }
+  if (!skipRefresh) { try { await refreshPrices(); } catch { /* use the last price */ } }
   for (const p of openPositions().filter(x => x.degen && x.wallet === 'burner')) {
     const lp = livePrices.get(p.mint)?.price;
     const ex = degenExit(p, lp);
@@ -6213,7 +6331,8 @@ function renderDegen() {
   const wins = rounds.filter(c => c.pnlUsd > 0).length;
   const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
   const halted = cfg.on && degenTodayPnl() <= -cfg.dailyLossUsd;
-  const stamp = DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—');
+  const readS = DEGEN.fetched ? Math.max(0, Math.round((Date.now() - DEGEN.fetched) / 1000)) : null;
+  const stamp = (DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—')) + (readS == null ? '' : ' · read ' + readS + 's ago');
   const stats = `<button type="button" data-open-degen class="hero-card w-full text-left">
     <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
@@ -7462,8 +7581,9 @@ function openListEditor(row) {
       saveMyList(); renderMyList(); toast('Token strategy saved', 'ok');
     } });
 }
+const CHART_TFS = ['1s', '5s', '1m', '5m', '15m', '1h', '4h'];
 function chartTfButtons(active) {
-  return `<div class="mb-2 flex flex-wrap gap-1">${LIST_TFS.map(tf => `<button type="button" data-chart-tf="${tf}" class="rounded-full border px-2 py-0.5 text-[11px] ${tf === active ? 'border-violet-400/50 bg-violet-500/20 text-violet-100' : 'border-white/10 text-slate-400'}">${tf}</button>`).join('')}</div>`;
+  return `<div class="mb-2 flex flex-wrap gap-1">${CHART_TFS.map(tf => `<button type="button" data-chart-tf="${tf}" class="rounded-full border px-2 py-0.5 text-[11px] ${tf === active ? 'border-violet-400/50 bg-violet-500/20 text-violet-100' : 'border-white/10 text-slate-400'}">${tf}</button>`).join('')}</div>`;
 }
 function bindChartRead(model) {
   const svg = $('mlChartSvg'), tip = $('mlChartTip');
@@ -7485,9 +7605,29 @@ function bindChartRead(model) {
   svg.addEventListener('pointermove', read);
 }
 let chartDrawSeq = 0;
+function rowAgeH(row) {
+  const created = row?.dexPair?.pairCreatedAt || row?.pairCreatedAt;
+  if (created) return (Date.now() - created) / 3.6e6;
+  return isNum(row?.ageH) ? row.ageH : null;
+}
 async function drawListChart(row, tf) {
   const box = $('mlChartLive');
   if (!box) return;
+  if (tf === '1s' || tf === '5s') {
+    const seq = ++chartDrawSeq;
+    const candles = tickBars(row.mint, tf);
+    const spec = listStrategy(row);
+    const px = isNum(row.price) ? row.price : livePrices.get(row.mint)?.price;
+    const model = listChartModel({ ...row, cache: { tf, candles } }, spec, px);
+    const drawn = listChartSvg(model, { w: 360, h: 220 });
+    box.innerHTML = chartTfButtons(tf) + (drawn.empty
+      ? '<p class="text-xs text-slate-400">Live 1s candles appear after a few price ticks.</p>'
+      : `<div style="touch-action:none">${drawn.svg.replace('<svg ', '<svg id="mlChartSvg" ')}<div id="mlChartTip" class="mt-1 text-[11px] text-slate-300">Drag across the chart to read a price.</div><p class="mt-1 text-[10px] text-slate-500">Built from the live price stream. 1m–4h still load exchange candles.</p></div>`);
+    if (seq !== chartDrawSeq) return;
+    box.querySelectorAll('[data-chart-tf]').forEach(b => b.addEventListener('click', () => { drawListChart(row, b.dataset.chartTf); }));
+    bindChartRead(model);
+    return;
+  }
   const seq = ++chartDrawSeq;
   const preferred = LIST_TFS.includes(tf) ? tf : '4h';
   let candles = null;
@@ -7535,7 +7675,8 @@ function openListChart(id) {
     html: '<div id="mlChartLive"></div>',
     onConfirm: async () => {} });
   const spec = listStrategy(row);
-  const start = row.chartTf || (spec.mode === 'momentum' ? '1m' : (isBreakMode(spec.mode) ? spec.tf : '4h'));
+  const ageH = rowAgeH(row);
+  const start = isNum(ageH) && ageH < 6 ? '1s' : (row.chartTf || (spec.mode === 'momentum' ? '1m' : (isBreakMode(spec.mode) ? spec.tf : '4h')));
   drawListChart(row, start);
 }
 function openScanChart(mint) {
@@ -7578,6 +7719,7 @@ async function myListBuyNow(row, typed, onDone) {
     } });
 }
 function renderMyList() {
+  if (document.body.classList.contains('sheet-on')) return;
   closeTokenSheet();
   const box = $('myListBox'); if (!box) return;
   const focus = document.activeElement;
@@ -7659,7 +7801,9 @@ function renderMyList() {
     }
     const dex = pair.url || ('https://dexscreener.com/solana/' + row.mint);
     const cell = (k, val) => `<div class="min-w-0"><div class="text-[9px] uppercase tracking-wide text-slate-500">${k}</div><div class="text-[12px] leading-tight text-slate-100 whitespace-normal break-words">${val || '—'}</div></div>`;
-    const spark = listChartSvg(v.model, { w: 84, h: 32 });
+    const ageH = rowAgeH(row);
+    const ticks = isNum(ageH) && ageH < 6 ? tickBars(row.mint, '1s') : [];
+    const spark = listChartSvg(ticks.length >= 2 ? { candles: ticks } : v.model, { w: 84, h: 32 });
     const mono = esc((row.symbol || '?').slice(0, 2).toUpperCase());
     if (!window.__pxSeen) window.__pxSeen = {};
     const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
@@ -8186,7 +8330,8 @@ function renderAgentPicks() {
     (rows || []).forEach(r => { const t = agentTime(r?.ts) || agentTime(r?.updatedAt) || agentTime(r?.addedTs); if (t > max) max = t; });
     return tehranClock(max);
   };
-  const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} · plans ${stamp('plans', [...AG.plans.values()])} · risk ${stamp('risk', AG.risk.positions)} · list file ${stamp('mylist', AG.listFile || [])} · config ${tehranClock(AG.fetched.config)}</div>`;
+  const ageOf = (name) => { const t = AG.pulled?.[name]; if (!t) return '—'; const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 90 ? s + 's' : Math.round(s / 60) + 'm'; };
+  const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} (${ageOf('candidates')}) · plans ${stamp('plans', [...AG.plans.values()])} (${ageOf('plans')}) · risk ${stamp('risk', AG.risk.positions)} (${ageOf('risk')}) · list file ${stamp('mylist', AG.listFile || [])} (${ageOf('mylist')}) · config ${tehranClock(AG.fetched.config)} (${ageOf('config')})</div>`;
   const banner = agentPauseBuys() ? `<div class="mt-1 rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[12px] font-semibold text-rose-100">Agent risk paused scanner auto-buy</div>` : '';
   const cards = AG.candidates.filter(c => c && isAddr(c.mint)).map(c => {
     const plan = agentPlanFor(c.mint);
@@ -8229,6 +8374,8 @@ async function refreshAgents() {
       const res = await fetch(AGENT_RAW + name + '.json?t=' + Date.now(), { cache: 'no-store' });
       if (!res.ok) throw new Error(name + ' ' + res.status);
       const data = await res.json();
+      AG.pulled = AG.pulled || {};
+      AG.pulled[name] = Date.now();
       AG.fetched[name] = Date.now();
       AG.errors[name] = '';
       if (name === 'candidates') {
@@ -8263,7 +8410,7 @@ async function refreshAgents() {
 function startAgents() {
   clearInterval(AG.timer);
   refreshAgents();
-  AG.timer = setInterval(refreshAgents, 150000);
+  AG.timer = setInterval(refreshAgents, 30000);
   setInterval(() => { if (ghToken()) pushMyListSync(); }, 10 * 60 * 1000);
 }
 const GH_TOKEN_LS = 'sms:ghtoken';
@@ -8652,7 +8799,8 @@ mountApp();
 fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
 if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
 setTimeout(degenWatch, 700);
-setInterval(degenWatch, 60000);
+setInterval(degenWatch, 15000);
+startLiveLoop();
 syncAgentPreview();
 maybeLockSizeUnit();
 setInterval(() => { refreshHolderWatch(); }, 60 * 1000);
@@ -8662,8 +8810,7 @@ try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HI
 updateSolFilterBadge();
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
 if (WALLETS.burner.pubkey) refreshBalances('burner');
-setInterval(() => { if (openPositions().length && !A.on) refreshPrices(); }, 60000);
-setInterval(() => { if (!A.on) refreshPrices(); }, 30000);
+setInterval(() => { if (!liveAt) refreshPrices(); }, 30000);
 if (openPositions().length) setTimeout(refreshPrices, 1500);
 setInterval(() => { if (recordEquity(false)) renderPortfolio(); }, 5 * 60 * 1000);
 setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
