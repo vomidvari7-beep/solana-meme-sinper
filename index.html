@@ -291,7 +291,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   input:not([type=checkbox]):not([type=radio]), select, textarea { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; color: var(--text); }
   .text-emerald-300, .text-emerald-400 { color: var(--up); }
   .text-rose-300, .text-rose-400 { color: var(--down); }
-  #tabTokens.seg-degen #myListBox, #tabTokens.seg-degen #emptyState, #tabTokens.seg-degen #results { display: none !important; }
+  #tabTokens.seg-degen #myListBox, #tabTokens.seg-degen #emptyState, #tabTokens.seg-degen #results,
+  #tabTokens.seg-scalp #myListBox, #tabTokens.seg-scalp #emptyState, #tabTokens.seg-scalp #results { display: none !important; }
   .deg-chip { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); padding: 1px 6px; font-size: 10px; font-weight: 700; letter-spacing: .03em; }
   .deg-ready { color: var(--up); border-color: var(--up-soft); background: var(--up-soft); }
   .deg-watch { color: var(--amber); border-color: var(--amber-soft); background: var(--amber-soft); }
@@ -386,6 +387,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       </div>
     </div>
   <div id="degenCard"></div>
+  <div id="scalpCard"></div>
 
 <section id="readyNow">
   <div class="glass rounded-2xl p-4 sm:p-5">
@@ -3118,7 +3120,7 @@ let AUTOLOG = load(LS.autolog, []);
 function autoLog(msg, level = 'info', extra = {}) { AUTOLOG.push({ ts: Date.now(), msg, level, ...extra }); AUTOLOG = AUTOLOG.slice(-300); save(LS.autolog, AUTOLOG); renderAutoLog(); }
 
 function blankPos(k, r) {
-  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null };
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: r.ts, tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, scalp: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null };
 }
 function profileStopPct() {
   let pct = 20;
@@ -3130,10 +3132,12 @@ function profileStopPct() {
 }
 function freshStop(p) {
   if (p?.degen && isNum(p.avgUsd) && p.avgUsd > 0) return degenStopPx(p.avgUsd, p.plan?.stopPct);
+  if (p?.scalp && isNum(p.avgUsd) && p.avgUsd > 0) return scalpStopLevel(p.avgUsd, p.plan?.breakLow, p.avgUsd, 0, false).stop;
   const avg = p.avgUsd;
   const planStop = p.plan?.stop;
   const byPct = isNum(avg) && avg > 0 ? avg * (1 - profileStopPct() / 100) : null;
   if (p?.plan?.myList && isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) return planStop;
+  if (p?.plan?.agent && isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) return planStop;
   // A plan stop is the analyzed level. If that level sits much further below the
   // actual fill than the profile stop (a dip-zone stop after a market buy), use the profile stop.
   if (isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) {
@@ -3161,6 +3165,7 @@ function positions() {
       if (r.auto) p.auto = true;
       if (r.sniper) p.sniper = true;
       if (r.degen || r.plan?.degen) p.degen = true;
+      if (r.scalp || r.plan?.scalp) p.scalp = true;
       if (r.myList || r.plan?.myList) p.myList = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
       if (r.scale && r.scale.i) { p.scaleI = Math.max(p.scaleI || 0, +r.scale.i || 0); p.scaleOf = r.scale.of || p.scaleOf || 3; }
@@ -3173,6 +3178,7 @@ function positions() {
       if (r.myList || r.plan?.myList) p.myList = true;
       if (r.sniper) p.sniper = true;
       if (r.degen || r.plan?.degen) p.degen = true;
+      if (r.scalp || r.plan?.scalp) p.scalp = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
     }
     p.symbol = r.symbol || p.symbol;
@@ -3272,12 +3278,14 @@ function clampAutoBuy(requested) {
   return { sol, err: null, clamped: (+requested || 0) > sol + 1e-9, byPct: bc.byPct, stale: bc.stale, bal: bc.sol };
 }
 function isDegenFill(r) { return !!(r && (r.degen || r.plan?.degen)); }
-function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, degen = false } = {}) {
+function isScalpFill(r) { return !!(r && (r.scalp || r.plan?.scalp)); }
+function mainBookFill(r) { return !isDegenFill(r) && !isScalpFill(r); }
+function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, degen = false, scalp = false } = {}) {
   const errs = []; const w = WALLETS[walletKey];
   if (!w.pubkey) errs.push(`${w.label} wallet not connected`);
   if (walletKey === 'burner' && !burnerReady()) errs.push('Burner wallet is locked — unlock it first');
   if (!(sol > 0)) errs.push('Amount must be > 0');
-  if (!degen) {
+  if (!degen && !scalp) {
     const tradeCap = solCap(S.maxSolPerTrade), autoCap = solCap(A.maxSolPerTrade);
     if (tradeCap == null || (auto && autoCap == null)) errs.push('SOL price unavailable — USD sizes can’t be converted. Switch Size unit to SOL to trade manually.');
     const cap = auto && tradeCap != null && autoCap != null ? Math.min(tradeCap, autoCap) : tradeCap;
@@ -3287,13 +3295,13 @@ function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, de
       if (!bc.ok) errs.push(bc.err);
       else if (!auto && sol > bc.byPct + 1e-9) errs.push(`Exceeds max ${A.balancePct}% of burner balance: ${sol} > ${bc.byPct.toFixed(4)} SOL (${bc.sol.toFixed(4)} SOL${bc.stale ? ' last known' : ''} × ${A.balancePct}%)`);
     }
-    const spent = spentToday(r => !isDegenFill(r));
+    const spent = spentToday(mainBookFill);
     const dailyCap = solCap(S.dailyMaxSol);
     if (dailyCap == null) errs.push('SOL price unavailable — USD daily cap can’t be converted');
     else if (spent + sol > dailyCap + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${dailyCap.toFixed(4)} SOL`);
-    if (auto) { const as = spentToday(r => r.auto && !isDegenFill(r)); const autoDaily = solCap(A.dailyCap); if (autoDaily == null) errs.push('SOL price unavailable — USD auto cap can’t be converted'); else if (as + sol > autoDaily + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${autoDaily.toFixed(4)} SOL`); }
+    if (auto) { const as = spentToday(r => r.auto && mainBookFill(r)); const autoDaily = solCap(A.dailyCap); if (autoDaily == null) errs.push('SOL price unavailable — USD auto cap can’t be converted'); else if (as + sol > autoDaily + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${autoDaily.toFixed(4)} SOL`); }
   }
-  const open = openPositions().filter(p => !p.degen); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
+  const open = openPositions().filter(p => !p.degen && !p.scalp); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
   if (!skipMaxOpen && !held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
   if (isNum(w.sol) && sol + S.reserveSol > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${S.reserveSol} reserve`);
   return errs;
@@ -3318,8 +3326,15 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
     if (!exitTag) exitTag = 'manual';
     if (!extra.entryReason) extra.entryReason = 'manual sell';
   }
+  const scalpHeld = !degenHeld && !isBuy && openPositions().some(p => p.mint === mint && p.wallet === walletKey && p.scalp && p.open);
+  if (scalpHeld) {
+    extra = { ...(extra || {}), scalp: true };
+    if (!exitTag) exitTag = 'manual';
+    if (!extra.entryReason) extra.entryReason = 'manual sell';
+  }
   const sig = await signAndSend(walletKey, tx);
   const degenTrade = !!(extra?.degen || extra?.plan?.degen || degenHeld);
+  const scalpTrade = !degenTrade && !!(extra?.scalp || extra?.plan?.scalp || scalpHeld);
   if (degenTrade && typeof noteDegenExit === 'function') noteDegenExit(mint);
   const rec = logTrade({ id: 'tr' + Date.now() + Math.random().toString(36).slice(2, 6), ts: Date.now(), wallet: walletKey, auto, side, mint, symbol: t?.symbol || short(mint),
     solAmount, tokenAmount, priceSol: tokenAmount ? solAmount / tokenAmount : null, priceUsd: tokenAmount && sp ? solAmount * sp / tokenAmount : null, solUsd: sp,
@@ -3338,6 +3353,7 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   updateTrade(rec.id, patch);
   const done = LOG.find(x => x.id === rec.id);
   if (degenTrade && done) applyDegenLedger(done);
+  if (scalpTrade && done && typeof applyScalpLedger === 'function') applyScalpLedger(done);
   if (!isBuy && (extra?.degen || degenHeld)) noteDegenExit(mint);
   refreshBalances(walletKey);
   return { sig, rec: done };
@@ -3450,7 +3466,7 @@ function renderWallet() {
         : `<div class="mt-1 text-[11px] text-slate-500">Not created yet — see Burner wallet below.</div>`}
     </div>`;
   $('walletInfo').innerHTML = `<div class="space-y-2">${wRow(ph)}${wRow(bu)}</div>
-    ${anyConn ? `<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]"><span class="whitespace-normal break-words">Today: <b class="text-slate-200">${solWithUsd(spentToday(r => !isDegenFill(r)))}</b> / ${esc(sizeHint(S.dailyMaxSol) || (S.dailyMaxSol + ' ' + unitWord()))} · max ${esc(sizeHint(S.maxSolPerTrade) || (S.maxSolPerTrade + ' ' + unitWord()))}</span><button data-act="refresh" class="text-violet-300 hover:underline">↻ Balances</button></div>` : ''}`;
+    ${anyConn ? `<div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]"><span class="whitespace-normal break-words">Today: <b class="text-slate-200">${solWithUsd(spentToday(mainBookFill))}</b> / ${esc(sizeHint(S.dailyMaxSol) || (S.dailyMaxSol + ' ' + unitWord()))} · max ${esc(sizeHint(S.maxSolPerTrade) || (S.maxSolPerTrade + ' ' + unitWord()))}</span><button data-act="refresh" class="text-violet-300 hover:underline">↻ Balances</button></div>` : ''}`;
   $('walletInfo').querySelectorAll('input[name=activeW]').forEach(r => r.addEventListener('change', () => setActive(r.value)));
   $('walletInfo').querySelector('[data-act=connect]')?.addEventListener('click', () => connectPhantom(false));
   $('walletInfo').querySelector('[data-act=disconnect]')?.addEventListener('click', () => disconnectPhantom(false));
@@ -3581,8 +3597,8 @@ function paneShown(id) {
 function liveMints() {
   const list = openMints();
   if (document.hidden) return [...new Set(list)];
-  if (paneShown('tabTokens') && (typeof tokenSeg === 'undefined' || tokenSeg !== 'degen')) {
-    try { (MYLIST?.rows || []).forEach(r => { if (r.mint) list.push(r.mint); }); } catch { /* list not ready */ }
+  if ((paneShown('tabTokens') && (typeof tokenSeg === 'undefined' || tokenSeg !== 'degen')) || (typeof MYLIST !== 'undefined' && MYLIST.on)) {
+    try { (MYLIST?.rows || []).forEach(r => { if (r.mint && r.enabled !== false) list.push(r.mint); }); } catch { /* list not ready */ }
   }
   if (paneShown('tabAgents') || (typeof A !== 'undefined' && A.on)) {
     try { (typeof AG !== 'undefined' ? [...AG.plans.values()] : []).forEach(p => { if (p?.mint) list.push(p.mint); }); } catch { /* plans not ready */ }
@@ -3596,18 +3612,19 @@ function liveMints() {
   return [...new Set(list)];
 }
 async function evaluateExits() {
+  if (typeof scalpExitTick === 'function') await scalpExitTick();
   if (typeof degenExitTick === 'function') await degenExitTick(true);
   if (typeof sniperExitTick === 'function') await sniperExitTick(true);
   if (typeof myListExits === 'function') await myListExits();
   if (!burnerReady()) { botLog('exits', 'panel', 'burner locked'); return; }
   if (!(A.on && A.autoExit)) {
-    for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
+    for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen && !x.scalp)) {
       const lp = livePrices.get(p.mint)?.price;
       if (priceExit(p, lp)) exitNote('exits', p.mint, p.symbol, 'exit due, auto-exit is off');
     }
     return;
   }
-  for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
+  for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen && !x.scalp)) {
     const lp = livePrices.get(p.mint)?.price;
     if (!isNum(lp)) { exitNote('exits', p.mint, p.symbol, 'no live price for exit'); continue; }
     const ex = priceExit(p, lp);
@@ -3616,7 +3633,7 @@ async function evaluateExits() {
 }
 let exitBusy = false;
 const paintGap = () => window.__SMS_SAFE ? 3000 : 2500;
-const lastFullPaint = { portfolio: 0, list: 0, degen: 0, ready: 0, home: 0 };
+const lastFullPaint = { portfolio: 0, list: 0, degen: 0, scalp: 0, ready: 0, home: 0 };
 let paintQueued = false;
 function patchLiveText() {
   document.querySelectorAll('[data-live-mint]').forEach(el => {
@@ -3655,7 +3672,8 @@ function slowPaint() {
   const gap = trackedMintCount() > 20 ? 12000 : 8000;
   try {
     if (paneShown('tabTrades') && now - lastFullPaint.portfolio > gap) { lastFullPaint.portfolio = now; renderPortfolio(); }
-    if (paneShown('tabHome') && now - lastFullPaint.home > gap) { lastFullPaint.home = now; paintHomePositions(openPositions().filter(p => !p.degen)); }
+    if (paneShown('tabHome') && now - lastFullPaint.home > gap) { lastFullPaint.home = now; paintHomePositions(openPositions().filter(p => !p.degen && !p.scalp)); }
+    if ((paneShown('tabHome') || (paneShown('tabTokens') && tokenSeg === 'scalp')) && now - lastFullPaint.scalp > gap) { lastFullPaint.scalp = now; try { renderScalp(); } catch { /* scalp card not ready */ } }
     if (paneShown('tabTokens') && tokenSeg !== 'degen' && !document.body.classList.contains('sheet-on') && $('tradeModal')?.classList.contains('hidden') && now - lastFullPaint.list > gap) { lastFullPaint.list = now; renderMyList(); }
     const degenOnScreen = paneShown('tabHome') || (paneShown('tabTokens') && tokenSeg === 'degen') || (paneShown('tabTrades') && tradeSeg === 'degen');
     if (degenOnScreen && !$('degenDesk')?.querySelector('details[open]') && now - lastFullPaint.degen > gap) { lastFullPaint.degen = now; renderDegen(); }
@@ -3696,7 +3714,8 @@ async function liveTick() {
         m5s: row?.m5s == null ? prev?.m5s : row.m5s,
         at: now
       });
-      if (!hidden && (held.has(mint) || mint === focus)) pushTick(mint, px, now);
+      const listOn = typeof MYLIST !== 'undefined' && MYLIST.on && (MYLIST.rows || []).some(r => r && r.enabled !== false && r.mint === mint);
+      if (!hidden && (held.has(mint) || mint === focus || listOn)) pushTick(mint, px, now);
       try {
         const row = (MYLIST?.rows || []).find(r => r.mint === mint);
         if (row) row.price = px;
@@ -3708,6 +3727,7 @@ async function liveTick() {
     if (!hidden) paintLive(0, performance.now() - t0);
     checkAlerts();
     if (!hidden) schedulePaint();
+    if (typeof mlBreakScan === 'function') mlBreakScan();
     pruneMemory();
   } catch (e) {
     if (e && e.name === 'AbortError') { /* a newer poll or a hidden tab replaced this fetch */ }
@@ -3916,13 +3936,13 @@ function burnerEquity() {
   const px = solUsd();
   let posUsd = 0;
   for (const p of positions()) {
-    if (p.wallet !== 'burner' || !p.open || p.degen) continue;
+    if (p.wallet !== 'burner' || !p.open || p.degen || p.scalp) continue;
     const lp = livePrices.get(p.mint)?.price;
     if (!isNum(lp) || !(p.qty > 0)) return null;
     posUsd += p.qty * lp;
   }
   if (posUsd > 0 && !(isNum(px) && px > 0)) return null;
-  const mainSol = bal - degenSolEffect();
+  const mainSol = bal - degenSolEffect() - scalpSolEffect();
   const sol = mainSol + (posUsd > 0 ? posUsd / px : 0);
   const usd = isNum(px) && px > 0 ? mainSol * px + posUsd : null;
   return { t: Date.now(), sol, usd };
@@ -3952,7 +3972,7 @@ function logStillOpen(wallet, mint) {
   return bought > 0 && qty > bought * 0.001;
 }
 function noteTradeForEquity(rec) {
-  if (!rec || rec.wallet !== 'burner' || rec.status !== 'confirmed' || rec.side !== 'sell' || isDegenFill(rec)) return;
+  if (!rec || rec.wallet !== 'burner' || rec.status !== 'confirmed' || rec.side !== 'sell' || isDegenFill(rec) || isScalpFill(rec)) return;
   if (logStillOpen('burner', rec.mint)) return;
   if (!LOG.some(r => r.status === 'confirmed' && r.wallet === 'burner' && r.mint === rec.mint && r.side === 'buy')) return;
   recordEquity(true);
@@ -4001,7 +4021,7 @@ function periodStats(fromTs, unit) {
   let realizedUsd = 0, realizedSol = 0, trades = 0, wins = 0;
   const daily = new Map();
   for (const r of LOG) {
-    if (r.status !== 'confirmed' || r.wallet !== 'burner' || isDegenFill(r)) continue;
+    if (r.status !== 'confirmed' || r.wallet !== 'burner' || !mainBookFill(r)) continue;
     let c = by.get(r.mint);
     if (!c || c.closed) c = { qty: 0, bought: 0, costUsd: 0, costSol: 0, pnlUsd: 0, pnlSol: 0, closed: false };
     if (r.side === 'buy') {
@@ -4800,7 +4820,7 @@ function renderPortfolio() {
   const ae = document.activeElement;
   if (posDragging) return;
   if (ae && ae.closest && ae.closest('[data-pos-edit]') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
-  const pos = positions(); const open = pos.filter(p => p.open && !p.degen); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
+  const pos = positions(); const open = pos.filter(p => p.open && !p.degen && !p.scalp); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
   const portSig = [tradeSeg, posTableView ? 1 : 0, equityRange, wealthUnit, closedRange, closedSrc, posEditKey || '', LOG.length, open.map(p => {
     const lp = livePrices.get(p.mint)?.price;
     const s = levelState(p);
@@ -4832,7 +4852,7 @@ function renderPortfolio() {
       <td class="pr-2 font-mono whitespace-normal break-words text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono whitespace-normal break-words text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
       <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}<button type="button" data-edit-stop="${esc(p.key)}" class="block mt-1 text-[10px] text-violet-300">Edit stop</button></td></tr>`; }).join('');
-  const logRows = [...LOG].reverse().filter(r => !isDegenFill(r)).slice(0, 200).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
+  const logRows = [...LOG].reverse().filter(mainBookFill).slice(0, 200).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
       <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}${r.entryReason ? ' · ' + esc(r.entryReason) : ''}</div></td>
       <td class="pr-2 font-mono whitespace-normal break-words">${solWithUsd(r.solAmount, r.solUsd)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
       <td class="pr-2 ${r.status === 'confirmed' ? 'text-emerald-300' : r.status === 'pending' ? 'text-amber-300' : 'text-rose-300'}">${esc(r.status)}</td>
@@ -4847,7 +4867,7 @@ function renderPortfolio() {
     <div class="flex flex-wrap gap-3 text-[12px] text-slate-500 mb-2"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfRefresh" class="text-slate-300">Refresh</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div>
     ${equityCardHtml()}
     <div class="trade-open">
-    <div class="text-[12px] text-slate-500 mb-2 num">Open ${open.length}/${maxPos()} · today ${solWithUsd(spentToday(r => !isDegenFill(r)))}</div>
+    <div class="text-[12px] text-slate-500 mb-2 num">Open ${open.length}/${maxPos()} · today ${solWithUsd(spentToday(mainBookFill))}</div>
     ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="empty-note">No open positions. Buys you confirm show up here with entry, stop, and P&amp;L.</p>'}
     </div>
     <div class="trade-closed">
@@ -4882,7 +4902,7 @@ function renderPortfolio() {
   $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
   $('pfCsv').addEventListener('click', () => {
     const cols = ['ts', 'wallet', 'auto', 'side', 'symbol', 'mint', 'solAmount', 'tokenAmount', 'priceUsd', 'status', 'signature', 'impactPct', 'route'];
-    const csv = [cols.join(','), ...LOG.filter(r => !isDegenFill(r)).map(r => cols.map(c => JSON.stringify(c === 'ts' ? new Date(r.ts).toISOString() : (r[c] ?? ''))).join(','))].join('\n');
+    const csv = [cols.join(','), ...LOG.filter(mainBookFill).map(r => cols.map(c => JSON.stringify(c === 'ts' ? new Date(r.ts).toISOString() : (r[c] ?? ''))).join(','))].join('\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'sms-trades.csv'; a.click(); });
   $('pfClear').addEventListener('click', () => { if (confirm('Clear the local trade log? (On-chain history is not affected.)')) { LOG = []; saveLog(); alerted = {}; save(LS.alerts, alerted); renderPortfolio(); } });
   renderAutoLog();
@@ -5497,6 +5517,7 @@ function degenExit(p, lp) {
   return null;
 }
 function effectiveStop(p, lp) {
+  if (p?.scalp) return scalpEffective(p, lp);
   if (p?.degen) return degenEffective(p, lp);
   if (p?.plan?.myList) return applyManualLevels(p, myListEffectiveStop(p, lp));
   let eff;
@@ -5728,7 +5749,7 @@ function quickReentryBlock(mint, plan) {
   return '';
 }
 function applyQuickOverlay(p, eff) {
-  if (p?.degen) return eff;
+  if (p?.degen || p?.scalp) return eff;
   if (!(quickOn() || p?.plan?.split) || !(p?.avgUsd > 0) || !eff) return eff;
   const man = manualLevelFlags(p);
   if (man.stop && man.tp) return eff;
@@ -5748,7 +5769,8 @@ function applyQuickOverlay(p, eff) {
     next.trail = null;
     next.beAtPct = null;
   }
-  if (!man.stop) {
+  const keepAgentStop = !!(p?.plan?.agent && isNum(p.plan.stop) && p.plan.stop > 0 && p.plan.stop < entry);
+  if (!man.stop && !keepAgentStop) {
     next.quick = true;
     const cap = entry * (1 - maxStop / 100);
     if (!isNum(next.stop) || !(next.stop > 0 && next.stop < entry) || next.stop < cap - 1e-12) {
@@ -5776,6 +5798,7 @@ function saveQuick(patch) {
   rememberBot('quick', A.quickOn !== false);
 }
 function priceExit(p, lp) {
+  if (p?.scalp) return null;
   if (p?.degen) return degenExit(p, lp);
   if (p?.plan?.myList) return myListExit(p, lp);
   if (!isNum(lp)) return null;
@@ -5898,7 +5921,7 @@ async function autoTick() {
     await refreshPrices(); await refreshBalances('burner');
     await ensureSolMarket();
     // ---- exits (always, even when the SOL filter pauses new buys)
-    if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen)) {
+    if (A.autoExit) for (const p of openPositions().filter(x => x.wallet === 'burner' && !x.sniper && !x.degen && !x.scalp)) {
       if (!A.on) break; const lp = livePrices.get(p.mint)?.price; const ex = priceExit(p, lp); if (!ex) continue;
       await autoSell(p, ex.pctSell, ex.tag, lp);
     }
@@ -6106,7 +6129,7 @@ function enableAuto() {
 }
 const BOT_LS = 'sms:bots';
 function botPrefs() {
-  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false, scan: false, split: true };
+  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false, scalp: false, scan: false, split: true };
   try {
     const raw = localStorage.getItem(BOT_LS);
     if (!raw) { saveBotPrefs(fallback); return { ...fallback }; }
@@ -6128,6 +6151,7 @@ function botLive(key) {
   if (key === 'copy') return typeof COPY !== 'undefined' && !!COPY.on;
   if (key === 'sniper') return typeof SNIPER !== 'undefined' && !!SNIPER.on;
   if (key === 'degen') return degenOn();
+  if (key === 'scalp') return scalpOn();
   if (key === 'scan') return !!liveScanOn;
   return false;
 }
@@ -6135,11 +6159,11 @@ function renderBotBar() {
   const box = $('botBar'); if (!box) return;
   const prefs = botPrefs();
   const locked = !burnerReady();
-  const liveKeys = ['auto', 'mylist', 'copy', 'sniper', 'degen', 'scan'];
+  const liveKeys = ['auto', 'mylist', 'copy', 'sniper', 'degen', 'scalp', 'scan'];
   const items = [
     ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
     ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%', '1:1'],
-    ['degen', 'Degen', 'شکارچی'], ['scan', 'Live scan'], ['split', 'Split entry']
+    ['degen', 'Degen', 'شکارچی'], ['scalp', 'Scalp'], ['scan', 'Live scan'], ['split', 'Split entry']
   ];
   const active = items.filter(([key]) => prefs[key]).length;
   const armed = items.some(([key]) => liveKeys.includes(key) && prefs[key] && locked);
@@ -6179,7 +6203,7 @@ function renderBotBar() {
   $('botAllOff')?.addEventListener('click', () => killSwitch('manual'));
   const dot = $('appDot');
   if (dot) {
-    const live = ['auto', 'mylist', 'copy', 'sniper'].some(k => prefs[k] && (botLive(k) || locked));
+    const live = ['auto', 'mylist', 'copy', 'sniper', 'scalp'].some(k => prefs[k] && (botLive(k) || locked));
     dot.className = 'dot' + (live && !locked ? ' on' : live ? ' armed' : '');
   }
   if ($('aMom')) $('aMom').checked = !!A.momentumOn;
@@ -6209,6 +6233,10 @@ function setExecBot(key, on) {
     if (!on) stopDegen();
     else if (!locked) startDegen();
     renderDegen();
+  } else if (key === 'scalp') {
+    if (!on) stopScalp();
+    else if (!locked) startScalp();
+    try { renderScalp(); } catch { /* card not mounted */ }
   } else if (key === 'scan') {
     liveScanOn = !!on;
     if (!on) stopLiveScan();
@@ -6272,6 +6300,7 @@ function resumeArmedBots() {
   if (p.copy && typeof COPY !== 'undefined' && !COPY.on) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 600); }
   if (p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
   if (p.degen || degenCfg().on) { const d = degenCfg(); d.on = true; saveDegen(d); startDegen(); }
+  if (p.scalp) startScalp();
   else if (typeof degenPoll === 'function') degenPoll();
   if (p.scan) { liveScanOn = true; if (!window.__SMS_SAFE) startLiveScan(); }
   A.momentumOn = !!p.momentum;
@@ -6297,13 +6326,14 @@ function killSwitch(reason = 'manual') {
   const wasL = !!(typeof MYLIST !== 'undefined' && MYLIST.on);
   if (wasL) stopMyList(reason, { quiet: true });
   stopDegen();
+  stopScalp();
   if (was) { autoLog(`⛔ KILL SWITCH (${reason}) — auto-trading stopped`, 'err'); toast('⛔ Auto-trading stopped', 'err'); }
   else if (wasC) toast('⛔ Copy mode stopped', 'err');
   else if (wasS) toast('⛔ Launch sniper stopped', 'err');
   else if (wasL) toast('⛔ My List stopped', 'err');
   if (reason !== 'locked') {
     const prefs = botPrefs();
-    prefs.auto = false; prefs.mylist = false; prefs.copy = false; prefs.sniper = false; prefs.momentum = false; prefs.degen = false; prefs.scan = false;
+    prefs.auto = false; prefs.mylist = false; prefs.copy = false; prefs.sniper = false; prefs.momentum = false; prefs.degen = false; prefs.scalp = false; prefs.scan = false;
     liveScanOn = false; stopLiveScan();
     const dOff = degenCfg(); dOff.on = false; saveDegen(dOff);
     saveBotPrefs(prefs);
@@ -6319,7 +6349,8 @@ function renderKillFab() {
   const copyOn = typeof COPY !== 'undefined' && COPY.on;
   const sniperOn = typeof SNIPER !== 'undefined' && SNIPER.on;
   const listOn = typeof MYLIST !== 'undefined' && MYLIST.on;
-  const armed = A.on || copyOn || sniperOn || listOn;
+  const scalpLive = typeof scalpOn === 'function' && scalpOn();
+  const armed = A.on || copyOn || sniperOn || listOn || scalpLive;
   if (!f) {
     const host = document.querySelector('.appbar-actions');
     if (!host) return;
@@ -6334,9 +6365,9 @@ function renderKillFab() {
   }
   f.hidden = !armed;
   if (!armed) return;
-  f.textContent = (A.on ? 'AUTO' : copyOn ? 'COPY' : sniperOn ? 'SNIPE' : 'LIST') + ' · KILL';
+  f.textContent = (A.on ? 'AUTO' : copyOn ? 'COPY' : sniperOn ? 'SNIPE' : listOn ? 'LIST' : 'SCALP') + ' · KILL';
 }
-window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on) || degenOn()) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
+window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on) || degenOn() || (typeof scalpOn === 'function' && scalpOn())) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
 
 
 /* ---------------- whale copy-trade ---------------- */
@@ -7842,11 +7873,15 @@ function placeDegenDesk() {
   desk.hidden = tokenSeg !== 'degen';
 }
 function showTokenSeg(name) {
-  tokenSeg = name === 'degen' ? 'degen' : 'list';
+  tokenSeg = name === 'degen' ? 'degen' : name === 'scalp' ? 'scalp' : 'list';
   const pane = $('tabTokens');
-  if (pane) pane.classList.toggle('seg-degen', tokenSeg === 'degen');
+  if (pane) {
+    pane.classList.toggle('seg-degen', tokenSeg === 'degen');
+    pane.classList.toggle('seg-scalp', tokenSeg === 'scalp');
+  }
   document.querySelectorAll('#tokenSeg [data-seg]').forEach(b => b.classList.toggle('on', b.dataset.seg === tokenSeg));
   placeDegenDesk();
+  try { placeScalpDesk(); } catch { /* desk not mounted */ }
 }
 let liveScanOn = false;
 let liveScanTimer = null;
@@ -8974,10 +9009,10 @@ function listBuyBlocks(sol, mint) {
   if (maxTrade == null || daily == null) errs.push('SOL price unavailable — USD sizes can’t be converted');
   else {
     if (sol > maxTrade + 1e-9) errs.push('above max per trade');
-    if (spentToday(r => !isDegenFill(r)) + sol > daily + 1e-9) errs.push('above daily cap');
+    if (spentToday(mainBookFill) + sol > daily + 1e-9) errs.push('above daily cap');
   }
-  const heldMint = mint && (openPositions().some(p => p.open && !p.degen && p.mint === mint) || (WALLETS.burner?.tokens?.get(mint)?.raw > 0n));
-  if (!heldMint && openPositions().filter(p => p.open && !p.degen).length >= maxPos()) errs.push('max positions');
+  const heldMint = mint && (openPositions().some(p => p.open && !p.degen && !p.scalp && p.mint === mint) || (WALLETS.burner?.tokens?.get(mint)?.raw > 0n));
+  if (!heldMint && openPositions().filter(p => p.open && !p.degen && !p.scalp).length >= maxPos()) errs.push('max positions');
   return errs;
 }
 function myListSpec(p) {
@@ -9550,7 +9585,7 @@ function myListStructSig() {
   for (const r of MYLIST.rows) {
     const px = (typeof livePrices !== 'undefined' && livePrices.get(r.mint)?.price) || r.price || 0;
     const bucket = px > 0 ? Math.round(Math.log(px) * 80) : 0;
-    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + bucket;
+    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + (r.mlArmed ? 'B' : '') + bucket;
   }
   return s;
 }
@@ -9657,9 +9692,10 @@ function renderMyList(opts) {
         <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
           ${logo}
           <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
+            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${row.mlArmed ? '<span class="setup-chip shrink-0">Breakout armed</span>' : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
             <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
+            ${row.mlGeo ? mlBreakSpark(row.mlGeo) : ''}
           </span>
           <span class="row-px">
             <span class="block num text-[15px] font-semibold ${flash}" data-live-mint="${esc(row.mint)}">${priceHtml(v.px)}</span>
@@ -9908,6 +9944,7 @@ async function myListBuys() {
     const px = row.price;
     if (!row.enabled || !(px > 0)) { if (row.enabled) botLog('mylist', row.mint, 'no live price'); continue; }
     if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) { botLog('mylist', row.mint, 'buy already pending'); continue; }
+    if (typeof mlBreakLock !== 'undefined' && mlBreakLock.has(row.mint)) continue;
     const pos = listPosition(row.mint);
     const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
     const gate = listEntryReady(spec, { enabled: row.enabled, open: !!pos, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
@@ -9989,6 +10026,159 @@ async function myListBuys() {
       if (hit === 'block') break;
     } catch { /* trade log records the failure */ }
   }
+}
+const ML_BREAK_PAD = 0.015;
+const ML_BREAK_CAP = 0.15;
+const ML_BREAK_LS = 'sms:mlbreak';
+const mlBreakMem = new Map();
+let mlBreakBusy = false;
+let mlBreakCursor = 0;
+const mlBreakLock = new Set();
+function mlBreakBook() {
+  const v = load(ML_BREAK_LS, []);
+  return Array.isArray(v) ? v : [];
+}
+function mlBreakNote(row) {
+  const rows = mlBreakBook();
+  rows.push(Object.assign({ at: Date.now() }, row));
+  save(ML_BREAK_LS, rows.slice(-80));
+}
+function mlBreakKey(geo) {
+  if (!geo) return '';
+  return Math.round(geo.line * 1e6) + ':' + Math.round(geo.zoneHi * 1e6);
+}
+function mlBreakGeometry(candles) {
+  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0).slice(-48);
+  if (cs.length < 15) return null;
+  const { highs } = swingPoints(cs, 2);
+  if (highs.length < 2) return null;
+  let use = highs.slice(-2);
+  const tail = highs.slice(-3);
+  if (tail.length === 3 && tail[1].price < tail[0].price && tail[2].price < tail[1].price) use = tail;
+  else if (!(highs.at(-1).price < highs.at(-2).price)) return null;
+  const a = use[0], b = use[use.length - 1];
+  if (!(b.price < a.price)) return null;
+  const lastI = cs.length - 1;
+  const line = lineAt(a, b, lastI);
+  let best = null;
+  for (const h of highs) {
+    const cluster = highs.filter(x => Math.abs(x.price - h.price) / h.price <= 0.015);
+    if (cluster.length < 2) continue;
+    const lo = Math.min(...cluster.map(x => x.price));
+    const hi = Math.max(...cluster.map(x => x.price));
+    const mid = (lo + hi) / 2;
+    if (!best || cluster.length > best.n || (cluster.length === best.n && Math.abs(mid - line) < Math.abs(best.mid - line))) best = { lo, hi, mid, n: cluster.length };
+  }
+  if (!best) {
+    const h = highs.at(-1);
+    best = { lo: h.price * 0.992, hi: h.price * 1.008, mid: h.price, n: 1 };
+  }
+  return { line, zoneLo: best.lo, zoneHi: best.hi, a, b, lastI };
+}
+function mlBreakStop(entry, candleLow) {
+  if (!(entry > 0)) return null;
+  const raw = (candleLow > 0 ? candleLow : entry) * (1 - ML_BREAK_PAD);
+  const floor = entry * (1 - ML_BREAK_CAP);
+  const stop = Math.max(raw, floor);
+  return stop < entry ? stop : floor;
+}
+function mlStrongBreakCandle(candles, lineOf) {
+  const cs = (candles || []).filter(c => c && c.c > 0 && c.l > 0);
+  let best = null, score = -1;
+  for (let i = 2; i < cs.length; i++) {
+    const lv = lineOf(i);
+    if (!(lv > 0) || !(cs[i].c > lv)) continue;
+    const body = cs[i].o > 0 ? Math.abs(cs[i].c - cs[i].o) : Math.abs(cs[i].c - cs[i].l);
+    const vol = cs[i].v > 0 ? cs[i].v : 1;
+    const s = body * vol;
+    if (s > score) { score = s; best = cs[i]; }
+  }
+  return best;
+}
+function mlMinuteClose(mint) {
+  const bars = typeof tickBars === 'function' ? (tickBars(mint, '1s') || []) : [];
+  if (!bars.length) return null;
+  const lastT = bars[bars.length - 1].t;
+  const minute = Math.floor(lastT / 60000) * 60000;
+  const prev = minute - 60000;
+  let c = null;
+  for (const b of bars) {
+    if (Math.floor(b.t / 60000) * 60000 !== prev || !(b.c > 0)) continue;
+    c = b.c;
+  }
+  return c;
+}
+function mlBreakSpark(geo) {
+  if (!geo || !(geo.zoneHi > geo.zoneLo)) return '';
+  const hi = Math.max(geo.zoneHi, geo.line) * 1.04;
+  const lo = Math.min(geo.zoneLo, geo.line) * 0.96;
+  const y = (p) => (1 - (p - lo) / (hi - lo || 1)) * 28 + 4;
+  return `<svg viewBox="0 0 140 36" class="mt-1 h-9 w-full" role="img" aria-label="Breakout line and zone"><rect x="0" y="${Math.min(y(geo.zoneHi), y(geo.zoneLo)).toFixed(1)}" width="140" height="${Math.max(2, Math.abs(y(geo.zoneHi) - y(geo.zoneLo))).toFixed(1)}" fill="rgba(122,162,214,0.18)"/><line x1="8" y1="${y(geo.line * 1.02).toFixed(1)}" x2="132" y2="${y(geo.line).toFixed(1)}" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
+}
+async function mlBreakPass() {
+  const rows = (MYLIST.rows || []).filter(r => r && r.enabled !== false && r.pool && r.mint);
+  if (!rows.length) return;
+  const row = rows[mlBreakCursor % rows.length];
+  mlBreakCursor++;
+  const mem = mlBreakMem.get(row.id);
+  if (!mem || Date.now() - mem.at > 120000) {
+    try {
+      const px = livePrices.get(row.mint)?.price || row.price;
+      const h1 = alignCandlesToToken(await fetchOhlcv(row.pool, '1h', row.mint), px).slice(-48);
+      const geo = mlBreakGeometry(h1);
+      let m15 = [];
+      try { m15 = alignCandlesToToken(await fetchOhlcv(row.pool, '15m', row.mint), px).slice(-48); } catch { m15 = []; }
+      if (geo) {
+        const lineOf = (i) => lineAt(geo.a, geo.b, i);
+        const strong = mlStrongBreakCandle(h1, lineOf) || mlStrongBreakCandle(m15, () => geo.line);
+        mlBreakMem.set(row.id, { ...geo, at: Date.now(), armed: true, candleLow: strong ? strong.l : null, h1 });
+      } else mlBreakMem.set(row.id, { at: Date.now(), armed: false });
+      const armed = !!(mlBreakMem.get(row.id) && mlBreakMem.get(row.id).armed);
+      if (!!row.mlArmed !== armed) { row.mlArmed = armed; row.mlGeo = armed ? { line: geo.line, zoneLo: geo.zoneLo, zoneHi: geo.zoneHi } : null; renderMyList(); }
+    } catch { /* next token */ }
+  }
+  if (!MYLIST.on || !burnerReady()) return;
+  for (const r of rows) {
+    const geo = mlBreakMem.get(r.id);
+    if (!geo || !geo.armed || !(geo.line > 0) || !(geo.zoneHi > 0)) continue;
+    const close = mlMinuteClose(r.mint);
+    const px = livePrices.get(r.mint)?.price || r.price;
+    if (!(close > geo.line && close > geo.zoneHi)) continue;
+    const flow = livePrices.get(r.mint) || {};
+    const buys = isNum(flow.m5b) ? flow.m5b : (r.dexPair?.txns?.m5?.buys || 0);
+    const sells = isNum(flow.m5s) ? flow.m5s : (r.dexPair?.txns?.m5?.sells || 0);
+    if (!(buys >= sells) || buys + sells === 0) continue;
+    const key = mlBreakKey(geo);
+    if ((mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy'))) continue;
+    if (LOG.some(t => t.myList && t.mint === r.mint && t.side === 'buy' && (t.status === 'pending' || t.status === 'confirmed') && t.plan?.mlBreakKey === key)) continue;
+    if (listPosition(r.mint) || mlBreakLock.has(r.mint)) continue;
+    const spec = listStrategy(r);
+    const resolved = resolveListSpend(spec);
+    if (!resolved.ok) { botLog('mylist', r.mint, resolved.error); continue; }
+    const safe = await degenSafety(r.mint);
+    if (!safe.ok) { botLog('mylist', r.mint, safe.reason || 'safety'); continue; }
+    const solPx = solPriceNow() || liveSolPx();
+    if (!(solPx > 0)) continue;
+    const qo = await getQuote({ inputMint: WSOL, outputMint: r.mint, amountRaw: BigInt(Math.round(resolved.sol * 1e9)), slippageBps: 100 });
+    if (impactPct(qo.quote) > 1) { botLog('mylist', r.mint, 'impact > 1%'); continue; }
+    const entry = px > 0 ? px : close;
+    const stop = mlBreakStop(entry, geo.candleLow);
+    const plan = { myList: true, mlBreak: true, mlBreakKey: key, agent: false, stop, strat: 'My List 1h breakout', exit: { stopPct: 15, stopPx: stop, tps: [{ gainPct: 30, sellPct: 100 }] } };
+    mlBreakLock.add(r.mint);
+    try {
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: r.mint, quoteObj: qo, t: { mint: r.mint, symbol: r.symbol || short(r.mint) }, auto: true, extra: { plan, myList: true, entryReason: '1h breakout' } });
+      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, line: geo.line, zoneLo: geo.zoneLo, zoneHi: geo.zoneHi, stop });
+    } finally { mlBreakLock.delete(r.mint); }
+    r.boughtOnce = true; r.dayKey = todayKey(); r.buysToday = (r.buysToday || 0) + 1;
+    saveMyList();
+    toast('My List breakout ' + (r.symbol || ''), 'ok', 6000);
+    break;
+  }
+}
+function mlBreakScan() {
+  if (mlBreakBusy || document.hidden) return;
+  mlBreakBusy = true;
+  mlBreakPass().catch(() => {}).finally(() => { mlBreakBusy = false; });
 }
 async function myListExits() {
   if (A.on && A.autoExit) return;
@@ -10775,6 +10965,675 @@ renderBotBar();
 $('lockUnlock')?.addEventListener('click', () => unlockBurner());
 paintLockBanner();
 
+/* ---------------- Scalp (own ledger, own toggle) ---------------- */
+const SCALP_RULE = {
+  START_USD: 100,
+  MIN_FREE: 5,
+  MAX_OPEN: 2,
+  DAY_LOSS: 20,
+  LIQ_MIN: 50000,
+  VOL24_MIN: 100000,
+  AGE_MIN_H: 2,
+  TOP10_MAX: 30,
+  INSIDER_MAX: 20,
+  M5_MIN: 1,
+  M5_MAX: 10,
+  H1_MAX: 60,
+  BODY_MAX: 0.04,
+  EMA20_MAX_ABOVE: 0.03,
+  LAST3_MAX: 0.08,
+  VOL_MULT: 2,
+  FLOW: 1.2,
+  BUYERS_MIN: 15,
+  BUYS_MIN: 15,
+  BIG_SELL: 0.02,
+  IMPACT_MAX: 0.5,
+  SLIP_BPS: 150,
+  QUOTE_DRIFT: 0.01,
+  SOL_15M_MIN: -1.5,
+  SOL_1H_MIN: -3,
+  STOP_PCT: 0.03,
+  STOP_BUF: 0.003,
+  STOP_TICKS: 2,
+  STOP_MS: 5000,
+  BE_ARM: 0.03,
+  BE_STOP: 0.005,
+  TIME_FLAT_MIN: 4,
+  TIME_FLAT_NEED: 0.015,
+  TIME_HARD_MIN: 10,
+  RUNNER_AT: 0.05,
+  TRAIL: 0.03,
+  TRAIL_TIGHT: 0.02,
+  TRAIL_TIGHT_AT: 0.15,
+  FLOOR: 0.03,
+  ROOM: 0.05,
+  CD_LOSS_MS: 15 * 60e3,
+  CD_WIN_MS: 60e3,
+  MAX_PER_DAY: 3,
+  LOSS_STREAK: 3,
+  PAUSE_MS: 30 * 60e3,
+  MAX_PAUSES: 2
+};
+const SCALP_LOG_LS = 'sms:scalp';
+const SCALP_LEDGER_LS = 'sms:scalpledger';
+const SCALP_PROT_LS = 'sms:scalpprot';
+let SCALP_ON = false;
+let scalpTimer = null;
+let scalpBusy = false;
+let scalpSelling = false;
+const scalpStopArm = {};
+const scalpWhy = { symbol: '', reason: 'Scalp is off', at: 0 };
+let SCALP_SCAN = [];
+let SCALP_SCAN_AT = 0;
+let SCALP_SOL = { m15: null, at: 0 };
+function scalpOn() { return !!SCALP_ON; }
+function scalpDexOk(dex) {
+  const d = String(dex || '').toLowerCase();
+  if (!d) return false;
+  if (/pumpfun|pump\.fun|moonshot|launchlab|bonding/.test(d)) return false;
+  if (d.includes('pump') && !d.includes('pumpswap')) return false;
+  return /pumpswap|raydium|meteora/.test(d);
+}
+function scalpLowerLow(cs) {
+  const bars = (cs || []).slice(-4);
+  if (bars.length < 3) return false;
+  const start = Math.max(1, bars.length - 3);
+  for (let i = start; i < bars.length; i++) if (bars[i].l < bars[i - 1].l) return true;
+  return false;
+}
+function scalpRoomReason(entry, level, candle) {
+  if (!(level > 0) || !(entry > 0) || !(level > entry)) return '';
+  if (level / entry - 1 > SCALP_RULE.ROOM) return '';
+  if (candle && candle.o <= level && candle.c > level) return '';
+  return 'resistance within +5%';
+}
+function scalpEntryFail(ctx) {
+  const R = SCALP_RULE;
+  if (!(ctx.ageH >= R.AGE_MIN_H)) return 'pair age < 2h';
+  if (ctx.curve) return 'bonding curve';
+  if (!ctx.dexOk) return 'not a graduated pool';
+  if (!(ctx.liq >= R.LIQ_MIN)) return 'liquidity < $50k';
+  if (!(ctx.vol24 >= R.VOL24_MIN)) return '24h volume < $100k';
+  if (ctx.flag) return ctx.flag;
+  if (isNum(ctx.top10) && ctx.top10 > R.TOP10_MAX) return 'top10 ' + ctx.top10.toFixed(0) + '%';
+  if (isNum(ctx.insiders) && ctx.insiders > R.INSIDER_MAX) return 'insiders ' + ctx.insiders.toFixed(0) + '%';
+  if (!(ctx.px > ctx.ema15)) return 'price below 15m EMA20';
+  if (!(ctx.ema15 > ctx.ema15Prev)) return '15m EMA20 not rising';
+  if (ctx.lowerLow1h) return '1h lower low';
+  if (ctx.room) return ctx.room;
+  if (!ctx.broke) return 'no 1m breakout';
+  if (!(ctx.volX >= R.VOL_MULT)) return 'breakout volume under 2x';
+  if (!(ctx.body <= R.BODY_MAX)) return 'breakout body > 4%';
+  if (!(ctx.px > ctx.ema20)) return 'price below 1m EMA20';
+  if (!(ctx.px <= ctx.ema20 * (1 + R.EMA20_MAX_ABOVE))) return 'more than 3% above 1m EMA20';
+  if (!(ctx.last3 <= R.LAST3_MAX)) return 'last 3 candles > +8%';
+  if (!(ctx.m5 >= R.M5_MIN && ctx.m5 <= R.M5_MAX)) return 'm5 change out of +1% to +10%';
+  if (isNum(ctx.h1) && ctx.h1 > R.H1_MAX) return 'h1 > +60%';
+  if (!(ctx.buys >= ctx.sells * R.FLOW)) return 'm5 buys < 1.2x sells';
+  if (isNum(ctx.buyers)) { if (!(ctx.buyers >= R.BUYERS_MIN)) return 'unique m5 buyers < 15'; }
+  else if (!(ctx.buys >= R.BUYS_MIN)) return 'm5 buy txns < 15';
+  if (isNum(ctx.bigSellPct) && ctx.bigSellPct > R.BIG_SELL) return 'large m5 sell vs liquidity';
+  if (isNum(ctx.impact) && ctx.impact > R.IMPACT_MAX) return 'price impact ' + ctx.impact.toFixed(2) + '%';
+  if (isNum(ctx.drift) && Math.abs(ctx.drift) > R.QUOTE_DRIFT) return 'quote differs from last price > 1%';
+  return '';
+}
+function scalpStopLevel(entry, breakLow, lp, high, runner) {
+  const hard = entry * (1 - SCALP_RULE.STOP_PCT);
+  let stop = hard;
+  if (isNum(breakLow) && breakLow > 0 && breakLow < entry) stop = Math.max(breakLow, hard);
+  const peak = Math.max(entry, isNum(high) ? high : 0, isNum(lp) ? lp : 0);
+  const up = peak / entry - 1;
+  if (up >= SCALP_RULE.BE_ARM) stop = Math.max(stop, entry * (1 + SCALP_RULE.BE_STOP));
+  const ran = !!runner || up >= SCALP_RULE.RUNNER_AT;
+  if (ran) {
+    const trailPct = up > SCALP_RULE.TRAIL_TIGHT_AT ? SCALP_RULE.TRAIL_TIGHT : SCALP_RULE.TRAIL;
+    stop = Math.max(stop, entry * (1 + SCALP_RULE.FLOOR), peak * (1 - trailPct));
+  }
+  return { stop, runner: ran, peak };
+}
+function scalpFadeReason(candles, m5b, m5s) {
+  if (isNum(m5b) && isNum(m5s) && m5s >= m5b && (m5b + m5s) > 0) return 'm5 sells >= buys';
+  const cs = candles || [];
+  if (cs.length >= 2) {
+    const prev = cs[cs.length - 2], last = cs[cs.length - 1];
+    if (last.h < prev.h) return '1m lower high';
+    if ((last.v || 0) < (prev.v || 0)) return '1m volume dropping';
+  }
+  return '';
+}
+function scalpLiqPull(entryLiq, nowLiq) {
+  return isNum(entryLiq) && entryLiq > 0 && isNum(nowLiq) && nowLiq <= entryLiq * 0.5;
+}
+function scalpLogBook() {
+  const raw = load(SCALP_LOG_LS, null);
+  const book = { events: [], pauseUntil: 0, pausesToday: 0, dayKey: '', haltDay: '', streak: 0, cooldowns: {}, counts: {} };
+  if (raw && typeof raw === 'object') {
+    if (Array.isArray(raw.events)) book.events = raw.events.slice(-120);
+    book.pauseUntil = +raw.pauseUntil || 0;
+    book.pausesToday = +raw.pausesToday || 0;
+    book.dayKey = raw.dayKey || '';
+    book.haltDay = raw.haltDay || '';
+    book.streak = +raw.streak || 0;
+    if (raw.cooldowns && typeof raw.cooldowns === 'object') book.cooldowns = raw.cooldowns;
+    if (raw.counts && typeof raw.counts === 'object') book.counts = raw.counts;
+  }
+  return book;
+}
+function saveScalpLog(book) {
+  book.events = (book.events || []).slice(-120);
+  save(SCALP_LOG_LS, book);
+}
+function scalpNote(book, row) {
+  book.events.push(Object.assign({ at: Date.now() }, row));
+  saveScalpLog(book);
+}
+function scalpLedger() {
+  const raw = load(SCALP_LEDGER_LS, null);
+  const book = { startUsd: SCALP_RULE.START_USD, balanceUsd: SCALP_RULE.START_USD, realizedUsd: 0, trades: [] };
+  if (raw && typeof raw === 'object') {
+    if (+raw.startUsd > 0) book.startUsd = +raw.startUsd;
+    if (Number.isFinite(+raw.balanceUsd)) book.balanceUsd = +raw.balanceUsd;
+    if (Number.isFinite(+raw.realizedUsd)) book.realizedUsd = +raw.realizedUsd;
+    if (Array.isArray(raw.trades)) book.trades = raw.trades.filter(t => t && t.mint && (t.side === 'buy' || t.side === 'sell')).slice(-200);
+  } else save(SCALP_LEDGER_LS, book);
+  return book;
+}
+function saveScalpLedger(book) {
+  save(SCALP_LEDGER_LS, { startUsd: book.startUsd, balanceUsd: usd6(book.balanceUsd), realizedUsd: usd6(book.realizedUsd), trades: (book.trades || []).slice(-200) });
+}
+function scalpLots(trades) {
+  const map = new Map();
+  for (const t of trades || []) {
+    let lot = map.get(t.mint) || { tokens: 0, cost: 0 };
+    if (t.side === 'buy') { lot.tokens += +t.tokenAmount || 0; lot.cost += +t.usd || 0; }
+    else if (lot.tokens > 0 && +t.tokenAmount > 0) {
+      const frac = Math.min(1, (+t.tokenAmount) / lot.tokens);
+      lot.cost *= 1 - frac;
+      lot.tokens = Math.max(0, lot.tokens - +t.tokenAmount);
+    }
+    map.set(t.mint, lot);
+  }
+  return map;
+}
+function scalpSolEffect() {
+  let net = 0;
+  for (const r of LOG) {
+    if (r.status !== 'confirmed' || r.wallet !== 'burner' || !isScalpFill(r)) continue;
+    const fee = isNum(r.feeSol) ? r.feeSol : 0;
+    if (r.side === 'buy') net -= (r.solAmount || 0) + fee;
+    else net += Math.max(0, (r.solAmount || 0) - fee);
+  }
+  return net;
+}
+function scalpMarkValue(book) {
+  let mtm = 0;
+  for (const [mint, lot] of scalpLots(book.trades)) {
+    if (!(lot.tokens > 0)) continue;
+    const px = livePrices.get(mint)?.price;
+    if (px > 0) mtm += lot.tokens * px;
+  }
+  return mtm;
+}
+function scalpEquity() {
+  const book = scalpLedger();
+  const mtm = scalpMarkValue(book);
+  const equity = book.balanceUsd + mtm;
+  const pnl = equity - book.startUsd;
+  const pct = book.startUsd > 0 ? pnl / book.startUsd * 100 : null;
+  return { book, mtm, equity, pnl, pct };
+}
+function scalpTodayPnl(book) {
+  const day = tehranDayKey(Date.now());
+  return ((book || scalpLedger()).trades || []).filter(t => t.side === 'sell' && tehranDayKey(t.ts) === day).reduce((s, t) => s + (isNum(t.pnlUsd) ? t.pnlUsd : 0), 0);
+}
+function scalpRoll(book) {
+  const day = tehranDayKey(Date.now());
+  if (book.dayKey !== day) {
+    book.dayKey = day;
+    book.pausesToday = 0;
+    book.counts = {};
+    if (book.haltDay && book.haltDay !== day) book.haltDay = '';
+  }
+  return book;
+}
+function scalpDayStopped(book) {
+  scalpRoll(book);
+  if (book.haltDay === book.dayKey) return 'scalp stopped for the day';
+  if ((+book.pausesToday || 0) >= SCALP_RULE.MAX_PAUSES) return 'two pauses today';
+  if (scalpTodayPnl() <= -SCALP_RULE.DAY_LOSS) return 'daily -$20 stop';
+  try {
+    const cap = solCap(S.dailyMaxSol);
+    if (cap > 0 && spentToday(mainBookFill) + 1e-9 >= cap) return 'daily cap hit';
+  } catch { /* settings not ready */ }
+  return '';
+}
+function scalpSizeUsd() {
+  const free = scalpLedger().balanceUsd;
+  const open = openPositions().filter(p => p.scalp && p.open);
+  if (open.length >= SCALP_RULE.MAX_OPEN) return { usd: 0, label: 'max 2 open' };
+  if (!(free >= SCALP_RULE.MIN_FREE)) return { usd: 0, label: 'free balance under $5' };
+  if (open.length === 1) {
+    const p = open[0];
+    const lp = livePrices.get(p.mint)?.price;
+    if (!(isNum(lp) && isNum(p.avgUsd) && lp >= p.avgUsd)) return { usd: 0, label: 'first scalp under breakeven' };
+    const fee = typeof degenFeeEstimateUsd === 'function' ? degenFeeEstimateUsd() : 0.25;
+    const usd = free - fee;
+    if (usd < SCALP_RULE.MIN_FREE) return { usd: 0, label: 'remainder under $5' };
+    return { usd, label: 'remainder $' + usd.toFixed(2) };
+  }
+  const half = free * 0.5;
+  if (half < SCALP_RULE.MIN_FREE) return { usd: 0, label: '50% under $5' };
+  return { usd: half, label: '50% · $' + half.toFixed(2) + ' of $' + free.toFixed(2) };
+}
+function scalpProtAll() { const v = load(SCALP_PROT_LS, {}); return v && typeof v === 'object' ? v : {}; }
+function scalpProt(p, lp) {
+  const all = scalpProtAll();
+  const prev = all[p.key] && typeof all[p.key] === 'object' ? all[p.key] : {};
+  const entry = p.avgUsd;
+  const high = Math.max(+prev.high || 0, entry > 0 ? entry : 0, lp > 0 ? lp : 0);
+  const runner = !!prev.runner || (entry > 0 && high >= entry * (1 + SCALP_RULE.RUNNER_AT));
+  let entryLiq = isNum(prev.entryLiq) ? prev.entryLiq : (isNum(p.plan?.entryLiq) ? p.plan.entryLiq : null);
+  const quote = livePrices.get(p.mint);
+  if (entryLiq == null && isNum(quote?.liq) && quote.liq > 0) entryLiq = quote.liq;
+  all[p.key] = { high, runner, entryLiq };
+  const live = new Set();
+  try { openPositions().forEach(x => { if (x.scalp && x.key) live.add(x.key); }); } catch { /* keep */ }
+  for (const k of Object.keys(all)) if (live.size && !live.has(k)) delete all[k];
+  save(SCALP_PROT_LS, all);
+  return all[p.key];
+}
+function scalpStopHeld(key, lp, stop) {
+  const row = scalpStopArm[key] || (scalpStopArm[key] = { ticks: 0, since: 0 });
+  if (!(lp <= stop)) { row.ticks = 0; row.since = 0; return false; }
+  row.ticks += 1;
+  if (!row.since) row.since = Date.now();
+  return row.ticks >= SCALP_RULE.STOP_TICKS || (Date.now() - row.since) >= SCALP_RULE.STOP_MS;
+}
+function scalpExitReason(p, lp) {
+  const entry = p.avgUsd;
+  if (!(entry > 0) || !(lp > 0)) return '';
+  const prot = scalpProt(p, lp);
+  const flow = livePrices.get(p.mint) || {};
+  if (scalpLiqPull(prot.entryLiq, flow.liq)) return 'liquidity pull';
+  const candles = SCALP_BARS.get(p.mint) || [];
+  const ageMin = (Date.now() - (p.firstTs || Date.now())) / 60000;
+  const high = prot.high;
+  if (!prot.runner && ageMin >= SCALP_RULE.TIME_FLAT_MIN && high < entry * (1 + SCALP_RULE.TIME_FLAT_NEED)) return 'no +1.5% in 4m';
+  if (!prot.runner && ageMin >= SCALP_RULE.TIME_HARD_MIN) return 'time stop 10m';
+  if (prot.runner) {
+    const closes = candles.map(c => c.c).filter(n => n > 0);
+    const ema9 = closes.length >= 9 ? emaLast(closes, 9) : null;
+    const last = candles[candles.length - 1];
+    if (isNum(ema9) && last && last.c < ema9) return '1m close below EMA9';
+    const fade = scalpFadeReason(candles, flow.m5b, flow.m5s);
+    if (fade) return fade;
+  }
+  const lvl = scalpStopLevel(entry, p.plan?.breakLow, lp, high, prot.runner);
+  if (lp <= lvl.stop && scalpStopHeld(p.key, lp, lvl.stop)) return prot.runner ? 'trail stop' : (lvl.stop >= entry ? 'stop to +0.5%' : 'stop -3%');
+  return '';
+}
+function scalpEffective(p, lp) {
+  const entry = p?.avgUsd;
+  if (!(entry > 0)) return { stop: null, tp1: null, tp2: null, reason: 'scalp', high: null, quick: false };
+  const prot = scalpProt(p, lp);
+  const lvl = scalpStopLevel(entry, p.plan?.breakLow, lp, prot.high, prot.runner);
+  return { stop: lvl.stop, tp1: entry * (1 + SCALP_RULE.RUNNER_AT), tp2: null, reason: prot.runner ? 'scalp trail' : 'scalp stop', high: prot.high, quick: false };
+}
+const SCALP_BARS = new Map();
+async function scalpBars(mint, pool) {
+  const hit = SCALP_BARS.get(mint);
+  if (hit && hit.at && Date.now() - hit.at < 20000 && hit.m1) return hit;
+  const out = { at: Date.now(), m1: hit?.m1 || [], m15: hit?.m15 || [], h1: hit?.h1 || [] };
+  if (pool) {
+    try { out.m1 = await fetchOhlcv(pool, '1m', mint); } catch { /* keep */ }
+    try { out.m15 = await fetchOhlcv(pool, '15m', mint); } catch { /* keep */ }
+    try { out.h1 = await fetchOhlcv(pool, '1h', mint); } catch { /* keep */ }
+  }
+  SCALP_BARS.set(mint, out);
+  if (SCALP_BARS.size > 40) {
+    const oldest = [...SCALP_BARS.entries()].sort((a, b) => a[1].at - b[1].at);
+    while (SCALP_BARS.size > 32) SCALP_BARS.delete(oldest.shift()[0]);
+  }
+  return out;
+}
+function scalpCandleCtx(bars, px, meta) {
+  const m1 = (bars.m1 || []).filter(c => c && c.c > 0);
+  const m15 = (bars.m15 || []).filter(c => c && c.c > 0);
+  const h1 = (bars.h1 || []).filter(c => c && c.c > 0);
+  const last = m1[m1.length - 1];
+  const prior5 = m1.slice(-6, -1);
+  const broke = !!(last && prior5.length === 5 && last.c > Math.max(...prior5.map(c => c.h)));
+  const prior20 = m1.slice(-21, -1);
+  const avg = prior20.length ? prior20.reduce((s, c) => s + (c.v || 0), 0) / prior20.length : 0;
+  const volX = avg > 0 && last ? (last.v || 0) / avg : 0;
+  const body = last && last.o > 0 ? Math.abs(last.c - last.o) / last.o : 1;
+  const closes = m1.map(c => c.c);
+  const ema20 = closes.length >= 20 ? emaLast(closes, 20) : null;
+  const base = m1.length >= 4 ? m1[m1.length - 4].c : 0;
+  const last3 = base > 0 && last ? last.c / base - 1 : 1;
+  const c15 = m15.map(c => c.c);
+  const ema15 = c15.length >= 20 ? emaLast(c15, 20) : null;
+  const ema15Prev = c15.length >= 21 ? emaLast(c15.slice(0, -1), 20) : null;
+  const plan = meta.plan;
+  const level = plan ? (+plan.trigger_price || 0) : 0;
+  const strong = scalpStrongBreak(m1);
+  const breakLow = strong && strong.l > 0 ? strong.l * (1 - SCALP_RULE.STOP_BUF) : (last && last.l > 0 ? last.l * (1 - SCALP_RULE.STOP_BUF) : null);
+  return {
+    ageH: meta.ageH, curve: !!meta.curve, dexOk: !!meta.dexOk, liq: meta.liq, vol24: meta.vol24, flag: meta.flag || '',
+    top10: meta.top10, insiders: meta.insiders, px, ema15, ema15Prev, lowerLow1h: scalpLowerLow(h1),
+    room: scalpRoomReason(px, level, last), broke, volX, body, ema20, last3, m5: meta.m5, h1: meta.h1,
+    buys: meta.buys, sells: meta.sells, buyers: meta.buyers, bigSellPct: meta.bigSellPct, impact: meta.impact, drift: meta.drift,
+    breakLow
+  };
+}
+function scalpStrongBreak(m1) {
+  const src = (m1 || []).filter(c => c && c.c > 0 && c.l > 0);
+  const win = src.slice(-5);
+  let best = null, score = -1;
+  for (let i = 0; i < win.length; i++) {
+    const c = win[i];
+    const idx = src.length - win.length + i;
+    const before = src.slice(Math.max(0, idx - 5), idx);
+    if (!before.length) continue;
+    const resist = Math.max(...before.map(x => x.h));
+    if (!(c.c > resist)) continue;
+    const body = c.o > 0 ? Math.abs(c.c - c.o) : Math.abs(c.c - c.l);
+    const vol = c.v > 0 ? c.v : 1;
+    const s = body * vol;
+    if (s > score) { score = s; best = c; }
+  }
+  return best;
+}
+function applyScalpLedger(rec) {
+  if (!isScalpFill(rec) || rec.status !== 'confirmed' || !rec.mint) return;
+  const book = scalpLedger();
+  if (rec.signature && book.trades.some(t => t.sig === rec.signature && t.side === rec.side)) return;
+  const px = (isNum(rec.solUsd) && rec.solUsd > 0) ? rec.solUsd : (liveSolPx() || 0);
+  const log = scalpRoll(scalpLogBook());
+  if (rec.side === 'buy') {
+    const feeUsd = isNum(rec.feeSol) && px > 0 ? rec.feeSol * px : (typeof degenFeeEstimateUsd === 'function' ? degenFeeEstimateUsd(px) : 0);
+    const tradeUsd = isNum(rec.plan?.scalpUsd) ? rec.plan.scalpUsd : Math.max(0, (rec.solAmount || 0) * px);
+    const usd = tradeUsd + feeUsd;
+    book.balanceUsd = usd6(book.balanceUsd - usd);
+    book.trades.push({ ts: rec.ts || Date.now(), side: 'buy', mint: rec.mint, symbol: rec.symbol || '', usd: usd6(usd), feeUsd: usd6(feeUsd), tradeUsd, sol: rec.solAmount || 0, sig: rec.signature || '', tokenAmount: rec.tokenAmount || 0 });
+    const day = tehranDayKey(Date.now());
+    const prev = log.counts[rec.mint] || { day, n: 0 };
+    log.counts[rec.mint] = { day, n: (prev.day === day ? prev.n : 0) + 1 };
+    scalpNote(log, { kind: 'entry', mint: rec.mint, symbol: rec.symbol || '', reason: rec.entryReason || 'scalp entry', m5: rec.plan?.m5, bsr: rec.plan?.bsr, volX: rec.plan?.volX, impact: rec.plan?.impact, ema15: rec.plan?.ema15 });
+  } else {
+    const feeSol = isNum(rec.feeSol) ? rec.feeSol : 0;
+    const solNet = Math.max(0, (rec.solAmount || 0) - feeSol);
+    const usd = px > 0 ? solNet * px : 0;
+    const lot = scalpLots(book.trades).get(rec.mint) || { tokens: 0, cost: 0 };
+    const costOut = lot.tokens > 0 && rec.tokenAmount > 0 ? lot.cost * Math.min(1, rec.tokenAmount / lot.tokens) : 0;
+    const pnlUsd = usd - costOut;
+    book.balanceUsd = usd6(book.balanceUsd + usd);
+    book.realizedUsd = usd6(book.realizedUsd + pnlUsd);
+    book.trades.push({ ts: rec.ts || Date.now(), side: 'sell', mint: rec.mint, symbol: rec.symbol || '', usd: usd6(usd), pnlUsd: usd6(pnlUsd), sig: rec.signature || '', tokenAmount: rec.tokenAmount || 0, tag: rec.exitTag || '' });
+    log.cooldowns[rec.mint] = Date.now() + (pnlUsd < 0 ? SCALP_RULE.CD_LOSS_MS : SCALP_RULE.CD_WIN_MS);
+    if (pnlUsd < 0) {
+      log.streak = (log.streak || 0) + 1;
+      if (log.streak >= SCALP_RULE.LOSS_STREAK) {
+        log.streak = 0;
+        log.pausesToday = (log.pausesToday || 0) + 1;
+        log.pauseUntil = Date.now() + SCALP_RULE.PAUSE_MS;
+        if (log.pausesToday >= SCALP_RULE.MAX_PAUSES) log.haltDay = tehranDayKey(Date.now());
+      }
+    } else log.streak = 0;
+    if (scalpTodayPnl(book) <= -SCALP_RULE.DAY_LOSS) log.haltDay = tehranDayKey(Date.now());
+    scalpNote(log, { kind: 'exit', mint: rec.mint, symbol: rec.symbol || '', reason: rec.entryReason || rec.exitTag || 'exit', m5: rec.plan?.m5, bsr: rec.plan?.bsr, volX: rec.plan?.volX, impact: rec.impactPct, ema15: rec.plan?.ema15 });
+  }
+  saveScalpLedger(book);
+  saveScalpLog(log);
+}
+async function scalpSell(p, reason) {
+  if (scalpSelling) return;
+  scalpSelling = true;
+  try {
+    if (!burnerReady()) { botLog('scalp', p.mint, 'burner locked'); return; }
+    let h = WALLETS.burner.tokens.get(p.mint);
+    if (!h || h.raw === 0n) { try { await refreshBalances('burner'); } catch { /* next tick */ } h = WALLETS.burner.tokens.get(p.mint); }
+    if (!h || h.raw === 0n) { botLog('scalp', p.mint, reason + ' — no balance'); return; }
+    const slip = reason === 'liquidity pull' ? 400 : SCALP_RULE.SLIP_BPS;
+    const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: h.raw, slippageBps: slip });
+    await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: 'scalp', extra: { scalp: true, plan: p.plan, entryReason: reason } });
+    delete scalpStopArm[p.key];
+    toast('Scalp exit ' + (p.symbol || '') + ' · ' + reason, 'warn', 5000);
+    renderScalp();
+  } catch (e) { botLog('scalp', p.mint, reason + ' sell failed — ' + (e.message || e)); }
+  finally { scalpSelling = false; }
+}
+async function scalpExitTick() {
+  const open = openPositions().filter(p => p.scalp && p.open && p.wallet === 'burner');
+  if (!open.length || scalpSelling) return;
+  for (const p of open) {
+    const lp = livePrices.get(p.mint)?.price;
+    if (!(lp > 0)) continue;
+    if (p.plan?.pool) { try { await scalpBars(p.mint, p.plan.pool); } catch { /* price stop still runs */ } }
+    const why = scalpExitReason(p, lp);
+    if (why) { await scalpSell(p, why); break; }
+  }
+}
+function scalpGate(mint) {
+  const book = scalpRoll(scalpLogBook());
+  const dayStop = scalpDayStopped(book);
+  if (dayStop) return dayStop;
+  if (book.pauseUntil > Date.now()) return 'paused 30m after 3 losses';
+  const cd = book.cooldowns && book.cooldowns[mint];
+  if (cd > Date.now()) return 'cooldown';
+  const count = book.counts && book.counts[mint];
+  if (count && count.day === book.dayKey && count.n >= SCALP_RULE.MAX_PER_DAY) return '3 scalps today';
+  if (openPositions().some(p => p.open && p.mint === mint)) return 'already open';
+  return '';
+}
+async function scalpSolBlock() {
+  const ctx = window.__SMS_SOL || {};
+  const h1 = isNum(+ctx.h1) ? +ctx.h1 : null;
+  if (h1 == null) return 'SOL 1h unavailable';
+  if (h1 < SCALP_RULE.SOL_1H_MIN) return 'SOL 1h ' + h1.toFixed(1) + '%';
+  if (!SCALP_SOL.at || Date.now() - SCALP_SOL.at > 60000) {
+    try {
+      const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + SOL_MINT, { timeout: 8000 });
+      const usdc = (arr || []).filter(p => p.baseToken?.address === SOL_MINT && /^(USDC|USDT)$/.test(p.quoteToken?.symbol || '')).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+      let m15 = null;
+      if (usdc?.pairAddress) {
+        const cs = await fetchOhlcv(usdc.pairAddress, '15m');
+        if (cs.length >= 2 && cs[cs.length - 2].c > 0) m15 = (cs[cs.length - 1].c / cs[cs.length - 2].c - 1) * 100;
+      }
+      SCALP_SOL = { m15, at: Date.now() };
+    } catch { return 'SOL 15m unavailable'; }
+  }
+  if (SCALP_SOL.m15 == null) return 'SOL 15m unavailable';
+  if (SCALP_SOL.m15 < SCALP_RULE.SOL_15M_MIN) return 'SOL 15m ' + SCALP_SOL.m15.toFixed(1) + '%';
+  return '';
+}
+function scalpUniverse() {
+  const map = new Map();
+  const add = (mint, symbol) => { if (!mint || (typeof IGNORE !== 'undefined' && IGNORE.has(mint))) return; if (!map.has(mint)) map.set(mint, { mint, symbol: symbol || '' }); };
+  try { (AG.candidates || []).forEach(c => add(c.mint, c.symbol)); } catch { /* agents later */ }
+  try { AG.plans.forEach(p => add(p.mint, p.symbol)); } catch { /* plans later */ }
+  try { (MYLIST.rows || []).forEach(r => add(r.mint, r.symbol)); } catch { /* list later */ }
+  try { (DEGEN.picks || []).forEach(p => add(p.mint, p.symbol)); } catch { /* degen later */ }
+  SCALP_SCAN.forEach(p => add(p.mint, p.symbol));
+  return [...map.values()].slice(0, 60);
+}
+function scalpFlag(mint) {
+  const t = (lastResult?.tokens || []).find(x => x.mint === mint);
+  const bits = [];
+  if (t) {
+    if (t.onCurve) return 'bonding curve';
+    if (t.verdict === 'Rejected') bits.push('rejected');
+    (t.flags || []).forEach(f => bits.push(String(f.text || f || '')));
+  }
+  const pick = (DEGEN.picks || []).find(p => p && p.mint === mint);
+  if (pick && pick.reason) bits.push(String(pick.reason));
+  if (/avoid|rug|fake holder|fake-holder|wash/.test(bits.join(' ').toLowerCase())) return 'flagged avoid/rug/fake-holder';
+  return '';
+}
+async function scalpTick() {
+  if (!SCALP_ON || scalpBusy || document.hidden || window.__SMS_SAFE) return;
+  const sized = scalpSizeUsd();
+  if (!(sized.usd >= SCALP_RULE.MIN_FREE)) { scalpWhy.symbol = ''; scalpWhy.reason = sized.label; scalpWhy.at = Date.now(); renderScalp(); return; }
+  const solMood = await scalpSolBlock();
+  if (solMood) { scalpWhy.symbol = 'SOL'; scalpWhy.reason = solMood; scalpWhy.at = Date.now(); renderScalp(); return; }
+  scalpBusy = true;
+  try {
+    if (Date.now() - SCALP_SCAN_AT > 45000 && typeof discoverLivePairs === 'function') {
+      SCALP_SCAN_AT = Date.now();
+      try { SCALP_SCAN = (await discoverLivePairs()).slice(0, 25); } catch { /* keep the last scan */ }
+    }
+    const universe = scalpUniverse();
+    if (!universe.length) { scalpWhy.symbol = ''; scalpWhy.reason = 'no tracked tokens'; scalpWhy.at = Date.now(); return; }
+    const ids = universe.map(x => x.mint);
+    let pairs = [];
+    try { pairs = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + ids.slice(0, 30).join(','), { timeout: 8000 }); } catch { pairs = []; }
+    const best = new Map();
+    for (const p of pairs || []) {
+      const mint = p?.baseToken?.address;
+      if (!mint) continue;
+      const cur = best.get(mint);
+      if (!cur || (p.liquidity?.usd || 0) > (cur.liquidity?.usd || 0)) best.set(mint, p);
+    }
+    const ranked = universe.map(row => {
+      const p = best.get(row.mint);
+      const ageH = p?.pairCreatedAt ? (Date.now() - p.pairCreatedAt) / 3.6e6 : null;
+      const dex = p?.dexId || '';
+      return Object.assign({}, row, {
+        vol: p?.volume?.h24 || 0,
+        meta: {
+          ageH, curve: !!(p && /pumpfun|bonding/i.test(dex) && !/pumpswap/i.test(dex)), dexOk: scalpDexOk(dex),
+          liq: p?.liquidity?.usd ?? null, vol24: p?.volume?.h24 ?? null, m5: isNum(+p?.priceChange?.m5) ? +p.priceChange.m5 : null,
+          h1: isNum(+p?.priceChange?.h1) ? +p.priceChange.h1 : null, buys: +p?.txns?.m5?.buys || 0, sells: +p?.txns?.m5?.sells || 0,
+          buyers: null, bigSellPct: null, flag: scalpFlag(row.mint), plan: typeof agentPlanFor === 'function' ? agentPlanFor(row.mint) : null,
+          pool: p?.pairAddress || '', symbol: p?.baseToken?.symbol || row.symbol, px: +p?.priceUsd || 0
+        }
+      });
+    }).filter(r => r.meta.liq > 0).sort((a, b) => b.vol - a.vol);
+    const top = ranked[0];
+    if (!top) { scalpWhy.symbol = ''; scalpWhy.reason = 'no priced candidates'; scalpWhy.at = Date.now(); return; }
+    const gate = scalpGate(top.mint);
+    if (gate) { scalpWhy.symbol = top.meta.symbol || top.symbol; scalpWhy.reason = gate; scalpWhy.at = Date.now(); return; }
+    const openOne = openPositions().filter(p => p.scalp && p.open);
+    if (openOne.length === 1 && openOne[0].mint === top.mint) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = 'same token already open'; scalpWhy.at = Date.now(); return; }
+    const bars = await scalpBars(top.mint, top.meta.pool);
+    const ctx = scalpCandleCtx(bars, top.meta.px, top.meta);
+    let why = scalpEntryFail(ctx);
+    if (why) { scalpWhy.symbol = top.meta.symbol || short(top.mint); scalpWhy.reason = why; scalpWhy.at = Date.now(); return; }
+    let rug = null;
+    try { rug = digestRug(await fetchRugReport(top.mint), top.meta.pool, top.mint); } catch { rug = null; }
+    if (rug && rug.available) {
+      ctx.top10 = isNum(rug.top10) ? rug.top10 : null;
+      ctx.insiders = null;
+      if (rug.rugged) ctx.flag = 'rug';
+    }
+    why = scalpEntryFail(ctx);
+    if (why) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = why; scalpWhy.at = Date.now(); return; }
+    const safe = await degenSafety(top.mint);
+    if (!safe.ok) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = safe.reason || 'safety'; scalpWhy.at = Date.now(); return; }
+    const size = scalpSizeUsd();
+    if (!(size.usd >= SCALP_RULE.MIN_FREE)) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = size.label; scalpWhy.at = Date.now(); return; }
+    const solPx = solPriceNow() || liveSolPx();
+    if (!(solPx > 0)) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = 'SOL price unavailable'; scalpWhy.at = Date.now(); return; }
+    const sol = +(size.usd / solPx).toFixed(6);
+    const errs = buyGuards('burner', top.mint, sol, { skipMaxOpen: true, scalp: true });
+    if (errs.length) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = errs[0]; scalpWhy.at = Date.now(); return; }
+    const qo = await getQuote({ inputMint: WSOL, outputMint: top.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: SCALP_RULE.SLIP_BPS });
+    const impact = impactPct(qo.quote);
+    let drift = null;
+    try {
+      const dec = await getDecimals(top.mint);
+      const tokens = +qo.quote.outAmount / 10 ** dec;
+      const implied = tokens > 0 ? (sol * solPx) / tokens : 0;
+      if (implied > 0 && top.meta.px > 0) drift = implied / top.meta.px - 1;
+    } catch { drift = null; }
+    ctx.impact = impact;
+    ctx.drift = drift;
+    why = scalpEntryFail(ctx);
+    if (why) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = why; scalpWhy.at = Date.now(); return; }
+    const bsr = ctx.sells > 0 ? ctx.buys / ctx.sells : ctx.buys;
+    const plan = { scalp: true, scalpUsd: size.usd, breakLow: ctx.breakLow, entryLiq: ctx.liq, pool: top.meta.pool, m5: ctx.m5, bsr, volX: ctx.volX, impact, ema15: ctx.px > ctx.ema15 ? 'above rising' : 'no', stop: scalpStopLevel(top.meta.px, ctx.breakLow, top.meta.px, 0, false).stop };
+    livePrices.set(top.mint, { price: top.meta.px, liq: ctx.liq, m5b: ctx.buys, m5s: ctx.sells, at: Date.now() });
+    await executeSwap({ walletKey: 'burner', side: 'buy', mint: top.mint, quoteObj: qo, t: { symbol: top.meta.symbol || short(top.mint), mint: top.mint }, auto: false, extra: { scalp: true, plan, entryReason: 'scalp breakout' } });
+    scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = 'bought'; scalpWhy.at = Date.now();
+    toast('Scalp buy ' + (top.meta.symbol || ''), 'warn', 5000);
+  } catch (e) {
+    scalpWhy.symbol = scalpWhy.symbol || '';
+    scalpWhy.reason = e.message || String(e);
+    scalpWhy.at = Date.now();
+    botLog('scalp', 'panel', scalpWhy.reason);
+  } finally { scalpBusy = false; renderScalp(); }
+}
+function startScalp() {
+  SCALP_ON = true;
+  clearInterval(scalpTimer);
+  scalpTimer = setInterval(() => { if (!document.hidden) scalpTick(); }, 12000);
+  setTimeout(scalpTick, 600);
+}
+function stopScalp() {
+  SCALP_ON = false;
+  clearInterval(scalpTimer);
+  scalpTimer = null;
+  try { renderScalp(); } catch { /* card later */ }
+}
+function placeScalpDesk() {
+  const desk = $('scalpDesk'); if (!desk) return;
+  desk.hidden = tokenSeg !== 'scalp';
+}
+function renderScalp() {
+  const eq = scalpEquity();
+  const sized = scalpSizeUsd();
+  const book = scalpLedger();
+  const log = scalpRoll(scalpLogBook());
+  const day = log.dayKey;
+  const sells = (book.trades || []).filter(t => t.side === 'sell');
+  const todayN = (book.trades || []).filter(t => t.side === 'buy' && tehranDayKey(t.ts) === day).length;
+  const wins = sells.filter(t => t.pnlUsd > 0).length;
+  const wr = sells.length ? Math.round(wins / sells.length * 100) + '%' : '—';
+  const stopped = scalpDayStopped(log);
+  const pnlCls = eq.pnl > 0 ? 'text-emerald-300' : eq.pnl < 0 ? 'text-rose-300' : 'text-slate-300';
+  const open = openPositions().filter(p => p.scalp && p.open);
+  const openHtml = open.map(p => {
+    const lp = livePrices.get(p.mint)?.price;
+    const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null;
+    return `<article class="border-b border-white/10 py-2 text-[12px]"><div class="flex items-center justify-between gap-2"><b>${esc(p.symbol || short(p.mint))}</b><span class="num" data-live-mint="${esc(p.mint)}">${price(lp)}</span></div><div class="text-[11px] text-slate-500">${isNum(pnl) ? pct(pnl) : '—'} · ${esc((scalpProt(p, lp).runner ? 'trailing' : 'armed'))}</div><button type="button" data-scalp-sell="${esc(p.mint)}" class="mt-1 text-[12px] text-rose-300">Sell</button></article>`;
+  }).join('');
+  const closed = [...sells].reverse().slice(0, 12).map(t => `<article class="border-b border-white/10 py-1.5 text-[12px]"><div class="flex justify-between gap-2"><b>${esc(t.symbol || short(t.mint))}</b><span class="${t.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300'} font-mono">${isNum(t.pnlUsd) ? (t.pnlUsd >= 0 ? '+' : '') + usd(t.pnlUsd, 2) : '—'}</span></div><div class="text-[11px] text-slate-500">${esc(t.tag || 'closed')} · ${tehranClock(t.ts)}</div></article>`).join('');
+  const why = scalpWhy.reason ? `<p class="mt-2 text-[12px] text-slate-400 whitespace-normal break-words">Why no scalp${scalpWhy.symbol ? ' · ' + esc(scalpWhy.symbol) : ''}: ${esc(scalpWhy.reason)}</p>` : '';
+  const html = `<section class="hero-card">
+    <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Scalp</div><button type="button" data-scalp-toggle class="rounded-full border px-2 py-0.5 text-[10px] ${SCALP_ON ? 'border-emerald-400/40 text-emerald-200' : 'border-white/15 text-slate-400'}">${SCALP_ON ? (stopped ? 'STOPPED' : 'ON') : 'OFF'}</button></div>
+    <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Balance</div><div class="font-mono text-lg">${usd(eq.equity, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Start</div><div class="font-mono text-lg">${usd(eq.book.startUsd, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L</div><div class="font-mono ${pnlCls}">${eq.pnl >= 0 ? '+' : ''}${usd(eq.pnl, 2)} · ${pct(eq.pct)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today · win rate</div><div class="font-mono">${todayN} · ${wr}</div></div>
+    </div>
+    <p class="mt-2 text-[12px] text-slate-300 whitespace-normal break-words">Next size <b>${sized.usd >= SCALP_RULE.MIN_FREE ? usd(sized.usd, 2) : '—'}</b> <span class="text-slate-500">${esc(sized.label || '')}</span></p>
+    <p class="text-[11px] text-slate-500 whitespace-normal break-words">Free ${usd(eq.book.balanceUsd, 2)} · daily stop -$20 · max 2</p>
+    ${why}
+    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open</h3>
+    ${openHtml || '<p class="empty-note mt-1">No open scalp.</p>'}
+    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Closed</h3>
+    ${closed || '<p class="empty-note mt-1">No closed scalp trades.</p>'}
+  </section>`;
+  const sig = [SCALP_ON ? 1 : 0, stopped, Math.round(eq.equity * 100), todayN, wr, sized.label, scalpWhy.reason, scalpWhy.symbol, open.map(p => p.mint).join(','), sells.length, Math.floor(Date.now() / 60000)].join('|');
+  const paint = (el) => {
+    if (!el) return;
+    if (el.dataset.mem === sig && el.childElementCount) { patchLiveText(); return; }
+    el.dataset.mem = sig;
+    releaseMedia(el);
+    el.innerHTML = html;
+    el.querySelectorAll('[data-scalp-toggle]').forEach(b => b.addEventListener('click', () => setExecBot('scalp', !scalpOn())));
+    el.querySelectorAll('[data-scalp-sell]').forEach(b => b.addEventListener('click', () => {
+      const p = openPositions().find(x => x.scalp && x.open && x.mint === b.dataset.scalpSell);
+      if (p) scalpSell(p, 'manual');
+    }));
+  };
+  paint($('scalpCard'));
+  paint($('scalpDesk'));
+  try { placeScalpDesk(); } catch { /* tab not ready */ }
+}
+setTimeout(() => { try { renderScalp(); } catch { /* first paint */ } }, 900);
+
 /* ---------------- init ---------------- */
 const READY_LS = 'sms:readyalert';
 let readyAudio = null;
@@ -11122,10 +11981,12 @@ function mountApp() {
   if (tokens) {
     const seg = document.createElement('div');
     seg.id = 'tokenSeg'; seg.className = 'seg';
-    seg.innerHTML = '<button type="button" data-seg="list" class="on">List</button><button type="button" data-seg="degen">Degen</button>';
+    seg.innerHTML = '<button type="button" data-seg="list" class="on">List</button><button type="button" data-seg="scalp">Scalp</button><button type="button" data-seg="degen">Degen</button>';
     const desk = document.createElement('div');
     desk.id = 'degenDesk'; desk.hidden = true;
-    tokens.appendChild(seg); tokens.appendChild(desk);
+    const scalpDesk = document.createElement('div');
+    scalpDesk.id = 'scalpDesk'; scalpDesk.hidden = true;
+    tokens.appendChild(seg); tokens.appendChild(scalpDesk); tokens.appendChild(desk);
     seg.addEventListener('click', (e) => { const b = e.target.closest('[data-seg]'); if (b) showTokenSeg(b.dataset.seg); });
   }
   ['myListBox', 'emptyState', 'results'].forEach(id => { const n = $(id); if (n && tokens) tokens.appendChild(n); });
