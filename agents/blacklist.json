@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T16:03:00Z",
-  "updated_tehran": "2026-11-11 19:33 IRST",
+  "updated_utc": "2026-11-11T16:16:00Z",
+  "updated_tehran": "2026-11-11 19:46 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -26,6 +26,16 @@
       "mint": "AcDDfsAu1VD7yDAM3tm6ZTuXZKvvXehiyTJEVJjcWiMW",
       "symbol": "Daniela Longo",
       "why": "one wallet 80%, LP unlocked"
+    },
+    {
+      "mint": "GEz83JBbzHfQWMt2n5T2JWTor3GJLoevsQq6Kaytpump",
+      "symbol": "Bittler",
+      "why": "Daniela 'Bittler', dumped 95%"
+    },
+    {
+      "mint": "EeMWtqT5HHBJ9ptp56GMrCvETJG3WT5s5UkbKDuEpump",
+      "symbol": "Daniela",
+      "why": "Daniela, fake equal holders, 4 insiders"
     }
   ]
 }
