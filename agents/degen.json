@@ -1,1 +1,80 @@
-{"updated_utc":"2026-11-11T15:13:45Z","updated_tehran":"2026-11-11 18:43 IRST","pot":{"budget_usd":25,"per_trade_usd":12.5,"max_open":2,"max_trades":null},"picks":[{"mint":"J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump","symbol":"Boris","pair":"29uZNbhEwRgsq3mqt8By8Ks2zqtz1Q189SFGVgDw7ju8","dex":"pumpswap","age_h":0.76,"liq_usd":1722,"mcap_usd":1603,"reason":"AVOID: RUGGED 18:33 IRST - liquidity pulled ($24.6k -> $1.7k), price -98%. SELL ALL / exit any open position","entry_now":false,"max_entry_price":1.63e-06,"stop_pct":25,"tp_plan":"sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all","time_stop_min":45,"confidence":0,"expires":1794411728000},{"mint":"8wbxHYCKbGimALpDvNkxcvzGm1tAG4GN69Jzfejtpump","symbol":"bro","pair":"5xgzaEH2xGWasfmm1S8PGzHgctGCAgCdCviKJiE9i1SS","dex":"pumpswap","age_h":1.91,"liq_usd":25781,"mcap_usd":112142,"reason":"WATCH: fake-holder flag (1366+ holders on ~$26k liq) = never entry_now; m5 +21% bounce, buys=sells","entry_now":false,"max_entry_price":0.0001166,"stop_pct":25,"tp_plan":"sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all","time_stop_min":45,"confidence":10,"expires":1794411728000},{"mint":"5jLj1jr2BtTBL8czd6xdpYoFkEqyG89W3bz5Jq6Mpump","symbol":"FLIPIF","pair":"C2yL4mFNrMtair3XsvVEVKGEWyaorK6b6iHGV4fWpvKF","dex":"pumpswap","age_h":2.23,"liq_usd":24317,"mcap_usd":108968,"reason":"WATCH low: dead volume (m5 $0, h1 $1.4k), top 9 non-pool wallets ~50% combined. Dump risk","entry_now":false,"max_entry_price":0.0001124,"stop_pct":25,"tp_plan":"sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all","time_stop_min":45,"confidence":5,"expires":1794411728000},{"mint":"Fkc9FKhK1K8FSPtKkcjfGkpeb4waa3DspRXHmwvvpump","symbol":"ape hao","pair":"5AqryCwFck8etdkhpy3xjU5WGU33jTbGhYiy3YBpsyyW","dex":"pumpswap","age_h":1.86,"liq_usd":22064,"mcap_usd":89384,"reason":"AVOID: bundle/fake-buy flag: 98 graph insiders, equal-size wallets, 3182 buys/412 sells dust buys; m5 -12.5%","entry_now":false,"max_entry_price":9.256e-05,"stop_pct":25,"tp_plan":"sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all","time_stop_min":45,"confidence":5,"expires":1794411728000},{"mint":"EjJWhokU7tcchbysuRNUiqaKUW5kYjzkUuHEAgdgFVP","symbol":"LuckyCoin","pair":"EzuhudeWAxpxoyLUX7UtoZUuQ9z9uieiiZfRN6jHWygQ","dex":"meteora","age_h":0.04,"liq_usd":0,"mcap_usd":133,"reason":"AVOID: RUGGED ~18:37 IRST - LP pulled (liq $0), -99%. Flagged unlocked-LP danger at 18:35","entry_now":false,"max_entry_price":1.329e-07,"stop_pct":25,"tp_plan":"sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all","time_stop_min":45,"confidence":0,"expires":1794411728000}]}
+{
+ "updated_utc": "2026-11-11T15:44:42Z",
+ "updated_tehran": "2026-11-11 19:14 IRST",
+ "pot": {
+  "budget_usd": 25,
+  "per_trade_usd": 12.5,
+  "max_open": 2,
+  "max_trades": null
+ },
+ "picks": [
+  {
+   "mint": "AWL7bYYUH3StCYySsyHPb5Gog5VC7SxWrbR3TTHspump",
+   "symbol": "Mao",
+   "pair": "3kSopKqpGdR7CeR5BUxUsNFL4TCDQ1ahb1bfrAWH5VKk",
+   "dex": "pumpswap",
+   "age_h": 0.58,
+   "liq_usd": 23251,
+   "mcap_usd": 98211,
+   "reason": "AVOID: RugCheck danger (creator rugged-token history) = fails minimum safety; also now vertical (m5 +19%, h1 +191%, ~5x from call), h1 vol $187k on $23k liq",
+   "entry_now": false,
+   "max_entry_price": 9.833e-05,
+   "stop_pct": 25,
+   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
+   "time_stop_min": 45,
+   "confidence": 0,
+   "expires": 1794413682591
+  },
+  {
+   "mint": "5jLj1jr2BtTBL8czd6xdpYoFkEqyG89W3bz5Jq6Mpump",
+   "symbol": "FLIPIF",
+   "pair": "C2yL4mFNrMtair3XsvVEVKGEWyaorK6b6iHGV4fWpvKF",
+   "dex": "pumpswap",
+   "age_h": 2.8,
+   "liq_usd": 24275,
+   "mcap_usd": 107602,
+   "reason": "WATCH low: dead volume (h1 $1.1k), top 9 non-pool wallets ~50%; no setup",
+   "entry_now": false,
+   "max_entry_price": 0.000111,
+   "stop_pct": 25,
+   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
+   "time_stop_min": 45,
+   "confidence": 5,
+   "expires": 1794413682591
+  },
+  {
+   "mint": "8wbxHYCKbGimALpDvNkxcvzGm1tAG4GN69Jzfejtpump",
+   "symbol": "bro",
+   "pair": "5xgzaEH2xGWasfmm1S8PGzHgctGCAgCdCviKJiE9i1SS",
+   "dex": "pumpswap",
+   "age_h": 2.57,
+   "liq_usd": 21674,
+   "mcap_usd": 79417,
+   "reason": "WATCH: earlier fake-holder flag (holder count very high for liq) = never entry_now; m5 -3.9%, buys~sells",
+   "entry_now": false,
+   "max_entry_price": null,
+   "stop_pct": 25,
+   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
+   "time_stop_min": 45,
+   "confidence": 5,
+   "expires": 1794413682591
+  },
+  {
+   "mint": "Fkc9FKhK1K8FSPtKkcjfGkpeb4waa3DspRXHmwvvpump",
+   "symbol": "ape hao",
+   "pair": "5AqryCwFck8etdkhpy3xjU5WGU33jTbGhYiy3YBpsyyW",
+   "dex": "pumpswap",
+   "age_h": 2.43,
+   "liq_usd": 21434,
+   "mcap_usd": 83875,
+   "reason": "AVOID: bundle/fake-buy flag (98 graph insiders, equal wallets, dust buys); m5 sells 24 > buys 15",
+   "entry_now": false,
+   "max_entry_price": null,
+   "stop_pct": 25,
+   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
+   "time_stop_min": 45,
+   "confidence": 0,
+   "expires": 1794413682591
+  }
+ ]
+}
