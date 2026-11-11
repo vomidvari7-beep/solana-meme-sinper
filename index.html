@@ -2616,10 +2616,7 @@ function profileStopPct() {
   return pct;
 }
 function freshStop(p) {
-  if (p?.degen && isNum(p.avgUsd) && p.avgUsd > 0) {
-    const stopPct = isNum(p.plan?.stopPct) ? p.plan.stopPct : -25;
-    return p.avgUsd * (1 + stopPct / 100);
-  }
+  if (p?.degen && isNum(p.avgUsd) && p.avgUsd > 0) return degenStopPx(p.avgUsd, p.plan?.stopPct);
   const avg = p.avgUsd;
   const planStop = p.plan?.stop;
   const byPct = isNum(avg) && avg > 0 ? avg * (1 - profileStopPct() / 100) : null;
@@ -2799,6 +2796,12 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   const tokRaw = isBuy ? +q.outAmount : +q.inAmount;
   const tokenAmount = dec != null ? tokRaw / 10 ** dec : null;
   const sp = solUsd();
+  const degenHeld = !isBuy && openPositions().some(p => p.mint === mint && p.wallet === walletKey && p.degen && p.open);
+  if (degenHeld) {
+    extra = { ...(extra || {}), degen: true };
+    if (!exitTag) exitTag = 'manual';
+    if (!extra.entryReason) extra.entryReason = 'manual sell';
+  }
   const sig = await signAndSend(walletKey, tx);
   const rec = logTrade({ id: 'tr' + Date.now() + Math.random().toString(36).slice(2, 6), ts: Date.now(), wallet: walletKey, auto, side, mint, symbol: t?.symbol || short(mint),
     solAmount, tokenAmount, priceSol: tokenAmount ? solAmount / tokenAmount : null, priceUsd: tokenAmount && sp ? solAmount * sp / tokenAmount : null, solUsd: sp,
@@ -2813,6 +2816,7 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
     const solReal = isBuy ? solAmount : (fill.solDelta != null ? Math.max(0, fill.solDelta + fill.fee) : solAmount);
     patch.solAmount = solReal; patch.priceSol = solReal / tk; patch.priceUsd = sp ? solReal * sp / tk : null; patch.feeSol = fill.fee; }
   updateTrade(rec.id, patch);
+  if (!isBuy && (extra?.degen || degenHeld)) noteDegenExit(mint);
   refreshBalances(walletKey);
   return { sig, rec: LOG.find(x => x.id === rec.id) };
 }
@@ -4450,16 +4454,23 @@ function notePositionCycles(list) {
     if (copyBooks) for (const mint of [...copyBooks.keys()]) if (!openCopy.has(mint)) copyBooks.delete(mint);
   } catch { /* copy books not ready */ }
 }
+function degenLossPct(v) {
+  const n = Math.abs(+v);
+  return isNum(n) && n > 0 && n < 100 ? n : 25;
+}
+function degenStopPx(entry, stopPct) {
+  return entry * (1 - degenLossPct(stopPct) / 100);
+}
 function degenEffective(p, lp) {
   const entry = p?.avgUsd;
-  const stopPct = isNum(p?.plan?.stopPct) ? p.plan.stopPct : -25;
-  const trail = isNum(p?.plan?.trail) ? p.plan.trail : 20;
+  const loss = degenLossPct(p?.plan?.stopPct);
+  const trail = isNum(p?.plan?.trail) ? Math.abs(p.plan.trail) : 20;
   const timeStopMin = isNum(p?.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
   let high = Math.max(isNum(lp) ? lp : 0, autoHigh[p.key] || 0);
   if (isNum(lp) && lp > (autoHigh[p.key] || 0)) { autoHigh[p.key] = lp; high = lp; save('sms:autohigh', autoHigh); }
-  let stop = isNum(entry) ? entry * (1 + stopPct / 100) : null;
-  let reason = 'degen ' + stopPct + '%';
-  if (p?.tp1Done && high > 0) {
+  let stop = isNum(entry) ? degenStopPx(entry, loss) : null;
+  let reason = 'degen -' + loss + '%';
+  if (p?.tp1Done && high > 0 && trail > 0 && trail < 100) {
     const trailed = high * (1 - trail / 100);
     if (!isNum(stop) || trailed > stop) { stop = trailed; reason = 'degen trail'; }
   }
@@ -4468,14 +4479,15 @@ function degenEffective(p, lp) {
 function degenExit(p, lp) {
   if (!p?.degen || !isNum(lp) || !(p.avgUsd > 0)) return null;
   const eff = degenEffective(p, lp);
-  if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'degen trail' ? 'trail' : 'stop' };
+  if (p.tp1Done && eff.reason === 'degen trail' && isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: 'trail' };
+  if (!p.tp1Done && isNum(eff.stop) && eff.stop < p.avgUsd && lp <= eff.stop) return { pctSell: 100, tag: 'stop' };
   if (!p.tp1Done && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 50, tag: 'tp1' };
   const ageMin = (Date.now() - p.firstTs) / 60000;
   if (!p.tp1Done && ageMin >= eff.timeStopMin && lp <= p.avgUsd) return { pctSell: 100, tag: 'time' };
   return null;
 }
 function effectiveStop(p, lp) {
-  if (p?.degen) return applyManualLevels(p, degenEffective(p, lp));
+  if (p?.degen) return degenEffective(p, lp);
   if (p?.plan?.myList) return applyManualLevels(p, applyQuickOverlay(p, myListEffectiveStop(p, lp)));
   let eff;
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
@@ -4935,6 +4947,7 @@ async function autoTick() {
   finally { autoBusy = false; const st = $('autoStatus'); if (st) st.textContent = autoStatusText(); }
 }
 async function autoSell(p, pctSell, tag, lp, extra) {
+  if (p?.degen) { autoLog((p.symbol || p.mint) + ': skipped non-degen exit (' + tag + ')', 'warn'); return; }
   const b = WALLETS.burner; const h = b.tokens.get(p.mint); if (!h || h.raw === 0n) return;
   const raw = pctSell >= 100 ? h.raw : (h.raw * BigInt(pctSell)) / 100n; if (raw === 0n) return;
   autoLog(`${p.symbol}: ${tag.toUpperCase()} trigger at ${price(lp)} → selling ${pctSell}%`, 'warn');
@@ -5403,6 +5416,7 @@ async function handleWhaleEvent(ev) {
   const whale = ev.whale || WHALES.find(w => w.wallet === ev.wallet) || { label: ev.label || short(ev.wallet), wallet: ev.wallet, tier: ev.tier || 'confirm', min: '', max: '' };
   ev.label = whale.label; ev.tier = whale.tier; ev.whale = whale;
   if (ev.side === 'sell') {
+    if (openPositions().some(p => p.mint === ev.mint && p.degen && p.open)) { whaleLog({ mint: ev.mint, whale: whale.label, token: ev.symbol || short(ev.mint), side: 'sell', usd: ev.usd, decision: 'sell', detail: 'degen position keeps its own exit' }); return; }
     const book = copyBooks.get(ev.mint);
     if (!book) { whaleLog({ mint: ev.mint, whale: whale.label, token: ev.symbol || short(ev.mint), side: 'sell', usd: ev.usd, decision: 'sell', detail: 'no copy position' }); return; }
     const m = mirrorSellPct(book, ev);
@@ -5820,6 +5834,7 @@ async function sniperPoll() {
       if (viaDegen) {
         const block = degenBuyBlock();
         if (block) { sniperNote(block, 'warn'); break; }
+        if (degenCooled(p.mint) || openPositions().some(x => x.open && x.mint === p.mint) || (WALLETS.burner?.tokens?.get(p.mint)?.raw > 0n)) { sniperNote(p.symbol + ' degen cooldown or already held', 'warn'); continue; }
         sol = degenTradeSol();
       } else {
         const openSnipes = openPositions().filter(x => x.sniper && !x.degen).length;
@@ -5860,6 +5875,7 @@ async function sniperPoll() {
   finally { sniperBusy = false; }
 }
 async function sniperSell(p, pct, tag, lp) {
+  if (p?.degen) return;
   const b = WALLETS.burner;
   if (!b.kp) return;
   let h = b.tokens.get(p.mint);
@@ -5930,11 +5946,23 @@ function saveDegen(patch) {
   return degenCfg();
 }
 function degenOn() { return degenCfg().on; }
+const DEGEN_CD_LS = 'sms:degencd';
+function degenCooldownBook() { const v = load(DEGEN_CD_LS, {}); return v && typeof v === 'object' ? v : {}; }
+function noteDegenExit(mint) {
+  if (!mint) return;
+  const book = degenCooldownBook();
+  book[mint] = Date.now() + 60 * 60e3;
+  save(DEGEN_CD_LS, book);
+}
+function degenCooled(mint) {
+  const until = degenCooldownBook()[mint];
+  return !!(until && Date.now() < until);
+}
 function degenPlan(pick, entryGuess) {
-  const stopPct = isNum(+pick?.stop_pct) ? +pick.stop_pct : -25;
+  const loss = degenLossPct(pick?.stop_pct);
   const timeStopMin = isNum(+pick?.time_stop_min) ? +pick.time_stop_min : 45;
-  const trail = isNum(+pick?.trail) ? +pick.trail : 20;
-  return { degen: true, stopPct, timeStopMin, trail, strat: 'Degen', stop: isNum(entryGuess) && entryGuess > 0 ? entryGuess * (1 + stopPct / 100) : null };
+  const trail = isNum(+pick?.trail) ? Math.abs(+pick.trail) : 20;
+  return { degen: true, stopPct: -loss, timeStopMin, trail, strat: 'Degen', stop: isNum(entryGuess) && entryGuess > 0 ? degenStopPx(entryGuess, loss) : null };
 }
 function degenRounds() { return closedRounds(liveSolPx()).filter(c => c.degen); }
 function degenOpenCost() {
@@ -5974,6 +6002,12 @@ function degenTradeSol() {
   return +sol.toFixed(6);
 }
 function degenNote(msg) { DEGEN.note = String(msg || '').slice(0, 180); }
+function degenLogHtml() {
+  return LOG.filter(r => r && (r.degen || r.plan?.degen) && (r.status === 'confirmed' || r.status === 'pending')).slice(-24).reverse().map(r => {
+    const why = r.entryReason || r.exitTag || (r.side === 'buy' ? 'degen buy' : 'sell');
+    return `<article class="border-b border-white/10 py-1.5 text-[12px]"><div class="flex justify-between gap-2"><b>${r.side === 'buy' ? 'BUY' : 'SELL'} ${esc(r.symbol || '')}</b><span class="font-mono">${price(r.priceUsd)}</span></div><div class="text-[11px] text-slate-500 whitespace-normal break-words">${esc(why)} · ${tehranClock(r.ts)}</div></article>`;
+  }).join('');
+}
 function degenPickBlock(pick, price) {
   if (!pick || typeof pick.mint !== 'string' || pick.mint.length < 32) return 'bad mint';
   if (pick.entry_now !== true && pick.entry_now !== 'true') return 'not entry now';
@@ -5982,7 +6016,10 @@ function degenPickBlock(pick, price) {
   if (exp && exp < Date.now()) return 'expired';
   if (!(+pick.max_entry_price > 0)) return 'no max price';
   if (!(isNum(price) && price > 0 && price <= +pick.max_entry_price)) return 'above max entry';
-  if (openPositions().some(p => p.mint === pick.mint)) return 'already open';
+  if (degenCooled(pick.mint)) return 'cooldown 60m';
+  if (openPositions().some(p => p.open && p.mint === pick.mint)) return 'already held';
+  const bag = WALLETS.burner?.tokens?.get(pick.mint);
+  if (bag && bag.raw > 0n) return 'already held';
   if (LOG.some(r => r.mint === pick.mint && r.side === 'buy' && r.status === 'pending')) return 'buy pending';
   return '';
 }
@@ -6000,9 +6037,21 @@ async function degenSafety(mint) {
   } catch (e) { return { ok: false, reason: e.message || 'honeypot' }; }
   return { ok: true, reason: checks.join(' ') };
 }
-async function degenTokenPx(mint) {
+async function degenFetchFile() {
+  const res = await fetch(AGENT_RAW + 'degen.json?t=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) throw new Error('degen ' + res.status);
+  const data = await res.json();
+  const picks = Array.isArray(data) ? data : (Array.isArray(data?.picks) ? data.picks : []);
+  DEGEN.picks = picks;
+  DEGEN.updatedTehran = typeof data?.updated_tehran === 'string' ? data.updated_tehran : '';
+  DEGEN.updatedAt = (typeof agentTime === 'function' && agentTime(data?.updated_utc)) || Date.now();
+  DEGEN.fetched = Date.now();
+  DEGEN.error = '';
+  return picks;
+}
+async function degenTokenPx(mint, force) {
   const hit = livePrices.get(mint);
-  if (hit && isNum(hit.price) && Date.now() - (hit.at || 0) < 20000) return hit.price;
+  if (!force && hit && isNum(hit.price) && Date.now() - (hit.at || 0) < 20000) return hit.price;
   const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mint);
   const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
   if (!best || !(+best.priceUsd > 0)) return null;
@@ -6010,8 +6059,15 @@ async function degenTokenPx(mint) {
   return +best.priceUsd;
 }
 async function degenBuy(pick, opt) {
-  const price = isNum(opt?.price) ? opt.price : await degenTokenPx(pick.mint);
-  const why = opt?.skipPick ? '' : degenPickBlock(pick, price);
+  if (!opt?.sniper) {
+    const picks = await degenFetchFile();
+    const fresh = picks.find(p => p && p.mint === pick.mint);
+    if (!fresh) { degenNote((pick.symbol || short(pick.mint)) + ': pick not in fresh degen.json'); return; }
+    pick = fresh;
+  }
+  const price = await degenTokenPx(pick.mint, true);
+  if (!opt?.sniper && degenStatus(pick, price) !== 'READY') { degenNote((pick.symbol || short(pick.mint)) + ': not READY on fresh file'); return; }
+  const why = degenPickBlock(pick, price);
   if (why) { degenNote((pick.symbol || short(pick.mint)) + ': ' + why); return; }
   const block = degenBuyBlock();
   if (block) { degenNote(block); return; }
@@ -6028,7 +6084,7 @@ async function degenBuy(pick, opt) {
   const imp = impactPct(qo.quote);
   if (imp > A.maxImpact) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
   const plan = degenPlan(pick, price);
-  const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick' } });
+  const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick · READY @ ' + price(price) } });
   degenNote('bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
   toast('Degen buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
   renderDegen();
@@ -6043,8 +6099,9 @@ async function degenSell(p, pct, tag, lp) {
   const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
   if (raw === 0n) return;
   const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(Math.min(15, Math.max(A.slipCap, S.slippagePct)) * 100) });
-  await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper } });
-  degenNote(p.symbol + ' ' + tag + ' ' + pct + '% at ' + price(lp));
+  const why = tag + ' ' + pct + '% at ' + price(lp);
+  await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper, entryReason: why } });
+  degenNote(p.symbol + ' ' + why);
   renderDegen();
 }
 async function degenExitTick() {
@@ -6187,8 +6244,7 @@ function renderDegen() {
   const posHtml = open.map(p => {
     const lp = livePrices.get(p.mint)?.price;
     const money = posMoney(p, lp);
-    const stopPct = isNum(p.plan?.stopPct) ? p.plan.stopPct : -25;
-    const stopPx = isNum(p.avgUsd) ? p.avgUsd * (1 + stopPct / 100) : null;
+    const stopPx = isNum(p.avgUsd) ? degenStopPx(p.avgUsd, p.plan?.stopPct) : null;
     const tpPx = isNum(p.avgUsd) ? p.avgUsd * 2 : null;
     const trail = isNum(p.plan?.trail) ? p.plan.trail : 20;
     const mins = isNum(p.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
@@ -6232,6 +6288,8 @@ function renderDegen() {
     ${posHtml || '<p class="empty-note mt-2">No open degen positions.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Closed</h3>
     ${closed || '<p class="empty-note mt-2">No closed degen trades.</p>'}
+    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Trade log</h3>
+    ${degenLogHtml() || '<p class="empty-note mt-2">No degen fills yet.</p>'}
   </section>`;
   desk?.querySelectorAll('[data-degen-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.degenSell, { pct: 100 })));
   const home = $('degenCard'); if (home) home.innerHTML = stats;
@@ -7931,7 +7989,7 @@ async function myListBuys() {
 async function myListExits() {
   if (A.on && A.autoExit) return;
   for (const p of openPositions()) {
-    if (!(p.myList || p.plan?.myList) || p.wallet !== 'burner') continue;
+    if (p.degen || !(p.myList || p.plan?.myList) || p.wallet !== 'burner') continue;
     const lp = livePrices.get(p.mint)?.price ?? MYLIST.rows.find(r => r.mint === p.mint)?.price;
     const ex = myListExit(p, lp);
     if (ex) await autoSell(p, ex.pctSell, ex.tag, lp);
@@ -8092,6 +8150,7 @@ function applyAgentRisk() {
     const key = row.mint + '|' + row.action + '|' + row.ts;
     if (AG.seenRisk[key]) continue;
     const pos = openPositions().find(p => p.mint === row.mint && p.wallet === 'burner' && p.open);
+    if (pos?.degen) { AG.seenRisk[key] = now; continue; }
     if (row.action === 'raise_stop') {
       if (!pos) continue;
       const lp = livePrices.get(pos.mint)?.price;
