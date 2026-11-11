@@ -10154,27 +10154,32 @@ window.__smsScanChart = T.openScanChart;
 </script>
 
 <style id="theme-unify">
-  .text-emerald-200, .text-emerald-300, .text-emerald-400, .text-emerald-400\/80 { color: #3DDC97 !important; }
-  .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400, .text-rose-300\/80 { color: #FF5C7A !important; }
+  .text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-400, .text-emerald-400\/80 { color: #3DDC97 !important; }
+  .text-rose-50, .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400, .text-rose-300\/80 { color: #FF5C7A !important; }
   .text-amber-100, .text-amber-200, .text-amber-300, .text-amber-400, .text-amber-200\/90, .text-amber-300\/90, .text-orange-200 { color: #E6B450 !important; }
   .text-violet-100, .text-violet-200, .text-violet-300, .text-sky-100, .text-sky-200, .text-fuchsia-100, .text-fuchsia-200, .text-fuchsia-300 { color: #C6F432 !important; }
+  .bg-emerald-300 { background-color: #3DDC97 !important; }
   .bg-emerald-500\/10, .bg-emerald-500\/15 { background-color: rgba(61,220,151,.14) !important; }
-  .bg-rose-500\/10, .bg-rose-500\/15, .bg-rose-500\/20, .bg-rose-600\/30 { background-color: rgba(255,92,122,.14) !important; }
-  .bg-amber-500\/10, .bg-amber-500\/15, .bg-amber-400\/15, .bg-orange-500\/15 { background-color: rgba(230,180,80,.14) !important; }
-  .bg-violet-500\/10, .bg-violet-500\/15, .bg-sky-500\/15 { background-color: rgba(198,244,50,.12) !important; }
+  .bg-rose-500\/10, .bg-rose-500\/15, .bg-rose-500\/20, .bg-rose-500\/25, .bg-rose-500\/30, .bg-rose-600\/30 { background-color: rgba(255,92,122,.14) !important; }
+  .bg-amber-500\/10, .bg-amber-500\/15, .bg-amber-400\/10, .bg-amber-400\/15, .bg-orange-500\/15 { background-color: rgba(230,180,80,.14) !important; }
+  .bg-violet-500\/10, .bg-violet-500\/15, .bg-violet-500\/20, .bg-sky-500\/5, .bg-sky-500\/15 { background-color: rgba(198,244,50,.12) !important; }
   .bg-fuchsia-500\/15 { background-color: rgba(230,180,80,.12) !important; }
   .bg-violet-500, .bg-violet-600, .bg-sky-500 { background-color: #C6F432 !important; }
   .bg-emerald-400, .bg-emerald-500, .bg-emerald-600 { background-color: #3DDC97 !important; }
   .bg-amber-300, .bg-amber-400, .bg-amber-500, .bg-orange-500, .bg-orange-600, .bg-fuchsia-500 { background-color: #E6B450 !important; }
   .bg-rose-500, .bg-rose-600 { background-color: #FF5C7A !important; }
-  .border-emerald-400\/40, .border-emerald-500\/20, .border-emerald-500\/25, .border-emerald-500\/30, .border-emerald-500\/40 { border-color: rgba(61,220,151,.4) !important; }
-  .border-rose-400\/40, .border-rose-400\/50, .border-rose-500\/20, .border-rose-500\/25, .border-rose-500\/30, .border-rose-500\/40, .border-rose-500\/50 { border-color: rgba(255,92,122,.4) !important; }
-  .border-amber-300\/40, .border-amber-400\/40, .border-amber-500\/20, .border-amber-500\/30, .border-amber-500\/40, .border-orange-400\/40 { border-color: rgba(230,180,80,.4) !important; }
-  .border-violet-400\/30, .border-violet-400\/40, .border-violet-400\/50, .border-violet-500\/30, .border-sky-400\/40 { border-color: rgba(198,244,50,.4) !important; }
+  .border-emerald-400\/40, .border-emerald-500\/20, .border-emerald-500\/25, .border-emerald-500\/30, .border-emerald-500\/40, .border-emerald-950 { border-color: rgba(61,220,151,.45) !important; }
+  .border-rose-400, .border-rose-400\/40, .border-rose-400\/50, .border-rose-500\/20, .border-rose-500\/25, .border-rose-500\/30, .border-rose-500\/40, .border-rose-500\/50 { border-color: rgba(255,92,122,.4) !important; }
+  .border-amber-300\/30, .border-amber-300\/40, .border-amber-400\/40, .border-amber-400\/50, .border-amber-500\/20, .border-amber-500\/30, .border-amber-500\/40, .border-orange-400\/40, .border-orange-500\/50 { border-color: rgba(230,180,80,.4) !important; }
+  .border-violet-400\/30, .border-violet-400\/40, .border-violet-400\/50, .border-violet-500\/30, .border-violet-500\/40, .border-sky-400\/20, .border-sky-400\/40 { border-color: rgba(198,244,50,.4) !important; }
   .border-fuchsia-400, .border-fuchsia-400\/40 { border-color: rgba(230,180,80,.45) !important; }
   .ring-violet-400, .ring-violet-500 { --tw-ring-color: rgba(198,244,50,.55) !important; }
   .accent-violet-500, .accent-emerald-500 { accent-color: #C6F432 !important; }
+  .accent-amber-500 { accent-color: #E6B450 !important; }
   .accent-rose-500 { accent-color: #FF5C7A !important; }
+  .from-rose-500\/40 { --tw-gradient-from: rgba(255,92,122,.4) var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(255,92,122,0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
+  .from-rose-400\/80 { --tw-gradient-from: rgba(255,92,122,.8) var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(255,92,122,0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
+  .to-emerald-500\/50 { --tw-gradient-to: rgba(61,220,151,.5) var(--tw-gradient-to-position) !important; }
   button.bg-violet-600, button.bg-violet-500, button.bg-emerald-500, button.bg-emerald-600, button.bg-emerald-400, button.hover\:bg-violet-500, button.hover\:bg-emerald-400, .btn-primary, [data-mb-buy] { background: #C6F432 !important; color: #14180C !important; border-color: transparent !important; }
   button.bg-rose-600, button.hover\:bg-rose-500, button[data-sell], button[data-degen-sell] { background: transparent !important; color: #FF5C7A !important; border-color: rgba(255,92,122,.45) !important; }
   button.bg-amber-300, button.bg-amber-400, button.bg-orange-600, button.hover\:bg-amber-300, button.hover\:bg-orange-500 { background: #1E232B !important; color: #F7F8FA !important; border-color: rgba(255,255,255,.08) !important; }
