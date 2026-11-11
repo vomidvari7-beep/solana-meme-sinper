@@ -235,6 +235,11 @@ export function scalpExitReason(p, lp, candles, flow) {
   if (!(entry > 0) || !(lp > 0)) return '';
   const prot = p.prot || {};
   if (isNum(prot.entryLiq) && prot.entryLiq > 0 && isNum(flow?.liq) && flow.liq <= prot.entryLiq * 0.5) return 'liquidity pull';
+  if (p.plan?.kind === 'breakout1h') {
+    const stop = +p.plan.stop;
+    if (stop > 0 && lp <= stop) return 'breakout stop';
+    return '';
+  }
   const high = Math.max(prot.high || 0, entry, lp);
   const runner = !!prot.runner || high >= entry * (1 + SCALP.RUNNER_AT);
   const ageMin = (Date.now() - (p.firstTs || Date.now())) / 60000;
@@ -315,6 +320,92 @@ export function mlStop(entry, candleLow) {
   const floor = entry * (1 - 0.15);
   const stop = Math.max(raw, floor);
   return stop < entry ? stop : floor;
+}
+
+function h1Parts(candles, now) {
+  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0 && c.o > 0);
+  const stamped = cs.filter(c => c.t > 0).sort((a, b) => a.t - b.t);
+  if (stamped.length) {
+    return {
+      closed: stamped.filter(c => c.t + 3600e3 <= now),
+      forming: stamped.filter(c => c.t <= now && c.t + 3600e3 > now).at(-1) || null
+    };
+  }
+  if (cs.length < 2) return { closed: [], forming: cs[0] || null };
+  return { closed: cs.slice(0, -1), forming: cs[cs.length - 1] };
+}
+function h1VolOk(bar, prior, spike) {
+  const vol = (prior || []).slice(-20);
+  if (vol.length < 20) return false;
+  const avg = vol.reduce((s, c) => s + (c.v > 0 ? c.v : 0), 0) / 20;
+  if (avg > 0 && bar.v >= avg) return true;
+  if (spike && +spike.mult >= 2) return true;
+  if (spike && +spike.avg > 0 && +spike.v >= +spike.avg * 2) return true;
+  return false;
+}
+function h1TrendAt(prior, index) {
+  if (!prior || prior.length < 15) return 0;
+  const { highs } = swingPoints(prior, 2);
+  if (highs.length < 2) return 0;
+  let use = highs.slice(-2);
+  const tail = highs.slice(-3);
+  if (tail.length === 3 && tail[1].price < tail[0].price && tail[2].price < tail[1].price) use = tail;
+  else if (!(highs.at(-1).price < highs.at(-2).price)) return 0;
+  const a = use[0], b = use[use.length - 1];
+  if (!(b.price < a.price)) return 0;
+  const lv = lineAt(a, b, index);
+  return lv > 0 ? lv : 0;
+}
+function h1ResistZone(prior, bar) {
+  const src = (prior || []).slice(-48);
+  if (src.length < 2 || !(bar?.c > 0) || !(bar.o > 0)) return null;
+  const pre = Math.min(bar.o > 0 ? bar.o : Infinity, src[src.length - 1].c || Infinity);
+  if (!(pre > 0) || pre === Infinity) return null;
+  const touches = [];
+  src.forEach((c, i) => {
+    if (c.h > 0) touches.push({ i, p: c.h });
+    if (c.c > 0) touches.push({ i, p: c.c });
+  });
+  let best = null;
+  for (const anchor of touches) {
+    const band = touches.filter(t => t.p + 1e-12 >= anchor.p && t.p <= anchor.p * 1.07);
+    if (band.length < 2) continue;
+    const lo = Math.min(...band.map(t => t.p));
+    const hi = Math.max(...band.map(t => t.p));
+    if (!(hi > lo) || hi / lo - 1 > 0.07) continue;
+    const ids = new Set(band.map(t => t.i));
+    if (ids.size < 2) continue;
+    if (!(lo > pre)) continue;
+    const first = Math.min(...ids);
+    const last = Math.max(...ids);
+    if (!src.slice(first + 1).some(c => c.l > 0 && c.l <= lo * 0.97)) continue;
+    if (!src.slice(last + 1).some(c => c.h > 0 && c.h < lo)) continue;
+    if (!best || last > best.last || (last === best.last && hi > best.hi)) best = { lo, hi, last, n: ids.size };
+  }
+  return best;
+}
+
+/** Forming 1h candle vs the descending trendline and the last resistance box. Buys on the live cross, not the close. */
+export function h1BreakSignal(candles, now = Date.now(), livePx = null, spike = null) {
+  const { closed, forming } = h1Parts(candles, now);
+  const wait = { buy: false, fa: '', state: 'wait', entry: null, stop: null, target: null, zoneLo: null, zoneHi: null, line: null, low: null, key: '', reason: 'waiting' };
+  if (!forming || closed.length < 21) return { ...wait, fa: closed.length ? 'منتظر شکست' : '' };
+  const line = h1TrendAt(closed, closed.length);
+  const zone = h1ResistZone(closed, forming);
+  const zoneLo = zone ? zone.lo : (line > 0 ? line : null);
+  const zoneHi = zone ? zone.hi : (line > 0 ? line * 1.03 : null);
+  if (!(line > 0) || !(zoneHi > 0)) return { ...wait, fa: 'منتظر شکست', zoneLo, zoneHi, line, reason: 'no trendline' };
+  const px = isNum(livePx) && livePx > 0 ? livePx : forming.c;
+  const stop = forming.l > 0 ? forming.l * (1 - 0.015) : null;
+  const crossed = px > line && px > zoneHi;
+  const key = Math.round(line * 1e8) + ':' + Math.round(zoneHi * 1e8);
+  if (!crossed || !h1VolOk(forming, closed, spike) || !(stop > 0) || !(stop < px)) {
+    return { ...wait, fa: 'منتظر شکست', zoneLo, zoneHi, line, key, reason: crossed ? 'no volume' : 'waiting for the cross' };
+  }
+  return {
+    buy: true, fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3,
+    zoneLo, zoneHi, line, low: forming.l, key, reason: '1h breakout'
+  };
 }
 
 export function planFresh(p, now = Date.now()) {

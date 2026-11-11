@@ -1,6 +1,6 @@
 import { tapeFromDex } from './net.js';
-import { CAPS, fakeDataReason, liveConfidence, livePreReason, mlGeometry, mlStop, mlStrongCandle, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
-import { isNum, lineAt, log, tehranDayKey, WSOL } from './util.js';
+import { CAPS, fakeDataReason, h1BreakSignal, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
+import { isNum, log, tehranDayKey, WSOL } from './util.js';
 
 function pairTape(p) { return tapeFromDex(p); }
 
@@ -21,6 +21,9 @@ export function createEngine(cfg, state, net, swap) {
   }
   let agents = {};
   let sol = { price: null, h1: null, m15: null, at: 0 };
+  let recentScan = [];
+  let h1Cursor = 0;
+  const breakViews = new Map();
   let busy = false;
   const agentRows = {};
 
@@ -156,8 +159,6 @@ export function createEngine(cfg, state, net, swap) {
 
   async function scalpTick() {
     if (!state.data.toggles.scalp || state.data.paused) return;
-    const sized = scalpSizeUsd(state.data, state.data.positions, (m) => live(m)?.px);
-    if (!(sized.usd >= SCALP.MIN_FREE)) { state.note('scalp', '', '', sized.label); return; }
     await refreshSol();
     if (!isNum(sol.h1)) { state.note('scalp', 'SOL', 'SOL', 'SOL 1h unavailable'); return; }
     if (sol.h1 < SCALP.SOL_1H_MIN) { state.note('scalp', 'SOL', 'SOL', 'SOL 1h ' + sol.h1.toFixed(1) + '%'); return; }
@@ -165,6 +166,9 @@ export function createEngine(cfg, state, net, swap) {
     if (sol.m15 < SCALP.SOL_15M_MIN) { state.note('scalp', 'SOL', 'SOL', 'SOL 15m ' + sol.m15.toFixed(1) + '%'); return; }
     const block = scalpDayBlock(state.data);
     if (block) { state.note('scalp', '', '', block); return; }
+    if (await scalpBreak1h()) return;
+    const sized = scalpSizeUsd(state.data, state.data.positions, (m) => live(m)?.px);
+    if (!(sized.usd >= SCALP.MIN_FREE)) { state.note('scalp', '', '', sized.label); return; }
     const ids = watchMints();
     const ranked = ids.map(mint => ({ mint, t: live(mint) })).filter(x => x.t && x.t.liq > 0).sort((a, b) => (b.t.vol24 || 0) - (a.t.vol24 || 0));
     let top = null;
@@ -219,6 +223,39 @@ export function createEngine(cfg, state, net, swap) {
     await safeBuy('scalp', top.mint, top.t.symbol, solAmt, SCALP.SLIP_BPS, { breakLow: ctx.breakLow, entryLiq: ctx.liq, pool: top.t.pool, reason: 'scalp breakout' }, ctx.liq);
   }
 
+  async function scalpBreak1h() {
+    const ids = [...new Set([...watchMints(), ...recentScan])];
+    if (!ids.length || !(sol.price > 0)) return false;
+    const start = h1Cursor % ids.length;
+    h1Cursor += 4;
+    for (let n = 0; n < 4 && n < ids.length; n++) {
+      const mint = ids[(start + n) % ids.length];
+      const tape = live(mint);
+      if (!tape?.pool) continue;
+      let h1;
+      try { h1 = await net.ohlcv(tape.pool, '1h'); } catch { continue; }
+      const sig = h1BreakSignal(h1, Date.now(), tape.px);
+      if (!sig.buy) continue;
+      const fake = guard(mint, tape);
+      if (fake) { state.note('scalp', mint, tape.symbol, fake); continue; }
+      const day = tehranDayKey();
+      const logBook = state.data.scalpLog;
+      if (logBook.cooldowns?.[mint] > Date.now()) continue;
+      const count = logBook.counts?.[mint];
+      if (count && count.day === day && count.n >= SCALP.MAX_PER_DAY) continue;
+      if (state.open('scalp').length >= SCALP.MAX_OPEN) return false;
+      state.data.seenH1 = state.data.seenH1 || {};
+      if (state.data.seenH1[mint] === sig.key) continue;
+      const solAmt = +(CAPS.listUsd / sol.price).toFixed(6);
+      const bal = await swap.balance();
+      if (solAmt + CAPS.reserveSol > bal) { state.note('scalp', mint, tape.symbol, 'insufficient SOL'); return false; }
+      state.data.seenH1[mint] = sig.key;
+      await safeBuy('scalp', mint, tape.symbol, solAmt, SCALP.SLIP_BPS, { scalp: true, kind: 'breakout1h', scalpUsd: CAPS.listUsd, stop: sig.stop, pool: tape.pool, entryLiq: tape.liq, reason: 'scalp 1h breakout' }, tape.liq);
+      return true;
+    }
+    return false;
+  }
+
   async function breakoutTick() {
     if (!state.data.toggles.breakout || state.data.paused) return;
     const rows = agents.mylist?.tokens || [];
@@ -227,36 +264,25 @@ export function createEngine(cfg, state, net, swap) {
     const row = rows[cursor % rows.length];
     state.data.breakCursor = cursor + 1;
     const tape = live(row.mint);
-    if (!tape?.pool || !(tape.px > 0)) return;
+    if (!tape?.pool) return;
+    let h1;
+    try { h1 = await net.ohlcv(tape.pool, '1h'); } catch { return; }
+    const sig = h1BreakSignal(h1, Date.now(), tape.px);
+    breakViews.set(row.mint, { mint: row.mint, symbol: row.symbol || tape.symbol || '', fa: sig.fa, zoneLo: sig.zoneLo, zoneHi: sig.zoneHi, stop: sig.stop, target: sig.target, entry: sig.entry, state: sig.state });
+    if (breakViews.size > 40) breakViews.delete(breakViews.keys().next().value);
+    if (!sig.buy) return;
     const fake = guard(row.mint, tape);
     if (fake) { state.note('breakout', row.mint, row.symbol || tape.symbol, fake); return; }
-    let h1, m15, m1;
-    try {
-      h1 = await net.ohlcv(tape.pool, '1h');
-      m15 = await net.ohlcv(tape.pool, '15m');
-      m1 = await net.ohlcv(tape.pool, '1m');
-    } catch { return; }
-    const geo = mlGeometry(h1);
-    if (!geo) return;
-    const minute = m1.length ? m1[m1.length - 2] : null;
-    const close = minute?.c || 0;
-    if (!(close > geo.line && close > geo.zoneHi)) return;
-    if (!(tape.m5b >= tape.m5s) || tape.m5b + tape.m5s === 0) return;
-    const key = Math.round(geo.line * 1e6) + ':' + Math.round(geo.zoneHi * 1e6);
     state.data.seenBreaks = state.data.seenBreaks || {};
-    if (state.data.seenBreaks[row.mint] === key) return;
-    const lineOf = (i) => lineAt(geo.a, geo.b, i);
-    const strong = mlStrongCandle(h1, lineOf) || mlStrongCandle(m15, () => geo.line);
-    const entry = tape.px;
-    const stop = mlStop(entry, strong ? strong.l : 0);
+    if (state.data.seenBreaks[row.mint] === sig.key) return;
     await refreshSol();
     if (!(sol.price > 0)) return;
     const want = CAPS.listUsd / sol.price;
     const bal = await swap.balance();
     const sized = (await import('./state.js')).clampMainBuy(state, want, bal);
-    if (sized.err) { state.note('breakout', row.mint, row.symbol, sized.err); return; }
-    state.data.seenBreaks[row.mint] = key;
-    await safeBuy('breakout', row.mint, row.symbol || tape.symbol, sized.sol, 100, { myList: true, mlBreak: true, stop, tp: entry * 1.3, reason: '1h breakout' }, tape.liq);
+    if (sized.err) { state.note('breakout', row.mint, row.symbol || tape.symbol, sized.err); return; }
+    state.data.seenBreaks[row.mint] = sig.key;
+    await safeBuy('breakout', row.mint, row.symbol || tape.symbol, sized.sol, 100, { myList: true, mlBreak: true, mlBreakKey: sig.key, stop: sig.stop, tp: sig.entry * 1.3, reason: '1h breakout', exit: { stopPx: sig.stop, tps: [{ gainPct: 30, sellPct: 100 }] } }, tape.liq);
   }
 
   async function plansTick() {
@@ -294,6 +320,7 @@ export function createEngine(cfg, state, net, swap) {
     if (led.balanceUsd + 1e-9 < lim.tradeUsd + 0.25) { state.note('scan', '', '', 'Degen out of funds'); return; }
     let rows = [];
     try { rows = await net.newPools(); } catch (e) { state.note('scan', '', '', e.message || 'source failed'); return; }
+    recentScan = rows.map(r => r && r.mint).filter(Boolean).slice(0, 20);
     let looked = 0;
     for (const raw of rows.slice(0, 20)) {
       const ageH = raw.created ? (Date.now() - raw.created) / 3.6e6 : null;
@@ -430,6 +457,7 @@ export function createEngine(cfg, state, net, swap) {
     return {
       ok: true, paused: !!d.paused, dryRun: !!cfg.dryRun, liveTest: false, pubkey: swap.owner,
       toggles: d.toggles, positions: pos, signals, executions,
+      breaks: [...breakViews.values()].slice(0, 40),
       ledgers: { scalp: d.ledgers.scalp, degen: d.ledgers.degen },
       decisions: d.decisions.slice(0, 20),
       blacklist: Object.keys(d.blacklist || {}).length,

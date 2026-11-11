@@ -6465,7 +6465,9 @@ function mountServerMode() {
     paint(data);
     try {
       const sig = (data.signals || []).map(s => s.mint + s.state + s.price).join('|');
+      const br = (data.breaks || []).map(s => s.mint + s.fa + s.entry).join('|');
       if (sig !== window.__SMS_SRV_SIG) { window.__SMS_SRV_SIG = sig; if (typeof renderAgentPicks === 'function') renderAgentPicks(); }
+      if (br !== window.__SMS_SRV_BR) { window.__SMS_SRV_BR = br; if (typeof renderMyList === 'function') renderMyList(); }
     } catch { /* cards stay on the last paint */ }
     return data;
   }
@@ -10021,7 +10023,8 @@ function myListStructSig() {
   for (const r of MYLIST.rows) {
     const px = (typeof livePrices !== 'undefined' && livePrices.get(r.mint)?.price) || r.price || 0;
     const bucket = px > 0 ? Math.round(Math.log(px) * 80) : 0;
-    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + (r.mlArmed ? 'B' : '') + bucket;
+    const phase = typeof mlBreakView === 'function' ? ((mlBreakView(r.mint) || {}).fa || '') : '';
+    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + phase + bucket;
   }
   return s;
 }
@@ -10132,7 +10135,7 @@ function renderMyList(opts) {
         <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
           ${logo}
           <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${row.mlArmed ? '<span class="setup-chip shrink-0">Breakout armed</span>' : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
+            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${(typeof mlBreakView === 'function' && mlBreakView(row.mint)?.fa) ? `<span class="setup-chip shrink-0">${esc(mlBreakView(row.mint).fa)}</span>` : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
             <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
             ${faZoneHtml(row.mint)}
@@ -10587,6 +10590,90 @@ function mlBreakSpark(geo) {
   const y = (p) => (1 - (p - lo) / (hi - lo || 1)) * 28 + 4;
   return `<svg viewBox="0 0 140 36" class="mt-1 h-9 w-full" role="img" aria-label="Breakout line and zone"><rect x="0" y="${Math.min(y(geo.zoneHi), y(geo.zoneLo)).toFixed(1)}" width="140" height="${Math.max(2, Math.abs(y(geo.zoneHi) - y(geo.zoneLo))).toFixed(1)}" fill="rgba(122,162,214,0.18)"/><line x1="8" y1="${y(geo.line * 1.02).toFixed(1)}" x2="132" y2="${y(geo.line).toFixed(1)}" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
 }
+const mlBreakByMint = new Map();
+function h1Parts(candles, now) {
+  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0 && c.o > 0);
+  const stamped = cs.filter(c => c.t > 0).sort((a, b) => a.t - b.t);
+  if (stamped.length) return { closed: stamped.filter(c => c.t + 3600e3 <= now), forming: stamped.filter(c => c.t <= now && c.t + 3600e3 > now).at(-1) || null };
+  if (cs.length < 2) return { closed: [], forming: cs[0] || null };
+  return { closed: cs.slice(0, -1), forming: cs[cs.length - 1] };
+}
+function h1TrendAt(prior, index) {
+  if (!prior || prior.length < 15) return 0;
+  const { highs } = swingPoints(prior, 2);
+  if (highs.length < 2) return 0;
+  let use = highs.slice(-2);
+  const tail = highs.slice(-3);
+  if (tail.length === 3 && tail[1].price < tail[0].price && tail[2].price < tail[1].price) use = tail;
+  else if (!(highs.at(-1).price < highs.at(-2).price)) return 0;
+  const a = use[0], b = use[use.length - 1];
+  if (!(b.price < a.price)) return 0;
+  const lv = lineAt(a, b, index);
+  return lv > 0 ? lv : 0;
+}
+function h1ResistZone(prior, bar) {
+  const src = (prior || []).slice(-48);
+  if (src.length < 2 || !(bar?.o > 0)) return null;
+  const pre = Math.min(bar.o, src[src.length - 1].c || bar.o);
+  if (!(pre > 0)) return null;
+  const touches = [];
+  src.forEach((c, i) => { if (c.h > 0) touches.push({ i, p: c.h }); if (c.c > 0) touches.push({ i, p: c.c }); });
+  let best = null;
+  for (const anchor of touches) {
+    const band = touches.filter(t => t.p + 1e-12 >= anchor.p && t.p <= anchor.p * 1.07);
+    if (band.length < 2) continue;
+    const lo = Math.min(...band.map(t => t.p));
+    const hi = Math.max(...band.map(t => t.p));
+    if (!(hi > lo) || hi / lo - 1 > 0.07) continue;
+    const ids = new Set(band.map(t => t.i));
+    if (ids.size < 2 || !(lo > pre)) continue;
+    const first = Math.min(...ids), last = Math.max(...ids);
+    if (!src.slice(first + 1).some(c => c.l > 0 && c.l <= lo * 0.97)) continue;
+    if (!src.slice(last + 1).some(c => c.h > 0 && c.h < lo)) continue;
+    if (!best || last > best.last || (last === best.last && hi > best.hi)) best = { lo, hi, last };
+  }
+  return best;
+}
+function h1VolOk(bar, prior, spike) {
+  const vol = (prior || []).slice(-20);
+  if (vol.length < 20) return false;
+  const avg = vol.reduce((s, c) => s + (c.v > 0 ? c.v : 0), 0) / 20;
+  if (avg > 0 && bar.v >= avg) return true;
+  if (spike && +spike.mult >= 2) return true;
+  if (spike && +spike.avg > 0 && +spike.v >= +spike.avg * 2) return true;
+  return false;
+}
+function h1Spike(mint) {
+  if (typeof tickBars !== 'function') return null;
+  const bars = (tickBars(mint, '1m') || []).filter(b => b && b.v > 0);
+  if (bars.length < 6) return null;
+  const prev = bars.slice(-6, -1);
+  const avg = prev.reduce((s, b) => s + b.v, 0) / prev.length;
+  return avg > 0 ? { v: bars[bars.length - 1].v, avg } : null;
+}
+function h1BreakSignal(candles, now, livePx, spike) {
+  const { closed, forming } = h1Parts(candles, now || Date.now());
+  const wait = { buy: false, fa: '', state: 'wait', entry: null, stop: null, target: null, zoneLo: null, zoneHi: null, line: null, low: null, key: '', reason: 'waiting' };
+  if (!forming || closed.length < 21) return { ...wait, fa: closed.length ? 'منتظر شکست' : '' };
+  const line = h1TrendAt(closed, closed.length);
+  const zone = h1ResistZone(closed, forming);
+  const zoneLo = zone ? zone.lo : (line > 0 ? line : null);
+  const zoneHi = zone ? zone.hi : (line > 0 ? line * 1.03 : null);
+  if (!(line > 0) || !(zoneHi > 0)) return { ...wait, fa: 'منتظر شکست', zoneLo, zoneHi, line, reason: 'no trendline' };
+  const px = isNum(livePx) && livePx > 0 ? livePx : forming.c;
+  const stop = forming.l > 0 ? forming.l * (1 - 0.015) : null;
+  const crossed = px > line && px > zoneHi;
+  const key = Math.round(line * 1e8) + ':' + Math.round(zoneHi * 1e8);
+  if (!crossed || !h1VolOk(forming, closed, spike) || !(stop > 0) || !(stop < px)) return { ...wait, fa: 'منتظر شکست', zoneLo, zoneHi, line, key, reason: crossed ? 'no volume' : 'waiting for the cross' };
+  return { buy: true, fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3, zoneLo, zoneHi, line, low: forming.l, key, reason: '1h breakout' };
+}
+function mlBreakView(mint) {
+  if (mint && typeof serverModeOn === 'function' && serverModeOn()) {
+    const hit = (window.__SMS_SRV?.breaks || []).find(s => s && s.mint === mint);
+    if (hit) return hit;
+  }
+  return mlBreakByMint.get(mint) || null;
+}
 async function mlBreakPass() {
   if (serverModeOn()) return;
   const rows = (MYLIST.rows || []).filter(r => r && r.enabled !== false && r.pool && r.mint);
@@ -10597,44 +10684,33 @@ async function mlBreakPass() {
   if (!mem || Date.now() - mem.at > 120000) {
     try {
       const px = livePrices.get(row.mint)?.price || row.price;
-      const h1 = alignCandlesToToken(await fetchOhlcv(row.pool, '1h', row.mint), px).slice(-48);
-      const geo = mlBreakGeometry(h1);
-      let m15 = [];
-      try { m15 = alignCandlesToToken(await fetchOhlcv(row.pool, '15m', row.mint), px).slice(-48); } catch { m15 = []; }
-      if (geo) {
-        const lineOf = (i) => lineAt(geo.a, geo.b, i);
-        const strong = mlStrongBreakCandle(h1, lineOf) || mlStrongBreakCandle(m15, () => geo.line);
-        mlBreakMem.set(row.id, { ...geo, at: Date.now(), armed: true, candleLow: strong ? strong.l : null, h1 });
-      } else mlBreakMem.set(row.id, { at: Date.now(), armed: false });
-      const armed = !!(mlBreakMem.get(row.id) && mlBreakMem.get(row.id).armed);
-      if (!!row.mlArmed !== armed) { row.mlArmed = armed; row.mlGeo = armed ? { line: geo.line, zoneLo: geo.zoneLo, zoneHi: geo.zoneHi } : null; renderMyList(); }
+      const h1 = alignCandlesToToken(await fetchOhlcv(row.pool, '1h', row.mint), px).slice(-60);
+      mlBreakMem.set(row.id, { at: Date.now(), h1 });
     } catch { /* next token */ }
   }
-  if (!MYLIST.on || !burnerReady()) return;
+  let painted = false;
   for (const r of rows) {
-    const geo = mlBreakMem.get(r.id);
-    if (!geo || !geo.armed || !(geo.line > 0) || !(geo.zoneHi > 0)) continue;
-    const close = mlMinuteClose(r.mint);
+    const book = mlBreakMem.get(r.id);
+    if (!book?.h1) continue;
     const px = livePrices.get(r.mint)?.price || r.price;
-    if (!(close > geo.line && close > geo.zoneHi)) continue;
+    const sig = h1BreakSignal(book.h1, Date.now(), px, h1Spike(r.mint));
+    mlBreakByMint.set(r.mint, Object.assign({ mint: r.mint, symbol: r.symbol || '' }, sig));
+    if ((r.mlFa || '') !== (sig.fa || '')) { r.mlFa = sig.fa || ''; painted = true; }
+    if (!sig.buy || !MYLIST.on || !burnerReady()) continue;
     const flow = livePrices.get(r.mint) || {};
-    const buys = isNum(flow.m5b) ? flow.m5b : (r.dexPair?.txns?.m5?.buys || 0);
-    const sells = isNum(flow.m5s) ? flow.m5s : (r.dexPair?.txns?.m5?.sells || 0);
-    if (!(buys >= sells) || buys + sells === 0) continue;
     const pair = r.dexPair || {};
     const fake = fakeDataReason(r.mint, {
       px, liq: isNum(flow.liq) ? flow.liq : pair.liquidity?.usd,
       vol24: pair.volume?.h24, mcap: pair.marketCap ?? pair.fdv,
-      m5b: buys, m5s: sells, h1b: pair.txns?.h1?.buys, h1s: pair.txns?.h1?.sells,
+      m5b: flow.m5b, m5s: flow.m5s, h1b: pair.txns?.h1?.buys, h1s: pair.txns?.h1?.sells,
       h1: pair.priceChange?.h1 != null ? +pair.priceChange.h1 : null
     });
     if (fake) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', fake); botLog('mylist', r.mint, fake); continue; }
-    const key = mlBreakKey(geo);
-    if ((mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy'))) continue;
+    const key = sig.key;
+    if (mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy')) continue;
     if (LOG.some(t => t.myList && t.mint === r.mint && t.side === 'buy' && (t.status === 'pending' || t.status === 'confirmed') && t.plan?.mlBreakKey === key)) continue;
     if (listPosition(r.mint) || mlBreakLock.has(r.mint)) continue;
-    const spec = listStrategy(r);
-    const resolved = resolveListSpend(spec);
+    const resolved = resolveListSpend(listStrategy(r));
     if (!resolved.ok) { botLog('mylist', r.mint, resolved.error); continue; }
     const safe = await degenSafety(r.mint);
     if (!safe.ok) { botLog('mylist', r.mint, safe.reason || 'safety'); continue; }
@@ -10648,19 +10724,20 @@ async function mlBreakPass() {
     const badQuote = fakeImpactReason(qo.quote);
     if (badQuote) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', badQuote); botLog('mylist', r.mint, badQuote); continue; }
     if (impactPct(qo.quote) > 1) { botLog('mylist', r.mint, 'impact > 1%'); continue; }
-    const entry = px > 0 ? px : close;
-    const stop = mlBreakStop(entry, geo.candleLow);
-    const plan = { myList: true, mlBreak: true, mlBreakKey: key, agent: false, stop, strat: 'My List 1h breakout', exit: { stopPct: 15, stopPx: stop, tps: [{ gainPct: 30, sellPct: 100 }] } };
+    const plan = { myList: true, mlBreak: true, mlBreakKey: key, agent: false, stop: sig.stop, strat: 'My List 1h breakout', exit: { stopPx: sig.stop, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } };
     mlBreakLock.add(r.mint);
     try {
       await executeSwap({ walletKey: 'burner', side: 'buy', mint: r.mint, quoteObj: qo, t: { mint: r.mint, symbol: r.symbol || short(r.mint) }, auto: true, extra: { plan, myList: true, test: test.test, entryReason: '1h breakout' } });
-      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, line: geo.line, zoneLo: geo.zoneLo, zoneHi: geo.zoneHi, stop });
+      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, line: sig.line, zoneLo: sig.zoneLo, zoneHi: sig.zoneHi, stop: sig.stop });
     } finally { mlBreakLock.delete(r.mint); }
     r.boughtOnce = true; r.dayKey = todayKey(); r.buysToday = (r.buysToday || 0) + 1;
+    r.mlFa = sig.fa;
     saveMyList();
     toast('My List breakout ' + (r.symbol || ''), 'ok', 6000);
+    painted = true;
     break;
   }
+  if (painted) renderMyList();
 }
 function mlBreakScan() {
   if (mlBreakBusy || document.hidden) return;
@@ -11107,14 +11184,18 @@ function scoreBadge(label, score, down) {
   return `<span class="hunt-score hunt-${tone}">${label} ${n == null ? '—' : n}</span>${down ? '<span class="tag-down">downtrend</span>' : ''}`;
 }
 function signalLevels(mint) {
-  if (mint && typeof serverModeOn === 'function' && serverModeOn()) {
-    const hit = (window.__SMS_SRV?.signals || []).find(s => s && s.mint === mint);
-    if (hit) return hit;
-  }
   const plan = typeof agentPlanFor === 'function' ? agentPlanFor(mint) : null;
-  if (!plan || typeof planDisplay !== 'function') return null;
-  const d = planDisplay(plan);
-  return { mint, symbol: plan.symbol || '', conf: d.conf, zoneLo: d.zoneLo, zoneHi: d.zoneHi, stop: d.stop, target: d.tp1, price: livePrices.get(mint)?.price || null, state: plan.status || 'waiting' };
+  if (plan && typeof planDisplay === 'function') {
+    const d = planDisplay(plan);
+    if (+d.zoneLo > 0 || +d.stop > 0 || +d.tp1 > 0) return { mint, symbol: plan.symbol || '', conf: d.conf, zoneLo: d.zoneLo, zoneHi: d.zoneHi, stop: d.stop, target: d.tp1, price: livePrices.get(mint)?.price || null, state: plan.status || 'waiting' };
+  }
+  if (mint && typeof serverModeOn === 'function' && serverModeOn()) {
+    const hit = (window.__SMS_SRV?.signals || []).find(s => s && s.mint === mint && (+s.zoneLo > 0 || +s.stop > 0 || +s.target > 0));
+    if (hit) return hit;
+    const br = (window.__SMS_SRV?.breaks || []).find(s => s && s.mint === mint);
+    if (br) return br;
+  }
+  return typeof mlBreakView === 'function' ? (mlBreakView(mint) || null) : null;
 }
 function faZoneHtml(mint) {
   const s = signalLevels(mint);
@@ -11785,6 +11866,7 @@ function scalpExitReason(p, lp) {
   const prot = scalpProt(p, lp);
   const flow = livePrices.get(p.mint) || {};
   if (scalpLiqPull(prot.entryLiq, flow.liq)) return 'liquidity pull';
+  if (p.plan?.kind === 'breakout1h') return (+p.plan.stop > 0 && lp <= +p.plan.stop) ? 'breakout stop' : '';
   const candles = (SCALP_BARS.get(p.mint) || {}).m1 || [];
   const ageMin = (Date.now() - (p.firstTs || Date.now())) / 60000;
   const high = prot.high;
@@ -11803,6 +11885,7 @@ function scalpExitReason(p, lp) {
   return '';
 }
 function scalpEffective(p, lp) {
+  if (p?.plan?.kind === 'breakout1h' && +p.plan.stop > 0) return { stop: +p.plan.stop, tp1: null, tp2: null, reason: 'breakout stop', high: null, quick: false };
   const entry = p?.avgUsd;
   if (!(entry > 0)) return { stop: null, tp1: null, tp2: null, reason: 'scalp', high: null, quick: false };
   const prot = scalpProt(p, lp);
@@ -12000,11 +12083,56 @@ function scalpFlag(mint) {
   if (/avoid|rug|fake holder|fake-holder|wash/.test(bits.join(' ').toLowerCase())) return 'flagged avoid/rug/fake-holder';
   return '';
 }
+let scalpH1Cursor = 0;
+async function scalpH1Buy(ranked) {
+  if (!ranked || !ranked.length) return false;
+  if (openPositions().filter(p => p.scalp && p.open).length >= SCALP_RULE.MAX_OPEN) return false;
+  const start = scalpH1Cursor % ranked.length;
+  scalpH1Cursor += 4;
+  for (let n = 0; n < 4 && n < ranked.length; n++) {
+    const row = ranked[(start + n) % ranked.length];
+    if (!row.meta?.pool) continue;
+    let bars;
+    try { bars = await scalpBars(row.mint, row.meta.pool); } catch { continue; }
+    const px = row.meta.px || livePrices.get(row.mint)?.price;
+    const sig = h1BreakSignal(bars.h1 || [], Date.now(), px, h1Spike(row.mint));
+    if (!sig.buy) continue;
+    const gate = scalpGate(row.mint);
+    if (gate) continue;
+    const fake = fakeDataReason(row.mint, { px, liq: row.meta.liq, mcap: row.meta.mcap, vol24: row.meta.vol24, m5b: row.meta.buys, m5s: row.meta.sells, h1b: row.meta.h1b, h1s: row.meta.h1s, h1: row.meta.h1 });
+    if (fake) { if (typeof noteBuyWhy === 'function') noteBuyWhy(row.mint, row.meta.symbol, 'scalp', fake); continue; }
+    const safe = await degenSafety(row.mint);
+    if (!safe.ok) continue;
+    const listRow = (MYLIST.rows || []).find(r => r.mint === row.mint) || null;
+    const spend = resolveListSpend(listStrategy(listRow));
+    if (!spend.ok) continue;
+    const solPx = solPriceNow() || liveSolPx();
+    if (!(solPx > 0)) continue;
+    let sol = spend.sol;
+    const test = liveTestTake(sol);
+    if (!test.ok) continue;
+    sol = test.sol;
+    const errs = buyGuards('burner', row.mint, sol, { skipMaxOpen: true, scalp: true });
+    if (errs.length) continue;
+    let qo;
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: SCALP_RULE.SLIP_BPS }); }
+    catch (e) { if (typeof noteBuyWhy === 'function') noteBuyWhy(row.mint, row.meta.symbol, 'scalp', 'fake-data: jupiter quote failed'); continue; }
+    const badQuote = fakeImpactReason(qo.quote);
+    if (badQuote) { if (typeof noteBuyWhy === 'function') noteBuyWhy(row.mint, row.meta.symbol, 'scalp', badQuote); continue; }
+    const impact = impactPct(qo.quote);
+    if (impact > SCALP_RULE.IMPACT_MAX) continue;
+    const usd = test.test ? (test.usd || 3) : sol * solPx;
+    const plan = { scalp: true, kind: 'breakout1h', scalpUsd: usd, stop: sig.stop, pool: row.meta.pool, entryLiq: row.meta.liq };
+    await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { symbol: row.meta.symbol || short(row.mint), mint: row.mint }, auto: false, extra: { scalp: true, test: test.test, plan, entryReason: 'scalp 1h breakout' } });
+    scalpWhy.symbol = row.meta.symbol || ''; scalpWhy.reason = 'bought'; scalpWhy.at = Date.now();
+    toast('Scalp 1h breakout ' + (row.meta.symbol || ''), 'warn', 5000);
+    return true;
+  }
+  return false;
+}
 async function scalpTick() {
   if (serverModeOn()) return;
   if (!SCALP_ON || scalpBusy || document.hidden || window.__SMS_SAFE) return;
-  const sized = scalpSizeUsd();
-  if (!(sized.usd >= SCALP_RULE.MIN_FREE)) { scalpWhy.symbol = ''; scalpWhy.reason = sized.label; scalpWhy.at = Date.now(); renderScalp(); return; }
   const solMood = await scalpSolBlock();
   if (solMood) { scalpWhy.symbol = 'SOL'; scalpWhy.reason = solMood; scalpWhy.at = Date.now(); renderScalp(); return; }
   scalpBusy = true;
@@ -12041,6 +12169,9 @@ async function scalpTick() {
         }
       });
     }).filter(r => r.meta.liq > 0).sort((a, b) => b.vol - a.vol);
+    if (await scalpH1Buy(ranked)) return;
+    const sized = scalpSizeUsd();
+    if (!(sized.usd >= SCALP_RULE.MIN_FREE)) { scalpWhy.symbol = ''; scalpWhy.reason = sized.label; scalpWhy.at = Date.now(); return; }
     let top = null;
     let fakeTop = null;
     for (const row of ranked) {
@@ -12150,7 +12281,8 @@ function renderScalp() {
   const openHtml = open.map(p => {
     const lp = livePrices.get(p.mint)?.price;
     const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null;
-    return `<article class="border-b border-white/10 py-2 text-[12px]"><div class="flex items-center justify-between gap-2"><b>${esc(p.symbol || short(p.mint))}</b><span class="num" data-live-mint="${esc(p.mint)}">${price(lp)}</span></div><div class="text-[11px] text-slate-500">${isNum(pnl) ? pct(pnl) : '—'} · ${esc((scalpProt(p, lp).runner ? 'trailing' : 'armed'))}</div><button type="button" data-scalp-sell="${esc(p.mint)}" class="mt-1 text-[12px] text-rose-300">Sell</button></article>`;
+    const state = p.plan?.kind === 'breakout1h' ? 'exit: TBD (Vahid)' : (scalpProt(p, lp).runner ? 'trailing' : 'armed');
+    return `<article class="border-b border-white/10 py-2 text-[12px]"><div class="flex items-center justify-between gap-2"><b>${esc(p.symbol || short(p.mint))}</b><span class="num" data-live-mint="${esc(p.mint)}">${price(lp)}</span></div><div class="text-[11px] text-slate-500">${isNum(pnl) ? pct(pnl) : '—'} · ${esc(state)}</div><button type="button" data-scalp-sell="${esc(p.mint)}" class="mt-1 text-[12px] text-rose-300">Sell</button></article>`;
   }).join('');
   const closed = [...sells].reverse().slice(0, 12).map(t => `<article class="border-b border-white/10 py-1.5 text-[12px]"><div class="flex justify-between gap-2"><b>${esc(t.symbol || short(t.mint))}</b><span class="${t.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300'} font-mono">${isNum(t.pnlUsd) ? (t.pnlUsd >= 0 ? '+' : '') + usd(t.pnlUsd, 2) : '—'}</span></div><div class="text-[11px] text-slate-500">${esc(t.tag || 'closed')} · ${tehranClock(t.ts)}</div></article>`).join('');
   const why = scalpWhy.reason ? `<p class="mt-2 text-[12px] text-slate-400 whitespace-normal break-words">Why no scalp${scalpWhy.symbol ? ' · ' + esc(scalpWhy.symbol) : ''}: ${esc(scalpWhy.reason)}</p>` : '';
