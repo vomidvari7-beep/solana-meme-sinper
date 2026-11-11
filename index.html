@@ -178,6 +178,14 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   @keyframes lockPulse { 0%, 100% { background: var(--alarm); } 50% { background: var(--down); } }
   body.lock-warn .appbar { top: calc(env(safe-area-inset-top) + var(--lock-h, 0px)); height: 52px; padding-top: 0; }
   body.lock-warn .tab-pane { padding-top: calc(68px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
+  .start-all, .stop-all { min-height: 44px; padding: 0 16px; border-radius: 999px; font-weight: 800; font-size: 14px; }
+  .start-all { border: 0; background: var(--accent); color: var(--on-accent); }
+  .stop-all { background: transparent; color: var(--down); border: 1px solid var(--down); }
+  .start-check { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+  .start-check b { font-weight: 700; font-size: 11px; line-height: 1.2; padding: 6px 8px; border-radius: 999px; }
+  .start-check b.on { color: var(--up); background: var(--up-soft); }
+  .start-check b.off { color: var(--down); background: var(--down-soft); }
+  .start-banner { margin: 8px 0 0; font-size: 12px; font-weight: 700; line-height: 1.35; color: var(--amber); }
   body.lock-warn #pullHint { top: calc(58px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
   body.scrolled .appbar { border-bottom-color: var(--line); }
   .large-title { font-size: 34px; line-height: 1.05; font-weight: 700; letter-spacing: -0.04em; margin: 0; color: var(--text); transition: font-size .22s cubic-bezier(.2,.8,.2,1), opacity .22s; }
@@ -5233,14 +5241,16 @@ function importBurner() {
     revalidate();
   });
 }
+let startAllPending = false;
+function isPreviewPage() { return /\/beta(\/|$)/.test(location.pathname); }
 function unlockBurner() {
   const rec = burnerRec(); if (!rec) return; resetModalButtons();
-  openModal({ title: '🔓 Unlock burner wallet', confirmLabel: 'Unlock', html: `<p class="text-xs text-slate-400">Address <span class="font-mono">${esc(short(rec.pub))}</span>. The key stays in memory until you lock it or close the tab.</p><label class="block mt-2 text-xs text-slate-400">Passphrase${passField('u')}</label>`,
+  openModal({ title: '🔓 Unlock burner wallet', confirmLabel: 'Unlock', onClose: () => { if (!burnerReady()) startAllPending = false; if (typeof paintRunDesk === 'function') paintRunDesk(); }, html: `<p class="text-xs text-slate-400">Address <span class="font-mono">${esc(short(rec.pub))}</span>. The key stays in memory until you lock it or close the tab.</p><label class="block mt-2 text-xs text-slate-400">Passphrase${passField('u')}</label>`,
     validate: () => kfVal('u').length > 0,
     onConfirm: async () => { const phrase = kfVal('u'); kfClear('u'); modalStatus('Decrypting…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
       const sk = await decryptSecret(rec, phrase); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
       if (kp.publicKey.toBase58() !== rec.pub) throw new Error('Decrypted key does not match stored address');
-      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); if (typeof botLog === 'function') botLog('unlock', 'panel', 'unlocked ok'); if (typeof degenLogEvent === 'function') { degenLogEvent('pot', 'unlocked ok'); (DEGEN.picks || []).forEach(p => p && p.mint && degenLogEvent(p.mint, 'unlocked ok', p.symbol)); } resumeArmedBots(); } });
+      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); if (typeof botLog === 'function') botLog('unlock', 'panel', 'unlocked ok'); if (typeof degenLogEvent === 'function') { degenLogEvent('pot', 'unlocked ok'); (DEGEN.picks || []).forEach(p => p && p.mint && degenLogEvent(p.mint, 'unlocked ok', p.symbol)); } resumeArmedBots(); if (startAllPending) { startAllPending = false; allBotsGo(); } if (typeof paintRunDesk === 'function') paintRunDesk(); } });
   setTimeout(() => kfEl('u')?.focus(), 50);
 }
 function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); paintLockBanner(); toast('Burner locked (key wiped from memory)', 'info'); }
@@ -6365,9 +6375,10 @@ function renderBotBar() {
   const armed = items.some(([key]) => liveKeys.includes(key) && prefs[key] && locked);
   const status = armed ? 'Armed, unlock to run' : active + '/' + items.length + ' active';
   const rowStatus = (key, on) => {
+    if (key === 'auto' || key === 'mylist' || key === 'scalp' || key === 'degen') return switchReason(key) || 'Running';
     if (!on) return 'Off';
     if (window.__SMS_SAFE && key === 'scan') return 'Paused in safe mode';
-    if (liveKeys.includes(key) && locked) return 'Armed';
+    if (liveKeys.includes(key) && locked) return 'locked';
     if (liveKeys.includes(key)) return 'Running';
     return 'On';
   };
@@ -6396,7 +6407,7 @@ function renderBotBar() {
   if (sdot) sdot.className = 'status-dot' + (summary === 'Running' ? ' on' : summary === 'Armed' ? ' armed' : '');
   box.querySelectorAll('[data-bot]').forEach(b => b.addEventListener('click', () => toggleBot(b.dataset.bot)));
   $('botAllOn')?.addEventListener('click', allBotsOn);
-  $('botAllOff')?.addEventListener('click', () => killSwitch('manual'));
+  $('botAllOff')?.addEventListener('click', () => { killSwitch('manual'); paintRunDesk(); });
   const dot = $('appDot');
   if (dot) {
     const live = ['auto', 'mylist', 'copy', 'sniper', 'scalp'].some(k => prefs[k] && (botLive(k) || locked));
@@ -6407,6 +6418,7 @@ function renderBotBar() {
   if ($('agentExits')) $('agentExits').checked = agentExitsOn();
   if (typeof paintQuickInputs === 'function') paintQuickInputs();
   if (typeof paintLockBanner === 'function') paintLockBanner();
+  if (typeof paintRunDesk === 'function') paintRunDesk();
 }
 function serverModeOn() {
   try {
@@ -6494,8 +6506,9 @@ function setExecBot(key, on) {
     if (!on) { A.on = false; clearInterval(tickTimer); clearInterval(scanTimer); tickTimer = scanTimer = null; }
     else if (!locked) { A.on = true; startTimers(); setTimeout(autoTick, 400); }
   } else if (key === 'mylist' && typeof MYLIST !== 'undefined') {
-    if (!on) { MYLIST.on = false; clearInterval(listTimer); listTimer = null; }
-    else if (!locked) { MYLIST.on = true; startMyList(); setTimeout(myListTick, 500); }
+    MYLIST.on = !!on;
+    if (!on) { clearInterval(listTimer); listTimer = null; }
+    else if (!locked) { startMyList(); setTimeout(myListTick, 500); }
   } else if (key === 'copy' && typeof COPY !== 'undefined') {
     if (!on) { COPY.on = false; COPY.armBaseline = false; clearInterval(copyTimer); copyTimer = null; }
     else if (!locked) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 500); }
@@ -6543,24 +6556,58 @@ function toggleBot(key) {
   if (key === 'split') { rememberBot('split', next); renderPortfolio(); try { renderMyList(); } catch { /* list not ready */ } return; }
   setExecBot(key, next);
 }
+function allBotsGo() {
+  if (isPreviewPage()) return;
+  if (typeof serverModeOn === 'function' && serverModeOn()) { toast('Server mode is on. This browser will not trade.', 'warn', 6000); paintRunDesk(); return; }
+  setExecBot('auto', true);
+  setExecBot('mylist', true);
+  setExecBot('scalp', true);
+  setExecBot('degen', true);
+  setExecBot('copy', true);
+  setExecBot('sniper', true);
+  saveAgentCfg({ usePlans: true });
+  rememberBot('plans', true);
+  saveQuick({ quickOn: true });
+  rememberBot('quick', true);
+  rememberBot('split', true);
+  renderBotBar();
+  paintRunDesk();
+}
 function allBotsOn() {
-  const go = () => {
-    setExecBot('auto', true);
-    setExecBot('mylist', true);
-    setExecBot('copy', true);
-    setExecBot('sniper', true);
-    saveAgentCfg({ usePlans: true });
-    rememberBot('plans', true);
-    saveQuick({ quickOn: true });
-    rememberBot('quick', true);
-    rememberBot('split', true);
-    renderBotBar();
-  };
+  if (isPreviewPage()) return;
+  if (!burnerRec()) { toast('Save a burner wallet first', 'warn'); return; }
+  if (!burnerReady()) { startAllPending = true; unlockBurner(); return; }
   resetModalButtons();
   openModal({ title: 'Turn bots on', confirmLabel: 'All ON', danger: true,
-    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Auto, My List, Copy, and the Launch Sniper will place trades without asking once the burner is unlocked. Agent exits stays off.</p><label class="mt-3 flex gap-2 text-xs"><input id="allAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand.</label>`,
+    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">AUTO, My List, Scalp, Degen, Copy, and the Launch Sniper will place trades without asking. The switches stay on after a reload. Unlock again to run. Agent exits stays off.</p><label class="mt-3 flex gap-2 text-xs"><input id="allAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand.</label>`,
     validate: () => $('allAck')?.checked,
-    onConfirm: async () => { go(); toast(WALLETS.burner.kp ? 'Bots ON' : 'Armed, unlock to run', 'warn', 6000); } });
+    onConfirm: async () => { allBotsGo(); toast('Bots ON', 'warn', 6000); } });
+}
+function switchReason(key) {
+  const prefs = botPrefs();
+  if (key === 'unlocked') return burnerRec() ? (burnerReady() ? '' : 'locked') : 'no burner';
+  if (!prefs[key]) return 'off';
+  if (typeof serverModeOn === 'function' && serverModeOn()) return 'server mode';
+  if (!burnerReady()) return 'locked';
+  if (key === 'auto' && typeof agentPauseBuys === 'function' && agentPauseBuys()) return 'risk pause';
+  return botLive(key) ? '' : 'off';
+}
+function paintRunDesk() {
+  const box = $('runCheck');
+  if (!box) return;
+  const rows = [['unlocked', 'Unlocked'], ['auto', 'AUTO'], ['mylist', 'My List'], ['scalp', 'Scalp'], ['degen', 'Degen']];
+  box.innerHTML = rows.map(([key, label]) => {
+    const why = switchReason(key);
+    const on = key === 'unlocked' ? !why : !why;
+    return `<b class="${on ? 'on' : 'off'}">${esc(label)}${why ? ' · ' + esc(why) : ''}</b>`;
+  }).join('');
+  const banner = $('runBanner');
+  const prefs = botPrefs();
+  const armed = prefs.auto || prefs.mylist || prefs.scalp || prefs.degen;
+  if (banner) {
+    banner.hidden = !(armed && !burnerReady());
+    banner.textContent = 'Switches stay on after a reload. Unlock to run.';
+  }
 }
 function applyStoredBots() {
   const p = botPrefs();
@@ -6640,8 +6687,8 @@ function renderKillFab() {
     f.addEventListener('click', () => killSwitch('fab'));
   }
   f.hidden = !armed;
-  if (!armed) return;
-  f.textContent = (A.on ? 'AUTO' : copyOn ? 'COPY' : sniperOn ? 'SNIPE' : listOn ? 'LIST' : 'SCALP') + ' · KILL';
+  if (armed) f.textContent = (A.on ? 'AUTO' : copyOn ? 'COPY' : sniperOn ? 'SNIPE' : listOn ? 'LIST' : 'SCALP') + ' · KILL';
+  if (typeof paintRunDesk === 'function') paintRunDesk();
 }
 window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on) || degenOn() || (typeof scalpOn === 'function' && scalpOn())) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
 
@@ -8195,7 +8242,7 @@ function openDegenDesk() {
   showTokenSeg('degen');
   $('degenDesk')?.scrollIntoView({ block: 'start' });
 }
-let tokenSeg = 'list';
+let tokenSeg = 'scalp';
 let tradeSeg = 'open';
 function placeDegenDesk() {
   const desk = $('degenDesk'); if (!desk) return;
@@ -8208,7 +8255,7 @@ function placeDegenDesk() {
   desk.hidden = tokenSeg !== 'degen';
 }
 function showTokenSeg(name) {
-  tokenSeg = name === 'degen' ? 'degen' : name === 'scalp' ? 'scalp' : 'list';
+  tokenSeg = name === 'degen' ? 'degen' : 'scalp';
   const pane = $('tabTokens');
   if (pane) {
     pane.classList.toggle('seg-degen', tokenSeg === 'degen');
@@ -9042,7 +9089,8 @@ function myListOneToTwo() { return [{ gainPct: 30, sellPct: 100 }]; }
 function loadMyList() {
   const raw = load('sms:mylist', {});
   const rows = Array.isArray(raw.rows) ? raw.rows.slice(0, 40) : [];
-  const base = { ...MYLIST_DEFAULTS, ...raw, on: false, tps: cleanTps(raw.tps).length ? cleanTps(raw.tps) : MYLIST_DEFAULTS.tps.slice() };
+  const savedOn = typeof botPrefs === 'function' && !!botPrefs().mylist;
+  const base = { ...MYLIST_DEFAULTS, ...raw, on: savedOn, tps: cleanTps(raw.tps).length ? cleanTps(raw.tps) : MYLIST_DEFAULTS.tps.slice() };
   if (raw.exitDefault !== '1:2') {
     if (isLegacyMyListTp(base.tps) || !cleanTps(base.tps).length) base.tps = myListOneToTwo();
     base.exitDefault = '1:2';
@@ -9142,7 +9190,9 @@ function clearListTombstone(mint) {
 }
 function saveMyList() {
   const rows = MYLIST.rows.map(r => { const { dexPair, ...rest } = r; return rest; });
-  save('sms:mylist', { ...MYLIST, on: false, rows });
+  const on = typeof botPrefs === 'function' && !!botPrefs().mylist;
+  MYLIST.on = on;
+  save('sms:mylist', { ...MYLIST, on, rows });
   if (typeof scheduleMyListSync === 'function') scheduleMyListSync();
 }
 function dropListRows(match) {
@@ -10221,11 +10271,9 @@ function renderMyList(opts) {
   box.innerHTML = `<div class="rounded-2xl border ${MYLIST.on ? 'border-amber-300/40' : 'border-white/10'} bg-ink-900/30 p-3">
     <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3>
       <div class="flex flex-wrap gap-2 text-[11px]"><button type="button" id="mlView" class="text-violet-300">${listTable ? 'Cards' : 'Table view'}</button><button type="button" id="mlClear" class="text-rose-300">Clear list</button></div></div>
-    <p class="mt-1 text-[11px] text-slate-500 whitespace-normal break-words">Flags are info only. Auto-buy skips RugCheck, insider, liquidity, age, and conviction. A Jupiter route plus the position, balance, and daily caps still apply. The auto-buy switch resets on reload.</p>
     <div class="mt-2 flex flex-wrap items-center gap-2">
       <span class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-200 whitespace-normal break-words">${esc(listDefaultChip())}</span>
       <button type="button" id="mlEditDefault" class="rounded-lg px-2.5 py-1.5 text-[11px] border border-white/10 text-violet-200">Edit default strategy</button>
-      ${MYLIST.on ? '<button type="button" id="mlOff" class="rounded-lg px-2.5 py-1.5 text-[11px] font-bold bg-rose-600 text-white">My List auto-buy OFF</button>' : '<button type="button" id="mlOn" class="rounded-lg px-2.5 py-1.5 text-[11px] font-bold bg-amber-300 text-ink-900">My List auto-buy ON</button>'}
     </div>
     <div class="mt-2 flex flex-wrap gap-2">
       <input id="mlAddMint" placeholder="Mint address" class="min-w-0 flex-1 rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" />
@@ -10237,15 +10285,6 @@ function renderMyList(opts) {
   $('mlView')?.addEventListener('click', () => { listTable = !listTable; renderMyList(); });
   $('mlClear')?.addEventListener('click', () => { dropListRows(() => true); });
   $('mlEditDefault')?.addEventListener('click', () => openListDefaults());
-  $('mlOff')?.addEventListener('click', () => stopMyList('manual'));
-  $('mlOn')?.addEventListener('click', () => {
-    if (!burnerReady()) return toast('Unlock the burner first', 'warn');
-    resetModalButtons();
-    openModal({ title: 'My List auto-buy', confirmLabel: 'Start', danger: true,
-      html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Listed tokens can market-buy when their entry hits. Quality filters are not applied. Caps still are. This switch turns off on reload.</p><label class="mt-3 flex gap-2 text-xs"><input id="mlAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand these buys execute without asking.</label>`,
-      validate: () => $('mlAck')?.checked,
-      onConfirm: async () => { MYLIST.on = true; saveMyList(); startMyList(); rememberBot('mylist', true); renderMyList(); renderKillFab(); toast('My List auto-buy ON', 'warn', 6000); myListTick(); } });
-  });
   $('mlAdd')?.addEventListener('click', () => {
     const parsed = parseInput($('mlAddMint')?.value || '');
     addMintsToList([...new Set([...(parsed.mints || []), ...(parsed.pairs || [])])]);
@@ -12755,7 +12794,7 @@ function mountApp() {
   if (tokens) {
     const seg = document.createElement('div');
     seg.id = 'tokenSeg'; seg.className = 'seg';
-    seg.innerHTML = '<button type="button" data-seg="list" class="on">List</button><button type="button" data-seg="scalp">Scalp</button><button type="button" data-seg="degen">Degen</button>';
+    seg.innerHTML = '<button type="button" data-seg="scalp" class="on">Scalp</button><button type="button" data-seg="degen">Degen</button>';
     const desk = document.createElement('div');
     desk.id = 'degenDesk'; desk.hidden = true;
     const scalpDesk = document.createElement('div');
@@ -12763,7 +12802,19 @@ function mountApp() {
     tokens.appendChild(seg); tokens.appendChild(scalpDesk); tokens.appendChild(desk);
     seg.addEventListener('click', (e) => { const b = e.target.closest('[data-seg]'); if (b) showTokenSeg(b.dataset.seg); });
   }
-  ['myListBox', 'emptyState', 'results'].forEach(id => { const n = $(id); if (n && tokens) tokens.appendChild(n); });
+  ['emptyState', 'results'].forEach(id => { const n = $(id); if (n && tokens) tokens.appendChild(n); });
+  if (agents && !$('runDesk')) {
+    const desk = document.createElement('section');
+    desk.id = 'runDesk';
+    desk.className = 'hero-card';
+    desk.innerHTML = '<div class="flex flex-wrap items-center gap-2"><button type="button" id="startAll" class="start-all">Start all</button><button type="button" id="stopAll" class="stop-all">Stop all</button></div><div id="runCheck" class="start-check mt-2"></div><p id="runBanner" class="start-banner" hidden></p><div id="runList" class="mt-3"></div>';
+    agents.appendChild(desk);
+    $('startAll')?.addEventListener('click', allBotsOn);
+    $('stopAll')?.addEventListener('click', () => { if (isPreviewPage()) return; killSwitch('manual'); paintRunDesk(); });
+  }
+  const listBox = $('myListBox');
+  const runList = $('runList');
+  if (listBox && runList) runList.appendChild(listBox);
   ['agentPicks', 'agentSettings', 'whaleBox', 'sniperBox'].forEach(id => { const n = $(id); if (n && agents) agents.appendChild(n); });
   const port = $('portfolio'); if (port && trades) trades.appendChild(port);
   if (trades && !$('tradeDegenHost')) { const host = document.createElement('div'); host.id = 'tradeDegenHost'; trades.appendChild(host); }
@@ -12808,6 +12859,8 @@ function mountApp() {
   $('sheetScrim')?.addEventListener('click', closeTokenSheet);
   let saved = 'home'; try { saved = localStorage.getItem('sms:tab') || 'home'; } catch { /* ignore */ }
   showTab(saved);
+  try { showTokenSeg('scalp'); } catch { /* tokens later */ }
+  try { paintRunDesk(); } catch { /* desk later */ }
 }
 window.showTab = showTab;
 mountApp();
