@@ -6378,18 +6378,31 @@ function stopSniper(reason, opts) {
 const DEGEN_LS = 'sms:degen';
 const DEGEN = { picks: [], fetched: 0, error: '', note: '' };
 let degenTimer = null, degenExitTimer = null, degenBusy = false;
+function degenBlank(v, max) {
+  const n = +v;
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(max, n);
+}
 function degenCfg() {
-  const d = { on: false, budgetUsd: 25, tradeUsd: 4, maxOpen: 3, dailyLossUsd: 15 };
-  try {
-    const v = JSON.parse(localStorage.getItem(DEGEN_LS) || 'null');
-    if (v && typeof v === 'object') Object.assign(d, v);
-  } catch { /* defaults */ }
+  const d = { on: false, budgetUsd: 0, tradeUsd: 4, maxOpen: 0, dailyLossUsd: 0, hunterOnly: true, uncapped: false };
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(DEGEN_LS) || 'null'); } catch { /* defaults */ }
+  if (raw && typeof raw === 'object') Object.assign(d, raw);
+  if (!d.uncapped) {
+    d.budgetUsd = 0;
+    d.maxOpen = 0;
+    d.dailyLossUsd = 0;
+    d.uncapped = true;
+    try { localStorage.setItem(DEGEN_LS, JSON.stringify(d)); } catch { /* ignore */ }
+  }
   d.on = !!d.on;
   d.hunterOnly = d.hunterOnly !== false;
-  d.budgetUsd = Math.min(100000, Math.max(1, +d.budgetUsd || 25));
-  d.tradeUsd = Math.min(d.budgetUsd, Math.max(0.5, +d.tradeUsd || 4));
-  d.maxOpen = Math.min(10, Math.max(1, Math.round(+d.maxOpen || 3)));
-  d.dailyLossUsd = Math.min(d.budgetUsd, Math.max(1, +d.dailyLossUsd || 15));
+  d.uncapped = true;
+  d.budgetUsd = degenBlank(d.budgetUsd, 100000);
+  d.maxOpen = Math.round(degenBlank(d.maxOpen, 50));
+  d.dailyLossUsd = degenBlank(d.dailyLossUsd, 100000);
+  d.tradeUsd = Math.min(100000, Math.max(0.5, +d.tradeUsd || 4));
+  if (d.budgetUsd > 0) d.tradeUsd = Math.min(d.tradeUsd, d.budgetUsd);
   return d;
 }
 function saveDegen(patch) {
@@ -6471,6 +6484,7 @@ function degenTodayPnl() {
 }
 function degenLeft() {
   const cfg = degenCfg();
+  if (!(cfg.budgetUsd > 0)) return Infinity;
   const raw = cfg.budgetUsd - degenOpenCost() + degenRealized();
   return Math.max(0, Math.min(cfg.budgetUsd, raw));
 }
@@ -6478,18 +6492,19 @@ function degenBuyBlock() {
   const cfg = degenCfg();
   if (!cfg.on) return 'degen pot off';
   if (!WALLETS.burner?.kp) return 'burner locked';
-  if (degenTodayPnl() <= -cfg.dailyLossUsd) return 'degen daily loss stop';
-  if (openPositions().filter(p => p.degen).length >= cfg.maxOpen) return 'degen max open';
-  if (degenLeft() + 1e-9 < Math.min(cfg.tradeUsd, 1)) return 'degen budget empty';
+  if (cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd) return 'degen daily loss stop';
+  if (cfg.maxOpen > 0 && openPositions().filter(p => p.degen).length >= cfg.maxOpen) return 'degen max open';
+  if (cfg.budgetUsd > 0 && degenLeft() + 1e-9 < Math.min(cfg.tradeUsd, 1)) return 'degen budget empty';
   return '';
 }
 function degenTradeSol() {
   const cfg = degenCfg();
   const px = solPriceNow();
   if (!(px > 0)) return null;
-  const usd = Math.min(cfg.tradeUsd, degenLeft());
-  if (!(usd > 0)) return null;
-  return +(usd / px).toFixed(6);
+  let usdAmt = cfg.tradeUsd;
+  if (cfg.budgetUsd > 0) usdAmt = Math.min(usdAmt, degenLeft());
+  if (!(usdAmt > 0)) return null;
+  return +(usdAmt / px).toFixed(6);
 }
 function degenNote(msg) { DEGEN.note = String(msg || '').slice(0, 180); }
 function degenMark(mint, state, reason) {
@@ -6955,15 +6970,17 @@ function renderDegen() {
   const rounds = degenRounds().filter(c => isNum(c.pnlUsd));
   const wins = rounds.filter(c => c.pnlUsd > 0).length;
   const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
-  const halted = cfg.on && degenTodayPnl() <= -cfg.dailyLossUsd;
+  const halted = cfg.on && cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd;
+  const leftTxt = cfg.budgetUsd > 0 ? usd(left, 2) : 'Unlimited';
+  const openTxt = cfg.maxOpen > 0 ? (open.length + '/' + cfg.maxOpen) : (open.length + ' · Unlimited');
   const readS = DEGEN.fetched ? Math.max(0, Math.round((Date.now() - DEGEN.fetched) / 1000)) : null;
   const stamp = (DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—')) + (readS == null ? '' : ' · read ' + readS + 's ago');
   const stats = `<button type="button" data-open-degen class="hero-card w-full text-left">
     <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Left</div><div class="font-mono text-lg">${usd(left, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Left</div><div class="font-mono text-lg">${esc(leftTxt)}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today</div><div class="font-mono ${today < 0 ? 'text-rose-300' : 'text-emerald-300'}">${today > 0 ? '+' : ''}${isNum(today) ? usd(today, 2) : '—'}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${open.length}/${cfg.maxOpen}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
     </div>
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
@@ -7029,9 +7046,9 @@ function renderDegen() {
   if (desk) desk.innerHTML = `<section class="hero-card">
     <div class="flex items-center justify-between gap-2"><h2 class="sec-title text-sm"><span class="ico">◎</span>Degen</h2><span class="text-[10px] text-slate-500">${esc(stamp)}</span></div>
     <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Cash left</div><div class="font-mono">${usd(left, 2)}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Cash left</div><div class="font-mono">${esc(leftTxt)}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today P&L</div><div class="font-mono ${today < 0 ? 'text-rose-300' : 'text-emerald-300'}">${today > 0 ? '+' : ''}${usd(today, 2)}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${open.length}/${cfg.maxOpen}</div></div>
+      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Win rate</div><div class="font-mono">${wr}</div></div>
     </div>
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
@@ -7054,16 +7071,19 @@ function renderDegen() {
   }
   box.innerHTML = stats + `<div class="mt-2 space-y-2 text-xs">
     <button type="button" id="degenToggle" class="flex w-full items-center justify-between rounded-xl border border-white/10 px-3" style="min-height:44px"><span>Degen pot</span><span class="ios-sw${cfg.on ? ' on' : ''}"><i></i></span></button>
+    <button type="button" id="degenStop" class="w-full rounded-xl border border-rose-400 bg-rose-500/30 px-3 text-[14px] font-semibold text-rose-50" style="min-height:48px">STOP Degen</button>
     <div class="grid grid-cols-2 gap-2">
-      <label class="block"><span class="text-slate-400">Budget USD</span><input id="degenBudget" type="number" min="1" step="1" value="${cfg.budgetUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+      <label class="block"><span class="text-slate-400">Budget USD · ${cfg.budgetUsd > 0 ? esc(usd(cfg.budgetUsd, 0)) : 'Unlimited'}</span><input id="degenBudget" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.budgetUsd > 0 ? cfg.budgetUsd : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Per trade USD</span><input id="degenTrade" type="number" min="0.5" step="0.5" value="${cfg.tradeUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
-      <label class="block"><span class="text-slate-400">Max open</span><input id="degenOpen" type="number" min="1" max="10" step="1" value="${cfg.maxOpen}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
-      <label class="block"><span class="text-slate-400">Daily loss stop USD</span><input id="degenLoss" type="number" min="1" step="1" value="${cfg.dailyLossUsd}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+      <label class="block"><span class="text-slate-400">Max open · ${cfg.maxOpen > 0 ? cfg.maxOpen : 'Unlimited'}</span><input id="degenOpen" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.maxOpen > 0 ? cfg.maxOpen : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
+      <label class="block"><span class="text-slate-400">Daily loss stop USD · ${cfg.dailyLossUsd > 0 ? esc(usd(cfg.dailyLossUsd, 0)) : 'Unlimited'}</span><input id="degenLoss" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.dailyLossUsd > 0 ? cfg.dailyLossUsd : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
     </div>
+    <p class="text-[11px] text-slate-500">Empty or 0 on budget, max open, and daily loss means Unlimited. Per trade stays $4 unless you change it.</p>
     <label class="flex items-center gap-2"><input id="degenHunterOnly" type="checkbox" ${cfg.hunterOnly !== false ? 'checked' : ''} class="accent-violet-500" /> Live scan: only Hunter-approved mints</label>
     <button type="button" id="degenSave" class="w-full rounded-xl border border-white/10 py-2">Save degen limits</button>
   </div>`;
   $('degenToggle')?.addEventListener('click', () => setExecBot('degen', !degenOn()));
+  $('degenStop')?.addEventListener('click', () => { setExecBot('degen', false); toast('Degen stopped', 'err'); });
   $('degenSave')?.addEventListener('click', () => {
     saveDegen({ budgetUsd: +$('degenBudget').value, tradeUsd: +$('degenTrade').value, maxOpen: +$('degenOpen').value, dailyLossUsd: +$('degenLoss').value, on: degenOn(), hunterOnly: !!$('degenHunterOnly')?.checked });
     toast('Degen limits saved', 'ok');
