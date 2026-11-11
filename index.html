@@ -3851,7 +3851,7 @@ function posCard(p) {
     </div>
     <div class="mt-3 grid grid-cols-2 gap-2 text-[11px]">
       <div class="min-w-0"><div class="text-slate-500">Live</div><div class="font-mono whitespace-normal break-words text-slate-100">${price(lp)}</div></div>
-      <div class="min-w-0"><div class="text-slate-500">Entry</div><div class="font-mono whitespace-normal break-words">${price(entry)}${p.scaleOf ? `<span class="block text-[10px] text-sky-200">${p.scaleI}/${p.scaleOf} filled</span>` : ''}</div></div>
+        <div class="min-w-0"><div class="text-slate-500">Entry</div><div class="font-mono whitespace-normal break-words">${price(entry)}${p.scaleOf ? `<span class="block text-[10px] text-sky-200">${p.plan?.split ? 'Leg 1 ' + (p.scaleI >= 1 ? 'filled' : 'waiting') + ' · Leg 2 ' + (p.scaleI >= 2 ? 'filled' : 'waiting') : p.scaleI + '/' + p.scaleOf + ' filled'}</span>` : ''}</div></div>
       <div class="min-w-0"><div class="text-slate-500">Size</div><div class="font-mono whitespace-normal break-words">${fmtSol(m.costSolLeft)}<span class="block text-slate-400">${isNum(m.valueUsd) ? usd(m.valueUsd, 2) : '—'}</span></div></div>
       <div class="min-w-0"><div class="text-slate-500">Stop</div><div class="font-mono whitespace-normal break-words ${stopOut && isNum(stopOut.usd) ? pnlColor(stopOut.usd) : 'text-rose-300'}">${price(stop)}<span class="block">${stopOut ? esc(pnlPhrase(stopOut)) : ''}</span>${stopOut && isNum(stopOut.sol) ? `<span class="block text-[10px] text-slate-400">${esc(fmtPnlSol(stopOut.sol))}</span>` : ''}<span class="block"><span class="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">${esc(reason)}</span></span></div></div>
     </div>
@@ -4614,11 +4614,11 @@ function effectiveStop(p, lp) {
     let stop = isNum(pl.stop) ? pl.stop : null;
     let reason = 'initial';
     const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
-    if (!(quickOn() && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && high > 0) {
+    if (!((quickOn() || p?.plan?.split) && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && high > 0) {
       if (high >= entry * (1 + A.beAtPct / 100)) raise(entry * 1.01, 'break-even');
       if (high >= entry * (1 + A.earlyAtPct / 100)) raise(high * (1 - A.earlyTrailPct / 100), 'early trail');
     }
-    if (!(quickOn() && !manualLevelFlags(p).tp) && p?.tp1Done && isNum(pl.trail) && high > 0) raise(high * (1 - pl.trail / 100), 'trail');
+    if (!((quickOn() || p?.plan?.split) && !manualLevelFlags(p).tp) && p?.tp1Done && isNum(pl.trail) && high > 0) raise(high * (1 - pl.trail / 100), 'trail');
     const prev = autoStop[p.key];
     if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
     else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
@@ -4799,17 +4799,20 @@ function quickReentryBlock(mint, plan) {
 }
 function applyQuickOverlay(p, eff) {
   if (p?.degen) return eff;
-  if (!quickOn() || !(p?.avgUsd > 0) || !eff) return eff;
+  if (!(quickOn() || p?.plan?.split) || !(p?.avgUsd > 0) || !eff) return eff;
   const man = manualLevelFlags(p);
   if (man.stop && man.tp) return eff;
   const q = quickSettings();
+  const split = !!p?.plan?.split;
+  const tpPct = split ? 15 : q.tp;
+  const maxStop = split ? 15 : q.maxStop;
   const entry = p.avgUsd;
   const next = { ...eff };
   if (!man.tp) {
     next.quick = true;
-    next.tp1 = entry * (1 + q.tp / 100);
+    next.tp1 = entry * (1 + tpPct / 100);
     next.tp2 = null;
-    next.tps = [{ gainPct: q.tp, sellPct: 100 }];
+    next.tps = [{ gainPct: tpPct, sellPct: 100 }];
     next.trailAtPct = null;
     next.trailPct = null;
     next.trail = null;
@@ -4817,10 +4820,10 @@ function applyQuickOverlay(p, eff) {
   }
   if (!man.stop) {
     next.quick = true;
-    const cap = entry * (1 - q.maxStop / 100);
+    const cap = entry * (1 - maxStop / 100);
     if (!isNum(next.stop) || !(next.stop > 0 && next.stop < entry) || next.stop < cap - 1e-12) {
       next.stop = cap;
-      next.reason = 'quick -' + q.maxStop + '%';
+      next.reason = (split ? 'split -' : 'quick -') + maxStop + '%';
     }
   }
   return next;
@@ -4937,7 +4940,7 @@ async function cappedBuy(opt) {
   sol = +sized.sol.toFixed(6);
   const spend = quoteSpend(sol);
   if (!spend.ok) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' — ' + spend.error, 'warn'); return 'skip'; }
-  const errs = opt.myList ? listBuyBlocks(sol) : buyGuards('burner', t.mint, sol, { auto: true });
+  const errs = opt.myList ? listBuyBlocks(sol, t.mint) : buyGuards('burner', t.mint, sol, { auto: true });
   if (errs.length) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' blocked — ' + errs[0], 'warn'); return 'block'; }
   const slip = Math.min(15, opt.myList ? S.slippagePct : A.slipCap);
   let qo;
@@ -4988,7 +4991,20 @@ async function autoTick() {
       return { sol: sized.sol, err: sized.err };
     };
     for (const p of openNow) {
-      if (boughtThisTick || quickOn() || !A.scaleIn || !p.scaleOf || p.scaleI >= p.scaleOf) continue;
+      if (boughtThisTick) continue;
+      const splitPlan = agentPlanFor(p.mint);
+      if (splitPlan && isSplitPlan(splitPlan) && splitEntryOn() && agentPlansOn()) {
+        const t = tokenInfo(p.mint);
+        const px = livePrices.get(p.mint)?.price;
+        const full = sizedFull(t);
+        if (!full.err && full.sol > 0) {
+          const hit = await attemptSplitBuy({ agent: splitPlan, px, candles: null, fullSol: full.sol, t, myList: !!(p.myList || p.plan?.myList), halve: solGate.action === 'halve', hasPos: true });
+          if (hit === 'bought') { boughtThisTick = true; toast('🤖 Split leg 2 ' + t.symbol, 'ok', 8000); }
+          if (hit === 'block') break;
+        }
+        continue;
+      }
+      if (quickOn() || !A.scaleIn || !p.scaleOf || p.scaleI >= p.scaleOf) continue;
       const t = tokenInfo(p.mint);
       const px = livePrices.get(p.mint)?.price;
       const zone = t.entry;
@@ -5011,6 +5027,16 @@ async function autoTick() {
       const px = livePrices.get(t.mint)?.price;
       const ap = agentPlanFor(t.mint);
       if (agentPlansOn() && ap) {
+        if (isSplitPlan(ap) && splitEntryOn()) {
+          const full = sizedFull(t);
+          if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
+          const blocked = quickReentryBlock(t.mint, ap);
+          if (blocked) { autoLog(t.symbol + ': ' + blocked, 'info'); continue; }
+          const hit = await attemptSplitBuy({ agent: ap, px, candles: null, fullSol: full.sol, t, myList: false, halve: solGate.action === 'halve', hasPos: false });
+          if (hit === 'bought') { boughtThisTick = true; toast('🤖 Split leg 1 ' + t.symbol, 'ok', 8000); }
+          if (hit === 'block' || hit === 'bought') break;
+          continue;
+        }
         if (!(agentPlanUsable(ap) && agentTriggerHit(ap, px))) continue;
         const full = sizedFull(t);
         if (full.err) { autoLog(`${t.symbol}: buy blocked — ${full.err}`, 'warn'); break; }
@@ -5096,7 +5122,7 @@ function enableAuto() {
 }
 const BOT_LS = 'sms:bots';
 function botPrefs() {
-  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false, scan: false };
+  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false, scan: false, split: true };
   try {
     const raw = localStorage.getItem(BOT_LS);
     if (!raw) { saveBotPrefs(fallback); return { ...fallback }; }
@@ -5129,7 +5155,7 @@ function renderBotBar() {
   const items = [
     ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
     ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%', '1:1'],
-    ['degen', 'Degen', 'شکارچی'], ['scan', 'Live scan']
+    ['degen', 'Degen', 'شکارچی'], ['scan', 'Live scan'], ['split', 'Split entry']
   ];
   const active = items.filter(([key]) => prefs[key]).length;
   const armed = items.some(([key]) => liveKeys.includes(key) && prefs[key] && locked);
@@ -5217,6 +5243,7 @@ function toggleBot(key) {
   if (key === 'plans') { saveAgentCfg({ usePlans: next }); rememberBot('plans', next); return; }
   if (key === 'exits') { saveAgentCfg({ exits: next }); rememberBot('exits', next); renderPortfolio(); return; }
   if (key === 'quick') { saveQuick({ quickOn: next }); rememberBot('quick', next); return; }
+  if (key === 'split') { rememberBot('split', next); renderPortfolio(); try { renderMyList(); } catch { /* list not ready */ } return; }
   setExecBot(key, next);
 }
 function allBotsOn() {
@@ -5229,6 +5256,7 @@ function allBotsOn() {
     rememberBot('plans', true);
     saveQuick({ quickOn: true });
     rememberBot('quick', true);
+    rememberBot('split', true);
     renderBotBar();
   };
   resetModalButtons();
@@ -7351,7 +7379,7 @@ function listPrefill(spec) {
   const amt = spec.sizeSol > 0 ? spec.sizeSol : (sizeStore === 'usd' ? 5 : 0.05);
   return sizeStore === 'usd' ? (+amt).toFixed(2) : (+amt).toFixed(4);
 }
-function listBuyBlocks(sol) {
+function listBuyBlocks(sol, mint) {
   const errs = [];
   const spend = quoteSpend(sol);
   if (!spend.ok) {
@@ -7367,7 +7395,8 @@ function listBuyBlocks(sol) {
     if (sol > maxTrade + 1e-9) errs.push('above max per trade');
     if (spentToday() + sol > daily + 1e-9) errs.push('above daily cap');
   }
-  if (openPositions().filter(p => p.open).length >= maxPos()) errs.push('max positions');
+  const heldMint = mint && (openPositions().some(p => p.open && p.mint === mint) || (WALLETS.burner?.tokens?.get(mint)?.raw > 0n));
+  if (!heldMint && openPositions().filter(p => p.open).length >= maxPos()) errs.push('max positions');
   return errs;
 }
 function myListSpec(p) {
@@ -7401,8 +7430,8 @@ function myListEffectiveStop(p, lp) {
   let stop = isNum(spec.stopPx) && (!isNum(entry) || spec.stopPx < entry) ? spec.stopPx : (isNum(entry) ? entry * (1 - spec.stopPct / 100) : null);
   let reason = 'initial';
   const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
-  if (!(quickOn() && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
-  if (!(quickOn() && !manualLevelFlags(p).tp) && isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
+  if (!((quickOn() || p?.plan?.split) && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
+  if (!((quickOn() || p?.plan?.split) && !manualLevelFlags(p).tp) && isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
   const prev = autoStop[p.key];
   if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
   else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
@@ -8272,7 +8301,7 @@ async function myListBuys() {
     if (gate.state === 'disabled' || gate.state === 'cooldown') continue;
     const model = listChartModel(row, spec, px);
     const agent = agentPlanFor(row.mint);
-    if (agentPlansOn() && agent && !pos) {
+    if (agentPlansOn() && agent && !pos && !(isSplitPlan(agent) && splitEntryOn())) {
       if (!(agentPlanUsable(agent) && agentTriggerHit(agent, px))) continue;
     }
     const candles = model.candles || [];
@@ -8289,6 +8318,16 @@ async function myListBuys() {
     let sol = null, reason = '', scale = null;
     const reentry = !pos ? quickReentryBlock(row.mint, agent) : '';
     if (reentry) { autoLog((row.symbol || short(row.mint)) + ': ' + reentry, 'info'); continue; }
+    if (agent && isSplitPlan(agent) && splitEntryOn() && agentPlansOn()) {
+      const hit = await attemptSplitBuy({ agent, px, candles, fullSol: full, t, myList: true, hasPos: !!pos });
+      if (hit === 'bought') {
+        row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
+        toast('My List buy ' + t.symbol + ' — split', 'ok', 8000);
+        break;
+      }
+      if (hit === 'block') break;
+      continue;
+    }
     if (pos && !quickOn() && MYLIST.scaleIn !== false && pos.scaleOf && pos.scaleI > 0 && pos.scaleI < pos.scaleOf) {
       const closes = candles.map(c => c.c);
       const e21 = emaLast(closes, 21);
@@ -8425,8 +8464,95 @@ function agentPlanUsable(p) {
   const conf = agentNum(p.confidence);
   return p.status === 'ready' && conf >= 60;
 }
+const SPLIT_LS = 'sms:splitlegs';
+function splitEntryOn() { return botPrefs().split !== false; }
+function isSplitPlan(p) { return String(p?.entry_mode || '').toLowerCase() === 'split'; }
+function splitPlanKey(p) { return (p?.mint || '') + ':' + (agentTime(p?.updatedAt) || agentTime(p?.ts) || 0); }
+function splitBook() { const v = load(SPLIT_LS, {}); return v && typeof v === 'object' ? v : {}; }
+function splitLegs(p) {
+  const id = splitPlanKey(p);
+  const mem = splitBook()[id] || {};
+  let leg1 = !!mem.leg1, leg2 = !!mem.leg2;
+  for (const r of LOG) {
+    if (!p || r.mint !== p.mint || r.side !== 'buy' || r.status === 'failed') continue;
+    const why = String(r.entryReason || '');
+    if (!why.includes(id)) continue;
+    if (/split leg 1/.test(why)) leg1 = true;
+    if (/split leg 2/.test(why)) leg2 = true;
+  }
+  return { leg1, leg2, id };
+}
+function markSplitLeg(p, n) {
+  const book = splitBook();
+  const id = splitPlanKey(p);
+  const cur = book[id] && typeof book[id] === 'object' ? book[id] : {};
+  cur[n === 1 ? 'leg1' : 'leg2'] = true;
+  book[id] = cur;
+  save(SPLIT_LS, book);
+}
+function splitZone(p) {
+  const z = p?.leg2_zone;
+  if (!Array.isArray(z) || z.length < 2) return null;
+  const a = +z[0], b = +z[1];
+  if (!(a > 0) || !(b > 0)) return null;
+  return { lo: Math.min(a, b), hi: Math.max(a, b) };
+}
+function splitStopOk(fill, stop) {
+  return isNum(fill) && fill > 0 && isNum(stop) && stop > 0 && stop < fill && (fill - stop) / fill <= 0.15 + 1e-9;
+}
+function splitLeg1Hit(p, px, candles) {
+  const level = agentNum(p?.leg1_price);
+  if (!(level > 0) || !(px > 0)) return false;
+  if (px > level * 1.03) return false;
+  const closed = (candles || []).filter(c => c && c.c > 0);
+  if (closed.length) return closed[closed.length - 1].c >= level && px >= level * 0.997;
+  return px >= level;
+}
+function splitLeg2Hit(p, px) {
+  const z = splitZone(p);
+  const stop = agentNum(p?.stop);
+  if (!z || !(px > 0)) return false;
+  if (isNum(stop) && stop > 0 && px <= stop) return false;
+  return px >= z.lo && px <= z.hi;
+}
+function splitFallbackHit(p, px) {
+  const z = splitZone(p);
+  if (z) return px > 0 && px >= z.lo && px <= z.hi;
+  const level = agentNum(p?.leg1_price) || agentNum(p?.trigger_price);
+  if (!(level > 0) || !(px > 0)) return false;
+  return px >= level && px <= level * 1.03;
+}
+function stampSplitPlan(agent, px) {
+  const stop = agentNum(agent?.stop);
+  const tp = px > 0 ? px * 1.15 : null;
+  return { stop, tp1: tp, tp2: null, split: true, agent: true, quick: true, strat: 'Split entry', trail: null, exit: { stopPx: stop, tps: [{ gainPct: 15, sellPct: 100 }], trailAtPct: null, trailPct: null, beAtPct: null } };
+}
+function splitDecision(agent, px, candles, state) {
+  const st = state || {};
+  if (!isSplitPlan(agent)) return 'no';
+  if (!splitEntryOn()) return splitFallbackHit(agent, px) ? 'fallback' : 'skip';
+  if (!agentPlanUsable(agent)) return 'skip';
+  if (!st.leg1 && !st.hasPos && splitLeg1Hit(agent, px, candles)) return splitStopOk(px, agentNum(agent.stop)) ? 'leg1' : 'stop-deep';
+  if (st.leg1 && !st.leg2 && st.hasPos && splitLeg2Hit(agent, px)) return 'leg2';
+  return 'skip';
+}
+async function attemptSplitBuy(ctx) {
+  const agent = ctx.agent;
+  if (!splitEntryOn() || !isSplitPlan(agent) || !agentPlanUsable(agent)) return 'no';
+  const filled = splitLegs(agent);
+  const pct = Math.min(90, Math.max(10, agentNum(agent.starter_pct) || 50));
+  const which = splitDecision(agent, ctx.px, ctx.candles, { hasPos: !!ctx.hasPos, leg1: filled.leg1, leg2: filled.leg2 });
+  if (which !== 'leg1' && which !== 'leg2') return which === 'stop-deep' ? 'skip' : 'skip';
+  const sol = trancheSol(ctx.fullSol, which === 'leg1' ? pct : (100 - pct));
+  const plan = stampSplitPlan(agent, ctx.px);
+  if (ctx.myList) plan.myList = true;
+  const hit = await cappedBuy({ t: ctx.t, sol, reason: 'split leg ' + (which === 'leg1' ? 1 : 2) + ' · ' + filled.id, scale: { i: which === 'leg1' ? 1 : 2, of: 2, kind: 'split' }, plan, myList: !!ctx.myList, halve: !!ctx.halve });
+  if (hit === 'bought') markSplitLeg(agent, which === 'leg1' ? 1 : 2);
+  return hit;
+}
 function agentTriggerHit(p, px) {
   if (!(px > 0)) return false;
+  if (isSplitPlan(p)) return splitEntryOn() ? false : splitFallbackHit(p, px);
   const mode = String(p.entry_mode || '').toLowerCase();
   const cond = String(p.trigger_condition || '').toLowerCase();
   const trig = agentNum(p.trigger_price);
@@ -8473,6 +8599,14 @@ function agentPlanChip(mint) {
   const ok = agentPlanUsable(p);
   const cls = p.status === 'invalid' ? 'border-rose-400/40 text-rose-200' : ok ? 'border-emerald-400/40 text-emerald-100' : 'border-amber-300/40 text-amber-100';
   const bits = [p.setup || 'Agent plan', p.tf || '', isNum(agentNum(p.trigger_price)) ? 'trigger ' + price(+p.trigger_price) : '', agentNum(p.stop) > 0 ? 'stop ' + price(+p.stop) : '', agentNum(p.tp1) > 0 ? 'TP ' + price(+p.tp1) : '', isNum(agentNum(p.confidence)) ? Math.round(+p.confidence) + '%' : '', p.status || ''].filter(Boolean);
+  if (isSplitPlan(p)) {
+    const st = splitLegs(p);
+    const z = splitZone(p);
+    bits.push('Leg 1 ' + (st.leg1 ? 'filled' : 'waiting'));
+    bits.push('Leg 2 ' + (st.leg2 ? 'filled' : 'waiting'));
+    if (agentNum(p.leg1_price) > 0) bits.push('leg1 ' + price(+p.leg1_price));
+    if (z) bits.push('leg2 ' + price(z.lo) + '–' + price(z.hi));
+  }
   return `<div class="mt-1.5 rounded-lg border ${cls} bg-white/5 px-2 py-1 text-[10px] leading-snug whitespace-normal break-words"><b>Agent plan</b> · ${bits.map(esc).join(' · ')}</div>`;
 }
 function agentRiskHtml(mint) {
@@ -9031,7 +9165,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, degenCfg, degenLeft, degenExit, degenBuyBlock, degenPickBlock, degenPlan, hunterVeto, livePre, liveConfidence, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, splitEntryOn, splitDecision, splitLeg1Hit, splitLeg2Hit, splitStopOk, splitFallbackHit, degenCfg, degenLeft, degenExit, degenBuyBlock, degenPickBlock, degenPlan, hunterVeto, livePre, liveConfidence, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
