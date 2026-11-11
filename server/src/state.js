@@ -105,7 +105,7 @@ export function recordBuy(state, row) {
   if (row.mode === 'scalp' || row.mode === 'degen') {
     const led = state.data.ledgers[row.mode];
     const feeUsd = row.feeUsd || 0;
-    const spend = (row.mode === 'degen' ? (state.data.degenTradeUsd || CAPS.degenTradeUsd) : (row.usd || 0)) + (row.mode === 'degen' ? feeUsd : 0);
+    const spend = (row.mode === 'degen' ? (row.plan?.degenUsd || row.usd || CAPS.degenTradeUsd) : (row.usd || 0)) + (row.mode === 'degen' ? feeUsd : 0);
     const usd = row.mode === 'scalp' ? (row.usd || 0) : spend;
     led.balanceUsd = usd6(led.balanceUsd - usd);
     led.trades.push({ ts: Date.now(), side: 'buy', mint: row.mint, symbol: row.symbol || '', usd: usd6(usd), feeUsd: usd6(feeUsd), tokenAmount: row.tokenAmount || 0, sig: row.sig || '' });

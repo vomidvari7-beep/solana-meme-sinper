@@ -1,4 +1,4 @@
-import { fakeDataReason, mlStop, planTriggerHit, planUsable, quoteImpact, scalpEntryFail, scalpSizeUsd, scalpStopLevel, textHasRugFlag } from './rules.js';
+import { degenLossPct, degenPotLimits, fakeDataReason, mlStop, planTriggerHit, planUsable, quoteImpact, scalpEntryFail, scalpSizeUsd, scalpStopLevel, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
 
 function assert(cond, msg) {
@@ -43,4 +43,8 @@ let locked = { code: 'abcd', exp: now + 1000, fails: 0, hits: [] };
 for (let i = 0; i < 5; i++) locked = evaluateSetup(locked, 'nope', now, '9.9.9.9').row;
 assert((locked.lockedUntil || 0) > now, 'setup rate limit');
 
+assert(degenLossPct(8) === 12 && degenLossPct(40) === 25 && degenLossPct(18) === 18, 'stop clamp');
+assert(degenPotLimits({ per_trade_usd: 20, max_open: 5, budget_usd: 40 }).tradeUsd === 12.5, 'pot cannot loosen size');
+assert(degenPotLimits({ per_trade_usd: 8, max_open: 1, budget_usd: 10 }).maxOpen === 1, 'pot can tighten');
+assert(degenPotLimits({}).budgetUsd === 25 && degenPotLimits(null).maxOpen === 2, 'pot defaults');
 console.log('selftest ok');

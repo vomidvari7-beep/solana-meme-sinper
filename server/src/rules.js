@@ -344,9 +344,22 @@ export function planUsable(p) {
   return !!(p && planFresh(p) && p.status === 'ready' && +p.confidence >= 60);
 }
 
+export function degenPotLimits(pot) {
+  const tighten = (cap, v) => {
+    const n = +v;
+    if (!Number.isFinite(n) || n <= 0) return cap;
+    return Math.min(cap, n);
+  };
+  const budgetUsd = tighten(25, pot?.budget_usd);
+  let tradeUsd = tighten(12.5, pot?.per_trade_usd);
+  if (tradeUsd > budgetUsd) tradeUsd = budgetUsd;
+  const maxOpen = Math.max(1, Math.round(tighten(2, pot?.max_open)));
+  return { budgetUsd, tradeUsd, maxOpen };
+}
 export function degenLossPct(v) {
   const n = Math.abs(+v);
-  return isNum(n) && n > 0 && n < 100 ? n : 25;
+  if (!(isNum(n) && n > 0)) return 25;
+  return Math.min(25, Math.max(12, n));
 }
 
 export function degenExitDecision(p, lp, flow) {

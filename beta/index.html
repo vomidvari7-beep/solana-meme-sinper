@@ -3705,6 +3705,7 @@ async function liveTick() {
         at: now
       });
       if (px > 0) rugWatch(mint, px);
+      if (isNum(row?.liq)) degenNoteLiq(mint, row.liq);
       if (!hidden && (held.has(mint) || mint === focus)) pushTick(mint, px, now);
       try {
         const row = (MYLIST?.rows || []).find(r => r.mint === mint);
@@ -5318,7 +5319,8 @@ function notePositionCycles(list) {
 }
 function degenLossPct(v) {
   const n = Math.abs(+v);
-  return isNum(n) && n > 0 && n < 100 ? n : 25;
+  if (!(isNum(n) && n > 0)) return 25;
+  return Math.min(25, Math.max(12, n));
 }
 function degenStopPx(entry, stopPct) {
   return entry * (1 - degenLossPct(stopPct) / 100);
@@ -7028,26 +7030,35 @@ function degenBlank(v, max) {
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.min(max, n);
 }
+const DEGEN_POT_USD = 25;
+const DEGEN_PER_TRADE_USD = 12.5;
+const DEGEN_MAX_OPEN = 2;
+function degenTighten(cap, v) {
+  const n = +v;
+  if (!Number.isFinite(n) || n <= 0) return cap;
+  return Math.min(cap, n);
+}
+function degenLimits() {
+  const pot = (typeof DEGEN !== 'undefined' && DEGEN.pot) || {};
+  const budgetUsd = degenTighten(DEGEN_POT_USD, pot.budget_usd);
+  let tradeUsd = degenTighten(DEGEN_PER_TRADE_USD, pot.per_trade_usd);
+  if (tradeUsd > budgetUsd) tradeUsd = budgetUsd;
+  const maxOpen = Math.max(1, Math.round(degenTighten(DEGEN_MAX_OPEN, pot.max_open)));
+  return { budgetUsd, tradeUsd, maxOpen };
+}
 function degenCfg() {
-  const d = { on: false, budgetUsd: 0, tradeUsd: 4, maxOpen: 0, dailyLossUsd: 0, hunterOnly: true, uncapped: false };
+  const d = { on: false, dailyLossUsd: 0, hunterOnly: true };
   let raw = null;
   try { raw = JSON.parse(localStorage.getItem(DEGEN_LS) || 'null'); } catch { /* defaults */ }
-  if (raw && typeof raw === 'object') Object.assign(d, raw);
-  if (!d.uncapped) {
-    d.budgetUsd = 0;
-    d.maxOpen = 0;
-    d.dailyLossUsd = 0;
-    d.uncapped = true;
-    try { localStorage.setItem(DEGEN_LS, JSON.stringify(d)); } catch { /* ignore */ }
+  if (raw && typeof raw === 'object') {
+    d.on = !!raw.on;
+    d.hunterOnly = raw.hunterOnly !== false;
+    d.dailyLossUsd = degenBlank(raw.dailyLossUsd, 100000);
   }
-  d.on = !!d.on;
-  d.hunterOnly = d.hunterOnly !== false;
-  d.uncapped = true;
-  d.budgetUsd = degenBlank(d.budgetUsd, 100000);
-  d.maxOpen = Math.round(degenBlank(d.maxOpen, 50));
-  d.dailyLossUsd = degenBlank(d.dailyLossUsd, 100000);
-  d.tradeUsd = Math.min(100000, Math.max(0.5, +d.tradeUsd || 4));
-  if (d.budgetUsd > 0) d.tradeUsd = Math.min(d.tradeUsd, d.budgetUsd);
+  const lim = degenLimits();
+  d.budgetUsd = lim.budgetUsd;
+  d.tradeUsd = lim.tradeUsd;
+  d.maxOpen = lim.maxOpen;
   return d;
 }
 function saveDegen(patch) {
@@ -7285,7 +7296,8 @@ function applyDegenLedger(rec) {
   const px = (isNum(rec.solUsd) && rec.solUsd > 0) ? rec.solUsd : (liveSolPx() || 0);
   if (rec.side === 'buy') {
     const feeUsd = isNum(rec.feeSol) && px > 0 ? rec.feeSol * px : degenFeeEstimateUsd(px);
-    const tradeUsd = degenCfg().tradeUsd;
+    const quoteUsd = rec.solAmount > 0 && px > 0 ? rec.solAmount * px : degenCfg().tradeUsd;
+    const tradeUsd = rec.test ? Math.min(degenCfg().tradeUsd, quoteUsd) : degenCfg().tradeUsd;
     const usd = tradeUsd + feeUsd;
     book.balanceUsd = usd6(book.balanceUsd - usd);
     book.trades.push({ ts: rec.ts || Date.now(), side: 'buy', mint: rec.mint, symbol: rec.symbol || '', usd: usd6(usd), feeUsd: usd6(feeUsd), tradeUsd, sol: rec.solAmount || 0, solUsd: px, sig: rec.signature || '', tokenAmount: rec.tokenAmount || 0 });
@@ -7311,22 +7323,50 @@ function degenSolEffect() {
   }
   return net;
 }
+function degenTradesToday() {
+  const day = tehranDayKey(Date.now());
+  return (degenLedger().trades || []).filter(t => t.side === 'buy' && tehranDayKey(t.ts) === day).length;
+}
+const degenLiqMem = new Map();
+function degenNoteLiq(mint, liq) {
+  if (!mint || !(liq > 0)) return '';
+  const now = Date.now();
+  let rows = (degenLiqMem.get(mint) || []).filter(x => x && now - x.t <= 10 * 60e3);
+  let hi = 0;
+  for (const s of rows) if (now - s.t >= 1000 && s.liq > hi) hi = s.liq;
+  rows.push({ t: now, liq });
+  if (rows.length > 40) rows = rows.slice(-40);
+  degenLiqMem.set(mint, rows);
+  if (degenLiqMem.size > 80) {
+    const drop = [...degenLiqMem.keys()].slice(0, degenLiqMem.size - 60);
+    drop.forEach(k => degenLiqMem.delete(k));
+  }
+  if (hi > 0 && liq <= hi * 0.7) return 'liquidity dropped >30% in 10m';
+  return '';
+}
 function degenBuyBlock() {
   const cfg = degenCfg();
   if (!cfg.on) return 'degen pot off';
   if (!burnerReady()) return 'burner locked';
   if (degenLedgerShort()) { degenHaltFunds(); return 'Degen out of funds'; }
   if (cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd) return 'degen daily loss stop';
-  if (cfg.maxOpen > 0 && openPositions().filter(p => p.degen).length >= cfg.maxOpen) return 'degen max open';
-  if (cfg.budgetUsd > 0 && degenLeft() + 1e-9 < Math.min(cfg.tradeUsd, 1)) return 'degen budget empty';
+  if (openPositions().filter(p => p.degen && p.open).length >= cfg.maxOpen) return 'max ' + cfg.maxOpen + ' open';
+  if (degenOpenCost() + cfg.tradeUsd > cfg.budgetUsd + 1e-6) return 'pot deployed cap';
   return '';
 }
 function degenTradeSol() {
   const cfg = degenCfg();
-  const px = solPriceNow();
+  const px = solPriceNow() || liveSolPx();
   if (!(px > 0)) return null;
   let usdAmt = cfg.tradeUsd;
-  if (cfg.budgetUsd > 0) usdAmt = Math.min(usdAmt, degenLeft());
+  if (degenOpenCost() + usdAmt > cfg.budgetUsd + 1e-6) return null;
+  const cash = degenLedger().balanceUsd - degenFeeEstimateUsd(px);
+  if (usdAmt > cash + 1e-6) return null;
+  if (typeof liveTestTake === 'function' && liveTestOn()) {
+    const t = liveTestTake(usdAmt / px);
+    if (!t.ok) return null;
+    usdAmt = Math.min(usdAmt, t.usd || 3);
+  }
   if (!(usdAmt > 0)) return null;
   return +(usdAmt / px).toFixed(6);
 }
@@ -7400,6 +7440,9 @@ function degenPickBlock(pick, price) {
   if (!(+pick.max_entry_price > 0)) return 'no max price';
   if (!isNum(price) || !(price > 0)) return 'no live price';
   if (price > +pick.max_entry_price) return 'above max entry';
+  const liqNow = livePrices.get(pick.mint)?.liq ?? pick.liq_usd;
+  const liqDrop = degenNoteLiq(pick.mint, liqNow);
+  if (liqDrop) return liqDrop;
   if (degenCooled(pick.mint)) return 'cooldown 60m';
   if (openPositions().some(p => p.open && p.mint === pick.mint)) return 'already held';
   const bag = WALLETS.burner?.tokens?.get(pick.mint);
@@ -7434,6 +7477,7 @@ function applyDegenDoc(data) {
   if (DEGEN.fileMs && ms && ms < DEGEN.fileMs) return null;
   if (ms) DEGEN.fileMs = ms;
   DEGEN.picks = body.picks;
+  DEGEN.pot = body.data.pot && typeof body.data.pot === 'object' ? body.data.pot : null;
   DEGEN.updatedTehran = typeof body.data.updated_tehran === 'string' ? body.data.updated_tehran : '';
   DEGEN.updatedAt = ms || Date.now();
   DEGEN.fetched = Date.now();
@@ -8058,7 +8102,8 @@ function renderDegen() {
   const wins = rounds.filter(c => c.pnlUsd > 0).length;
   const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
   const halted = cfg.on && cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd;
-  const openTxt = cfg.maxOpen > 0 ? (open.length + '/' + cfg.maxOpen) : (open.length + ' · Unlimited');
+  const openTxt = open.length + '/' + cfg.maxOpen;
+  const potLine = 'Pot ' + usd(cfg.budgetUsd, 2) + ' · size ' + usd(cfg.tradeUsd, 2) + ' · open ' + openTxt + ' · trades today ' + degenTradesToday();
   const fundsShort = degenLedgerShort();
   const readS = DEGEN.fetched ? Math.max(0, Math.round((Date.now() - DEGEN.fetched) / 1000)) : null;
   const stamp = (DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—')) + (readS == null ? '' : ' · read ' + readS + 's ago');
@@ -8071,6 +8116,7 @@ function renderDegen() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L vs start</div><div class="font-mono ${pnlCls}">${pnlTxt}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div><div class="text-[10px] text-slate-500">win ${wr}</div></div>
     </div>
+    <p class="mt-2 text-[12px] text-slate-300">${esc(potLine)}</p>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     ${removedTxt ? `<p class="block-note mt-2 text-[11px] font-semibold whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
@@ -8145,6 +8191,7 @@ function renderDegen() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L vs start</div><div class="font-mono ${pnlCls}">${pnlTxt}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
     </div>
+    <p class="mt-2 text-[12px] text-slate-300">${esc(potLine)}</p>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
     ${DEGEN.fetched ? (picks || '<p class="empty-note mt-2">No hunter picks yet. The pot is waiting for the next degen file.</p>') : '<div class="skel" style="height:64px;margin-top:12px"></div><div class="skel" style="height:64px;margin-top:8px"></div>'}
@@ -8175,7 +8222,7 @@ function renderDegen() {
       <label class="block"><span class="text-slate-400">Max open · ${cfg.maxOpen > 0 ? cfg.maxOpen : 'Unlimited'}</span><input id="degenOpen" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.maxOpen > 0 ? cfg.maxOpen : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
       <label class="block"><span class="text-slate-400">Daily loss stop USD · ${cfg.dailyLossUsd > 0 ? esc(usd(cfg.dailyLossUsd, 0)) : 'Unlimited'}</span><input id="degenLoss" type="number" min="0" step="1" placeholder="Unlimited" value="${cfg.dailyLossUsd > 0 ? cfg.dailyLossUsd : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1.5" style="font-size:16px" /></label>
     </div>
-    <p class="text-[11px] text-slate-500">Empty or 0 on budget, max open, and daily loss means Unlimited. Per trade stays $4 unless you change it.</p>
+    <p class="text-[11px] text-slate-500">Pot $25, $12.50 per entry, max 2 open. The agent file can only tighten those. A closed slot can be refilled immediately. Trades today is a count, not a cap.</p>
     <label class="flex items-center gap-2"><input id="degenHunterOnly" type="checkbox" ${cfg.hunterOnly !== false ? 'checked' : ''} class="accent-violet-500" /> Live scan: only Hunter-approved mints</label>
     <button type="button" id="degenSave" class="w-full rounded-xl border border-white/10 py-2">Save degen limits</button>
     <button type="button" id="degenReset" class="w-full rounded-xl border border-rose-400/50 px-3 text-[13px] font-semibold text-rose-200" style="min-height:44px">Reset ledger</button>

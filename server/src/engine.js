@@ -1,11 +1,24 @@
 import { tapeFromDex } from './net.js';
-import { CAPS, fakeDataReason, liveConfidence, livePreReason, mlGeometry, mlStop, mlStrongCandle, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision } from './rules.js';
+import { CAPS, fakeDataReason, liveConfidence, livePreReason, mlGeometry, mlStop, mlStrongCandle, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
 import { isNum, lineAt, log, tehranDayKey, WSOL } from './util.js';
 
 function pairTape(p) { return tapeFromDex(p); }
 
 export function createEngine(cfg, state, net, swap) {
   const prices = new Map();
+  const liqMem = new Map();
+  function liqDrop(mint, liq) {
+    if (!mint || !(liq > 0)) return '';
+    const now = Date.now();
+    let rows = (liqMem.get(mint) || []).filter(x => x && now - x.t <= 10 * 60e3);
+    let hi = 0;
+    for (const s of rows) if (now - s.t >= 1000 && s.liq > hi) hi = s.liq;
+    rows.push({ t: now, liq });
+    liqMem.set(mint, rows.slice(-40));
+    if (liqMem.size > 80) liqMem.delete(liqMem.keys().next().value);
+    if (hi > 0 && liq <= hi * 0.7) return 'liquidity dropped >30% in 10m';
+    return '';
+  }
   let agents = {};
   let sol = { price: null, h1: null, m15: null, at: 0 };
   let busy = false;
@@ -51,7 +64,7 @@ export function createEngine(cfg, state, net, swap) {
       const raw = await net.agents();
       agents = {
         sha: raw.sha || '',
-        degen: { picks: asList(raw.degen, 'picks') },
+        degen: { picks: asList(raw.degen, 'picks'), pot: raw.degen?.pot || {} },
         plans: { plans: asList(raw.plans, 'plans') },
         candidates: { candidates: asList(raw.candidates, 'candidates') },
         mylist: { tokens: asList(raw.mylist, 'tokens') },
@@ -70,6 +83,7 @@ export function createEngine(cfg, state, net, swap) {
     for (const [mint, p] of best) {
       const t = pairTape(p);
       prices.set(mint, t);
+      if (t.liq > 0) liqDrop(mint, t.liq);
       if (noteRugDrop(state.data, mint, t.px, t.h1)) {
         state.note('safety', mint, t.symbol, 'fake-data: blacklisted rug');
         log('safety', (t.symbol || mint.slice(0, 4)) + ' blacklisted after -80%');
@@ -256,9 +270,13 @@ export function createEngine(cfg, state, net, swap) {
   async function scanTick() {
     if (!state.data.toggles.scan && !state.data.toggles.degen) return;
     if (state.data.paused || !state.data.toggles.scan) return;
+    const lim = degenPotLimits(agents.degen?.pot);
     const led = state.data.ledgers.degen;
-    const need = (state.data.degenTradeUsd || CAPS.degenTradeUsd) + 0.25;
-    if (led.balanceUsd + 1e-9 < need) { state.note('scan', '', '', 'Degen out of funds'); return; }
+    const openDegen = state.open('degen');
+    if (openDegen.length >= lim.maxOpen) { state.note('scan', '', '', 'max ' + lim.maxOpen + ' open'); return; }
+    const deployed = openDegen.reduce((s, p) => s + (p.costUsd || 0), 0);
+    if (deployed + lim.tradeUsd > lim.budgetUsd + 1e-6) { state.note('scan', '', '', 'pot deployed cap'); return; }
+    if (led.balanceUsd + 1e-9 < lim.tradeUsd + 0.25) { state.note('scan', '', '', 'Degen out of funds'); return; }
     let rows = [];
     try { rows = await net.newPools(); } catch (e) { state.note('scan', '', '', e.message || 'source failed'); return; }
     let looked = 0;
@@ -287,10 +305,12 @@ export function createEngine(cfg, state, net, swap) {
       if (conf < 60) { state.note('scan', raw.mint, raw.symbol, 'confidence ' + conf + ' < 60'); continue; }
       await refreshSol();
       if (!(sol.price > 0)) return;
-      const solAmt = +((state.data.degenTradeUsd || CAPS.degenTradeUsd) / sol.price).toFixed(6);
+      const drop = liqDrop(raw.mint, tape.liq);
+      if (drop) { state.note('scan', raw.mint, raw.symbol, drop); continue; }
+      const solAmt = +(lim.tradeUsd / sol.price).toFixed(6);
       const bal = await swap.balance();
       if (solAmt + CAPS.reserveSol > bal) { state.note('scan', raw.mint, raw.symbol, 'insufficient SOL'); return; }
-      await safeBuy('scan', raw.mint, raw.symbol || tape.symbol, solAmt, 300, { degen: true, stopPct: 25, timeStopMin: 45, trail: 20, reason: 'live scan · conf ' + conf }, tape.liq);
+      await safeBuy('scan', raw.mint, raw.symbol || tape.symbol, solAmt, 300, { degen: true, stopPct: 25, timeStopMin: 45, trail: 20, reason: 'live scan · conf ' + conf, degenUsd: lim.tradeUsd }, tape.liq);
       return;
     }
   }
