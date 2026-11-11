@@ -206,6 +206,19 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .watch-row b { font-size: 16px; font-weight: 650; letter-spacing: -.02em; color: var(--text); }
   .watch-row .row-px .num, .watch-row .row-px .text-\[15px\] { font-size: 17px; font-weight: 700; color: var(--text); }
   .watch-row svg { display: none; }
+  #myListBox .watch-row { min-height: 44px; gap: 8px; padding: 4px 2px; }
+  #myListBox .ml-cards { display: flex; flex-direction: column; }
+  #myListBox .ml-cards > article { border-bottom: 1px solid var(--line); }
+  #myListBox .ml-meta { display: flex; align-items: center; gap: 4px; min-height: 44px; }
+  #myListBox .ml-setup { min-width: 0; }
+  #myListBox .ml-setup summary { min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; list-style: none; }
+  #myListBox .ml-setup summary::-webkit-details-marker { display: none; }
+  #myListBox .ml-setup-body { margin: 0 0 6px; font-size: 11px; line-height: 1.35; color: var(--muted); }
+  #myListBox .ml-chart-toggle { min-height: 44px; min-width: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 700; }
+  #myListBox label:has(input[data-ml-on]) { min-width: 44px; min-height: 44px; justify-content: center; }
+  #myListBox .ml-chart-host { margin: 0 0 6px; }
+  .bot-skip { margin: 2px 0 0; max-width: 100%; font-size: 11px; font-weight: 500; line-height: 1.25; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bot-skip-ok { color: var(--up); }
   .row-px { flex: 0 0 auto; min-width: 92px; text-align: right; }
   .row-px .num { white-space: nowrap; }
   .setup-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
@@ -7762,14 +7775,15 @@ function botLog(bot, key, reason) {
 function botLast(bot, key) {
   return botLogBook().filter(x => x && x.bot === bot && (x.key || 'panel') === (key || 'panel')).pop() || null;
 }
-function botSkipHtml(bot, key) {
-  const row = botLast(bot, key);
+function botSkipLine(row) {
   if (!row) return '';
   const hm = typeof tehranHM === 'function' ? tehranHM(row.at) : '';
   const ok = row.reason === 'unlocked ok' || row.reason === 'bought';
-  const cls = ok ? 'text-emerald-300' : 'block-note';
   const label = ok ? (row.reason + ' ' + hm) : ('Blocked ' + hm + ': ' + row.reason);
-  return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`;
+  return `<p class="bot-skip${ok ? ' bot-skip-ok' : ''}">${esc(label)}</p>`;
+}
+function botSkipHtml(bot, key) {
+  return botSkipLine(botLast(bot, key));
 }
 function degenLastBlock(mint) {
   const row = degenEventLog().filter(x => x && x.mint === mint).pop();
@@ -10050,6 +10064,9 @@ function renderMyList(opts) {
     if (!lines.length) return '';
     return `<div class="rounded-xl border border-sky-400/20 bg-sky-500/5 px-2.5 py-2 space-y-1"><div class="text-[10px] font-semibold uppercase tracking-wide text-sky-200">Room to resistance</div>${lines.join('')}</div>`;
   };
+  const blocked = views.map(v => botLast('mylist', v.row.mint)).filter(r => r && r.reason !== 'unlocked ok' && r.reason !== 'bought');
+  const sharedBlock = views.length > 0 && blocked.length === views.length && blocked.every(r => r.reason === blocked[0].reason);
+  const sharedNote = sharedBlock ? botSkipLine(blocked.reduce((a, b) => ((b.at || 0) > (a.at || 0) ? b : a))) : '';
   const cards = views.map(v => {
     const row = v.row, pair = row.dexPair || {}, info = pair.info || {};
     const name = pair.baseToken?.name || '';
@@ -10104,7 +10121,8 @@ function renderMyList(opts) {
     if (info.imageUrl) rememberLogo(row.mint, info.imageUrl, { src: 'dex' });
     const setupTag = v.spec.mode === 'ath' ? 'ATH' : (v.model.buyZone ? 'BUY ZONE' : '');
     const scored = AG.scores && AG.scores.get(row.mint);
-    const setupHtml = scored && isNum(+scored.score) ? `<span class="block text-[11px] text-slate-500 whitespace-normal break-words"><span class="setup-score">Setup ${Math.round(+scored.score)}</span>${scored.setup ? ' · ' + esc(scored.setup) : ''}${scored.entry ? ' · ' + esc(scored.entry) : ''}</span>` : '';
+    const setupFull = [scored && scored.setup ? esc(scored.setup) : '', scored && scored.entry ? esc(scored.entry) : ''].filter(Boolean).join(' · ');
+    const setupHtml = scored && isNum(+scored.score) ? `<details class="ml-setup"><summary class="setup-chip">Setup ${Math.round(+scored.score)} ▸</summary>${setupFull ? `<p class="ml-setup-body">${setupFull}</p>` : ''}</details>` : '';
     if (!window.__pxSeen) window.__pxSeen = {};
     const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
     if (isNum(v.px)) window.__pxSeen[row.mint] = v.px;
@@ -10118,7 +10136,6 @@ function renderMyList(opts) {
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
             <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
             ${faZoneHtml(row.mint)}
-            ${row.mlGeo ? mlBreakSpark(row.mlGeo) : ''}
           </span>
           <span class="row-px">
             <span class="block num text-[15px] font-semibold ${flash}" data-live-mint="${esc(row.mint)}">${priceHtml(v.px)}</span>
@@ -10127,15 +10144,15 @@ function renderMyList(opts) {
         </button>
         <label class="flex items-center text-[11px] text-slate-400 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
       </div>
-      ${setupHtml ? `<div class="px-1 pb-1">${setupHtml}</div>` : ''}
-      ${botSkipHtml('mylist', row.mint)}
+      <div class="ml-meta">${setupHtml}<button type="button" class="ml-chart-toggle" data-ml-chart-toggle="${esc(row.id)}">Chart ▸</button></div>
+      ${sharedBlock ? '' : botSkipHtml('mylist', row.mint)}
       <div class="token-sheet">
         <div class="sheet-grab"></div>
         <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">${esc(row.symbol || short(row.mint))}</b><button type="button" data-sheet-close class="text-sm text-slate-400">Close</button></div>
         <span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
         <span class="ml-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">1:2</span>
         <span class="mt-1 block text-[12px] text-slate-300">${esc(exitLine)} · full exit</span>
-      <div class="chart-frame sheet-chart mt-2" data-sheet-chart="${esc(row.id)}" style="overflow:hidden;height:220px"><div class="grid h-full place-items-center text-[11px] text-slate-500">Chart loads with this token</div></div>
+      <div data-sheet-chart-slot></div>
       <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
         ${cell('Setup', esc(setupSum))}
         ${cell('Trigger', esc(trigSum))}
@@ -10187,7 +10204,7 @@ function renderMyList(opts) {
       <button type="button" id="mlAdd" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Add</button>
     </div>
     <div class="mt-2 flex flex-wrap gap-1.5">${sortBtn('ready', 'Ready first')}${sortBtn('distance', 'Distance to trigger')}</div>
-    <div class="mt-3 ${listTable ? '' : 'space-y-3'}">${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
+    <div class="mt-2 ${listTable ? '' : 'ml-cards'}">${sharedNote}${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
   </div>`;
   $('mlView')?.addEventListener('click', () => { listTable = !listTable; renderMyList(); });
   $('mlClear')?.addEventListener('click', () => { dropListRows(() => true); });
@@ -10237,6 +10254,37 @@ function renderMyList(opts) {
     if (row) myListBuyNow(row, null);
   }));
   box.querySelectorAll('[data-ml-chart]').forEach(el => el.addEventListener('click', () => openListChart(el.dataset.mlChart)));
+  box.querySelectorAll('[data-ml-chart-toggle]').forEach(el => el.addEventListener('click', () => {
+    const art = el.closest('article');
+    if (!art) return;
+    let host = art.querySelector('.ml-chart-host');
+    if (host && !host.hidden && host.childElementCount) {
+      releaseMedia(host);
+      host.replaceChildren();
+      host.hidden = true;
+      el.textContent = 'Chart ▸';
+      return;
+    }
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'ml-chart-host chart-frame';
+      el.parentElement.insertAdjacentElement('afterend', host);
+    }
+    host.hidden = false;
+    el.textContent = 'Chart ▾';
+    const model = listChartMemo[el.dataset.mlChartToggle];
+    const row = MYLIST.rows.find(r => r.id === el.dataset.mlChartToggle);
+    if (model && row) { model.faMint = row.mint; model.entryZone = signalLevels(row.mint); }
+    if (!model) {
+      host.replaceChildren();
+      const note = document.createElement('div');
+      note.className = 'grid h-full place-items-center text-[11px] text-slate-500';
+      note.textContent = 'Chart waiting for candles';
+      host.appendChild(note);
+      return;
+    }
+    paintSheetChart(host, model);
+  }));
   box.querySelectorAll('[data-ml-details]').forEach(el => el.addEventListener('toggle', () => {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlDetails);
     if (!row || row.detailsOpen === el.open) return;
@@ -11070,13 +11118,25 @@ function signalLevels(mint) {
 }
 function faZoneHtml(mint) {
   const s = signalLevels(mint);
-  const lo = s && +s.zoneLo > 0 ? +s.zoneLo : null;
-  const hi = s && +s.zoneHi > 0 ? +s.zoneHi : null;
-  const zone = lo ? (hi && Math.abs(hi - lo) > lo * 1e-8 ? price(Math.min(lo, hi)) + '–' + price(Math.max(lo, hi)) : price(lo)) : '—';
-  const conf = s && isNum(+s.conf) ? Math.round(+s.conf) : '—';
-  const stop = s && +s.stop > 0 ? price(+s.stop) : '—';
-  const tgt = s && +s.target > 0 ? price(+s.target) : '—';
-  return `<p class="mt-1 text-[12px] whitespace-normal break-words text-slate-200">محدوده ورود: ${zone}</p><p class="text-[11px] text-slate-400 whitespace-normal break-words">امتیاز ورود: ${conf} · <span class="text-rose-300">حد ضرر ${stop}</span> · <span class="text-emerald-300">تارگت ${tgt}</span>${s && s.state ? ' · ' + esc(s.state) : ''}</p>`;
+  if (!s) return '';
+  const lo = +s.zoneLo > 0 ? +s.zoneLo : null;
+  const hi = +s.zoneHi > 0 ? +s.zoneHi : null;
+  const hasConf = isNum(+s.conf);
+  const hasStop = +s.stop > 0;
+  const hasTgt = +s.target > 0;
+  if (!lo && !hasConf && !hasStop && !hasTgt) return '';
+  const bits = [];
+  if (lo) {
+    const zone = hi && Math.abs(hi - lo) > lo * 1e-8 ? price(Math.min(lo, hi)) + '–' + price(Math.max(lo, hi)) : price(lo);
+    bits.push(`<p class="mt-1 text-[12px] whitespace-normal break-words text-slate-200">محدوده ورود: ${zone}</p>`);
+  }
+  const sub = [];
+  if (hasConf) sub.push('امتیاز ورود: ' + Math.round(+s.conf));
+  if (hasStop) sub.push('<span class="text-rose-300">حد ضرر ' + price(+s.stop) + '</span>');
+  if (hasTgt) sub.push('<span class="text-emerald-300">تارگت ' + price(+s.target) + '</span>');
+  if (s.state && s.state !== 'waiting') sub.push(esc(String(s.state)));
+  if (sub.length) bits.push(`<p class="text-[11px] text-slate-400 whitespace-normal break-words">${sub.join(' · ')}</p>`);
+  return bits.join('');
 }
 function hunterPlanBox(plan, px) {
   if (!plan) return '';
@@ -12443,7 +12503,14 @@ function openTokenSheet(art) {
   requestAnimationFrame(() => {
     sheet.classList.add('open');
     const model = typeof listChartMemo !== 'undefined' ? listChartMemo[art.dataset.row] : null;
-    const frame = sheet.querySelector('.sheet-chart');
+    let frame = sheet.querySelector('.sheet-chart');
+    if (!frame) {
+      frame = document.createElement('div');
+      frame.className = 'chart-frame sheet-chart mt-2';
+      const slot = sheet.querySelector('[data-sheet-chart-slot]');
+      if (slot) slot.replaceWith(frame);
+      else sheet.appendChild(frame);
+    }
     const row = typeof MYLIST !== 'undefined' ? MYLIST.rows.find(r => r.id === art.dataset.row) : null;
     if (model && row) { model.faMint = row.mint; model.entryZone = signalLevels(row.mint); }
     if (frame && model) paintSheetChart(frame, model);
