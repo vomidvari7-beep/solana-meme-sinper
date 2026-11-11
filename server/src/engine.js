@@ -110,7 +110,7 @@ export function createEngine(cfg, state, net, swap) {
     return why;
   }
   function liveTestTake(solAmt) {
-    if (state.data.liveTest === false) return { ok: true, sol: solAmt, test: false };
+    if (state.data.liveTest !== true) return { ok: true, sol: solAmt, test: false };
     if (state.data.positions.some(p => p.open && p.plan?.test)) return { ok: false, sol: 0, test: true, reason: 'live test position open' };
     const px = sol.price || 0;
     if (!(px > 0)) return { ok: false, sol: 0, test: true, reason: 'SOL price unavailable' };

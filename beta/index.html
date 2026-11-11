@@ -3338,11 +3338,11 @@ function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, de
   return errs;
 }
 
-const TEST_LS = 'sms:testmode';
+const TEST_LS = 'sms:testmode2';
 const TEST_LOG = 'sms:test';
 function liveTestOn() {
   const v = load(TEST_LS, null);
-  if (!v || typeof v !== 'object' || !('on' in v)) return true;
+  if (!v || typeof v !== 'object' || !('on' in v)) return false;
   return !!v.on;
 }
 function testBook() { const v = load(TEST_LOG, []); return Array.isArray(v) ? v : []; }
