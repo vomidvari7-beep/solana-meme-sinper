@@ -83,6 +83,16 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   @keyframes flashDown { from { color: #fb7185; } }
   #botBar .glass { box-shadow: none; background: #181D28; }
   .appbar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: calc(52px + env(safe-area-inset-top)); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: env(safe-area-inset-top) 16px 0; background: #0A0B0F; border-bottom: 1px solid transparent; }
+  .lock-banner { position: fixed; top: env(safe-area-inset-top); left: 0; right: 0; z-index: 55; display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #9f1239; color: #fff; animation: lockPulse 2.4s ease-in-out infinite; }
+  .lock-banner[hidden] { display: none !important; }
+  .lock-banner .lock-copy { min-width: 0; flex: 1; }
+  .lock-banner .lock-title { display: block; font-size: 15px; font-weight: 700; line-height: 1.35; }
+  .lock-banner .lock-sub { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .lock-banner button { flex: 0 0 auto; min-height: 48px; min-width: 104px; padding: 0 16px; border: 0; border-radius: 12px; background: #fff; color: #9f1239; font-size: 17px; font-weight: 800; }
+  @keyframes lockPulse { 0%, 100% { background: #9f1239; } 50% { background: #e11d48; } }
+  body.lock-warn .appbar { top: calc(env(safe-area-inset-top) + var(--lock-h, 0px)); height: 52px; padding-top: 0; }
+  body.lock-warn .tab-pane { padding-top: calc(68px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
+  body.lock-warn #pullHint { top: calc(58px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
   body.scrolled .appbar { border-bottom-color: var(--line); }
   .large-title { font-size: 34px; line-height: 1.05; font-weight: 600; letter-spacing: -0.03em; margin: 0; transition: font-size .22s cubic-bezier(.2,.8,.2,1), opacity .22s; }
   body.scrolled .large-title { font-size: 17px; }
@@ -168,6 +178,13 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 })();
 </script>
 
+<div id="lockBanner" class="lock-banner" hidden>
+  <div class="lock-copy">
+    <b class="lock-title">🔒 پنل قفله — ربات‌ها معامله نمی‌کنن</b>
+    <span id="lockBotLine" class="lock-sub" hidden></span>
+  </div>
+  <button type="button" id="lockUnlock">Unlock</button>
+</div>
 <header class="appbar">
   <div class="min-w-0"><div id="liveStat" class="text-[12px] text-slate-500 num">Live</div></div>
   <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
@@ -4472,7 +4489,7 @@ function unlockBurner() {
       WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); resumeArmedBots(); } });
   setTimeout(() => $('buPass')?.focus(), 50);
 }
-function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); toast('Burner locked (key wiped from memory)', 'info'); }
+function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); paintLockBanner(); toast('Burner locked (key wiped from memory)', 'info'); }
 function exportBurner() {
   const rec = burnerRec(); if (!rec) return; resetModalButtons();
   openModal({ title: '⚠️ Export burner private key', confirmLabel: 'Reveal key', danger: true,
@@ -4517,7 +4534,44 @@ function deleteBurner() {
 }
 async function renderQR(pub) { try { const QR = (await import(QR_URL)).default; const url = await QR.toDataURL('solana:' + pub, { margin: 1, width: 168, color: { dark: '#07090f', light: '#ffffff' } }); const img = $('burnerQR'); if (img) { img.src = url; img.classList.remove('hidden'); } } catch (e) { console.warn('QR', e); } }
 
+const LOCK_ALERT_LS = 'sms:lockalert';
+const LOCK_BOT_KEYS = ['auto', 'mylist', 'copy', 'sniper', 'degen', 'scan', 'momentum'];
+let lockBannerShown = false;
+function lockedBotCount() {
+  const p = botPrefs();
+  return LOCK_BOT_KEYS.filter(k => p[k]).length;
+}
+function paintLockBanner() {
+  const el = $('lockBanner');
+  if (!el) return;
+  const locked = !!(burnerRec() && !WALLETS.burner.kp);
+  el.hidden = !locked;
+  document.body.classList.toggle('lock-warn', locked);
+  const n = locked ? lockedBotCount() : 0;
+  const line = $('lockBotLine');
+  if (line) {
+    line.hidden = !(n > 0);
+    line.textContent = n > 0 ? (n + ' bots ON but locked') : '';
+  }
+  const h = locked ? el.offsetHeight : 0;
+  document.documentElement.style.setProperty('--lock-h', h + 'px');
+  if (locked && n > 0 && !lockBannerShown) noteLockAlert();
+  lockBannerShown = locked;
+}
+function noteLockAlert() {
+  if (typeof readyAlertsOn === 'function' && !readyAlertsOn()) return;
+  const now = Date.now();
+  let last = 0;
+  try { last = +JSON.parse(localStorage.getItem(LOCK_ALERT_LS) || '0') || 0; } catch { /* first time */ }
+  if (now - last < 10 * 60e3) return;
+  try { localStorage.setItem(LOCK_ALERT_LS, JSON.stringify(now)); } catch { /* ignore */ }
+  if (typeof playReadyChime === 'function') playReadyChime();
+  try {
+    if (typeof Notification === 'function' && Notification.permission === 'granted') new Notification('پنل قفله', { body: 'ربات‌ها معامله نمی‌کنن' });
+  } catch { /* notifications blocked */ }
+}
 function renderBurner() {
+  paintLockBanner();
   const box = $('burnerBox'); if (!box) return; const b = WALLETS.burner; const rec = burnerRec();
   const num = (id, v, step, label, extra = '') => `<label class="block"><span class="text-slate-400">${label}</span><input id="${id}" type="number" step="${step}" value="${v}" ${extra} class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>`;
   box.innerHTML = `<details id="burnerDetails" class="rounded-xl bg-ink-850 border ${A.on ? 'border-rose-500/50' : 'border-white/5'}" ${A.on || b.kp || burnerOpen ? 'open' : ''}>
@@ -5509,6 +5563,7 @@ function renderBotBar() {
   if ($('agentUse')) $('agentUse').checked = agentPlansOn();
   if ($('agentExits')) $('agentExits').checked = agentExitsOn();
   if (typeof paintQuickInputs === 'function') paintQuickInputs();
+  if (typeof paintLockBanner === 'function') paintLockBanner();
 }
 function setExecBot(key, on) {
   const locked = !WALLETS.burner.kp;
@@ -9620,6 +9675,8 @@ applyStoredBots();
 wireAgentSettings();
 startAgents();
 renderBotBar();
+$('lockUnlock')?.addEventListener('click', () => unlockBurner());
+paintLockBanner();
 
 /* ---------------- init ---------------- */
 const READY_LS = 'sms:readyalert';
