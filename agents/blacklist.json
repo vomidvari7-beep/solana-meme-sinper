@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T16:16:00Z",
-  "updated_tehran": "2026-11-11 19:46 IRST",
+  "updated_utc": "2026-11-11T18:35:00Z",
+  "updated_tehran": "2026-11-11 22:05 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -36,6 +36,16 @@
       "mint": "EeMWtqT5HHBJ9ptp56GMrCvETJG3WT5s5UkbKDuEpump",
       "symbol": "Daniela",
       "why": "Daniela, fake equal holders, 4 insiders"
+    },
+    {
+      "mint": "HNzme8WWXsUyWFN2c14iQDH6nw1zJKZEyAag3TXkBAGS",
+      "symbol": "Gridking",
+      "why": "large unlocked liquidity, 19 holders"
+    },
+    {
+      "mint": "Z5ijNneoDubKBEhzTumUgfm18m6PjUDred4gp7Xpump",
+      "symbol": "mihao",
+      "why": "mihao copy, bot buying"
     }
   ]
 }
