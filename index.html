@@ -3316,11 +3316,6 @@ function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, de
       if (!bc.ok) errs.push(bc.err);
       else if (!auto && sol > bc.byPct + 1e-9) errs.push(`Exceeds max ${A.balancePct}% of burner balance: ${sol} > ${bc.byPct.toFixed(4)} SOL (${bc.sol.toFixed(4)} SOL${bc.stale ? ' last known' : ''} × ${A.balancePct}%)`);
     }
-    const spent = spentToday(mainBookFill);
-    const dailyCap = solCap(S.dailyMaxSol);
-    if (dailyCap == null) errs.push('SOL price unavailable — USD daily cap can’t be converted');
-    else if (spent + sol > dailyCap + 1e-9) errs.push(`Daily max spend: ${spent.toFixed(3)} + ${sol} > ${dailyCap.toFixed(4)} SOL`);
-    if (auto) { const as = spentToday(r => r.auto && mainBookFill(r)); const autoDaily = solCap(A.dailyCap); if (autoDaily == null) errs.push('SOL price unavailable — USD auto cap can’t be converted'); else if (as + sol > autoDaily + 1e-9) errs.push(`Auto daily cap: ${as.toFixed(3)} + ${sol} > ${autoDaily.toFixed(4)} SOL`); }
   }
   const open = openPositions().filter(p => !p.degen && !p.scalp); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
   if (!skipMaxOpen && !held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
@@ -6385,7 +6380,8 @@ function renderBotBar() {
   const row = ([key, label, sub]) => {
     const on = !!prefs[key];
     const lastSkip = typeof botLast === 'function' ? botLast(key, 'panel') : null;
-    const note = rowStatus(key, on) + (sub ? ' · ' + sub : '') + (lastSkip ? ' · ' + tehranHM(lastSkip.at) + ' ' + lastSkip.reason : '');
+    const staleCap = lastSkip && /above daily cap|daily cap hit|Daily max spend|Auto daily cap|degen daily loss stop/i.test(lastSkip.reason || '');
+    const note = rowStatus(key, on) + (sub ? ' · ' + sub : '') + (lastSkip && !staleCap ? ' · ' + tehranHM(lastSkip.at) + ' ' + lastSkip.reason : '');
     return `<button type="button" data-bot="${key}" aria-pressed="${on}" class="bot-row">
       <span class="bot-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/></svg></span>
       <span class="min-w-0 flex-1"><span class="block truncate text-[15px] font-semibold text-slate-100">${label}</span><span class="block truncate text-[12px] text-slate-500">${note}</span></span>
@@ -7778,7 +7774,6 @@ function degenBuyBlock() {
   if (!cfg.on) return 'degen pot off';
   if (!burnerReady()) return 'burner locked';
   if (degenLedgerShort()) { degenHaltFunds(); return 'Degen out of funds'; }
-  if (cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd) return 'degen daily loss stop';
   if (openPositions().filter(p => p.degen && p.open).length >= cfg.maxOpen) return 'max ' + cfg.maxOpen + ' open';
   if (degenOpenCost() + cfg.tradeUsd > cfg.budgetUsd + 1e-6) return 'pot deployed cap';
   return '';
@@ -8571,7 +8566,7 @@ function renderDegen() {
   const rounds = degenRounds().filter(c => isNum(c.pnlUsd));
   const wins = rounds.filter(c => c.pnlUsd > 0).length;
   const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
-  const halted = cfg.on && cfg.dailyLossUsd > 0 && degenTodayPnl() <= -cfg.dailyLossUsd;
+  const halted = false;
   const openTxt = open.length + '/' + cfg.maxOpen;
   const potLine = 'Pot ' + usd(cfg.budgetUsd, 2) + ' · size ' + usd(cfg.tradeUsd, 2) + ' · open ' + openTxt + ' · trades today ' + degenTradesToday();
   const fundsShort = degenLedgerShort();
@@ -9490,12 +9485,9 @@ function listBuyBlocks(sol, mint) {
   const cap = burnerTradeCap();
   if (!cap.ok) errs.push(cap.err);
   else if (sol > cap.byPct + 1e-9) errs.push('above balance % cap');
-  const maxTrade = solCap(S.maxSolPerTrade), daily = solCap(S.dailyMaxSol);
-  if (maxTrade == null || daily == null) errs.push('SOL price unavailable — USD sizes can’t be converted');
-  else {
-    if (sol > maxTrade + 1e-9) errs.push('above max per trade');
-    if (spentToday(mainBookFill) + sol > daily + 1e-9) errs.push('above daily cap');
-  }
+  const maxTrade = solCap(S.maxSolPerTrade);
+  if (maxTrade == null) errs.push('SOL price unavailable — USD sizes can’t be converted');
+  else if (sol > maxTrade + 1e-9) errs.push('above max per trade');
   const heldMint = mint && (openPositions().some(p => p.open && !p.degen && !p.scalp && p.mint === mint) || (WALLETS.burner?.tokens?.get(mint)?.raw > 0n));
   if (!heldMint && openPositions().filter(p => p.open && !p.degen && !p.scalp).length >= maxPos()) errs.push('max positions');
   return errs;
@@ -11901,10 +11893,6 @@ function scalpDayStopped(book) {
   if (book.haltDay === book.dayKey) return 'scalp stopped for the day';
   if ((+book.pausesToday || 0) >= SCALP_RULE.MAX_PAUSES) return 'two pauses today';
   if (scalpTodayPnl() <= -SCALP_RULE.DAY_LOSS) return 'daily -$20 stop';
-  try {
-    const cap = solCap(S.dailyMaxSol);
-    if (cap > 0 && spentToday(mainBookFill) + 1e-9 >= cap) return 'daily cap hit';
-  } catch { /* settings not ready */ }
   return '';
 }
 function scalpSizeUsd() {

@@ -70,10 +70,6 @@ export function clampMainBuy(state, sol, balance) {
   const room = Math.max(0, balance - CAPS.reserveSol);
   const sized = Math.min(want, CAPS.maxSolPerTrade, CAPS.autoMaxSol, byPct, room);
   if (sized + 1e-9 < CAPS.minBuySol) return { sol: 0, err: 'size below 0.001 SOL after caps' };
-  const spent = mainSpentToday(state, f => f.mode === 'plan' || f.mode === 'breakout');
-  if (spent + sized > CAPS.dailyMaxSol + 1e-9) return { sol: 0, err: 'daily cap hit' };
-  const autoSpent = mainSpentToday(state, f => f.auto);
-  if (autoSpent + sized > CAPS.autoDaily + 1e-9) return { sol: 0, err: 'auto daily cap hit' };
   if (state.open().filter(p => p.mode === 'plan' || p.mode === 'breakout').length >= CAPS.maxOpen && !state.data.positions.some(p => p.open && false)) {
     const mainOpen = state.open().filter(p => p.mode === 'plan' || p.mode === 'breakout');
     if (mainOpen.length >= CAPS.maxOpen) return { sol: 0, err: 'max open positions' };
