@@ -205,6 +205,13 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .chart-frame { overflow: hidden; }
   .chart-frame canvas { display: block; width: 100%; height: 220px; }
   .mono-logo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--tab-btn); color: var(--text); font-size: 13px; font-weight: 700; overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+  .logo-slot { display: inline-grid; flex: 0 0 auto; }
+  .logo-slot > .mono-logo { grid-area: 1 / 1; }
+  img.mono-logo { display: block; object-fit: cover; }
+  .mono-logo.logo-sq { width: 40px; height: 40px; border-radius: 12px; }
+  .mono-logo.logo-sm { width: 32px; height: 32px; border-radius: 8px; font-size: 10px; }
+  .tag-down { display: inline-flex; align-items: center; height: 18px; margin-left: 4px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--down); background: var(--down-soft); color: var(--down); font-size: 10px; font-weight: 700; letter-spacing: .03em; vertical-align: middle; }
+  .setup-score { color: var(--accent); font-weight: 700; }
   .chg-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 600; }
   .chg-up, .pnl-up { color: var(--up); background: var(--up-soft); }
   .chg-down, .pnl-down { color: var(--down); background: var(--down-soft); }
@@ -1991,6 +1998,184 @@ async function runAnalysis({ boosted = false } = {}) {
   }
 }
 
+/* ============================ LOGOS + TREND ============================ */
+const LOGO_LS = 'sms:logos';
+const tokenTape = new Map();
+const logoMiss = new Map();
+let logoMem = null;
+let tokenMetaBusy = false;
+let metaRedraw = false;
+function looksMint(m) { return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(String(m || '').trim()); }
+function logoBook() {
+  if (logoMem) return logoMem;
+  try { const v = JSON.parse(localStorage.getItem(LOGO_LS) || 'null'); logoMem = v && typeof v === 'object' ? v : {}; }
+  catch { logoMem = {}; }
+  return logoMem;
+}
+function saveLogoBook(book) {
+  logoMem = book;
+  try { localStorage.setItem(LOGO_LS, JSON.stringify(book)); } catch { /* storage full */ }
+}
+function cachedLogo(mint) {
+  const row = logoBook()[String(mint || '').trim()];
+  return row && typeof row.url === 'string' ? row.url : '';
+}
+function rememberLogo(mint, url, opts) {
+  const m = String(mint || '').trim();
+  const u = String(url || '').trim();
+  if (!looksMint(m) || !/^https:\/\//i.test(u) || u.length > 500) return false;
+  if (logoBad.get(m) === u) return false;
+  const book = logoBook();
+  const prev = book[m];
+  const src = (opts && opts.src) || 'img';
+  if (prev && prev.url === u) return false;
+  const rank = { pump: 1, img: 1, jup: 2, dex: 3 };
+  if (prev && (rank[prev.src] || 1) > (rank[src] || 1)) return false;
+  book[m] = { url: u.slice(0, 500), at: Date.now(), src };
+  const keys = Object.keys(book);
+  if (keys.length > 400) keys.sort((a, b) => (book[a].at || 0) - (book[b].at || 0)).slice(0, keys.length - 320).forEach(k => { delete book[k]; });
+  saveLogoBook(book);
+  return true;
+}
+const logoBad = new Map();
+function noteLogo(mint, url) { rememberLogo(mint, url, { src: 'pump' }); }
+function logoFail(img) {
+  if (!img) return;
+  const showLetter = () => { img.style.display = 'none'; const n = img.nextElementSibling; if (n) n.style.display = 'grid'; };
+  if (img.dataset.fell) { showLetter(); return; }
+  const mint = img.dataset.mint || '';
+  const src = String(img.currentSrc || img.src || '');
+  if (looksMint(mint) && src.indexOf('images.pump.fun/coin-image/') === -1) {
+    logoBad.set(mint, src);
+    const book = logoBook();
+    if (book[mint] && book[mint].url === src) { delete book[mint]; saveLogoBook(book); }
+    img.dataset.fell = '1';
+    img.onload = function() { noteLogo(mint, this.currentSrc || this.src); };
+    img.src = 'https://images.pump.fun/coin-image/' + mint;
+    return;
+  }
+  showLetter();
+}
+function logoHtml(mint, symbol, letters, kind) {
+  const n = letters || 2;
+  const mono = esc(String(symbol || '?').slice(0, n).toUpperCase());
+  const known = cachedLogo(mint);
+  const pump = !known && looksMint(mint) ? 'https://images.pump.fun/coin-image/' + String(mint).trim() : '';
+  const src = known || pump;
+  const extra = kind === 'sq' ? ' logo-sq' : kind === 'sm' ? ' logo-sm' : '';
+  const mintAttr = looksMint(mint) ? ` data-mint="${esc(mint)}"` : '';
+  const img = src ? `<img src="${safeUrl(src)}" alt="" class="mono-logo${extra}"${mintAttr}${pump ? ' onload="noteLogo(this.dataset.mint,this.currentSrc||this.src)"' : ''} onerror="logoFail(this)">` : '';
+  return `<span class="logo-slot shrink-0">${img}<span class="mono-logo${extra}" style="${src ? 'display:none' : ''}">${mono}</span></span>`;
+}
+function tapeNum(v) { const n = +v; return Number.isFinite(n) ? n : null; }
+function noteTape(mint, p) {
+  const m = String(mint || '').trim();
+  if (!looksMint(m) || !p) return;
+  const pc = p.priceChange || p.chg || {};
+  const vol = p.volume || p.vol || {};
+  const tx = p.txns || {};
+  const h1tx = tx.h1 || {};
+  const buys = tapeNum(h1tx.buys);
+  const sells = tapeNum(h1tx.sells);
+  let bsr = null;
+  if (buys != null && sells != null && sells > 0) bsr = buys / sells;
+  else if (buys != null && buys > 0 && sells === 0) bsr = 3;
+  else bsr = tapeNum(p.bsr1);
+  tokenTape.set(m, {
+    h1: tapeNum(pc.h1), h6: tapeNum(pc.h6), h24: tapeNum(pc.h24),
+    bsr, v1: tapeNum(vol.h1), v24: tapeNum(vol.h24), at: Date.now()
+  });
+}
+function tapeOf(mint) { return tokenTape.get(String(mint || '').trim()) || null; }
+function trendFromTape(tape) {
+  if (!tape) return null;
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const leg = (chg) => chg == null ? null : clamp(50 + chg, 0, 100);
+  const p1 = leg(tape.h1), p6 = leg(tape.h6), p24 = leg(tape.h24);
+  const w1 = p1 == null ? 0 : 0.45, w6 = p6 == null ? 0 : 0.35, w24 = p24 == null ? 0 : 0.2;
+  const wp = w1 + w6 + w24;
+  const price = wp > 0 ? ((p1 || 0) * w1 + (p6 || 0) * w6 + (p24 || 0) * w24) / wp : null;
+  const flow = tape.bsr != null && tape.bsr > 0 ? clamp(50 + Math.log2(tape.bsr) * 25, 0, 100) : null;
+  const vol = tape.v1 != null && tape.v24 != null && tape.v24 > 0 ? clamp(50 + (tape.v1 / (tape.v24 / 24) - 1) * 25, 0, 100) : null;
+  if (price == null && flow == null && vol == null) return null;
+  const a = price == null ? 0 : 0.6, b = flow == null ? 0 : 0.25, c = vol == null ? 0 : 0.15;
+  const w = a + b + c || 1;
+  const score = Math.round(clamp(((price || 0) * a + (flow || 0) * b + (vol || 0) * c) / w, 0, 100));
+  const down = (tape.h24 != null && tape.h24 <= -25) || (tape.h6 != null && tape.h6 <= -20) || (tape.h1 != null && tape.h1 <= -15);
+  return { score, down };
+}
+function trendKey(tr) { return tr ? String(tr.score) + (tr.down ? 'd' : 'u') : ''; }
+function trendClass(score) {
+  if (!Number.isFinite(+score)) return 'text-slate-500';
+  if (score >= 60) return 'text-emerald-300';
+  if (score >= 40) return 'text-amber-300';
+  return 'text-rose-300';
+}
+async function ensureTokenMeta(mints) {
+  const now = Date.now();
+  const list = [...new Set((mints || []).map(m => String(m || '').trim()).filter(looksMint))];
+  const need = list.filter(m => {
+    const tape = tokenTape.get(m);
+    const fresh = !!(tape && now - tape.at < 45000);
+    const looked = logoMiss.get(m) && now - logoMiss.get(m) < 30 * 60 * 1000;
+    if (cachedLogo(m) && fresh) return false;
+    if (!cachedLogo(m) && looked && fresh) return false;
+    return true;
+  });
+  if (!need.length || tokenMetaBusy) return false;
+  tokenMetaBusy = true;
+  let changed = false;
+  try {
+    for (let i = 0; i < need.length; i += 30) {
+      const chunk = need.slice(i, i + 30);
+      let arr = [];
+      try { arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + chunk.join(','), { timeout: 8000 }); }
+      catch { arr = []; }
+      const best = new Map();
+      for (const p of arr || []) {
+        const mint = p && p.baseToken && p.baseToken.address;
+        if (!looksMint(mint)) continue;
+        const liq = (p.liquidity && p.liquidity.usd) || 0;
+        const cur = best.get(mint);
+        if (!cur || liq > cur.liq) best.set(mint, { p, liq });
+      }
+      for (const mint of chunk) {
+        const hit = best.get(mint);
+        if (!hit) {
+          if (!tokenTape.has(mint)) tokenTape.set(mint, { h1: null, h6: null, h24: null, bsr: null, v1: null, v24: null, at: Date.now() });
+          continue;
+        }
+        const before = trendKey(trendFromTape(tokenTape.get(mint)));
+        noteTape(mint, hit.p);
+        const after = trendKey(trendFromTape(tokenTape.get(mint)));
+        if (before !== after) changed = true;
+        const img = hit.p.info && hit.p.info.imageUrl;
+        if (img && rememberLogo(mint, img, { src: 'dex' })) changed = true;
+      }
+    }
+    const queue = need.filter(m => !cachedLogo(m) && !(logoMiss.get(m) > Date.now() - 30 * 60 * 1000)).slice(0, 24);
+    for (const mint of queue) {
+      try {
+        const j = await fetchJSONOnce('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(mint), { timeout: 6000 });
+        const rows = Array.isArray(j) ? j : [];
+        const row = rows.find(x => x && (x.id === mint || x.address === mint));
+        const icon = row && (row.icon || row.logoURI);
+        if (icon && rememberLogo(mint, icon, { src: 'jup' })) changed = true;
+        else logoMiss.set(mint, Date.now());
+      } catch { logoMiss.set(mint, Date.now()); }
+    }
+  } finally { tokenMetaBusy = false; }
+  return changed;
+}
+function wantLogos(mints, again) {
+  ensureTokenMeta(mints).then(changed => {
+    if (!changed || metaRedraw || typeof again !== 'function') return;
+    metaRedraw = true;
+    try { again(); } catch { /* redraw */ }
+    metaRedraw = false;
+  }).catch(() => {});
+}
+
 /* ============================ RENDER ============================ */
 const sevStyle = { critical: 'bg-rose-600/30 text-rose-200 border-rose-500/50', high: 'bg-rose-500/15 text-rose-300 border-rose-500/30', med: 'bg-amber-500/15 text-amber-300 border-amber-500/30', low: 'bg-slate-500/15 text-slate-300 border-slate-500/30' };
 const verdictStyle = { Candidate: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', Watchlist: 'bg-amber-500/15 text-amber-300 border-amber-500/30', Rejected: 'bg-rose-500/15 text-rose-300 border-rose-500/30' };
@@ -2056,9 +2241,11 @@ function render(R) {
   `);
 
   // Candidate ranking
-  const card = (t, i) => `<article class="rounded-2xl bg-ink-850 border border-white/5 hover:border-white/15 transition p-4 min-w-0">
+  const card = (t, i) => {
+    if (t && t.image) rememberLogo(t.mint, t.image, { src: 'dex' });
+    return `<article class="rounded-2xl bg-ink-850 border border-white/5 hover:border-white/15 transition p-4 min-w-0">
       <div class="flex items-start gap-3">
-        ${t.image ? `<img src="${safeUrl(t.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs shrink-0">${esc(t.symbol.slice(0,3))}</div>`}
+        ${logoHtml(t.mint, t.symbol, 3, 'sq')}
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 flex-wrap"><span class="text-xs text-slate-500 font-mono">#${i + 1}</span><h3 class="font-bold truncate max-w-[9rem]">${esc(t.symbol)}</h3><span class="text-[10px] px-1.5 py-0.5 rounded-md border ${verdictStyle[t.verdict]}">${t.verdict}</span>${typeof quickOn === 'function' && quickOn() ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border border-sky-400/40 bg-sky-500/15 text-sky-100">Quick 15% · 1:1</span>` : ''}${(t.sources || []).map(s => `<span class="text-[10px] px-1.5 py-0.5 rounded-md border border-violet-400/30 bg-violet-500/10 text-violet-200">${esc(s)}</span>`).join('')}${momentumLabel(t) ? `<span class="text-[10px] px-1.5 py-0.5 rounded-md border ${t.momentum.state === 'trigger' ? 'border-amber-400/40 bg-amber-500/15 text-amber-200' : 'border-white/15 text-slate-300'}" title="${esc(t.momentum.reason || '')}">${momentumLabel(t)}</span>` : ''}</div>
           <div class="text-xs text-slate-400 truncate">${esc(t.name)} · ${esc(t.dexId)}</div>
@@ -2090,6 +2277,7 @@ function render(R) {
         ${t.socialLinks.slice(0, 3).map(s => `<a href="${safeUrl(s.url)}" target="_blank" rel="noopener" class="text-slate-400 hover:underline">${esc(s.label)} ↗</a>`).join('')}
       </div>
     </article>`;
+  };
   const rejRows = rej.map(t => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><a class="text-slate-300 hover:underline" href="${safeUrl(t.url)}" target="_blank" rel="noopener">${esc(t.symbol)}</a></td><td class="pr-2 font-mono text-rose-300">${t.conviction}</td><td class="pr-2 font-mono">${usd(t.liq)}</td><td class="pr-2 font-mono ${pctCls(t.chg.h24)}">${pct(t.chg.h24, 0)}</td><td class="text-slate-400 py-1.5">${esc([...t.fails, ...t.flags.filter(f => f.sev !== 'low').map(f => f.text.split(' — ')[0])].slice(0, 3).join(' · ') || 'Low conviction')}</td></tr>`).join('');
   const brkHits = toks.filter(t => t.ta?.signal === 'breakout' || t.ta?.signal === 'watch');
   const rank = breakoutOnlyView ? brkHits : top;
@@ -2182,6 +2370,7 @@ function render(R) {
   el.querySelectorAll('[data-scan-chart]').forEach(b => b.addEventListener('click', () => { if (typeof window.__smsScanChart === 'function') window.__smsScanChart(b.dataset.scanChart); }));
   if (window.SMS_TRADE) window.SMS_TRADE.hydrate();
   if (typeof window.__smsReady === 'function') window.__smsReady();
+  wantLogos((R.tokens || []).map(t => t.mint), () => render(R));
 }
 </script>
 <script>
@@ -4117,6 +4306,7 @@ function posCard(p) {
   const m = posMoney(p, lp);
   const src = posSource(p);
   const info = (lastResult?.tokens || []).find(t => t.mint === p.mint);
+  if (info?.image) rememberLogo(p.mint, info.image, { src: 'dex' });
   const dex = info?.url || ('https://dexscreener.com/solana/' + p.mint);
   const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
   const up = isNum(m.pnl) && m.pnl >= 0;
@@ -4190,7 +4380,7 @@ function posCard(p) {
   }
   return `<article class="glass rounded-2xl p-3.5 ${glow}">
     <div class="flex items-start gap-3">
-      ${info?.image ? `<img src="${safeUrl(info.image)}" alt="" class="w-10 h-10 rounded-xl object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-10 h-10 rounded-xl bg-ink-700 grid place-items-center text-xs font-bold shrink-0">${esc((p.symbol || '?').slice(0, 3))}</div>`}
+      ${logoHtml(p.mint, p.symbol, 3, 'sq')}
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(p.symbol)}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${src.cls}">${src.label}</span>${pl.quick ? `<span class="rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-100">Quick 15% · 1:1</span>` : ''}</div>
         <div class="text-[11px] text-slate-500 break-words">${esc(p.wallet)} · held ${heldFor(p.firstTs)}</div>
@@ -4376,11 +4566,12 @@ function closedSummary(list) {
 }
 function closedTradeCard(c) {
   const img = (lastResult?.tokens || []).find(t => t.mint === c.mint)?.image;
+  if (img) rememberLogo(c.mint, img, { src: 'dex' });
   const up = isNum(c.pnlUsd) ? c.pnlUsd >= 0 : (isNum(c.pnlPct) ? c.pnlPct >= 0 : true);
   const col = !isNum(c.pnlUsd) && !isNum(c.pnlPct) ? 'text-slate-300' : up ? 'text-emerald-300' : 'text-rose-300';
   return `<article class="rounded-xl border border-white/10 bg-ink-850/70 p-3">
     <div class="flex items-start gap-2">
-      ${img ? `<img src="${safeUrl(img)}" alt="" class="w-8 h-8 rounded-lg object-cover bg-ink-700 shrink-0" onerror="this.style.visibility='hidden'">` : `<div class="w-8 h-8 rounded-lg bg-ink-700 grid place-items-center text-[10px] font-bold shrink-0">${esc((c.symbol || '?').slice(0, 3))}</div>`}
+      ${logoHtml(c.mint, c.symbol, 3, 'sm')}
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-1.5"><b class="break-words">${esc(c.symbol || short(c.mint))}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${c.src.cls}">${c.src.label}</span><span class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-300">${esc(c.exit)}</span></div>
         <div class="mt-0.5 text-[10px] text-slate-500 whitespace-normal break-words">Opened ${esc(tehranWhen(c.openTs))} · closed ${esc(tehranWhen(c.closeTs))} · held ${esc(spanText((c.closeTs || 0) - (c.openTs || 0)))} · Tehran</div>
@@ -4515,6 +4706,9 @@ function renderPortfolio() {
   }
   syncHomeHero();
   placeDegenDesk();
+  let closedMints = [];
+  try { closedMints = closedRounds(liveSolPx()).slice(0, 30).map(c => c.mint); } catch { closedMints = []; }
+  wantLogos(open.map(p => p.mint).concat(closedMints), () => { if (!posDragging) renderPortfolio(); });
 }
 function paintHomePositions(open) {
   const box = $('homePositions'); if (!box) return;
@@ -4525,7 +4719,7 @@ function paintHomePositions(open) {
     const up = isNum(m.pnl) && m.pnl >= 0;
     const ticks = typeof tickBars === 'function' ? tickBars(p.mint, '1m') : [];
     const spark = ticks.length >= 2 && typeof listChartSvg === 'function' ? listChartSvg({ candles: ticks }, { w: 72, h: 28 }) : { empty: true, svg: '' };
-    return `<button type="button" class="watch-row" data-go-trades="1"><span class="mono-logo">${esc(String(p.symbol || '?').slice(0, 2).toUpperCase())}</span><span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(p.symbol)}</b><span class="block text-[12px] text-slate-500 num">${fmtSol(m.costSolLeft)}</span></span>${spark.empty ? '' : `<span class="shrink-0">${spark.svg}</span>`}<span class="shrink-0 text-right num"><span class="block ${up ? 'pnl-up' : 'pnl-down'}" data-live-mint="${esc(p.mint)}">${price(lp)}</span><span class="block text-[12px] ${up ? 'pnl-up' : 'pnl-down'}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</span></span></button>`;
+    return `<button type="button" class="watch-row" data-go-trades="1">${logoHtml(p.mint, p.symbol, 2)}<span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(p.symbol)}</b><span class="block text-[12px] text-slate-500 num">${fmtSol(m.costSolLeft)}</span></span>${spark.empty ? '' : `<span class="shrink-0">${spark.svg}</span>`}<span class="shrink-0 text-right num"><span class="block ${up ? 'pnl-up' : 'pnl-down'}" data-live-mint="${esc(p.mint)}">${price(lp)}</span><span class="block text-[12px] ${up ? 'pnl-up' : 'pnl-down'}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</span></span></button>`;
   }).join('');
   box.querySelectorAll('[data-go-trades]').forEach(b => b.addEventListener('click', () => showTab('trades')));
 }
@@ -7331,6 +7525,8 @@ async function degenWatch() {
         const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
         if (best && +best.priceUsd > 0) {
           DEGEN.quotes[pick.mint] = { price: +best.priceUsd, image: best.info?.imageUrl || '' };
+          if (best.info?.imageUrl) rememberLogo(pick.mint, best.info.imageUrl, { src: 'dex' });
+          noteTape(pick.mint, best);
           livePrices.set(pick.mint, { price: +best.priceUsd, liq: best.liquidity?.usd ?? null, at: Date.now() });
         }
       } catch { /* keep the last quote */ }
@@ -7580,11 +7776,10 @@ function renderDegen() {
     const q = (DEGEN.quotes || {})[pick.mint] || {};
     const px = isNum(q.price) ? q.price : livePrices.get(pick.mint)?.price;
     const st = degenStatus(pick, px);
-    const mono = esc(String(pick.symbol || '?').slice(0, 2).toUpperCase());
-    const logo = q.image ? `<img src="${safeUrl(q.image)}" alt="" class="mono-logo object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : '';
+    if (q.image) rememberLogo(pick.mint, q.image, { src: 'dex' });
     return `<article class="border-b border-white/10 py-2.5">
       <div class="flex items-center gap-2">
-        <span class="shrink-0">${logo}<span class="mono-logo" style="${q.image ? 'display:none' : ''}">${mono}</span></span>
+        ${logoHtml(pick.mint, pick.symbol, 2)}
         <span class="min-w-0 flex-1"><b class="block truncate text-sm">${esc(pick.symbol || short(pick.mint))}</b><span class="block text-[10px] text-slate-500">${degenAgeLabel(pick.age_h)} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
         <span class="deg-chip">HUNTER</span>
         <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
@@ -7610,7 +7805,7 @@ function renderDegen() {
     const timeTxt = p.tp1Done ? 'time stop done' : (leftMin <= 0 ? 'time stop due' : leftMin + 'm left');
     const pnlCls = !isNum(money.pnl) ? 'text-slate-400' : (money.pnl >= 0 ? 'text-emerald-300' : 'text-rose-300');
     return `<article class="border-b border-white/10 py-2.5">
-      <div class="flex items-center justify-between gap-2"><b class="text-sm">${esc(p.symbol)}</b><span class="deg-chip">DEGEN</span></div>
+      <div class="flex items-center justify-between gap-2"><span class="flex items-center gap-2 min-w-0">${logoHtml(p.mint, p.symbol, 2, 'sm')}<b class="text-sm truncate">${esc(p.symbol)}</b></span><span class="deg-chip">DEGEN</span></div>
       <div class="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Entry</div><div class="font-mono">${price(p.avgUsd)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Now</div><div class="font-mono">${price(lp)}</div></div>
@@ -7655,6 +7850,7 @@ function renderDegen() {
   </section>`;
   desk?.querySelectorAll('[data-degen-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.degenSell, { pct: 100 })));
   placeDegenDesk();
+  wantLogos((DEGEN.picks || []).map(p => p.mint).concat(open.map(p => p.mint)), () => renderDegen());
   const home = $('degenCard'); if (home) home.innerHTML = stats;
   const box = $('degenBox'); if (!box || (document.activeElement && box.contains(document.activeElement))) {
     document.querySelectorAll('[data-open-degen]').forEach(b => b.addEventListener('click', openDegenDesk));
@@ -9128,12 +9324,14 @@ function renderMyList(opts) {
     }
     const dex = pair.url || ('https://dexscreener.com/solana/' + row.mint);
     const cell = (k, val) => `<div class="min-w-0"><div class="text-[9px] uppercase tracking-wide text-slate-500">${k}</div><div class="text-[12px] leading-tight text-slate-100 whitespace-normal break-words">${val || '—'}</div></div>`;
-    const mono = esc((row.symbol || '?').slice(0, 2).toUpperCase());
+    if (info.imageUrl) rememberLogo(row.mint, info.imageUrl, { src: 'dex' });
     const setupTag = v.spec.mode === 'ath' ? 'ATH' : (v.model.buyZone ? 'BUY ZONE' : '');
+    const scored = AG.scores && AG.scores.get(row.mint);
+    const setupHtml = scored && isNum(+scored.score) ? `<span class="block text-[11px] text-slate-500 whitespace-normal break-words"><span class="setup-score">Setup ${Math.round(+scored.score)}</span>${scored.setup ? ' · ' + esc(scored.setup) : ''}${scored.entry ? ' · ' + esc(scored.entry) : ''}</span>` : '';
     if (!window.__pxSeen) window.__pxSeen = {};
     const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
     if (isNum(v.px)) window.__pxSeen[row.mint] = v.px;
-    const logo = `<span class="logo-slot shrink-0">${info.imageUrl ? `<img src="${safeUrl(info.imageUrl)}" alt="" class="mono-logo object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''}<span class="mono-logo" style="${info.imageUrl ? 'display:none' : ''}">${mono}</span></span>`;
+    const logo = logoHtml(row.mint, row.symbol, 2);
     return `<article data-row="${esc(row.id)}">
       <div class="flex items-center gap-1">
         <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
@@ -9149,6 +9347,7 @@ function renderMyList(opts) {
         </button>
         <label class="flex items-center text-[11px] text-slate-400 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
       </div>
+      ${setupHtml ? `<div class="px-1 pb-1">${setupHtml}</div>` : ''}
       ${botSkipHtml('mylist', row.mint)}
       <div class="token-sheet">
         <div class="sheet-grab"></div>
@@ -9189,7 +9388,7 @@ function renderMyList(opts) {
       </div>
     </article>`;
   }).join('');
-  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><b>${esc(v.row.symbol || short(v.row.mint))}</b></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" data-ml-mint="${esc(v.row.mint)}" class="text-rose-300">Remove</button></td></tr>`).join('')}</tbody></table></div>`;
+  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => { const scored = AG.scores && AG.scores.get(v.row.mint); const setupBit = scored && isNum(+scored.score) ? `<div class="text-[10px] whitespace-normal break-words"><span class="setup-score">Setup ${Math.round(+scored.score)}</span>${scored.entry ? ' · ' + esc(scored.entry) : ''}</div>` : ''; return `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><span class="inline-flex items-center gap-2">${logoHtml(v.row.mint, v.row.symbol, 2, 'sm')}<span><b>${esc(v.row.symbol || short(v.row.mint))}</b>${setupBit}</span></span></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" data-ml-mint="${esc(v.row.mint)}" class="text-rose-300">Remove</button></td></tr>`; }).join('')}</tbody></table></div>`;
   const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="rounded-full border px-2.5 py-1 text-[11px] ${listSort === key ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
   box.innerHTML = `<div class="rounded-2xl border ${MYLIST.on ? 'border-amber-300/40' : 'border-white/10'} bg-ink-900/30 p-3">
     <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3>
@@ -9264,6 +9463,7 @@ function renderMyList(opts) {
   box.querySelectorAll('[data-ml-pos]').forEach(el => el.addEventListener('click', () => { showTab('trades'); document.getElementById('sec-portfolio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
   box.querySelectorAll('[data-ml-open]').forEach(el => el.addEventListener('click', () => openTokenSheet(el.closest('article'))));
   box.querySelectorAll('[data-sheet-close]').forEach(el => el.addEventListener('click', closeTokenSheet));
+  wantLogos(MYLIST.rows.map(r => r.mint), () => { if (!document.body.classList.contains('sheet-on')) renderMyList(); });
 }
 function addMintsToList(addrs) {
   let n = 0;
@@ -9292,6 +9492,8 @@ async function refreshListMarket() {
         const p = best.get(row.mint); if (!p) continue;
         row.dexPair = p; row.pool = p.pairAddress || row.pool;
         if (!row.symbol) row.symbol = p.baseToken?.symbol || '';
+        if (p.info?.imageUrl) rememberLogo(row.mint, p.info.imageUrl, { src: 'dex' });
+        noteTape(row.mint, p);
         const px = p.priceUsd != null ? +p.priceUsd : null;
         if (isNum(px)) { row.price = px; livePrices.set(row.mint, { price: px, at: Date.now() }); }
       }
@@ -9501,7 +9703,7 @@ $('btnSaveList')?.addEventListener('click', () => {
 /* ---------------- agent files (shared JSON on main) ---------------- */
 const AGENT_RAW = 'https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/main/agents/';
 const AGENT_LS = 'sms:agents';
-const AG = { candidates: [], plans: new Map(), risk: { pause_auto_buy: false, ts: 0, positions: [] }, config: { burner_public_address: '', notes: '' }, fetched: {}, errors: {}, pauseLogged: false, seenRisk: {}, timer: null };
+const AG = { candidates: [], plans: new Map(), scores: new Map(), risk: { pause_auto_buy: false, ts: 0, positions: [] }, config: { burner_public_address: '', notes: '' }, fetched: {}, errors: {}, pauseLogged: false, seenRisk: {}, timer: null };
 function agentCfg() {
   const d = { usePlans: true, exits: false };
   try { const v = JSON.parse(localStorage.getItem(AGENT_LS) || 'null'); if (v && typeof v === 'object') return { usePlans: v.usePlans !== false, exits: !!v.exits }; } catch { /* default */ }
@@ -9784,15 +9986,26 @@ function renderAgentPicks() {
     return tehranClock(max);
   };
   const ageOf = (name) => { const t = AG.pulled?.[name]; if (!t) return '—'; const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 90 ? s + 's' : Math.round(s / 60) + 'm'; };
-  const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} (${ageOf('candidates')}) · plans ${stamp('plans', [...AG.plans.values()])} (${ageOf('plans')}) · risk ${stamp('risk', AG.risk.positions)} (${ageOf('risk')}) · list file ${stamp('mylist', AG.listFile || [])} (${ageOf('mylist')}) · config ${tehranClock(AG.fetched.config)} (${ageOf('config')})</div>`;
+  const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} (${ageOf('candidates')}) · plans ${stamp('plans', [...AG.plans.values()])} (${ageOf('plans')}) · risk ${stamp('risk', AG.risk.positions)} (${ageOf('risk')}) · list file ${stamp('mylist', AG.listFile || [])} (${ageOf('mylist')}) · setup scores ${tehranClock(AG.fetched.mylist_scores)} (${ageOf('mylist_scores')}) · config ${tehranClock(AG.fetched.config)} (${ageOf('config')})</div>`;
   const banner = agentPauseBuys() ? `<div class="mt-1 rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[12px] font-semibold text-rose-100">Agent risk paused scanner auto-buy</div>` : '';
-  const cards = AG.candidates.filter(c => c && isAddr(c.mint)).map(c => {
+  const ranked = AG.candidates.filter(c => c && isAddr(c.mint)).map((c, i) => {
+    const safety = isNum(agentNum(c.score)) ? Math.round(agentNum(c.score)) : null;
+    const tr = trendFromTape(tapeOf(c.mint));
+    const trend = tr ? tr.score : null;
+    const down = !!(tr && tr.down);
+    let rank = (isNum(safety) ? safety : 0) * ((isNum(trend) ? trend : 50) / 100);
+    if (down) rank *= 0.35;
+    return { c, safety, trend, down, rank, i };
+  }).sort((a, b) => b.rank - a.rank || a.i - b.i);
+  const cards = ranked.map(({ c, safety, trend, down }) => {
     const plan = agentPlanFor(c.mint);
     const fresh = agentTime(c.updatedAt) || agentTime(c.ts) || AG.pulled?.candidates || 0;
     const agoS = fresh ? Math.max(0, Math.round((Date.now() - fresh) / 1000)) : null;
     const ago = agoS == null ? '—' : (agoS < 90 ? agoS + 's ago' : Math.round(agoS / 60) + 'm ago');
+    const safetyTxt = isNum(safety) ? safety : '—';
+    const trendTxt = isNum(trend) ? trend : '—';
     return `<article class="hero-card">
-      <div class="flex items-center gap-3"><span class="mono-logo">${esc(String(c.symbol || '?').slice(0, 1).toUpperCase())}</span><span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(c.symbol || short(c.mint))}</b><span class="block text-[12px] text-slate-500">${ago} · score ${isNum(agentNum(c.score)) ? Math.round(+c.score) : '—'}</span></span><span class="status-dot ${plan && agentPlanUsable(plan) ? 'on' : ''}"></span></div>
+      <div class="flex items-center gap-3">${logoHtml(c.mint, c.symbol, 1)}<span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(c.symbol || short(c.mint))}</b><span class="block text-[12px] text-slate-500">${ago} · Safety ${safetyTxt} · <span class="${trendClass(trend)}">Trend ${trendTxt}</span>${down ? '<span class="tag-down">downtrend</span>' : ''}</span></span><span class="status-dot ${plan && agentPlanUsable(plan) ? 'on' : ''}"></span></div>
       <div class="mt-2 text-[13px] text-slate-400 whitespace-normal break-words">${esc(c.reason || 'No summary yet.')}${c.safety ? ' · ' + esc(c.safety) : ''}</div>
       ${agentPlanChip(c.mint)}
       ${botSkipHtml('plans', c.mint)}
@@ -9823,11 +10036,12 @@ function renderAgentPicks() {
   if (use && document.activeElement !== use) use.checked = agentPlansOn();
   if (exits && document.activeElement !== exits) exits.checked = agentExitsOn();
   syncAgentPreview();
+  wantLogos(AG.candidates.map(c => c.mint), renderAgentPicks);
 }
 async function refreshAgents() {
   if (document.hidden || AG.fetching) return;
   AG.fetching = true;
-  const names = ['candidates', 'mylist', 'plans', 'risk', 'config'];
+  const names = ['candidates', 'mylist', 'plans', 'risk', 'config', 'mylist_scores'];
   await Promise.all(names.map(async (name) => {
     try {
       const data = await fetchAgentDoc(name);
@@ -9848,6 +10062,13 @@ async function refreshAgents() {
         AG.listFile = Array.isArray(data) ? data : (Array.isArray(data?.tokens) ? data.tokens : []);
         const written = agentTime(data?.updatedAt);
         if (written) AG.fetched.mylist = written;
+      }
+      if (name === 'mylist_scores') {
+        const list = Array.isArray(data?.tokens) ? data.tokens : [];
+        AG.scores = new Map();
+        list.forEach(t => { if (t && isAddr(t.mint)) AG.scores.set(t.mint, t); });
+        const written = agentTime(data?.updated_utc) || agentTime(data?.updatedAt);
+        if (written) AG.fetched.mylist_scores = written;
       }
       if (name === 'plans') {
         const list = Array.isArray(data) ? data : (Array.isArray(data?.plans) ? data.plans : []);
@@ -10403,7 +10624,8 @@ function syncAgentPreview() {
   if (!cards.length) slot.innerHTML = '<button type="button" data-go="agents" class="hero-card w-full text-left"><div class="text-[11px] uppercase tracking-wide text-slate-500">Agent picks</div><p class="empty-note mt-2">No hunter candidates yet</p></button>';
   else slot.innerHTML = '<div class="text-[11px] uppercase tracking-wide text-slate-500">Agent picks</div>' + cards.map(c => {
     const name = c.querySelector('b')?.textContent || 'Token';
-    return `<button type="button" data-go="agents" class="watch-row"><span class="mono-logo">${esc(name.slice(0, 2).toUpperCase())}</span><span class="min-w-0"><b class="block truncate text-sm">${esc(name)}</b></span></button>`;
+    const mint = c.querySelector('[data-agent-add]')?.getAttribute('data-agent-add') || '';
+    return `<button type="button" data-go="agents" class="watch-row">${logoHtml(mint, name, 2)}<span class="min-w-0"><b class="block truncate text-sm">${esc(name)}</b></span></button>`;
   }).join('');
   slot.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.go)));
 }
