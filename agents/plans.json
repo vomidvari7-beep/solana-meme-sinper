@@ -366,7 +366,7 @@
   "expires": 1794412892000,
   "reason": "BREAKOUT: 1h closed 0.06744 > 0.0648 band top (17:30 Tehran) on ~$596k volume (~20x avg), high 0.07267; leg 1 at live, leg 2 on retest 0.06006-0.06472; 4h confirms at 19:30 Tehran close",
   "warnings": [
-   "Nov 8 22:45 15m closed 0.06953 through the band (high 0.07057) but the 1h closed 0.06208 and the 4h closed 0.06208 \u2014 failed break; do not buy until a 1h and 4h close above 0.0648",
+   "Nov 8 22:45 15m closed 0.06953 through the band (high 0.07057) but the 1h closed 0.06208 and the 4h closed 0.06208 — failed break; do not buy until a 1h and 4h close above 0.0648",
    "Next resistance is the Nov 8 wick / Oct 28 high 0.0697-0.07057 (~9% above trigger); the +15% target 0.07313 sits in the 0.0706-0.0762 supply",
    "4h candle not closed until 07:30 Tehran time; current 1h (05:30, open until 06:30) wicked 0.06134 and is back near 0.0579",
    "True ATH is 0.4489 (2026-07-07 01:30 Tehran), not the 0.1517 short-window high in the prior plan",
@@ -4093,60 +4093,91 @@
   "mint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
   "symbol": "GATO",
   "setup": "trendline+resistance breakout",
-  "tf": "4h",
-  "trendline_now": 0.01135,
+  "tf": "1h",
+  "trendline_now": 0.00895,
   "resistance_band": [
-   0.01274,
-   0.013
+   0.0093,
+   0.0096
   ],
   "ath": 0.01512,
-  "trigger_price": 0.01304,
-  "trigger_condition": "above",
-  "entry_condition": "1h close above 0.01304 confirmed by 4h close (above both trendline and band top)",
-  "entry_mode": "split",
-  "scale_in": true,
-  "starter_pct": 50,
-  "leg1_price": null,
-  "leg1_condition": "skipped (stop >15% below breakout)",
-  "leg2_zone": [
-   0.0128,
-   0.01313
+  "trigger_price": 0.00962,
+  "trigger_condition": "retest",
+  "entry_condition": "buy a retest of 0.00930-0.00960 that holds (1h close back above the band); leg 1 skipped because a stop 1-2% below the breakout-candle low would be more than 15% under live",
+  "entry_mode": "zone",
+  "entry_zone": [
+   0.0093,
+   0.0096
   ],
-  "leg2_condition": "buy 50% on a retest of 0.0128-0.01313 that holds (1h close back above)",
+  "scale_in": false,
+  "starter_pct": 100,
+  "leg1_price": null,
+  "leg1_condition": "skipped (stop 1.5% below the 16:30 Tehran 1h low 0.008201 is more than 15% under live 0.00962)",
+  "leg2_zone": [
+   0.0093,
+   0.0096
+  ],
+  "leg2_condition": "buy on a retest of 0.00930-0.00960 that holds (1h close back above)",
   "leg1_target": null,
-  "leg2_target": 0.01491,
-  "stop": 0.008406,
-  "target": 0.01491,
-  "tp1": 0.01491,
-  "tp2": 0.01491,
-  "rr": 0.43,
-  "confidence": 20,
-  "status": "invalid",
-  "expires": 1794412892000,
-  "reason": "4h trendline 0.01135 + band 0.01274-0.013; live 0.00934, EMA9<EMA21; buy on 1h/4h close >0.01304",
+  "leg2_target": 0.01087,
+  "stop": 0.00808,
+  "target": 0.01087,
+  "tp1": 0.01087,
+  "tp2": 0.01087,
+  "rr": 1.04,
+  "confidence": 60,
+  "status": "waiting",
+  "expires": 1794428552702,
+  "reason": "1h 16:30 Tehran closed 0.009623 above band 0.00930-0.00960 and the descending trendline from the 0.0127 highs (TL then ~0.00903); breakout candle low 0.008201 at 16:30 Tehran; leg 1 skipped (chart stop 0.00808 is >15% under live); buy the retest of 0.00930-0.00960 that holds; stop 0.00808, target 0.01087. | Commander override 17:52 IRST per Vahid: buy the 1h breakout retest (conf raised 52->60).",
   "warnings": [
-   "Price 28% below trigger; stop parked below live until price nears the level",
-   "Leg 1 skipped: stop would be >15% below the breakout price; leg 2 (retest) only",
+   "4h EMA9 < EMA21 and the 4h candle (15:30-19:30 Tehran) is not closed; a 4h close back below 0.00960 = failed break",
+   "Same band already failed once: Nov 10 22:30-23:30 Tehran 1h closed above 0.00960 (high 0.01042) then broke down",
+   "16:30 breakout candle had a long upper wick to 0.01029, rejected at the 0.0102-0.0105 supply; the +15% target 0.01087 sits in that supply",
+   "Next resistances: 0.0102-0.0105, then 0.0107-0.0110, then 0.0125-0.0127, ATH 0.01512",
+   "Stop is 1.5% below the 16:30 Tehran 1h low 0.008201; a zone fill above ~0.00951 would put that stop more than 15% away — prefer mid-to-low band",
+   "15m 17:15 Tehran already wicked to 0.00923 and recovered; live is back at the band top",
+   "RugCheck score 1, mint/freeze revoked, PumpSwap LP 100% locked; top10 ~15-16%, insiders ~3%",
    "Your manualTp 30:100 overrides the plan target on the panel"
   ],
-  "live": 0.00934,
-  "ts": 1794405692000,
-  "updatedAt": 1794405692000,
+  "live": 0.00962,
+  "ts": 1794406952702,
+  "updatedAt": 1794406952702,
   "key_levels": {
    "1D": {
-    "resistance": [],
-    "support": [
+    "resistance": [
      {
       "zone": [
-       0.002048,
-       0.002096
+       0.01443,
+       0.01512
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.01255,
+       0.01267
       ],
       "touches": 3
      },
      {
       "zone": [
-       0.001499,
-       0.0015
+       0.01096,
+       0.01138
+      ],
+      "touches": 2
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.00659,
+       0.00672
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.00704,
+       0.00745
       ],
       "touches": 2
      }
@@ -4154,6 +4185,13 @@
    },
    "4h": {
     "resistance": [
+     {
+      "zone": [
+       0.01022,
+       0.01061
+      ],
+      "touches": 3
+     },
      {
       "zone": [
        0.01071,
@@ -4164,14 +4202,14 @@
      {
       "zone": [
        0.01255,
-       0.01261
+       0.01267
       ],
-      "touches": 2
+      "touches": 3
      },
      {
       "zone": [
        0.01443,
-       0.01466
+       0.01512
       ],
       "touches": 2
      }
@@ -4179,22 +4217,22 @@
     "support": [
      {
       "zone": [
-       0.007646,
-       0.007746
+       0.00814,
+       0.0082
       ],
       "touches": 2
      },
      {
       "zone": [
-       0.006593,
-       0.006716
+       0.00726,
+       0.00745
       ],
       "touches": 2
      },
      {
       "zone": [
-       0.005723,
-       0.005725
+       0.00659,
+       0.00672
       ],
       "touches": 2
      }
@@ -4204,38 +4242,59 @@
     "resistance": [
      {
       "zone": [
-       0.009369,
-       0.009549
-      ],
-      "touches": 3
-     },
-     {
-      "zone": [
-       0.009955,
-       0.0102
-      ],
-      "touches": 3
-     },
-     {
-      "zone": [
-       0.01031,
-       0.0105
-      ],
-      "touches": 5
-     }
-    ],
-    "support": [
-     {
-      "zone": [
-       0.00912,
-       0.00928
+       0.01014,
+       0.01029
       ],
       "touches": 2
      },
      {
       "zone": [
-       0.006593,
-       0.006716
+       0.01033,
+       0.01042
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.01061,
+       0.01085
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.01241,
+       0.01261
+      ],
+      "touches": 7
+     },
+     {
+      "zone": [
+       0.01308,
+       0.01348
+      ],
+      "touches": 7
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.0093,
+       0.0096
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.00814,
+       0.0082
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.00659,
+       0.00672
       ],
       "touches": 2
      }
@@ -4245,57 +4304,51 @@
     "resistance": [
      {
       "zone": [
-       0.0102,
-       0.01045
+       0.01014,
+       0.01029
       ],
-      "touches": 5
+      "touches": 3
      },
      {
       "zone": [
-       0.01046,
+       0.01042,
        0.01061
       ],
-      "touches": 4
-     },
-     {
-      "zone": [
-       0.01085,
-       0.0111
-      ],
-      "touches": 4
+      "touches": 2
      }
     ],
     "support": [
      {
       "zone": [
-       0.008664,
-       0.008698
+       0.00923,
+       0.0093
       ],
       "touches": 2
      },
      {
       "zone": [
-       0.008297,
-       0.008477
+       0.00814,
+       0.0082
       ],
       "touches": 2
      },
      {
       "zone": [
-       0.00804,
-       0.008202
+       0.00659,
+       0.00672
       ],
-      "touches": 3
+      "touches": 2
      }
     ]
    }
   },
   "fast_move_zone": {
-   "break_level": 0.009208,
-   "ran_to": 0.01227,
-   "note": "price ran >=15% within 3 candles after breaking 0.009208"
+   "break_level": 0.0093,
+   "ran_to": 0.01029,
+   "note": "16:30 Tehran 1h broke the 0.0093-0.0096 band from 0.00845 and ran to 0.01029 on that same candle (~21% from the open)"
   },
-  "manualTp": "30:100"
+  "manualTp": "30:100",
+  "note": "Vahid 1h chart 17:45 Tehran: broke descending TL from the 0.0127 highs and closed above the 0.0093-0.0096 band. Chart levels match USD (priceNative is 0.0001146 SOL). Actionable setup is the band retest; breakout confirmed on the 16:30 1h close."
  },
  {
   "mint": "DtcicPCKTKeAh7TDEzTym3hXeoHAoMiBdYJhMYxZpump",
