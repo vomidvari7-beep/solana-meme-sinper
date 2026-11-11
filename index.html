@@ -268,6 +268,10 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
   html.sms-safe #tabBar { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--tab-solid); }
+  .secret-field { -webkit-text-security: disc; text-security: disc; }
+  @supports not ((-webkit-text-security: disc) or (text-security: disc)) {
+    .secret-field { color: transparent; caret-color: var(--text); text-shadow: 0 0 7px var(--text); }
+  }
 </style>
 </head>
 <body class="text-slate-200 font-sans min-h-screen antialiased">
@@ -558,12 +562,12 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     <div class="w-full sm:max-w-lg bg-ink-900 border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl">
       <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
         <h3 id="tmTitle" class="font-bold">Confirm trade</h3>
-        <button id="tmClose" class="text-slate-400 hover:text-white text-xl leading-none px-2" aria-label="Close">×</button>
+        <button id="tmClose" type="button" class="text-slate-400 hover:text-white text-xl leading-none px-2" aria-label="Close">×</button>
       </div>
       <div id="tmBody" class="px-5 py-4 text-sm"></div>
       <div class="px-5 pb-5 flex gap-2">
-        <button id="tmCancel" class="flex-1 rounded-xl py-3 text-sm font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10">Cancel</button>
-        <button id="tmConfirm" class="flex-[2] rounded-xl py-3 text-sm font-bold btn-primary disabled:opacity-40 disabled:cursor-not-allowed">Confirm &amp; sign in Phantom</button>
+        <button id="tmCancel" type="button" class="flex-1 rounded-xl py-3 text-sm font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10">Cancel</button>
+        <button id="tmConfirm" type="button" class="flex-[2] rounded-xl py-3 text-sm font-bold btn-primary disabled:opacity-40 disabled:cursor-not-allowed">Confirm &amp; sign in Phantom</button>
       </div>
     </div>
   </div>
@@ -4746,7 +4750,14 @@ async function decryptSecret(rec, pass) {
 }
 const burnerRec = () => load(LS.burner, null);
 let burnerOpen = false;
-const passField = (id, ph = 'Passphrase') => `<input id="${id}" type="password" autocomplete="new-password" placeholder="${ph}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm" />`;
+function passField(slot) {
+  const rid = 'q' + Math.random().toString(36).slice(2, 12);
+  const name = 'q' + Math.random().toString(36).slice(2, 12);
+  return `<input id="${rid}" name="${name}" data-kf="${slot}" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" class="secret-field mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-sm" />`;
+}
+function kfEl(slot) { return document.querySelector('#tradeModal [data-kf="' + slot + '"]'); }
+function kfVal(slot) { return kfEl(slot)?.value || ''; }
+function kfClear(slot) { const el = kfEl(slot); if (el) el.value = ''; }
 
 function createBurner() {
   if (burnerRec() && !confirm('A burner wallet already exists in this browser. Creating a new one REPLACES it — export its key / withdraw funds first! Continue?')) return;
@@ -4754,14 +4765,15 @@ function createBurner() {
   openModal({ title: '🔥 Create burner wallet', confirmLabel: 'Generate wallet',
     html: `<p class="text-xs text-slate-300">A new Solana keypair is generated <b>in this browser</b>. The secret key is encrypted with your passphrase (AES-GCM, PBKDF2 310k) and stored only in this browser's localStorage. It is never sent anywhere.</p>
       <ul class="text-[11px] text-amber-200/90 list-disc pl-4 mt-2 space-y-0.5"><li>Fund it only with a small amount you can afford to lose.</li><li>Clearing browser data deletes the key — export it if you want a backup.</li><li>If you forget the passphrase, the funds are lost.</li></ul>
-      <label class="block mt-3 text-xs text-slate-400">Passphrase (min 10 characters)${passField('bpPass')}</label>
-      <label class="block mt-2 text-xs text-slate-400">Repeat passphrase${passField('bpPass2')}</label>
+      <label class="block mt-3 text-xs text-slate-400">Passphrase (min 10 characters)${passField('c1')}</label>
+      <label class="block mt-2 text-xs text-slate-400">Repeat passphrase${passField('c2')}</label>
       <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="bpAck" type="checkbox" class="mt-0.5 accent-violet-500" /> I understand this is a hot wallet in my browser and I will only fund small amounts.</label>`,
-    validate: () => ($('bpPass')?.value || '').length >= 10 && $('bpPass').value === $('bpPass2').value && $('bpAck').checked,
+    validate: () => kfVal('c1').length >= 10 && kfVal('c1') === kfVal('c2') && $('bpAck').checked,
     onConfirm: async () => {
+      const phrase = kfVal('c1'); kfClear('c1'); kfClear('c2');
       modalStatus('<span class="spinner spinner-light"></span> Generating & encrypting…');
       const w = await loadWeb3(); const kp = w.Keypair.generate();
-      const e = await encryptSecret(kp.secretKey, $('bpPass').value);
+      const e = await encryptSecret(kp.secretKey, phrase);
       save(LS.burner, { v: 1, pub: kp.publicKey.toBase58(), kdf: 'PBKDF2-SHA256-310000/AES-GCM-256', created: Date.now(), ...e });
       Object.assign(WALLETS.burner, { pubkey: kp.publicKey.toBase58(), kp, sol: null, tokens: new Map() }); forgetBurnerSol();
       setActive('burner'); renderBurner(); refreshBalances('burner'); toast('Burner wallet created & unlocked: ' + short(kp.publicKey.toBase58()), 'ok');
@@ -4785,32 +4797,33 @@ function parseSecretKey(text) {
 function importBurner() {
   if (burnerRec() && !confirm('A burner wallet already exists in this browser. Importing REPLACES it — export its key / withdraw funds first! Continue?')) return;
   resetModalButtons(); let derived = null; let sk = null;
-  const wipe = () => { if (sk) sk.fill(0); sk = null; derived = null; const f = $('biKey'); if (f) f.value = ''; };
+  const wipe = () => { if (sk) sk.fill(0); sk = null; derived = null; kfClear('ik'); kfClear('i1'); kfClear('i2'); };
   openModal({ title: '📥 Import existing key as burner', confirmLabel: 'Import & encrypt',
     html: `<p class="text-xs text-slate-300">Paste a Solana private key: <b>base58</b> (Phantom export) or a <b>JSON byte array</b> (64 bytes, Solana CLI format). It is decrypted only in this browser, encrypted with your passphrase (AES-GCM, PBKDF2 310k) and never sent anywhere.</p>
       <div class="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-200/90">Prefer a dedicated wallet with a small balance — auto-trading can spend from it. Don't import your main wallet.</div>
-      <label class="block mt-3 text-xs text-slate-400">Private key<textarea id="biKey" rows="3" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 font-mono text-[11px]" style="-webkit-text-security:disc"></textarea></label>
-      <button id="biDerive" class="mt-2 rounded-lg px-3 py-1.5 text-xs bg-ink-700 hover:bg-ink-600 border border-white/10">Derive address</button>
+      <label class="block mt-3 text-xs text-slate-400">Private key<textarea data-kf="ik" rows="3" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" data-1p-ignore data-lpignore="true" class="secret-field mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 font-mono text-[11px]"></textarea></label>
+      <button id="biDerive" type="button" class="mt-2 rounded-lg px-3 py-1.5 text-xs bg-ink-700 hover:bg-ink-600 border border-white/10">Derive address</button>
       <div id="biAddr" class="mt-2 text-xs"></div>
-      <label class="block mt-3 text-xs text-slate-400">Passphrase (min 10 characters)${passField('biPass')}</label>
-      <label class="block mt-2 text-xs text-slate-400">Repeat passphrase${passField('biPass2')}</label>
+      <label class="block mt-3 text-xs text-slate-400">Passphrase (min 10 characters)${passField('i1')}</label>
+      <label class="block mt-2 text-xs text-slate-400">Repeat passphrase${passField('i2')}</label>
       <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="biAck" type="checkbox" class="mt-0.5 accent-violet-500" /> <span>The address above is the wallet I want to import.</span></label>`,
-    validate: () => !!derived && ($('biPass')?.value || '').length >= 10 && $('biPass').value === $('biPass2').value && $('biAck').checked,
+    validate: () => !!derived && kfVal('i1').length >= 10 && kfVal('i1') === kfVal('i2') && $('biAck').checked,
     onClose: wipe,
     onConfirm: async () => {
       if (!sk || !derived) throw new Error('Derive the address first');
       modalStatus('<span class="spinner spinner-light"></span> Encrypting…');
       const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(Uint8Array.from(sk));
       if (kp.publicKey.toBase58() !== derived) throw new Error('Key changed — derive again');
-      const e = await encryptSecret(kp.secretKey, $('biPass').value);
+      const phrase = kfVal('i1'); kfClear('i1'); kfClear('i2');
+      const e = await encryptSecret(kp.secretKey, phrase);
       killSwitch('import');
       save(LS.burner, { v: 1, pub: derived, kdf: 'PBKDF2-SHA256-310000/AES-GCM-256', created: Date.now(), imported: true, ...e });
       Object.assign(WALLETS.burner, { pubkey: derived, kp, sol: null, tokens: new Map() }); forgetBurnerSol();
-      const addr = derived; wipe(); ['biPass', 'biPass2'].forEach(id => { if ($(id)) $(id).value = ''; });
+      const addr = derived; wipe();
       setActive('burner'); renderBurner(); refreshBalances('burner'); toast('Key imported & unlocked: ' + short(addr), 'ok');
       modalStatus(`✔ Imported <span class="font-mono">${esc(addr)}</span> — stored encrypted in this browser.`, 'text-emerald-300'); return true;
     } });
-  const keyEl = $('biKey');
+  const keyEl = kfEl('ik');
   keyEl.addEventListener('input', () => { if (sk) sk.fill(0); sk = null; derived = null; $('biAddr').innerHTML = ''; if ($('biAck')) $('biAck').checked = false; revalidate(); });
   $('biDerive').addEventListener('click', async () => {
     try {
@@ -4825,23 +4838,23 @@ function importBurner() {
 }
 function unlockBurner() {
   const rec = burnerRec(); if (!rec) return; resetModalButtons();
-  openModal({ title: '🔓 Unlock burner wallet', confirmLabel: 'Unlock', html: `<p class="text-xs text-slate-400">Address <span class="font-mono">${esc(short(rec.pub))}</span>. The key stays in memory until you lock it or close the tab.</p><label class="block mt-2 text-xs text-slate-400">Passphrase${passField('buPass')}</label>`,
-    validate: () => ($('buPass')?.value || '').length > 0,
-    onConfirm: async () => { modalStatus('<span class="spinner spinner-light"></span> Decrypting…');
-      const sk = await decryptSecret(rec, $('buPass').value); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
+  openModal({ title: '🔓 Unlock burner wallet', confirmLabel: 'Unlock', html: `<p class="text-xs text-slate-400">Address <span class="font-mono">${esc(short(rec.pub))}</span>. The key stays in memory until you lock it or close the tab.</p><label class="block mt-2 text-xs text-slate-400">Passphrase${passField('u')}</label>`,
+    validate: () => kfVal('u').length > 0,
+    onConfirm: async () => { const phrase = kfVal('u'); kfClear('u'); modalStatus('<span class="spinner spinner-light"></span> Decrypting…');
+      const sk = await decryptSecret(rec, phrase); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
       if (kp.publicKey.toBase58() !== rec.pub) throw new Error('Decrypted key does not match stored address');
       WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); if (typeof botLog === 'function') botLog('unlock', 'panel', 'unlocked ok'); if (typeof degenLogEvent === 'function') { degenLogEvent('pot', 'unlocked ok'); (DEGEN.picks || []).forEach(p => p && p.mint && degenLogEvent(p.mint, 'unlocked ok', p.symbol)); } resumeArmedBots(); } });
-  setTimeout(() => $('buPass')?.focus(), 50);
+  setTimeout(() => kfEl('u')?.focus(), 50);
 }
 function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); paintLockBanner(); toast('Burner locked (key wiped from memory)', 'info'); }
 function exportBurner() {
   const rec = burnerRec(); if (!rec) return; resetModalButtons();
   openModal({ title: '⚠️ Export burner private key', confirmLabel: 'Reveal key', danger: true,
     html: `<div class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-200">Anyone with this key controls the wallet's funds. Never paste it into a website or chat, and never share it. Only import it into a wallet you trust (Phantom → Add account → Import private key).</div>
-      <label class="block mt-3 text-xs text-slate-400">Passphrase${passField('bePass')}</label>
+      <label class="block mt-3 text-xs text-slate-400">Passphrase${passField('e')}</label>
       <label class="mt-3 flex gap-2 items-start text-xs text-slate-300"><input id="beAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand the risk and I am in a private place.</label>`,
-    validate: () => ($('bePass')?.value || '').length > 0 && $('beAck').checked,
-    onConfirm: async () => { const sk = await decryptSecret(rec, $('bePass').value); const k = b58encode(sk);
+    validate: () => kfVal('e').length > 0 && $('beAck').checked,
+    onConfirm: async () => { const phrase = kfVal('e'); kfClear('e'); const sk = await decryptSecret(rec, phrase); const k = b58encode(sk);
       $('tmBody').innerHTML = `<p class="text-xs text-slate-400">Private key (base58, Phantom-compatible). It is hidden again when you close this window.</p><textarea readonly class="mt-2 w-full h-24 rounded-lg bg-ink-800 border border-rose-500/40 p-2 font-mono text-[11px] break-all" id="beKey">${k}</textarea><button id="beCopy" class="mt-2 rounded-lg px-3 py-1.5 text-xs bg-ink-700 border border-white/10">Copy key</button>`;
       $('beCopy').addEventListener('click', async () => { if (await copyText(k)) toast('Key copied — clear your clipboard after use', 'warn'); }); return true; } });
 }
@@ -5297,7 +5310,7 @@ function degenExit(p, lp) {
 }
 function effectiveStop(p, lp) {
   if (p?.degen) return degenEffective(p, lp);
-  if (p?.plan?.myList) return applyManualLevels(p, applyQuickOverlay(p, myListEffectiveStop(p, lp)));
+  if (p?.plan?.myList) return applyManualLevels(p, myListEffectiveStop(p, lp));
   let eff;
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
     const pl = positionTargets(p);
@@ -8705,8 +8718,8 @@ function myListEffectiveStop(p, lp) {
   let stop = isNum(spec.stopPx) && (!isNum(entry) || spec.stopPx < entry) ? spec.stopPx : (isNum(entry) ? entry * (1 - spec.stopPct / 100) : null);
   let reason = 'initial';
   const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
-  if (!((quickOn() || p?.plan?.split) && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
-  if (!((quickOn() || p?.plan?.split) && !manualLevelFlags(p).tp) && isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
+  if (!(p?.plan?.split && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
+  if (!(p?.plan?.split && !manualLevelFlags(p).tp) && isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
   const prev = autoStop[p.key];
   if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
   else if (isNum(stop) && (!prev || stop > (prev.stop || 0) + 1e-12)) { autoStop[p.key] = { stop, reason }; save('sms:autostop', autoStop); }
@@ -8718,7 +8731,6 @@ function myListExit(p, lp) {
   if (!isNum(lp) || !(p?.avgUsd > 0)) return null;
   const eff = effectiveStop(p, lp);
   if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'trail' ? 'trail' : (eff.reason === 'break-even' ? 'stop' : 'stop') };
-  if (eff.quick && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 100, tag: 'tp' };
   const done = p.tpDone || {};
   for (let i = 0; i < (eff.tps || []).length; i++) {
     const tag = 'tp' + i;
@@ -9308,7 +9320,11 @@ function renderMyList(opts) {
     const cardTf = v.spec.mode === 'momentum' ? '1m' : (row.displayTf || (isBreakMode(v.spec.mode) ? v.spec.tf : '4h'));
     const setupSum = modeShort(v.spec.mode) + ' · ' + cardTf;
     const trigSum = [isNum(v.model.trigger) ? price(v.model.trigger) : '', distTxt && distTxt !== '—' ? distTxt : ''].filter(Boolean).join(' · ');
-    const stopSum = v.spec.mode === 'ath' && !v.spec.athUserStop ? 'under band' : ((v.spec.stopPct > 0 ? v.spec.stopPct : 15) + '%');
+    const exitStop = v.spec.stopPct > 0 ? v.spec.stopPct : 15;
+    const exitTp = v.spec.tps?.[0]?.gainPct > 0 ? v.spec.tps[0].gainPct : 30;
+    const pctBit = (n) => { const x = Math.round(+n * 10) / 10; return Number.isInteger(x) ? String(x) : x.toFixed(1); };
+    const exitLine = (v.spec.mode === 'ath' && !v.spec.athUserStop ? 'stop under band' : 'stop −' + pctBit(exitStop) + '%') + ' · TP +' + pctBit(exitTp) + '%';
+    const stopSum = v.spec.mode === 'ath' && !v.spec.athUserStop ? 'under band' : (pctBit(exitStop) + '%');
     const upside = isNum(v.model.room?.up) ? v.model.room.up : (isNum(v.px) && isNum(v.model.tp1) && v.model.tp1 > v.px ? (v.model.tp1 / v.px - 1) * 100 : null);
     const rrShow = isNum(v.model.room?.rr) ? v.model.room.rr : v.model.rr;
     const potSum = [isNum(upside) ? '+' + upside.toFixed(0) + '%' : '', isNum(rrShow) ? '1:' + rrShow.toFixed(1) : ''].filter(Boolean).join(' · ');
@@ -9337,8 +9353,9 @@ function renderMyList(opts) {
         <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
           ${logo}
           <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b>${typeof quickOn === 'function' && quickOn() ? '<span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:1</span>' : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
+            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
+            <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
           </span>
           <span class="row-px">
             <span class="block num text-[15px] font-semibold ${flash}" data-live-mint="${esc(row.mint)}">${priceHtml(v.px)}</span>
@@ -9353,7 +9370,8 @@ function renderMyList(opts) {
         <div class="sheet-grab"></div>
         <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">${esc(row.symbol || short(row.mint))}</b><button type="button" data-sheet-close class="text-sm text-slate-400">Close</button></div>
         <span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
-        ${typeof quickOn === 'function' && quickOn() ? `<span class="ml-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">Quick 15% · 1:1</span>` : ''}
+        <span class="ml-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">1:2</span>
+        <span class="mt-1 block text-[12px] text-slate-300">${esc(exitLine)} · full exit</span>
       <div class="chart-frame sheet-chart mt-2" data-sheet-chart="${esc(row.id)}" style="overflow:hidden;height:220px"><div class="grid h-full place-items-center text-[11px] text-slate-500">Chart loads with this token</div></div>
       <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
         ${cell('Setup', esc(setupSum))}
