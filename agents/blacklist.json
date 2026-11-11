@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T21:20:00Z",
-  "updated_tehran": "2026-11-12 00:50 IRST",
+  "updated_utc": "2026-11-11T21:50:00Z",
+  "updated_tehran": "2026-11-12 01:20 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -121,6 +121,11 @@
       "mint": "6ut8rZUw8aroJCDwAXaGpmx2gcXvriGoTgBS6p98pump",
       "symbol": "MANEKI",
       "why": "bundled launch"
+    },
+    {
+      "mint": "57GLjEQGAsLa22z6xCJyFGRpyL32vxdijDzxxFr9pump",
+      "symbol": "konnichiwa",
+      "why": "rugged, liquidity $2.3k"
     }
   ]
 }

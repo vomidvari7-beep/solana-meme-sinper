@@ -391,6 +391,8 @@ export function createEngine(cfg, state, net, swap) {
       }
       const conf = liveConfidence(tape);
       if (conf < 60) { state.note('scan', raw.mint, raw.symbol, 'confidence ' + conf + ' < 60'); continue; }
+      const listed = (agents.degen?.picks || []).find(x => x && x.mint === raw.mint);
+      if (!listed) { state.note('scan', raw.mint, raw.symbol, 'not in degen.json'); continue; }
       await refreshSol();
       if (!(sol.price > 0)) return;
       const drop = liqDrop(raw.mint, tape.liq);

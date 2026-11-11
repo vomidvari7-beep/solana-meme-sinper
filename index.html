@@ -7386,7 +7386,7 @@ async function sniperPoll() {
     for (const p of ready) {
       if (LOG.some(r => r.sniper && r.side === 'buy' && r.mint === p.mint && ['pending', 'confirmed'].includes(r.status))) { sniperNote(p.symbol + ' already sniped', 'info'); botLog('sniper', p.mint, 'already sniped'); continue; }
       if (gate.action === 'pause') { sniperNote(p.symbol + ' paused — ' + gate.badge, 'warn'); botLog('sniper', p.mint, gate.badge || 'mood pause'); break; }
-      const viaDegen = degenOn();
+      const viaDegen = degenOn() && (DEGEN.picks || []).some(x => x && x.mint === p.mint);
       let sol;
       if (viaDegen) {
         const block = degenBuyBlock();
@@ -7490,6 +7490,22 @@ function stopSniper(reason, opts) {
 const DEGEN_LS = 'sms:degen';
 const DEGEN = { picks: [], fetched: 0, error: '', note: '' };
 let degenTimer = null, degenExitTimer = null, degenBusy = false, degenBusySince = 0, degenPass = 0;
+function degenTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error((label || 'degen call') + ' timed out')), ms || 20000);
+    Promise.resolve(promise).then(v => { clearTimeout(timer); resolve(v); }, e => { clearTimeout(timer); reject(e); });
+  });
+}
+function releaseDegenLock(reason) {
+  if (!degenBusy || Date.now() - degenBusySince < 45000) return false;
+  degenBusy = false;
+  degenBusySince = 0;
+  degenPass++;
+  const msg = reason || 'buy pass lock cleared after 45s';
+  degenLogEvent('pot', msg);
+  degenNote(msg);
+  return true;
+}
 function degenBlank(v, max) {
   const n = +v;
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -8024,8 +8040,9 @@ async function degenTokenPx(mint, force) {
 }
 async function degenBuy(pick, opt) {
   if (opt?.live) {
+    if (!(DEGEN.picks || []).some(x => x && x.mint === pick?.mint)) { degenBlockNote(pick, 'not in degen.json'); return; }
     if (!degenEntryLive(pick) && hunterRemoved(pick?.mint)) { degenBlockNote(pick, 'removed by Hunter'); return; }
-    const price = isNum(opt.price) ? opt.price : await degenTokenPx(pick.mint, true);
+    const price = isNum(opt.price) ? opt.price : await degenTimeout(degenTokenPx(pick.mint, true), 20000, 'price');
     if (degenCooled(pick.mint) || openPositions().some(p => p.open && p.mint === pick.mint) || (WALLETS.burner?.tokens?.get(pick.mint)?.raw > 0n)) { degenBlockNote(pick, 'cooldown or already held'); return; }
     const veto = hunterVeto(pick.mint);
     if (veto) { degenBlockNote(pick, 'hunter ' + veto); return; }
@@ -8034,7 +8051,7 @@ async function degenBuy(pick, opt) {
     const block = degenBuyBlock();
     if (block) { degenBlockNote(pick, block); return; }
     if (!opt.skipSafety) {
-      const safe = await degenSafety(pick.mint);
+      const safe = await degenTimeout(degenSafety(pick.mint), 20000, 'honeypot');
       if (!safe.ok) { degenBlockNote(pick, safe.reason); return; }
     }
     const fake = fakeDataReason(pick.mint, Object.assign({ px: price }, opt.tape || {}));
@@ -8049,7 +8066,7 @@ async function degenBuy(pick, opt) {
     if (errs.length) { degenBlockNote(pick, errs[0]); return; }
     const slip = Math.min(S.slippagePct, A.slipCap);
     let qo;
-    try { qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
+    try { qo = await degenTimeout(getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }), 20000, 'jupiter quote'); }
     catch (e) { degenBlockNote(pick, 'fake-data: jupiter quote failed'); noteScanHit({ mint: pick.mint, symbol: pick.symbol, ok: false, status: 'BLOCK', conf: opt.conf ?? null, reason: 'fake-data: jupiter quote failed', at: Date.now() }); return; }
     const badQuote = fakeImpactReason(qo.quote);
     if (badQuote) { degenBlockNote(pick, badQuote); noteScanHit({ mint: pick.mint, symbol: pick.symbol, ok: false, status: 'BLOCK', conf: opt.conf ?? null, reason: badQuote, at: Date.now() }); return; }
@@ -8074,17 +8091,17 @@ async function degenBuy(pick, opt) {
     if (!fresh) { degenBlockNote(pick, 'pick not in fresh degen.json'); return; }
     pick = fresh;
   }
-  const price = isNum(opt?.price) ? opt.price : await degenTokenPx(pick.mint, true);
+  const price = isNum(opt?.price) ? opt.price : await degenTimeout(degenTokenPx(pick.mint, true), 20000, 'price');
   if (!opt?.sniper && degenStatus(pick, price) !== 'READY') { degenBlockNote(pick, 'not READY on fresh file'); return; }
   const why = degenPickBlock(pick, price);
   if (why) { degenBlockNote(pick, why); return; }
   const block = degenBuyBlock();
   if (block) { degenBlockNote(pick, block); return; }
   if (!opt?.skipSafety) {
-    const safe = await degenSafety(pick.mint);
+    const safe = await degenTimeout(degenSafety(pick.mint), 20000, 'honeypot');
     if (!safe.ok) { degenBlockNote(pick, safe.reason); return; }
   }
-  if (!solPriceNow()) await refreshSolPrice();
+  if (!solPriceNow()) await degenTimeout(refreshSolPrice(), 20000, 'SOL price');
   let sol = degenTradeSol();
   if (!(sol >= 0.001)) { degenBlockNote(pick, 'degen size too small'); return; }
   const test = liveTestTake(sol);
@@ -8093,7 +8110,7 @@ async function degenBuy(pick, opt) {
   const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
   if (errs.length) { degenBlockNote(pick, errs[0]); return; }
   const slip = Math.min(S.slippagePct, A.slipCap);
-  const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
+  const qo = await degenTimeout(getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }), 20000, 'jupiter quote');
   const imp = impactPct(qo.quote);
   if (imp > 15) { degenBlockNote(pick, 'impact ' + imp.toFixed(1) + '%'); return; }
   if (opt?.pass && opt.pass !== degenPass) { degenBlockNote(pick, 'buy pass restarted'); return; }
@@ -8165,7 +8182,8 @@ async function degenEvaluate(picks) {
   if (!degenOn()) { degenNoteLive(list, 'degen pot off'); return; }
   if (!burnerReady()) { degenNoteLive(list, 'burner locked'); botLog('degen', 'panel', 'burner locked'); degenNote('armed, unlock to run'); return; }
   if (degenLedgerShort()) { degenHaltFunds(); degenNoteLive(list, 'Degen out of funds'); return; }
-  if (degenBusy && Date.now() - degenBusySince < 8000) { degenNoteLive(list, 'buy pass still running'); return; }
+  releaseDegenLock('buy pass lock cleared after 45s');
+  if (degenBusy) { degenNoteLive(list, 'buy pass still running'); return; }
   const pass = ++degenPass;
   degenBusy = true;
   degenBusySince = Date.now();
@@ -8179,13 +8197,13 @@ async function degenEvaluate(picks) {
       const block = degenBuyBlock();
       if (block) { degenBlockNote(pick, block); continue; }
       let price = shown;
-      try { price = await degenTokenPx(pick.mint, true); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
+      try { price = await degenTimeout(degenTokenPx(pick.mint, true), 20000, 'price'); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
       if (pass !== degenPass) { degenBlockNote(pick, 'buy pass restarted'); return; }
       const why = degenPickBlock(pick, price);
       if (why) { degenBlockNote(pick, why); continue; }
       if (filled) { degenBlockNote(pick, 'queued — one degen buy per pass'); continue; }
       try {
-        const bought = await degenBuy(pick, { price, fresh: true, pass });
+        const bought = await degenTimeout(degenBuy(pick, { price, fresh: true, pass }), 45000, 'buy');
         if (bought) filled = true;
       } catch (e) { degenBlockNote(pick, e.message || 'buy failed'); }
     }
@@ -8200,7 +8218,8 @@ async function degenEvaluate(picks) {
 }
 let degenKickQueued = false;
 async function degenPoll() {
-  if (degenBusy && Date.now() - degenBusySince < 8000) { degenKickQueued = true; degenNoteLive(DEGEN.picks, 'buy pass still running'); return; }
+  releaseDegenLock('buy pass lock cleared after 45s');
+  if (degenBusy) { degenKickQueued = true; degenNoteLive(DEGEN.picks, 'buy pass still running'); return; }
   try {
     const data = await fetchDegenDoc();
     const picks = applyDegenDoc(data);
@@ -8558,11 +8577,8 @@ async function liveScanOnce() {
       if (!degenOn() || !burnerReady()) { const why = degenOn() ? 'burner locked' : 'degen pot off'; noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: why, at: Date.now() }); botLog('scan', p.mint, why); break; }
       const block = degenBuyBlock();
       if (block) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: block, at: Date.now() }); break; }
-      noteScanHit({ mint: p.mint, symbol: p.symbol, ok: true, status: 'PASS', conf, reason: 'buying from degen pot', at: Date.now() });
-      try {
-        await degenBuy({ mint: p.mint, symbol: p.symbol, stop_pct: 25, time_stop_min: 45, trail: 20, max_entry_price: p.price }, { live: true, price: p.price, conf, tape: { liq: p.liq, mcap: p.mcap, vol24: p.vol24, m5b: p.m5b, m5s: p.m5s, h1b: p.h1b, h1s: p.h1s, h1: p.chg1h } });
-      } catch (e) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: e.message || 'buy failed', at: Date.now() }); degenLogEvent(p.mint, e.message || 'buy failed', p.symbol); }
-      break;
+      noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: 'live scan does not spend the Degen pot', at: Date.now() });
+      continue;
     }
   } catch (e) {
     if (e && (e.status === 429 || /429|rate/i.test(e.message || ''))) liveScanGap = Math.min(20000, Math.max(8000, liveScanGap * 2));
