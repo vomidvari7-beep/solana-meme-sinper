@@ -624,6 +624,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 01:34</p>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -7504,6 +7505,7 @@ function releaseDegenLock(reason) {
   const msg = reason || 'buy pass lock cleared after 45s';
   degenLogEvent('pot', msg);
   degenNote(msg);
+  if (typeof degenNoteLive === 'function') degenNoteLive(DEGEN.picks, msg);
   return true;
 }
 function degenBlank(v, max) {
@@ -8183,7 +8185,7 @@ async function degenEvaluate(picks) {
   if (!burnerReady()) { degenNoteLive(list, 'burner locked'); botLog('degen', 'panel', 'burner locked'); degenNote('armed, unlock to run'); return; }
   if (degenLedgerShort()) { degenHaltFunds(); degenNoteLive(list, 'Degen out of funds'); return; }
   releaseDegenLock('buy pass lock cleared after 45s');
-  if (degenBusy) { degenNoteLive(list, 'buy pass still running'); return; }
+  if (degenBusy) { degenKickQueued = true; return; }
   const pass = ++degenPass;
   degenBusy = true;
   degenBusySince = Date.now();
@@ -8197,7 +8199,12 @@ async function degenEvaluate(picks) {
       const block = degenBuyBlock();
       if (block) { degenBlockNote(pick, block); continue; }
       let price = shown;
-      try { price = await degenTimeout(degenTokenPx(pick.mint, true), 20000, 'price'); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
+      const quoted = (DEGEN.quotes || {})[pick.mint];
+      const shownAt = quoted && quoted.at ? quoted.at : (livePrices.get(pick.mint)?.at || 0);
+      const aboveMax = isNum(shown) && +pick.max_entry_price > 0 && shown > +pick.max_entry_price;
+      if (!(aboveMax && shownAt && Date.now() - shownAt < 15000)) {
+        try { price = await degenTimeout(degenTokenPx(pick.mint, true), 20000, 'price'); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
+      }
       if (pass !== degenPass) { degenBlockNote(pick, 'buy pass restarted'); return; }
       const why = degenPickBlock(pick, price);
       if (why) { degenBlockNote(pick, why); continue; }
@@ -8219,7 +8226,7 @@ async function degenEvaluate(picks) {
 let degenKickQueued = false;
 async function degenPoll() {
   releaseDegenLock('buy pass lock cleared after 45s');
-  if (degenBusy) { degenKickQueued = true; degenNoteLive(DEGEN.picks, 'buy pass still running'); return; }
+  if (degenBusy) { degenKickQueued = true; return; }
   try {
     const data = await fetchDegenDoc();
     const picks = applyDegenDoc(data);
@@ -8270,14 +8277,14 @@ async function degenWatch() {
       const pick = quoteList[(degenQuoteCursor + i) % quoteList.length];
       const fresh = livePrices.get(pick.mint);
       if (fresh && fresh.price > 0 && Date.now() - (fresh.at || 0) < 3000) {
-        DEGEN.quotes[pick.mint] = { ...(DEGEN.quotes[pick.mint] || {}), price: fresh.price };
+        DEGEN.quotes[pick.mint] = { ...(DEGEN.quotes[pick.mint] || {}), price: fresh.price, at: fresh.at || Date.now() };
         continue;
       }
       try {
         const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + pick.mint, { signal: ctl.signal });
         const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
         if (best && +best.priceUsd > 0) {
-          DEGEN.quotes[pick.mint] = { price: +best.priceUsd, image: best.info?.imageUrl || '' };
+          DEGEN.quotes[pick.mint] = { price: +best.priceUsd, image: best.info?.imageUrl || '', at: Date.now() };
           if (best.info?.imageUrl) rememberLogo(pick.mint, best.info.imageUrl, { src: 'dex' });
           noteTape(pick.mint, best);
           livePrices.set(pick.mint, { price: +best.priceUsd, liq: best.liquidity?.usd ?? null, at: Date.now() });
@@ -13162,6 +13169,14 @@ function mountApp() {
     const pane = $(id); if (!pane || pane.querySelector(':scope > .large-title')) return;
     const h = document.createElement('h1'); h.className = 'large-title'; h.textContent = label; pane.prepend(h);
   });
+  if (settings && !$('panelBuildTop')) {
+    const stamp = document.createElement('p');
+    stamp.id = 'panelBuildTop';
+    stamp.className = 'text-[12px] font-mono text-slate-500';
+    stamp.textContent = 'Panel build 2026-11-12 01:34';
+    const title = settings.querySelector('.large-title');
+    if (title) title.after(stamp); else settings.prepend(stamp);
+  }
   const openBots = () => { $('botSheet')?.classList.add('open'); $('botScrim')?.classList.add('on'); };
   const closeBots = () => { $('botSheet')?.classList.remove('open'); $('botScrim')?.classList.remove('on'); };
   const banner = $('safeBanner');
