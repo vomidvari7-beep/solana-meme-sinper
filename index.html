@@ -103,7 +103,13 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .status-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--card); color: inherit; text-align: left; }
   .status-row b { display: block; font-size: 15px; font-weight: 600; }
   .status-row span span { display: block; color: var(--muted); font-size: 12px; }
-  .watch-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; }
+  .watch-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; overflow: hidden; }
+  .watch-row svg { display: none; }
+  .row-px { flex: 0 0 auto; min-width: 92px; text-align: right; }
+  .row-px .num { white-space: nowrap; }
+  .setup-chip { display: inline-flex; align-items: center; height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); color: #C4B5FD; font-size: 10px; font-weight: 600; letter-spacing: .02em; }
+  .chart-frame { overflow: hidden; }
+  .chart-frame canvas { display: block; width: 100%; height: 220px; }
   .mono-logo { width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--elev); color: var(--text); font-size: 13px; font-weight: 600; overflow: hidden; flex: 0 0 auto; }
   .chg-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 600; }
   .chg-up, .pnl-up { color: var(--up); background: rgba(34,197,94,.12); }
@@ -7914,10 +7920,10 @@ function listChartSvg(model, opt) {
   if (model.trendLine) {
     const a = model.trendLine.a, b = model.trendLine.b;
     const p0 = lineAt(a, b, a.i), pEnd = lineAt(a, b, cs.length - 1);
-    if (isNum(p0) && isNum(pEnd) && p0 > 0 && pEnd > 0) tl = `<line x1="${x(a.i).toFixed(2)}" y1="${y(p0).toFixed(2)}" x2="${x(cs.length - 1).toFixed(2)}" y2="${y(pEnd).toFixed(2)}" stroke="#f8fafc" stroke-width="2.2" stroke-linecap="round"/>`;
+    if (isNum(p0) && isNum(pEnd) && p0 > 0 && pEnd > 0) tl = `<line x1="${x(a.i).toFixed(2)}" y1="${y(p0).toFixed(2)}" x2="${x(cs.length - 1).toFixed(2)}" y2="${y(pEnd).toFixed(2)}" stroke="#f8fafc" stroke-width="1.5" stroke-linecap="round"/>`;
   }
   const distinct = model.srBand && model.ath && Math.abs(model.srBand.mid - model.ath.mid) / model.ath.mid > 0.1;
-  const labelSize = h >= 180 ? 11 : 8;
+  const labelSize = 11;
   let athLabel = '';
   if (model.ath) {
     const yTop = y(model.ath.hi);
@@ -8287,7 +8293,6 @@ function renderMyList() {
     const pc = pair.priceChange || {};
     const h1 = pc.h1 != null ? +pc.h1 : null, h24 = pc.h24 != null ? +pc.h24 : null;
     const flags = (row.flags && row.flags.length ? row.flags : ((lastResult?.tokens || []).find(t => t.mint === row.mint)?.flags || []).map(f => f.text)).slice(0, 4);
-    const drawn = listChartSvg(v.model, { w: 320, h: 72 });
     const sameUnit = (mid) => isNum(mid) && isNum(v.px) && mid > 0 && mid / v.px > 0.05 && mid / v.px < 20;
     const trend = v.model.trend === 'up' ? 'Up' : v.model.trend === 'down' ? 'Down' : v.model.trend === 'range' ? 'Range' : '';
     const zone = v.model.zone && isNum(v.model.zone.lo) ? price(v.model.zone.lo) + '–' + price(v.model.zone.hi) : '';
@@ -8329,10 +8334,8 @@ function renderMyList() {
     }
     const dex = pair.url || ('https://dexscreener.com/solana/' + row.mint);
     const cell = (k, val) => `<div class="min-w-0"><div class="text-[9px] uppercase tracking-wide text-slate-500">${k}</div><div class="text-[12px] leading-tight text-slate-100 whitespace-normal break-words">${val || '—'}</div></div>`;
-    const ageH = rowAgeH(row);
-    const ticks = !window.__SMS_SAFE && isNum(ageH) && ageH < 6 ? tickBars(row.mint, '1s').slice(-48) : [];
-    const spark = listChartSvg(ticks.length >= 2 ? { candles: ticks } : v.model, { w: 84, h: 32 });
     const mono = esc((row.symbol || '?').slice(0, 2).toUpperCase());
+    const setupTag = v.spec.mode === 'ath' ? 'ATH' : (v.model.buyZone ? 'BUY ZONE' : '');
     if (!window.__pxSeen) window.__pxSeen = {};
     const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
     if (isNum(v.px)) window.__pxSeen[row.mint] = v.px;
@@ -8342,11 +8345,10 @@ function renderMyList() {
         <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
           ${logo}
           <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b>${typeof quickOn === 'function' && quickOn() ? '<span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:1</span>' : ''}</span>
+            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b>${typeof quickOn === 'function' && quickOn() ? '<span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:1</span>' : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
           </span>
-          <span class="shrink-0">${spark.empty ? '' : spark.svg}</span>
-          <span class="shrink-0 text-right">
+          <span class="row-px">
             <span class="block num text-[15px] font-semibold ${flash}" data-live-mint="${esc(row.mint)}">${priceHtml(v.px)}</span>
             ${isNum(h24) ? `<span class="chg-pill ${h24 >= 0 ? 'chg-up' : 'chg-down'}">${pct(h24, 1)}</span>` : ''}
           </span>
@@ -8358,9 +8360,7 @@ function renderMyList() {
         <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">${esc(row.symbol || short(row.mint))}</b><button type="button" data-sheet-close class="text-sm text-slate-400">Close</button></div>
         <span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
         ${typeof quickOn === 'function' && quickOn() ? `<span class="ml-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">Quick 15% · 1:1</span>` : ''}
-      <button type="button" data-ml-chart="${esc(row.id)}" class="chart-frame mt-2 block w-full rounded-xl border border-white/10 p-1.5 text-left" style="touch-action:manipulation" aria-label="Open chart">
-        ${drawn.empty ? '<div class="h-10 grid place-items-center text-[11px] text-slate-500">Chart waiting for candles</div>' : drawn.svg}
-      </button>
+      <div class="chart-frame sheet-chart mt-2" data-sheet-chart="${esc(row.id)}" style="overflow:hidden;height:220px"><div class="grid h-full place-items-center text-[11px] text-slate-500">Chart loads with this token</div></div>
       <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
         ${cell('Setup', esc(setupSum))}
         ${cell('Trigger', esc(trigSum))}
@@ -9416,9 +9416,117 @@ function closeTokenSheet() {
   if (sheet) {
     sheet.classList.remove('open');
     sheet.querySelectorAll('.lite-host').forEach(n => { try { n._chart?.remove(); } catch { /* gone */ } n._chart = null; });
+    sheet.querySelectorAll('.sheet-chart canvas').forEach(c => { c.width = 0; c.height = 0; c.remove(); });
   }
   if (sheet && sheetHost && sheetHost.isConnected) sheetHost.appendChild(sheet);
   sheetHost = null;
+}
+function paintSheetChart(frame, model) {
+  if (!frame || !model) return;
+  const cs = (model.candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0);
+  frame.replaceChildren();
+  frame.style.overflow = 'hidden';
+  frame.style.height = '220px';
+  if (cs.length < 2) {
+    const note = document.createElement('div');
+    note.className = 'grid h-full place-items-center text-[11px] text-slate-500';
+    note.textContent = 'Chart waiting for candles';
+    frame.appendChild(note);
+    return;
+  }
+  const cssW = Math.max(280, Math.round(frame.clientWidth || 340));
+  const cssH = 220;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width = '100%';
+  canvas.style.height = cssH + 'px';
+  frame.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const minC = Math.min(...cs.map(c => c.l));
+  const maxC = Math.max(...cs.map(c => c.h));
+  const log = minC > 0 && (maxC / minC >= 2.5 || maxC < 1);
+  const pad = 0.08;
+  let lo, hi, y;
+  if (log) {
+    const span = Math.log(maxC) - Math.log(minC) || 1;
+    lo = Math.log(minC) - span * pad;
+    hi = Math.log(maxC) + span * pad;
+    y = (p) => (1 - (Math.log(Math.max(p, minC * 0.5)) - lo) / (hi - lo)) * (cssH - 16) + 8;
+  } else {
+    const span = (maxC - minC) || Math.abs(maxC) * 0.04 || 1;
+    lo = minC - span * pad;
+    hi = maxC + span * pad;
+    y = (p) => (1 - (p - lo) / (hi - lo)) * (cssH - 16) + 8;
+  }
+  const x = (i) => cs.length < 2 ? 8 : (i / (cs.length - 1)) * (cssW - 16) + 8;
+  const band = (zone, fill) => {
+    if (!zone || !(zone.hi > zone.lo)) return;
+    const y1 = y(zone.hi), y2 = y(zone.lo);
+    ctx.fillStyle = fill;
+    ctx.fillRect(0, Math.min(y1, y2), cssW, Math.max(1, Math.abs(y2 - y1)));
+  };
+  ctx.clearRect(0, 0, cssW, cssH);
+  band(model.ath, 'rgba(168,85,247,0.28)');
+  if (model.srBand && model.ath && Math.abs(model.srBand.mid - model.ath.mid) / model.ath.mid > 0.1) band(model.srBand, 'rgba(168,85,247,0.16)');
+  const bw = Math.max(1, (cssW - 16) / cs.length * 0.62);
+  cs.forEach((c, i) => {
+    const open = isNum(c.o) ? c.o : c.c;
+    const up = c.c >= open;
+    ctx.strokeStyle = up ? '#22C55E' : '#EF4444';
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x(i), y(c.h));
+    ctx.lineTo(x(i), y(c.l));
+    ctx.stroke();
+    const top = y(Math.max(open, c.c)), bot = y(Math.min(open, c.c));
+    ctx.fillRect(x(i) - bw / 2, Math.min(top, bot), bw, Math.max(1, Math.abs(bot - top)));
+  });
+  if (model.trendLine) {
+    const a = model.trendLine.a, b = model.trendLine.b;
+    const p0 = lineAt(a, b, a.i), pEnd = lineAt(a, b, cs.length - 1);
+    if (isNum(p0) && isNum(pEnd) && p0 > 0 && pEnd > 0) {
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x(a.i), y(p0));
+      ctx.lineTo(x(cs.length - 1), y(pEnd));
+      ctx.stroke();
+    }
+  }
+  const guide = (px, color) => {
+    if (!(px > 0)) return;
+    const yy = y(px);
+    if (yy < 4 || yy > cssH - 4) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(0, yy);
+    ctx.lineTo(cssW, yy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  guide(model.stop, '#EF4444');
+  guide(model.tp1, '#22C55E');
+  ctx.font = '11px Inter, sans-serif';
+  ctx.textBaseline = 'top';
+  if (model.ath) {
+    ctx.fillStyle = '#f3e8ff';
+    ctx.fillText('ATH zone', 8, Math.max(6, Math.min(cssH - 16, y(model.ath.hi) + 2)));
+  }
+  if (model.buyZone && (model.srBand || model.ath)) {
+    const zone = model.srBand || model.ath;
+    const x1 = x(model.buyZone.i);
+    const y1 = y(zone.hi), y2 = y(zone.lo);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(x1, Math.min(y1, y2), Math.max(8, cssW - 8 - x1), Math.max(1, Math.abs(y2 - y1)));
+    ctx.fillStyle = '#f5f3ff';
+    ctx.fillText('BUY ZONE', Math.min(cssW - 78, x1 + 4), Math.max(6, Math.min(cssH - 16, Math.min(y1, y2) + 2)));
+  }
 }
 function openTokenSheet(art) {
   if (!art) return;
@@ -9431,8 +9539,8 @@ function openTokenSheet(art) {
   requestAnimationFrame(() => {
     sheet.classList.add('open');
     const model = typeof listChartMemo !== 'undefined' ? listChartMemo[art.dataset.row] : null;
-    const frame = sheet.querySelector('.chart-frame');
-    if (frame && model) mountLiteChart(frame, model);
+    const frame = sheet.querySelector('.sheet-chart');
+    if (frame && model) paintSheetChart(frame, model);
   });
 }
 function showTab(name) {
