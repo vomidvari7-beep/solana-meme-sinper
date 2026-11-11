@@ -5096,7 +5096,7 @@ function enableAuto() {
 }
 const BOT_LS = 'sms:bots';
 function botPrefs() {
-  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false };
+  const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false, scan: false };
   try {
     const raw = localStorage.getItem(BOT_LS);
     if (!raw) { saveBotPrefs(fallback); return { ...fallback }; }
@@ -5118,17 +5118,18 @@ function botLive(key) {
   if (key === 'copy') return typeof COPY !== 'undefined' && !!COPY.on;
   if (key === 'sniper') return typeof SNIPER !== 'undefined' && !!SNIPER.on;
   if (key === 'degen') return degenOn();
+  if (key === 'scan') return !!liveScanOn;
   return false;
 }
 function renderBotBar() {
   const box = $('botBar'); if (!box) return;
   const prefs = botPrefs();
   const locked = !WALLETS.burner.kp;
-  const liveKeys = ['auto', 'mylist', 'copy', 'sniper', 'degen'];
+  const liveKeys = ['auto', 'mylist', 'copy', 'sniper', 'degen', 'scan'];
   const items = [
     ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
     ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%', '1:1'],
-    ['degen', 'Degen', 'شکارچی']
+    ['degen', 'Degen', 'شکارچی'], ['scan', 'Live scan']
   ];
   const active = items.filter(([key]) => prefs[key]).length;
   const armed = items.some(([key]) => liveKeys.includes(key) && prefs[key] && locked);
@@ -5189,6 +5190,11 @@ function setExecBot(key, on) {
     if (!on) stopDegen();
     else if (!locked) startDegen();
     renderDegen();
+  } else if (key === 'scan') {
+    liveScanOn = !!on;
+    if (!on) stopLiveScan();
+    else if (!locked) startLiveScan();
+    renderDegen();
   }
   rememberBot(key, on);
   if (on && locked) toast(key + ' armed, unlock to run', 'warn');
@@ -5245,6 +5251,7 @@ function resumeArmedBots() {
   if (p.copy && typeof COPY !== 'undefined' && !COPY.on) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 600); }
   if (p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
   if (p.degen) { const d = degenCfg(); d.on = true; saveDegen(d); startDegen(); }
+  if (p.scan) { liveScanOn = true; startLiveScan(); }
   A.momentumOn = !!p.momentum;
   renderBotBar();
   renderKillFab();
@@ -5268,7 +5275,8 @@ function killSwitch(reason = 'manual') {
   else if (wasL) toast('⛔ My List stopped', 'err');
   if (reason !== 'locked') {
     const prefs = botPrefs();
-    prefs.auto = false; prefs.mylist = false; prefs.copy = false; prefs.sniper = false; prefs.momentum = false; prefs.degen = false;
+    prefs.auto = false; prefs.mylist = false; prefs.copy = false; prefs.sniper = false; prefs.momentum = false; prefs.degen = false; prefs.scan = false;
+    liveScanOn = false; stopLiveScan();
     const dOff = degenCfg(); dOff.on = false; saveDegen(dOff);
     saveBotPrefs(prefs);
     A.momentumOn = false;
@@ -6172,6 +6180,32 @@ async function degenTokenPx(mint, force) {
   return +best.priceUsd;
 }
 async function degenBuy(pick, opt) {
+  if (opt?.live) {
+    const price = isNum(opt.price) ? opt.price : await degenTokenPx(pick.mint, true);
+    if (degenCooled(pick.mint) || openPositions().some(p => p.open && p.mint === pick.mint) || (WALLETS.burner?.tokens?.get(pick.mint)?.raw > 0n)) { degenNote((pick.symbol || short(pick.mint)) + ': cooldown or already held'); return; }
+    const veto = hunterVeto(pick.mint);
+    if (veto) { degenNote((pick.symbol || short(pick.mint)) + ': hunter ' + veto); return; }
+    const block = degenBuyBlock();
+    if (block) { degenNote(block); return; }
+    if (!opt.skipSafety) {
+      const safe = await degenSafety(pick.mint);
+      if (!safe.ok) { degenNote((pick.symbol || short(pick.mint)) + ' blocked — ' + safe.reason); return; }
+    }
+    const sol = degenTradeSol();
+    if (!(sol >= 0.001)) { degenNote('degen size too small'); return; }
+    const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true });
+    if (errs.length) { degenNote(errs[0]); return; }
+    const slip = Math.min(S.slippagePct, A.slipCap);
+    const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
+    const imp = impactPct(qo.quote);
+    if (imp > A.maxImpact) { degenNote((pick.symbol || '') + ' impact ' + imp.toFixed(1) + '%'); return; }
+    const plan = degenPlan({ stop_pct: 25, time_stop_min: 45, trail: 20 }, price);
+    const r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, plan, entryReason: 'live scan · conf ' + (opt.conf ?? '') } });
+    degenNote('live scan bought ' + (pick.symbol || short(pick.mint)) + ' ' + sol + ' SOL');
+    toast('Live scan buy ' + (pick.symbol || short(pick.mint)), 'warn', 6000);
+    renderDegen();
+    return r;
+  }
   if (!opt?.sniper) {
     const picks = await degenFetchFile();
     const fresh = picks.find(p => p && p.mint === pick.mint);
@@ -6322,6 +6356,182 @@ function showTokenSeg(name) {
   $('degenDesk') && ($('degenDesk').hidden = tokenSeg !== 'degen');
   document.querySelectorAll('#tokenSeg [data-seg]').forEach(b => b.classList.toggle('on', b.dataset.seg === tokenSeg));
 }
+let liveScanOn = false;
+let liveScanTimer = null;
+let liveScanBusy = false;
+let liveScanGap = 4000;
+let liveScanTick = 0;
+const liveScanHits = [];
+const liveHolders = {};
+function scanHitsHtml() {
+  return liveScanHits.slice(0, 20).map(h => `<article class="border-b border-white/10 py-2 text-[12px]">
+    <div class="flex items-center justify-between gap-2"><b class="truncate">${esc(h.symbol || short(h.mint))}</b><span class="flex gap-1"><span class="deg-chip">LIVE</span><span class="deg-chip ${h.ok ? 'deg-ready' : 'deg-above'}">${esc(h.status)}</span></span></div>
+    <div class="mt-0.5 text-[11px] text-slate-400 whitespace-normal break-words">${h.conf != null ? 'conf ' + h.conf + ' · ' : ''}${esc(h.reason || '')}</div>
+  </article>`).join('');
+}
+function noteScanHit(row) {
+  const prev = liveScanHits.find(h => h.mint && h.mint === row.mint && h.reason === row.reason);
+  if (prev && Date.now() - prev.at < 120000) return;
+  liveScanHits.unshift(row);
+  if (liveScanHits.length > 20) liveScanHits.length = 20;
+}
+function hunterVeto(mint) {
+  const pick = (DEGEN.picks || []).find(p => p && p.mint === mint);
+  if (!pick) return '';
+  const now = pick.entry_now === true || pick.entry_now === 'true';
+  if (now) return '';
+  const reason = String(pick.reason || '');
+  if (/watch|reject|skip|avoid|wait|wash|insider/i.test(reason)) return reason.slice(0, 160);
+  return '';
+}
+function maxNonPoolPct(rr) {
+  const r = rr?.data || {};
+  const known = r.knownAccounts || {};
+  const marketKeys = new Set((r.markets || []).flatMap(m => [m.pubkey, m.liquidityAAccount, m.liquidityBAccount]).filter(Boolean));
+  const isPool = h => known[h.owner]?.type === 'AMM' || known[h.address]?.type === 'AMM' || known[h.owner]?.type === 'LOCKER' || marketKeys.has(h.owner) || marketKeys.has(h.address);
+  const holders = (r.topHolders || []).filter(h => h && !isPool(h));
+  return holders.reduce((m, h) => Math.max(m, +h.pct || 0), 0);
+}
+function livePre(p) {
+  const ageH = p.created ? (Date.now() - p.created) / 3.6e6 : (isNum(p.ageH) ? p.ageH : null);
+  if (!(isNum(ageH) && ageH < 6)) return 'age ' + (ageH == null ? 'unknown' : ageH.toFixed(1) + 'h');
+  if (!(isNum(p.liq) && p.liq >= 40000)) return 'liquidity under $40k';
+  const m5b = +p.m5b || 0, h1b = +p.h1b || 0, m5v = +p.m5vol || 0, h1v = +p.h1vol || 0;
+  if (!(h1b > 0) || !(h1v > 0)) return 'no h1 baseline';
+  const buyAccel = (m5b * 12) / h1b;
+  const volAccel = (m5v * 12) / h1v;
+  if (!(buyAccel > 1.15 && volAccel > 1.1 && m5b > (+p.m5s || 0))) return 'volume or buys not accelerating';
+  if (isNum(p.chg1h) && p.chg1h > 1000 && !(isNum(p.m5chg) && p.m5chg <= 0)) return 'extended +' + Math.round(p.chg1h) + '% 1h';
+  return '';
+}
+function liveHoldersOk(p) {
+  const holders = p.holders;
+  const prev = liveHolders[p.mint];
+  if (isNum(holders)) liveHolders[p.mint] = holders;
+  if (!(isNum(holders) && isNum(prev) && holders > prev)) return 'holders not growing';
+  const m5b = +p.m5b || 0, m5s = +p.m5s || 0;
+  if (m5b > 0 && m5s > 0 && Math.abs(m5b - m5s) / Math.max(m5b, m5s) < 0.15 && holders < 1500) return 'wash pattern';
+  return '';
+}
+function liveConfidence(p) {
+  let s = 45;
+  if (p.liq >= 80000) s += 8;
+  const buyAccel = p.h1b > 0 ? (p.m5b * 12) / p.h1b : 1;
+  const volAccel = p.h1vol > 0 ? (p.m5vol * 12) / p.h1vol : 1;
+  if (buyAccel > 1.5) s += 12;
+  if (volAccel > 1.5) s += 8;
+  if (p.m5b > p.m5s * 1.3) s += 8;
+  if (isNum(p.holders) && p.holders >= 500) s += 6;
+  if (isNum(p.chg1h) && p.chg1h > 0 && p.chg1h < 300) s += 6;
+  return Math.max(0, Math.min(95, Math.round(s)));
+}
+async function discoverLivePairs() {
+  liveScanTick++;
+  const src = liveScanTick % 4;
+  if (src === 0 || src === 1) {
+    const path = src === 0 ? 'new_pools?page=1' : 'dexes/raydium/new_pools?page=1';
+    const j = await fetchJSONOnce('https://api.geckoterminal.com/api/v2/networks/solana/' + path, { timeout: 8000 });
+    return (j?.data || []).map(geckoPool).filter(Boolean);
+  }
+  if (src === 2) {
+    const j = await fetchJSONOnce('https://api.geckoterminal.com/api/v2/networks/solana/dexes/pumpswap/new_pools?page=1', { timeout: 8000 });
+    return (j?.data || []).map(geckoPool).filter(Boolean);
+  }
+  const profiles = await fetchJSONOnce('https://api.dexscreener.com/token-profiles/latest/v1', { timeout: 8000 });
+  const mints = (Array.isArray(profiles) ? profiles : []).filter(t => t.chainId === 'solana' && t.tokenAddress && !IGNORE.has(t.tokenAddress)).map(t => t.tokenAddress).slice(0, 20);
+  if (!mints.length) return [];
+  const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + mints.join(','), { timeout: 8000 });
+  const best = new Map();
+  for (const p of arr || []) {
+    const mint = p.baseToken?.address;
+    if (!mint || IGNORE.has(mint)) continue;
+    if (!best.has(mint) || (p.liquidity?.usd || 0) > (best.get(mint).liquidity?.usd || 0)) best.set(mint, p);
+  }
+  return [...best.values()].map(p => ({
+    mint: p.baseToken.address, symbol: p.baseToken.symbol || short(p.baseToken.address), pool: p.pairAddress,
+    created: p.pairCreatedAt || null, liq: p.liquidity?.usd ?? null, mcap: p.marketCap ?? p.fdv ?? null,
+    price: p.priceUsd != null ? +p.priceUsd : null,
+    m5b: p.txns?.m5?.buys || 0, m5s: p.txns?.m5?.sells || 0, h1b: p.txns?.h1?.buys || 0, h1s: p.txns?.h1?.sells || 0,
+    m5vol: p.volume?.m5 || 0, h1vol: p.volume?.h1 || 0, chg1h: p.priceChange?.h1 != null ? +p.priceChange.h1 : null,
+    m5chg: p.priceChange?.m5 != null ? +p.priceChange.m5 : null, source: 'dex'
+  }));
+}
+async function enrichLive(p) {
+  if (isNum(p.h1b) && p.h1b > 0 && isNum(p.h1vol)) return p;
+  try {
+    const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + p.mint, { timeout: 8000 });
+    const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    if (!best) return p;
+    return { ...p,
+      symbol: p.symbol || best.baseToken?.symbol, pool: p.pool || best.pairAddress,
+      liq: best.liquidity?.usd ?? p.liq, mcap: best.marketCap ?? best.fdv ?? p.mcap,
+      price: best.priceUsd != null ? +best.priceUsd : p.price,
+      m5b: best.txns?.m5?.buys || p.m5b || 0, m5s: best.txns?.m5?.sells || p.m5s || 0,
+      h1b: best.txns?.h1?.buys || 0, h1s: best.txns?.h1?.sells || 0,
+      m5vol: best.volume?.m5 || p.m5vol || 0, h1vol: best.volume?.h1 || 0,
+      chg1h: best.priceChange?.h1 != null ? +best.priceChange.h1 : p.chg1h,
+      m5chg: best.priceChange?.m5 != null ? +best.priceChange.m5 : p.m5chg
+    };
+  } catch { return p; }
+}
+async function liveScanOnce() {
+  if (!liveScanOn || liveScanBusy || document.hidden) return;
+  liveScanBusy = true;
+  try {
+    const rows = await discoverLivePairs();
+    liveScanGap = 4000;
+    let deep = 0;
+    let looked = 0;
+    for (const raw of rows.slice(0, 20)) {
+      if (!liveScanOn) break;
+      const ageH = raw.created ? (Date.now() - raw.created) / 3.6e6 : null;
+      if (!(isNum(ageH) && ageH < 6 && isNum(raw.liq) && raw.liq >= 40000)) continue;
+      if (looked >= 3) break;
+      looked++;
+      const p = await enrichLive(raw);
+      const cheap = livePre(p);
+      if (cheap) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: cheap, at: Date.now() }); continue; }
+      if (deep >= 1) continue;
+      deep++;
+      const veto = hunterVeto(p.mint);
+      if (veto) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: 'hunter: ' + veto, at: Date.now() }); continue; }
+      let report;
+      try { report = await fetchRugReport(p.mint); } catch { report = { ok: false }; }
+      const rug = digestRug(report, p.pool, p.mint);
+      p.holders = rug.holders;
+      const heldGrow = liveHoldersOk(p);
+      if (heldGrow) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: heldGrow, at: Date.now() }); continue; }
+      if (rug.mintRevoked === false || rug.freezeRevoked === false) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: 'mint or freeze authority', at: Date.now() }); continue; }
+      const top = maxNonPoolPct(report);
+      if (top > 15) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: 'holder ' + top.toFixed(1) + '%', at: Date.now() }); continue; }
+      const safe = await degenSafety(p.mint);
+      if (!safe.ok) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: safe.reason, at: Date.now() }); continue; }
+      const conf = liveConfidence(p);
+      if (conf < 60) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: 'confidence ' + conf + ' < 60', at: Date.now() }); continue; }
+      if (!degenOn() || !WALLETS.burner?.kp) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: degenOn() ? 'burner locked' : 'degen pot off', at: Date.now() }); break; }
+      const block = degenBuyBlock();
+      if (block) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: block, at: Date.now() }); break; }
+      noteScanHit({ mint: p.mint, symbol: p.symbol, ok: true, status: 'PASS', conf, reason: 'buying from degen pot', at: Date.now() });
+      try {
+        await degenBuy({ mint: p.mint, symbol: p.symbol, stop_pct: 25, time_stop_min: 45, trail: 20, max_entry_price: p.price }, { live: true, price: p.price, conf });
+      } catch (e) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: e.message || 'buy failed', at: Date.now() }); }
+      break;
+    }
+  } catch (e) {
+    if (e && (e.status === 429 || /429|rate/i.test(e.message || ''))) liveScanGap = Math.min(20000, Math.max(8000, liveScanGap * 2));
+    noteScanHit({ mint: '', symbol: 'scanner', ok: false, status: 'BLOCK', conf: null, reason: e.message || 'source failed', at: Date.now() });
+  } finally { liveScanBusy = false; renderDegen(); }
+}
+function startLiveScan() {
+  stopLiveScan();
+  const step = async () => {
+    if (!liveScanOn) return;
+    await liveScanOnce();
+    if (liveScanOn) liveScanTimer = setTimeout(step, document.hidden ? 8000 : liveScanGap);
+  };
+  liveScanTimer = setTimeout(step, 600);
+}
+function stopLiveScan() { clearTimeout(liveScanTimer); liveScanTimer = null; }
 function renderDegen() {
   const cfg = degenCfg();
   const left = degenLeft();
@@ -6354,6 +6564,7 @@ function renderDegen() {
       <div class="flex items-center gap-2">
         <span class="shrink-0">${logo}<span class="mono-logo" style="${q.image ? 'display:none' : ''}">${mono}</span></span>
         <span class="min-w-0 flex-1"><b class="block truncate text-sm">${esc(pick.symbol || short(pick.mint))}</b><span class="block text-[10px] text-slate-500">${degenAgeLabel(pick.age_h)} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
+        <span class="deg-chip">HUNTER</span>
         <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="font-mono">${price(px)} <span class="text-slate-500">/ max ${price(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
@@ -6403,6 +6614,8 @@ function renderDegen() {
     </div>
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
     ${picks || '<p class="empty-note mt-2">No hunter picks yet.</p>'}
+    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Live scanner ${liveScanOn ? '· on' : '· off'}</h3>
+    ${scanHitsHtml() || '<p class="empty-note mt-2">No live-scan hits yet.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open positions</h3>
     ${posHtml || '<p class="empty-note mt-2">No open degen positions.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Closed</h3>
@@ -8818,7 +9031,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
-  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, degenCfg, degenLeft, degenExit, degenBuyBlock, degenPickBlock, degenPlan, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
+  sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, degenCfg, degenLeft, degenExit, degenBuyBlock, degenPickBlock, degenPlan, hunterVeto, livePre, liveConfidence, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };
 })();
 window.SMS_TRADE = T;
