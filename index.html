@@ -28,9 +28,15 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .toast-enter { animation: tin .25s ease-out; } @keyframes tin { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
   section[id^="sec-"], #results { scroll-margin-top: 12px; } @media (min-width:640px){ section[id^="sec-"], #results { scroll-margin-top: 84px; } }
   details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+  .ios-sw { width: 44px; height: 26px; border-radius: 13px; background: #39393D; position: relative; flex: 0 0 auto; transition: background-color 200ms ease; }
+  .ios-sw.on { background: #34C759; }
+  .ios-sw i { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform 200ms ease; }
+  .ios-sw.on i { transform: translateX(18px); }
 </style>
 </head>
 <body class="text-slate-200 font-sans min-h-screen antialiased">
+
+<div id="botBar"></div>
 
 <header class="sm:sticky top-0 z-30 border-b border-white/5 bg-ink-950/80 backdrop-blur">
   <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
@@ -78,8 +84,6 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     </div>
   </div>
 </header>
-
-<div id="botBar" class="sticky top-0 z-50 border-b border-white/10 bg-ink-950/95 backdrop-blur px-2 py-2" style="padding-top:max(0.5rem, env(safe-area-inset-top))"></div>
 
 <section id="readyNow" class="max-w-7xl mx-auto px-4 pt-4">
   <div class="glass rounded-2xl p-4 sm:p-5">
@@ -4845,25 +4849,34 @@ function renderBotBar() {
   const box = $('botBar'); if (!box) return;
   const prefs = botPrefs();
   const locked = !WALLETS.burner.kp;
+  const liveKeys = ['auto', 'mylist', 'copy', 'sniper'];
   const items = [
     ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
-    ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15% · 1:1']
+    ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%', '1:1']
   ];
-  const armed = items.some(([key]) => ['auto', 'mylist', 'copy', 'sniper'].includes(key) && prefs[key] && locked);
-  const pill = ([key, label]) => {
-    const liveKeys = ['auto', 'mylist', 'copy', 'sniper'];
-    const on = liveKeys.includes(key) ? !!prefs[key] && (botLive(key) || locked) : !!prefs[key];
-    const state = liveKeys.includes(key) && prefs[key] && locked ? 'ARMED' : (on ? 'ON' : 'OFF');
-    const cls = state === 'ON' ? 'bg-emerald-500 text-ink-950' : state === 'ARMED' ? 'bg-amber-300 text-ink-950' : 'bg-white/10 text-slate-300';
-    return `<button type="button" data-bot="${key}" class="min-h-[44px] rounded-full px-2 text-[11px] font-bold leading-tight ${cls}" style="touch-action:manipulation">${label}<span class="block text-[10px] font-extrabold">${state}</span></button>`;
+  const active = items.filter(([key]) => prefs[key]).length;
+  const armed = items.some(([key]) => liveKeys.includes(key) && prefs[key] && locked);
+  const status = armed ? 'Armed, unlock to run' : active + '/8 active';
+  const row = ([key, label, sub], i) => {
+    const on = !!prefs[key];
+    const note = liveKeys.includes(key) && on && locked ? 'Unlock to run' : (sub || '');
+    const edge = (i < items.length - 2 ? 'border-b ' : '') + (i % 2 === 0 ? 'border-r ' : '');
+    return `<button type="button" data-bot="${key}" aria-pressed="${on}" class="${edge}flex items-center justify-between gap-2 px-3 text-left border-white/10" style="min-height:36px;touch-action:manipulation">
+      <span class="min-w-0"><span class="block truncate text-[13px] text-slate-100">${label}</span>${note ? `<span class="block truncate text-[10px] text-slate-500">${note}</span>` : ''}</span>
+      <span class="ios-sw${on ? ' on' : ''}" aria-hidden="true"><i></i></span>
+    </button>`;
   };
-  box.innerHTML = `<div class="max-w-7xl mx-auto">
-    <div class="grid grid-cols-4 gap-1">${items.map(pill).join('')}</div>
-    <div class="mt-1 grid grid-cols-2 gap-1">
-      <button type="button" id="botAllOn" class="min-h-[44px] rounded-xl bg-emerald-600 text-white text-xs font-bold">All ON</button>
-      <button type="button" id="botAllOff" class="min-h-[44px] rounded-xl bg-rose-600 text-white text-xs font-bold">All OFF</button>
-    </div>
-    ${armed ? '<p class="mt-1 text-[11px] text-amber-200">Armed, unlock to run</p>' : ''}
+  box.innerHTML = `<div class="max-w-7xl mx-auto px-4 pt-3">
+    <section class="glass overflow-hidden rounded-xl">
+      <div class="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-1.5">
+        <div class="min-w-0"><div class="text-[13px] font-semibold text-slate-100">Bot controls</div><div class="text-[11px] text-slate-500">${status}</div></div>
+        <div class="flex shrink-0 items-center gap-3">
+          <button type="button" id="botAllOn" class="text-[11px] font-semibold text-emerald-400">All ON</button>
+          <button type="button" id="botAllOff" class="text-[11px] font-semibold text-rose-400">All OFF</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2">${items.map(row).join('')}</div>
+    </section>
   </div>`;
   box.querySelectorAll('[data-bot]').forEach(b => b.addEventListener('click', () => toggleBot(b.dataset.bot)));
   $('botAllOn')?.addEventListener('click', allBotsOn);
