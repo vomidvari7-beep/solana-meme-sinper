@@ -1,31 +1,15 @@
 {
   "pause_auto_buy": false,
-  "ts": 1794361563000,
-  "updated_utc": "2026-11-11T01:46:03Z",
-  "updated_tehran": "2026-11-11 05:16 Asia/Tehran",
+  "ts": 1794364428000,
+  "updated_utc": "2026-11-11T02:33:48Z",
+  "updated_tehran": "2026-11-11 06:03 Asia/Tehran",
   "wallet": "4u2MpTT4WXLTaJFhqaXRHu6dw5zKiJc5iuUH1cuamKYU",
-  "wallet_usd": 221.4,
-  "sol_balance": 2.3357,
-  "sol_usd": 83.72,
-  "daily_pnl_usd": -9.1,
-  "daily_pnl_pct_of_wallet": -4.11,
-  "positions": [
-    {
-      "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
-      "symbol": "WEALTH",
-      "action": "hold",
-      "new_stop": 0.000735,
-      "partial_pct": 0,
-      "reason": "Hold: -13.9% vs entry; stop 0.000735 (~-16% from live) unchanged. 5m -9%, 24h -31%, 1h sells>buys (115/99) - weak, watch 4h swing low 0.00073. Liq $81.9k, LP locked, no dev sell.",
-      "ts": 1794361563000,
-      "timestamp": "2026-11-11T01:46:03Z",
-      "price": 0.0008714,
-      "value_usd": 25.86,
-      "entry": 0.00101259,
-      "qty": 29672.160011,
-      "pnl_pct": -13.94
-    }
-  ],
+  "wallet_usd": 216.88,
+  "sol_balance": 2.6116,
+  "sol_usd": 83.045,
+  "daily_pnl_usd": -16.1,
+  "daily_pnl_pct_of_wallet": -7.42,
+  "positions": [],
   "closed_today": [
     {
       "mint": "FZxHLUGiGchY5uvvoeqh1EKiXTrGdN67WUBhUc1fLoat",
@@ -48,6 +32,14 @@
       "pnl_sol": -0.006,
       "pnl_pct": -12.4,
       "note": "2nd entry; token then dumped -78% 1h"
+    },
+    {
+      "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
+      "symbol": "WEALTH",
+      "closed_tehran": "2026-11-11 05:51",
+      "pnl_sol": -0.084,
+      "pnl_pct": -23.3,
+      "note": "stopped out (~$0.00077, stop 0.000735) before -34% 1h dump"
     }
   ]
 }
