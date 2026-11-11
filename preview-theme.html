@@ -182,7 +182,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a4154; flex: 0 0 auto; }
   .dot.on, .status-dot.on { background: var(--accent); }
   .dot.armed, .status-dot.armed { background: #C4A35A; }
-  .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(112px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
+  .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(156px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
   .tab-pane[hidden] { display: none !important; }
   #tabBar { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 45; display: flex; align-items: center; justify-content: space-evenly; height: 72px; padding: 8px; border-radius: 32px; background: var(--tab); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 32px rgba(0,0,0,.38); }
   #tabBar button { width: 52px; height: 52px; min-height: 52px; padding: 0; border: 0; border-radius: 50%; background: var(--tab-btn); color: #8B98A9; font-size: 0; line-height: 0; display: grid; place-items: center; }
@@ -236,7 +236,36 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .border-white\/5, .border-white\/10 { border-color: var(--line); }
   @keyframes sk { to { background-position: -200% 0; } }
   #toasts { top: 60px; bottom: auto; }
-  #killFab { bottom: calc(108px + env(safe-area-inset-bottom)) !important; }
+  #killFab, .kill-head { position: static !important; inset: auto !important; bottom: auto !important; left: auto !important; z-index: auto; height: 32px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--alarm); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .01em; box-shadow: none; animation: none; }
+  .hunt-head, .hunt-badges, .hunt-legs, .hunt-chips, .hunt-actions { display: flex; align-items: center; gap: 8px; }
+  .hunt-head { gap: 12px; }
+  .hunt-px { margin-left: auto; text-align: right; flex: 0 0 auto; }
+  .hunt-px .num { font-size: 16px; font-weight: 750; color: var(--text); }
+  .hunt-stats, .hunt-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .hunt-cells { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hunt-tile, .hunt-cell { min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+  .hunt-tile span, .hunt-cell span { display: block; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .hunt-tile b, .hunt-cell b { display: block; margin-top: 2px; font-size: 13px; font-weight: 750; color: var(--text); word-break: break-word; }
+  .hunt-tile i, .hunt-cell i { display: block; margin-top: 1px; font-style: normal; font-size: 11px; font-weight: 700; }
+  .hunt-up { color: var(--up); }
+  .hunt-dn { color: var(--down); }
+  .hunt-badges, .hunt-chips, .hunt-legs { flex-wrap: wrap; }
+  .hunt-badges, .hunt-details, .hunt-plan, .hunt-actions { margin-top: 10px; }
+  .hunt-score, .hunt-chip, .hunt-leg { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .hunt-ok { color: var(--up); background: var(--up-soft); }
+  .hunt-mid { color: var(--amber); background: var(--amber-soft); }
+  .hunt-bad { color: var(--down); background: var(--down-soft); }
+  .hunt-leg { border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 11px; }
+  .hunt-leg.hunt-ok { border-color: transparent; }
+  .hunt-details summary, .hunt-status summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .hunt-status { border: 1px solid var(--line); border-radius: 14px; background: var(--elev); padding: 10px 12px; }
+  .hunt-plan { border: 1px solid var(--line); background: var(--bg); border-radius: 16px; padding: 10px 12px; }
+  .hunt-plan.is-ready { border-color: var(--accent-line); }
+  .hunt-plan-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--text); }
+  .hunt-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .hunt-ghost, .hunt-buy { min-height: 44px; border-radius: 14px; font-size: 14px; font-weight: 700; }
+  .hunt-ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .hunt-buy { background: var(--accent); color: var(--on-accent); border: 0; }
   details.adv { background: var(--card); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; }
   details.adv > summary { padding: 14px 16px; font-weight: 650; cursor: pointer; }
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); border: 1px solid rgba(255,255,255,.06); }
@@ -292,6 +321,7 @@ window.__SMS_PREVIEW = true;
 <header class="appbar">
   <div class="min-w-0"><div id="liveStat" class="text-[12px] text-slate-500 num">Live</div></div>
   <div class="appbar-actions">
+    <button type="button" id="killFab" class="kill-head" hidden>KILL</button>
     <button type="button" id="themeToggle" class="theme-toggle" data-theme-toggle aria-label="Switch day or night"></button>
     <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
   </div>
@@ -5844,9 +5874,21 @@ function renderKillFab() {
   const copyOn = typeof COPY !== 'undefined' && COPY.on;
   const sniperOn = typeof SNIPER !== 'undefined' && SNIPER.on;
   const listOn = typeof MYLIST !== 'undefined' && MYLIST.on;
-  if (!A.on && !copyOn && !sniperOn && !listOn) { f?.remove(); return; }
-  if (!f) { f = document.createElement('button'); f.id = 'killFab'; f.className = 'fixed bottom-4 left-4 z-50 rounded-full px-4 py-3 font-extrabold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-2xl animate-pulse'; f.addEventListener('click', () => killSwitch('fab')); document.body.appendChild(f); }
-  f.textContent = (A.on ? 'AUTO ON' : copyOn ? 'COPY ON' : sniperOn ? 'SNIPE ON' : 'LIST ON') + ' · KILL';
+  const armed = A.on || copyOn || sniperOn || listOn;
+  if (!f) {
+    const host = document.querySelector('.appbar-actions');
+    if (!host) return;
+    f = document.createElement('button');
+    f.id = 'killFab'; f.type = 'button'; f.className = 'kill-head'; f.hidden = true;
+    host.prepend(f);
+  }
+  if (f && !f.dataset.killBound) {
+    f.dataset.killBound = '1';
+    f.addEventListener('click', () => killSwitch('fab'));
+  }
+  f.hidden = !armed;
+  if (!armed) return;
+  f.textContent = (A.on ? 'AUTO' : copyOn ? 'COPY' : sniperOn ? 'SNIPE' : 'LIST') + ' · KILL';
 }
 window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on) || degenOn()) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
 
@@ -9539,6 +9581,108 @@ function applyAgentRisk() {
     autoSell(pos, pct, 'agent', lp).catch(() => {});
   }
 }
+function huntFacts(reason) {
+  const s = String(reason || '');
+  const grab = (re) => { const m = s.match(re); return m ? m[1] : ''; };
+  const h = s.match(/24h\s+([+-]?[\d.]+)\s*%/i);
+  return {
+    liq: grab(/liq\s+(\$[\d.]+[kmb]?)/i),
+    mcap: grab(/mcap\s+(\$[\d.]+[kmb]?)/i),
+    vol: grab(/vol24\s+(\$[\d.]+[kmb]?)/i),
+    vl: grab(/V\/L\s+([\d.]+)/i),
+    age: grab(/age\s+([\d.]+[mhd])/i),
+    h24: h ? +h[1] : null
+  };
+}
+function huntTone(kind, raw) {
+  const n = +String(raw || '').replace(/[^\d.]/g, '');
+  const num = Number.isFinite(n) && String(raw || '').match(/\d/) ? n : null;
+  if (kind === 'rug') return num == null ? 'mid' : num <= 400 ? 'ok' : num <= 2000 ? 'mid' : 'bad';
+  if (kind === 'warn') return /none|clean|no\b/i.test(raw) ? 'ok' : 'bad';
+  if (kind === 'top') return num == null ? 'mid' : num <= 20 ? 'ok' : num <= 30 ? 'mid' : 'bad';
+  if (kind === 'ins') return num == null ? 'mid' : num <= 10 ? 'ok' : num <= 20 ? 'mid' : 'bad';
+  if (kind === 'lp') return /unknown/i.test(raw) || num == null ? 'mid' : num >= 95 ? 'ok' : num >= 50 ? 'mid' : 'bad';
+  if (kind === 'auth') return /revoked/i.test(raw) ? 'ok' : /unknown/i.test(raw) ? 'mid' : 'bad';
+  return 'mid';
+}
+function safetyChips(text) {
+  const s = String(text || '');
+  if (!s.trim()) return '';
+  const bits = [];
+  const add = (label, tone) => bits.push(`<span class="hunt-chip hunt-${tone}">${esc(label)}</span>`);
+  const rug = s.match(/RugCheck score\s+([^,]+)/i);
+  if (rug) add('RugCheck ' + rug[1].trim(), huntTone('rug', rug[1]));
+  const warn = s.match(/warnings?\s+([^,]+)/i);
+  if (warn) add('Warnings ' + warn[1].trim(), huntTone('warn', warn[1]));
+  const top = s.match(/top10[^,]*/i);
+  if (top) {
+    const num = top[0].match(/([\d.]+)\s*%/);
+    add(num ? 'Top10 ' + num[1] + '%' : top[0].trim(), huntTone('top', num ? num[1] : ''));
+  }
+  const ins = s.match(/insiders?\s+([\d.]+)\s*%/i);
+  if (ins) add('Insiders ' + ins[1] + '%', huntTone('ins', ins[1]));
+  const lp = s.match(/LP locked\s+([^,]+)/i);
+  if (lp) add('LP ' + lp[1].trim(), huntTone('lp', lp[1]));
+  const auth = s.match(/mint\/freeze\s+([^,]+)/i);
+  if (auth) add('Mint/freeze ' + auth[1].trim(), huntTone('auth', auth[1]));
+  return bits.join('');
+}
+function huntDist(level, px) {
+  const n = typeof agentNum === 'function' ? agentNum(level) : (+level || null);
+  if (!(n > 0) || !(px > 0)) return '';
+  const d = (n / px - 1) * 100;
+  const x = Math.round(d * 10) / 10;
+  const txt = (x > 0 ? '+' : '') + (Number.isInteger(x) ? String(x) : x.toFixed(1)) + '%';
+  return `<i class="${d >= 0 ? 'hunt-up' : 'hunt-dn'}">${txt}</i>`;
+}
+function scoreBadge(label, score, down) {
+  const n = isNum(score) ? score : null;
+  const tone = n == null ? 'mid' : n >= 60 ? 'ok' : n >= 40 ? 'mid' : 'bad';
+  return `<span class="hunt-score hunt-${tone}">${label} ${n == null ? '—' : n}</span>${down ? '<span class="tag-down">downtrend</span>' : ''}`;
+}
+function hunterPlanBox(plan, px) {
+  if (!plan) return '';
+  const ready = typeof agentPlanUsable === 'function' && agentPlanUsable(plan);
+  const title = [plan.setup || 'Agent plan', plan.tf || ''].filter(Boolean).join(' · ');
+  const cell = (label, level) => {
+    const n = typeof agentNum === 'function' ? agentNum(level) : (+level || null);
+    if (!(n > 0)) return '';
+    return `<div class="hunt-cell"><span>${label}</span><b>${price(n)}</b>${huntDist(n, px)}</div>`;
+  };
+  const cells = [cell('Trigger', plan.trigger_price), cell('Stop', plan.stop), cell('TP', plan.tp1)].filter(Boolean).join('');
+  let legs = '';
+  if (typeof isSplitPlan === 'function' && isSplitPlan(plan) && typeof splitLegs === 'function') {
+    const st = splitLegs(plan);
+    const z = typeof splitZone === 'function' ? splitZone(plan) : null;
+    const pill = (name, on) => `<span class="hunt-leg${on ? ' hunt-ok' : ''}">${name} ${on ? 'filled' : 'waiting'}</span>`;
+    legs = `<div class="hunt-legs">${pill('Leg 1', st.leg1)}${pill('Leg 2', st.leg2)}${z ? `<span class="hunt-leg">${price(z.lo)}–${price(z.hi)}</span>` : ''}</div>`;
+  }
+  const status = plan.status ? `<span class="hunt-leg">${esc(plan.status)}</span>` : '';
+  return `<div class="hunt-plan${ready ? ' is-ready' : ''}"><div class="hunt-plan-top"><b>${esc(title)}</b>${status}</div>${cells ? `<div class="hunt-cells">${cells}</div>` : ''}${legs}</div>`;
+}
+function hunterCard(c, extra) {
+  const x = extra || {};
+  const facts = huntFacts(c.reason);
+  const tape = typeof tapeOf === 'function' ? tapeOf(c.mint) : null;
+  const live = (typeof livePrices !== 'undefined' && livePrices.get(c.mint)?.price) || (tape && tape.px) || null;
+  const h24 = tape && tape.h24 != null ? tape.h24 : facts.h24;
+  const age = facts.age || '—';
+  const logo = typeof logoHtml === 'function' ? logoHtml(c.mint, c.symbol, 1) : `<span class="mono-logo">${esc(String(c.symbol || '?').slice(0, 1).toUpperCase())}</span>`;
+  const chg = h24 == null || !isNum(+h24) ? '' : `<span class="chg-pill ${h24 >= 0 ? 'chg-up' : 'chg-down'}">${pct(+h24, 1)}</span>`;
+  const tile = (k, v, sub) => `<div class="hunt-tile"><span>${k}</span><b>${esc(v || '—')}</b>${sub ? `<i>${esc(sub)}</i>` : ''}</div>`;
+  const plan = typeof agentPlanFor === 'function' ? agentPlanFor(c.mint) : null;
+  const chips = safetyChips(c.safety);
+  const shown = isNum(live) && live > 0 ? (typeof priceHtml === 'function' ? priceHtml(live) : price(live)) : '—';
+  return `<article class="hero-card hunt-card">
+    <div class="hunt-head">${logo}<span class="min-w-0"><b class="block truncate text-[16px]">${esc(c.symbol || short(c.mint))}</b><span class="block text-[12px] text-slate-500">${esc(age)}</span></span><span class="hunt-px"><span class="block num">${shown}</span>${chg}</span></div>
+    <div class="hunt-stats">${tile('Liq', facts.liq)}${tile('MCap', facts.mcap)}${tile('Vol24', facts.vol, facts.vl ? 'V/L ' + facts.vl : '')}${tile('Age', facts.age)}</div>
+    <div class="hunt-badges">${scoreBadge('Safety', x.safety, false)}${scoreBadge('Trend', x.trend, !!x.down)}</div>
+    ${chips ? `<details class="hunt-details"><summary>Details</summary><div class="hunt-chips">${chips}</div></details>` : ''}
+    ${hunterPlanBox(plan, live)}
+    ${typeof botSkipHtml === 'function' ? botSkipHtml('plans', c.mint) : ''}
+    <div class="hunt-actions"><button type="button" data-agent-add="${esc(c.mint)}" class="hunt-ghost">+ My List</button><button type="button" data-agent-buy="${esc(c.mint)}" class="hunt-buy">Buy</button></div>
+  </article>`;
+}
 function renderAgentPicks() {
   const box = $('agentPicks'); if (!box) return;
   const stamp = (name, rows) => {
@@ -9547,28 +9691,23 @@ function renderAgentPicks() {
     return tehranClock(max);
   };
   const ageOf = (name) => { const t = AG.pulled?.[name]; if (!t) return '—'; const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 90 ? s + 's' : Math.round(s / 60) + 'm'; };
-  const status = `<div class="text-[10px] text-slate-500 whitespace-normal break-words">Agents · candidates ${stamp('candidates', AG.candidates)} (${ageOf('candidates')}) · plans ${stamp('plans', [...AG.plans.values()])} (${ageOf('plans')}) · risk ${stamp('risk', AG.risk.positions)} (${ageOf('risk')}) · list file ${stamp('mylist', AG.listFile || [])} (${ageOf('mylist')}) · config ${tehranClock(AG.fetched.config)} (${ageOf('config')})</div>`;
-  const banner = agentPauseBuys() ? `<div class="mt-1 rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[12px] font-semibold text-rose-100">Agent risk paused scanner auto-buy</div>` : '';
-  const cards = AG.candidates.filter(c => c && isAddr(c.mint)).map(c => {
-    const plan = agentPlanFor(c.mint);
-    const fresh = agentTime(c.updatedAt) || agentTime(c.ts) || AG.pulled?.candidates || 0;
-    const agoS = fresh ? Math.max(0, Math.round((Date.now() - fresh) / 1000)) : null;
-    const ago = agoS == null ? '—' : (agoS < 90 ? agoS + 's ago' : Math.round(agoS / 60) + 'm ago');
-    return `<article class="hero-card">
-      <div class="flex items-center gap-3"><span class="mono-logo">${esc(String(c.symbol || '?').slice(0, 1).toUpperCase())}</span><span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(c.symbol || short(c.mint))}</b><span class="block text-[12px] text-slate-500">${ago} · score ${isNum(agentNum(c.score)) ? Math.round(+c.score) : '—'}</span></span><span class="status-dot ${plan && agentPlanUsable(plan) ? 'on' : ''}"></span></div>
-      <div class="mt-2 text-[13px] text-slate-400 whitespace-normal break-words">${esc(c.reason || 'No summary yet.')}${c.safety ? ' · ' + esc(c.safety) : ''}</div>
-      ${agentPlanChip(c.mint)}
-      <div class="mt-2 flex gap-2 text-[11px]">
-        <button type="button" data-agent-add="${esc(c.mint)}" class="rounded-lg px-2 py-1 bg-violet-600 text-white">Add to My List</button>
-        <button type="button" data-agent-buy="${esc(c.mint)}" class="rounded-lg px-2 py-1 bg-emerald-500 font-bold text-ink-950">Buy</button>
-      </div>
-    </article>`;
-  }).join('');
-  box.innerHTML = `<section class="glass rounded-2xl p-3">
-    <h2 class="sec-title text-sm mb-1"><span class="ico">◎</span>Agent picks</h2>
-    ${status}${banner}
-    ${cards ? `<div class="mt-2 space-y-2">${cards}</div>` : '<p class="empty-note mt-2">No hunter candidates yet.</p>'}
-  </section>`;
+  const status = `candidates ${stamp('candidates', AG.candidates)} (${ageOf('candidates')}) · plans ${stamp('plans', [...AG.plans.values()])} (${ageOf('plans')}) · risk ${stamp('risk', AG.risk.positions)} (${ageOf('risk')}) · list file ${stamp('mylist', AG.listFile || [])} (${ageOf('mylist')}) · setup scores ${tehranClock(AG.fetched.mylist_scores)} (${ageOf('mylist_scores')}) · config ${tehranClock(AG.fetched.config)} (${ageOf('config')})`;
+  const banner = agentPauseBuys() ? `<div class="rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[12px] font-semibold text-rose-100">Agent risk paused scanner auto-buy</div>` : '';
+  const ranked = AG.candidates.filter(c => c && isAddr(c.mint)).map((c, i) => {
+    const safety = isNum(agentNum(c.score)) ? Math.round(agentNum(c.score)) : null;
+    const tr = typeof trendFromTape === 'function' ? trendFromTape(tapeOf(c.mint)) : null;
+    const trend = tr ? tr.score : null;
+    const down = !!(tr && tr.down);
+    let rank = (isNum(safety) ? safety : 0) * ((isNum(trend) ? trend : 50) / 100);
+    if (down) rank *= 0.35;
+    return { c, safety, trend, down, rank, i };
+  }).sort((a, b) => b.rank - a.rank || a.i - b.i);
+  const cards = ranked.map(({ c, safety, trend, down }) => hunterCard(c, { safety, trend, down })).join('');
+  box.innerHTML = `<div class="space-y-3">
+    <details class="hunt-status"><summary>Agent files · candidates ${ageOf('candidates')} · plans ${ageOf('plans')}</summary><div class="mt-2 text-[11px] text-slate-500 whitespace-normal break-words">${status}</div></details>
+    ${banner}
+    ${cards || '<p class="empty-note">No hunter candidates yet.</p>'}
+  </div>`;
   box.querySelectorAll('[data-agent-add]').forEach(b => b.addEventListener('click', () => {
     const c = AG.candidates.find(x => x.mint === b.dataset.agentAdd);
     if (!c) return;
