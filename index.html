@@ -252,6 +252,26 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   #myListBox .ml-ring .fg { stroke: var(--accent); stroke-linecap: round; }
   #myListBox .ml-ring b { position: absolute; font-size: 10px; font-variant-numeric: tabular-nums; color: var(--text); }
   #myListBox .ml-chart-host { margin: 8px 0; }
+  #degenDesk .deg-picks { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+  #degenDesk .deg-picks > article { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: var(--bg); padding: 12px; }
+  #degenDesk .deg-order { margin-top: 10px; border: 1px solid var(--accent-line); border-radius: 14px; padding: 10px 10px 8px; background: var(--accent-soft); }
+  #degenDesk .deg-order h4 { margin: 0 0 8px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
+  #degenDesk .deg-order .ml-grid { margin-top: 0; }
+  #degenDesk .ml-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+  #degenDesk .ml-pill { display: inline-flex; align-items: center; max-width: 100%; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.2; }
+  #degenDesk .ml-pill.ready { color: var(--up); background: var(--up-soft); }
+  #degenDesk .ml-pill.wait { color: var(--amber); background: var(--amber-soft); }
+  #degenDesk .ml-pill.block { color: var(--down); background: var(--down-soft); }
+  #degenDesk .ml-pill.rule { color: var(--muted); background: transparent; border: 1px solid var(--line); }
+  #degenDesk .ml-ring { position: relative; width: 36px; height: 36px; display: inline-grid; place-items: center; }
+  #degenDesk .ml-ring svg { width: 36px; height: 36px; transform: rotate(-90deg); }
+  #degenDesk .ml-ring circle { fill: none; stroke-width: 3; }
+  #degenDesk .ml-ring .bg { stroke: rgba(255,255,255,.12); }
+  #degenDesk .ml-ring .fg { stroke: var(--accent); stroke-linecap: round; }
+  #degenDesk .ml-ring b { position: absolute; font-size: 10px; font-variant-numeric: tabular-nums; color: var(--text); }
+  #degenDesk .deg-exit summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; list-style: none; font-size: 12px; font-weight: 700; color: var(--muted); }
+  #degenDesk .deg-exit summary::-webkit-details-marker { display: none; }
+  #degenDesk .deg-note { margin: 8px 0 0; font-size: 12px; font-weight: 650; line-height: 1.35; color: var(--down); }
   .bot-skip { margin: 2px 0 0; max-width: 100%; font-size: 11px; font-weight: 500; line-height: 1.25; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bot-skip-ok { color: var(--up); }
   .row-px { flex: 0 0 auto; min-width: 92px; text-align: right; }
@@ -8241,6 +8261,16 @@ function startDegen() {
   degenPoll();
 }
 function stopDegen() { clearInterval(degenTimer); degenTimer = null; }
+function degenCountdown(exp) {
+  if (!(exp > 0)) return '';
+  const left = exp - Date.now();
+  if (left <= 0) return 'expired';
+  const m = Math.floor(left / 60000);
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  if (h < 48) return h + 'h ' + (m % 60) + 'm';
+  return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
+}
 function degenStatus(pick, px) {
   const exp = degenExpiry(pick?.expires);
   if (exp && exp < Date.now()) return 'EXPIRED';
@@ -8650,24 +8680,50 @@ function renderDegen() {
     ${removedTxt ? `<p class="block-note mt-2 text-[11px] font-semibold whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
     ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
   </button>`;
-  const chipCls = { READY: 'deg-chip deg-ready', WATCH: 'deg-chip deg-watch', EXPIRED: 'deg-chip deg-expired', 'ABOVE MAX': 'deg-chip deg-above' };
+  const statusCls = { READY: 'ready', WATCH: 'wait', EXPIRED: 'block', 'ABOVE MAX': 'block' };
   const picks = (DEGEN.picks || []).map(pick => {
     const q = (DEGEN.quotes || {})[pick.mint] || {};
     const px = isNum(q.price) ? q.price : livePrices.get(pick.mint)?.price;
     const st = degenStatus(pick, px);
     if (q.image) rememberLogo(pick.mint, q.image, { src: 'dex' });
-    return `<article class="border-b border-white/10 py-2.5">
+    const maxPx = +pick.max_entry_price;
+    const hasOrder = maxPx > 0;
+    const dist = hasOrder && isNum(px) && px > 0 ? (maxPx / px - 1) * 100 : null;
+    const distTxt = dist == null ? '—' : (dist < -0.05 ? 'needs ' + pct(dist, 0) : 'in range');
+    const stopRef = hasOrder ? maxPx : (isNum(px) && px > 0 ? px : null);
+    const stopPx = +pick.stop > 0 ? +pick.stop : (stopRef ? degenStopPx(stopRef, pick.stop_pct) : null);
+    const exp = degenExpiry(pick.expires);
+    const expTxt = exp ? tehranClock(exp) + ' · ' + degenCountdown(exp) : '—';
+    const confN = isNum(+pick.confidence) ? Math.round(+pick.confidence) : null;
+    const ring = confN == null ? '<span class="ml-ring"><b>—</b></span>' : (() => { const p = Math.max(0, Math.min(100, confN)); const c = 87.96; const d = (p / 100) * c; return `<span class="ml-ring" aria-label="Confidence ${confN}"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="bg" cx="18" cy="18" r="14"/><circle class="fg" cx="18" cy="18" r="14" style="stroke-dasharray:${d.toFixed(2)} ${c.toFixed(2)}"/></svg><b>${confN}</b></span>`; })();
+    const source = pick.dex ? String(pick.dex) : 'Hunter';
+    const row = degenLastBlock(pick.mint);
+    const liveSt = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter', at: Date.now() } : (DEGEN.pickState && DEGEN.pickState[pick.mint]);
+    const noteAt = row && row.at ? row.at : (liveSt && liveSt.at) || 0;
+    const noteWhy = row && row.reason ? row.reason : (liveSt && liveSt.reason) || '';
+    const noteFresh = noteWhy && noteAt && Date.now() - noteAt < 60000 && !/buy pass still running|unlocked ok/i.test(noteWhy);
+    const note = noteFresh ? (noteWhy === 'bought' ? 'Bought' : noteWhy) : '';
+    const order = hasOrder ? `<div class="ml-grid">
+        <div class="ml-lv"><span>Max entry</span><b>${priceHtml(maxPx)}</b></div>
+        <div class="ml-lv"><span>Now</span><b data-live-mint="${esc(pick.mint)}">${isNum(px) ? priceHtml(px) : '—'}</b></div>
+        <div class="ml-lv"><span>To entry</span><b>${esc(distTxt)}</b></div>
+        <div class="ml-lv"><span>Stop</span><b>${stopPx ? priceHtml(stopPx) : '—'}</b></div>
+        <div class="ml-lv" style="grid-column:1 / -1"><span>Expires · Tehran</span><b>${esc(expTxt)}</b></div>
+      </div>` : '<p class="text-[13px] font-semibold text-slate-300">No entry order</p>';
+    return `<article>
       <div class="flex items-center gap-2">
         ${logoHtml(pick.mint, pick.symbol, 2)}
-        <span class="min-w-0 flex-1"><b class="block truncate text-sm">${esc(pick.symbol || short(pick.mint))}</b><span class="block text-[10px] text-slate-500">${degenAgeLabel(pick.age_h)} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
-        <span class="deg-chip">HUNTER</span>
-        <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
+        <span class="min-w-0 flex-1"><b class="block truncate text-[16px]">${esc(pick.symbol || short(pick.mint))}</b><span class="block truncate text-[12px] text-slate-500">${esc(degenAgeLabel(pick.age_h))} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
+        ${ring}
       </div>
-      <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num"><span data-live-mint="${esc(pick.mint)}">${price(px)}</span> <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
-      ${faZoneHtml(pick.mint)}
-      ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
-      ${(() => { const row = degenLastBlock(pick.mint); if (row) { const hm = tehranHM(row.at); const ok = row.reason === 'bought' || row.reason === 'unlocked ok'; const label = row.reason === 'bought' ? 'Bought ' + hm : row.reason === 'unlocked ok' ? 'Unlocked ok ' + hm : 'Blocked ' + hm + ': ' + row.reason; const cls = ok ? 'text-emerald-300' : 'block-note'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; } const st = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter' } : DEGEN.pickState?.[pick.mint]; if (!st) return ''; const label = st.state === 'bought' ? 'Bought' : st.state === 'buying' ? 'Buying…' : 'Blocked: ' + (st.reason || ''); const cls = st.state === 'blocked' ? 'block-note' : 'text-emerald-300'; return `<p class="mt-1 text-[12px] font-semibold ${cls} whitespace-normal break-words">${esc(label)}</p>`; })()}
-      ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
+      <div class="deg-order"><h4>Entry order</h4>${order}</div>
+      <div class="ml-pills">
+        <span class="ml-pill ${statusCls[st] || 'wait'}">${esc(st)}</span>
+        <span class="ml-pill rule">${esc(source)}</span>
+      </div>
+      ${pick.tp_plan ? `<details class="deg-exit"><summary>Exit rules</summary><p class="text-[12px] text-slate-400 whitespace-normal break-words">${esc(pick.tp_plan)}</p></details>` : ''}
+      ${note ? `<p class="deg-note">${esc(note)}</p>` : ''}
+      ${pick.reason ? `<details class="deg-exit"><summary>Why this pick</summary><p class="text-[12px] text-slate-400 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
     </article>`;
   }).join('');
   const posHtml = open.map(p => {
@@ -8719,7 +8775,7 @@ function renderDegen() {
     <p class="mt-2 text-[12px] text-slate-300">${esc(potLine)}</p>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
-    ${picks || '<p class="empty-note mt-2">No hunter picks yet.</p>'}
+    ${picks ? `<div class="deg-picks">${picks}</div>` : '<p class="empty-note mt-2">No hunter picks yet.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Live scanner ${liveScanOn ? '· on' : '· off'}</h3>
     ${scanHitsHtml() || '<p class="empty-note mt-2">No live-scan hits yet.</p>'}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open positions</h3>
