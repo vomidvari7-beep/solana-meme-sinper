@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T18:38:00Z",
-  "updated_tehran": "2026-11-11 22:08 IRST",
+  "updated_utc": "2026-11-11T19:02:00Z",
+  "updated_tehran": "2026-11-11 22:32 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -51,6 +51,31 @@
       "mint": "8AP8cp2ZwdqgiDUjjXnGT2omzUsqhYzkWDxWQnncpump",
       "symbol": "BERNIE",
       "why": "Vahid: do not buy"
+    },
+    {
+      "mint": "bn5DhJnkB8EVDoAgV9qCV3Kbv7XmEEp7mxW4npDpump",
+      "symbol": "GACHAZ",
+      "why": "drained pool"
+    },
+    {
+      "mint": "31htpQjJJCNJtA1eYE25Si43Wy5HqF9BjihwREmvpump",
+      "symbol": "Bernie",
+      "why": "Bernie copy, bundled"
+    },
+    {
+      "mint": "AVYzqnJG5g4qWf3eSAZVMzwsZh79bS9KCWxceCaJpump",
+      "symbol": "Bernie",
+      "why": "Bernie copy, 22 insiders"
+    },
+    {
+      "mint": "2d6rBgEptqditfqvKojShohWEMuwiQnAtMgSf2tYpump",
+      "symbol": "Bernie",
+      "why": "Bernie copy, RugCheck danger"
+    },
+    {
+      "mint": "FjRPQ8dkH1jHtgqhKwWxxNrt9jTsTbJ4Quw59up7chU4",
+      "symbol": "Bernie",
+      "why": "Bernie copy, RugCheck danger"
     }
   ]
 }
