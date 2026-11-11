@@ -3713,6 +3713,7 @@ async function liveTick() {
         m5s: row?.m5s == null ? prev?.m5s : row.m5s,
         at: now
       });
+      if (px > 0) rugWatch(mint, px);
       const listLive = typeof MYLIST !== 'undefined' && MYLIST.on && (MYLIST.rows || []).some(r => r && r.enabled !== false && r.mint === mint);
       if (!hidden && (held.has(mint) || mint === focus || listLive)) pushTick(mint, px, now);
       try {
@@ -7631,13 +7632,19 @@ async function degenBuy(pick, opt) {
       const safe = await degenSafety(pick.mint);
       if (!safe.ok) { degenBlockNote(pick, safe.reason); return; }
     }
+    const fake = fakeDataReason(pick.mint, Object.assign({ px: price }, opt.tape || {}));
+    if (fake) { degenBlockNote(pick, fake); noteScanHit({ mint: pick.mint, symbol: pick.symbol, ok: false, status: 'BLOCK', conf: opt.conf ?? null, reason: fake, at: Date.now() }); return; }
     if (!solPriceNow()) await refreshSolPrice();
     const sol = degenTradeSol();
     if (!(sol >= 0.001)) { degenBlockNote(pick, 'degen size too small'); return; }
     const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
     if (errs.length) { degenBlockNote(pick, errs[0]); return; }
     const slip = Math.min(S.slippagePct, A.slipCap);
-    const qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) });
+    let qo;
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: pick.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(slip * 100) }); }
+    catch (e) { degenBlockNote(pick, 'fake-data: jupiter quote failed'); noteScanHit({ mint: pick.mint, symbol: pick.symbol, ok: false, status: 'BLOCK', conf: opt.conf ?? null, reason: 'fake-data: jupiter quote failed', at: Date.now() }); return; }
+    const badQuote = fakeImpactReason(qo.quote);
+    if (badQuote) { degenBlockNote(pick, badQuote); noteScanHit({ mint: pick.mint, symbol: pick.symbol, ok: false, status: 'BLOCK', conf: opt.conf ?? null, reason: badQuote, at: Date.now() }); return; }
     const imp = impactPct(qo.quote);
     if (imp > 15) { degenBlockNote(pick, 'impact ' + imp.toFixed(1) + '%'); return; }
     degenMark(pick.mint, 'buying', '');
@@ -7920,6 +7927,88 @@ function maxNonPoolPct(rr) {
   const holders = (r.topHolders || []).filter(h => h && !isPool(h));
   return holders.reduce((m, h) => Math.max(m, +h.pct || 0), 0);
 }
+const RUG_BLACK_LS = 'sms:rugblack';
+const rugPxMem = new Map();
+const fakeWhy = new Map();
+function rugBlackBook() {
+  const v = load(RUG_BLACK_LS, {});
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+function rugBlackHas(mint) { return !!(mint && rugBlackBook()[mint]); }
+function rugBlackAdd(mint, why) {
+  if (!mint || rugBlackHas(mint)) return;
+  const book = rugBlackBook();
+  book[mint] = { at: Date.now(), why: String(why || 'price -80% within 1h').slice(0, 120) };
+  const keys = Object.keys(book);
+  if (keys.length > 500) {
+    keys.sort((a, b) => (book[a].at || 0) - (book[b].at || 0));
+    while (Object.keys(book).length > 400) delete book[keys.shift()];
+  }
+  save(RUG_BLACK_LS, book);
+}
+function rugWatch(mint, px) {
+  if (!mint || !(px > 0) || rugBlackHas(mint)) return;
+  const now = Date.now();
+  let rows = (rugPxMem.get(mint) || []).filter(x => x && now - x.t <= 3600e3 && x.p > 0);
+  const last = rows[rows.length - 1];
+  if (!last || now - last.t >= 5000) rows.push({ t: now, p: px });
+  if (rows.length > 80) rows = rows.slice(-80);
+  rugPxMem.set(mint, rows);
+  if (rugPxMem.size > 100) {
+    const oldest = [...rugPxMem.entries()].sort((a, b) => ((a[1][a[1].length - 1] || {}).t || 0) - ((b[1][b[1].length - 1] || {}).t || 0));
+    while (rugPxMem.size > 70) rugPxMem.delete(oldest.shift()[0]);
+  }
+  const prior = rows.filter(x => now - x.t >= 15000);
+  if (!prior.length) return;
+  const hi = Math.max(...prior.map(x => x.p));
+  if (hi > 0 && px <= hi * 0.2) rugBlackAdd(mint, 'price -80% within 1h');
+}
+function agentRugBlob(v) {
+  if (v == null) return '';
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return v.map(agentRugBlob).join(' ');
+  if (typeof v === 'object') return Object.keys(v).map(k => k + ' ' + agentRugBlob(v[k])).join(' ');
+  return '';
+}
+function textHasRugFlag(s) {
+  return /\brugged\b|\brug[\s-]?pull\b|\brug\b/i.test(String(s || '').replace(/rugcheck/ig, ' '));
+}
+function agentRowsFor(mint) {
+  const rows = [];
+  try { const p = (DEGEN?.picks || []).find(x => x && x.mint === mint); if (p) rows.push(p); } catch { /* degen later */ }
+  try { const c = (AG?.candidates || []).find(x => x && x.mint === mint); if (c) rows.push(c); } catch { /* candidates later */ }
+  try { const s = AG?.scores?.get?.(mint); if (s) rows.push(s); } catch { /* scores later */ }
+  try { const p = AG?.plans?.get?.(mint); if (p) rows.push(p); } catch { /* plans later */ }
+  try { (AG?.risk?.positions || []).forEach(p => { if (p && p.mint === mint) rows.push(p); }); } catch { /* risk later */ }
+  try { (AG?.listFile || []).forEach(p => { if (p && p.mint === mint) rows.push(p); }); } catch { /* list file later */ }
+  return rows;
+}
+function fakeDataReason(mint, tape) {
+  const t = tape || {};
+  if (t.px > 0) rugWatch(mint, t.px);
+  if (isNum(t.h1) && t.h1 <= -80) rugBlackAdd(mint, 'price -80% within 1h');
+  let reason = '';
+  if (rugBlackHas(mint)) reason = 'fake-data: blacklisted rug';
+  if (!reason) {
+    const pick = (DEGEN?.picks || []).find(x => x && x.mint === mint);
+    if (pick && +pick.confidence === 0) reason = 'fake-data: confidence 0';
+    else if (pick && /\bAVOID\b/i.test(String(pick.reason || '') + ' ' + String(pick.status || ''))) reason = 'fake-data: AVOID';
+  }
+  if (!reason && agentRowsFor(mint).some(row => textHasRugFlag(agentRugBlob(row)))) reason = 'fake-data: rug flag';
+  const m5b = t.m5b, m5s = t.m5s, h1b = t.h1b, h1s = t.h1s;
+  if (!reason && isNum(m5b) && m5b > 0 && isNum(m5s) && m5s === 0) reason = 'fake-data: m5 sells 0';
+  if (!reason && isNum(h1b) && h1b > 0 && isNum(h1s) && h1s === 0) reason = 'fake-data: h1 sells 0';
+  if (!reason && isNum(t.liq) && t.liq > 0 && isNum(t.vol24) && t.vol24 >= 0 && t.liq > t.vol24 * 20) reason = 'fake-data: liquidity > 20x 24h volume';
+  if (!reason && isNum(t.liq) && t.liq > 0 && isNum(t.mcap) && t.mcap > 0 && t.liq > t.mcap) reason = 'fake-data: liquidity > mcap';
+  if (reason) fakeWhy.set(mint, reason);
+  else if (t.m5b != null || t.liq != null || t.vol24 != null) fakeWhy.delete(mint);
+  return reason;
+}
+function fakeImpactReason(quote) {
+  if (!quote || !quote.outAmount) return 'fake-data: jupiter quote failed';
+  if (quote.priceImpactPct == null || quote.priceImpactPct === '' || !Number.isFinite(+quote.priceImpactPct)) return 'fake-data: impact cannot be computed';
+  return '';
+}
 function livePre(p) {
   const ageH = p.created ? (Date.now() - p.created) / 3.6e6 : (isNum(p.ageH) ? p.ageH : null);
   if (!(isNum(ageH) && ageH < 6)) return 'age ' + (ageH == null ? 'unknown' : ageH.toFixed(1) + 'h');
@@ -7980,12 +8069,12 @@ async function discoverLivePairs() {
     created: p.pairCreatedAt || null, liq: p.liquidity?.usd ?? null, mcap: p.marketCap ?? p.fdv ?? null,
     price: p.priceUsd != null ? +p.priceUsd : null,
     m5b: p.txns?.m5?.buys || 0, m5s: p.txns?.m5?.sells || 0, h1b: p.txns?.h1?.buys || 0, h1s: p.txns?.h1?.sells || 0,
-    m5vol: p.volume?.m5 || 0, h1vol: p.volume?.h1 || 0, chg1h: p.priceChange?.h1 != null ? +p.priceChange.h1 : null,
+    m5vol: p.volume?.m5 || 0, h1vol: p.volume?.h1 || 0, vol24: p.volume?.h24 ?? null, chg1h: p.priceChange?.h1 != null ? +p.priceChange.h1 : null,
     m5chg: p.priceChange?.m5 != null ? +p.priceChange.m5 : null, source: 'dex'
   }));
 }
 async function enrichLive(p) {
-  if (isNum(p.h1b) && p.h1b > 0 && isNum(p.h1vol)) return p;
+  if (isNum(p.h1b) && p.h1b > 0 && isNum(p.h1vol) && isNum(p.vol24) && isNum(p.h1s)) return p;
   try {
     const arr = await fetchJSONOnce('https://api.dexscreener.com/tokens/v1/solana/' + p.mint, { timeout: 8000 });
     const best = (arr || []).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
@@ -7996,7 +8085,7 @@ async function enrichLive(p) {
       price: best.priceUsd != null ? +best.priceUsd : p.price,
       m5b: best.txns?.m5?.buys || p.m5b || 0, m5s: best.txns?.m5?.sells || p.m5s || 0,
       h1b: best.txns?.h1?.buys || 0, h1s: best.txns?.h1?.sells || 0,
-      m5vol: best.volume?.m5 || p.m5vol || 0, h1vol: best.volume?.h1 || 0,
+      m5vol: best.volume?.m5 || p.m5vol || 0, h1vol: best.volume?.h1 || 0, vol24: best.volume?.h24 ?? p.vol24 ?? null,
       chg1h: best.priceChange?.h1 != null ? +best.priceChange.h1 : p.chg1h,
       m5chg: best.priceChange?.m5 != null ? +best.priceChange.m5 : p.m5chg
     };
@@ -8019,6 +8108,8 @@ async function liveScanOnce() {
       if (looked >= 3) break;
       looked++;
       const p = await enrichLive(raw);
+      const fake = fakeDataReason(p.mint, { px: p.price, liq: p.liq, mcap: p.mcap, vol24: p.vol24, m5b: p.m5b, m5s: p.m5s, h1b: p.h1b, h1s: p.h1s, h1: p.chg1h });
+      if (fake) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: fake, at: Date.now() }); if (typeof noteBuyWhy === 'function') noteBuyWhy(p.mint, p.symbol, 'scan', fake); continue; }
       const cheap = livePre(p);
       if (cheap) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf: null, reason: cheap, at: Date.now() }); continue; }
       if (deep >= 1) continue;
@@ -8044,7 +8135,7 @@ async function liveScanOnce() {
       if (block) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: block, at: Date.now() }); break; }
       noteScanHit({ mint: p.mint, symbol: p.symbol, ok: true, status: 'PASS', conf, reason: 'buying from degen pot', at: Date.now() });
       try {
-        await degenBuy({ mint: p.mint, symbol: p.symbol, stop_pct: 25, time_stop_min: 45, trail: 20, max_entry_price: p.price }, { live: true, price: p.price, conf });
+        await degenBuy({ mint: p.mint, symbol: p.symbol, stop_pct: 25, time_stop_min: 45, trail: 20, max_entry_price: p.price }, { live: true, price: p.price, conf, tape: { liq: p.liq, mcap: p.mcap, vol24: p.vol24, m5b: p.m5b, m5s: p.m5s, h1b: p.h1b, h1s: p.h1s, h1: p.chg1h } });
       } catch (e) { noteScanHit({ mint: p.mint, symbol: p.symbol, ok: false, status: 'BLOCK', conf, reason: e.message || 'buy failed', at: Date.now() }); degenLogEvent(p.mint, e.message || 'buy failed', p.symbol); }
       break;
     }
@@ -10146,6 +10237,14 @@ async function mlBreakPass() {
     const buys = isNum(flow.m5b) ? flow.m5b : (r.dexPair?.txns?.m5?.buys || 0);
     const sells = isNum(flow.m5s) ? flow.m5s : (r.dexPair?.txns?.m5?.sells || 0);
     if (!(buys >= sells) || buys + sells === 0) continue;
+    const pair = r.dexPair || {};
+    const fake = fakeDataReason(r.mint, {
+      px, liq: isNum(flow.liq) ? flow.liq : pair.liquidity?.usd,
+      vol24: pair.volume?.h24, mcap: pair.marketCap ?? pair.fdv,
+      m5b: buys, m5s: sells, h1b: pair.txns?.h1?.buys, h1s: pair.txns?.h1?.sells,
+      h1: pair.priceChange?.h1 != null ? +pair.priceChange.h1 : null
+    });
+    if (fake) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', fake); botLog('mylist', r.mint, fake); continue; }
     const key = mlBreakKey(geo);
     if ((mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy'))) continue;
     if (LOG.some(t => t.myList && t.mint === r.mint && t.side === 'buy' && (t.status === 'pending' || t.status === 'confirmed') && t.plan?.mlBreakKey === key)) continue;
@@ -10157,7 +10256,11 @@ async function mlBreakPass() {
     if (!safe.ok) { botLog('mylist', r.mint, safe.reason || 'safety'); continue; }
     const solPx = solPriceNow() || liveSolPx();
     if (!(solPx > 0)) continue;
-    const qo = await getQuote({ inputMint: WSOL, outputMint: r.mint, amountRaw: BigInt(Math.round(resolved.sol * 1e9)), slippageBps: 100 });
+    let qo;
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: r.mint, amountRaw: BigInt(Math.round(resolved.sol * 1e9)), slippageBps: 100 }); }
+    catch (e) { const why = 'fake-data: jupiter quote failed'; if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', why); botLog('mylist', r.mint, why); continue; }
+    const badQuote = fakeImpactReason(qo.quote);
+    if (badQuote) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', badQuote); botLog('mylist', r.mint, badQuote); continue; }
     if (impactPct(qo.quote) > 1) { botLog('mylist', r.mint, 'impact > 1%'); continue; }
     const entry = px > 0 ? px : close;
     const stop = mlBreakStop(entry, geo.candleLow);
@@ -10431,8 +10534,10 @@ function planBlockReason(p, px) {
 }
 function planCanFire(p, px) { return planBlockReason(p, px) === ''; }
 function explainNoBuy(mint) {
-  const plan = typeof agentPlanFor === 'function' ? agentPlanFor(mint) : null;
   const px = typeof livePrices !== 'undefined' ? livePrices.get(mint)?.price : null;
+  const fake = typeof fakeDataReason === 'function' ? (fakeDataReason(mint, { px }) || fakeWhy.get(mint) || '') : '';
+  if (fake) return fake;
+  const plan = typeof agentPlanFor === 'function' ? agentPlanFor(mint) : null;
   if (plan) return planBlockReason(plan, px) || 'trigger touched — next auto tick can buy';
   if (!A.on) return 'AUTO is off (turns off on reload)';
   if (typeof burnerReady === 'function' && !burnerReady()) return 'burner locked';
@@ -11507,15 +11612,32 @@ async function scalpTick() {
         vol: p?.volume?.h24 || 0,
         meta: {
           ageH, curve: !!(p && /pumpfun|bonding/i.test(dex) && !/pumpswap/i.test(dex)), dexOk: scalpDexOk(dex),
-          liq: p?.liquidity?.usd ?? null, vol24: p?.volume?.h24 ?? null, m5: isNum(+p?.priceChange?.m5) ? +p.priceChange.m5 : null,
+          liq: p?.liquidity?.usd ?? null, vol24: p?.volume?.h24 ?? null, mcap: p?.marketCap ?? p?.fdv ?? null, m5: isNum(+p?.priceChange?.m5) ? +p.priceChange.m5 : null,
           h1: isNum(+p?.priceChange?.h1) ? +p.priceChange.h1 : null, buys: +p?.txns?.m5?.buys || 0, sells: +p?.txns?.m5?.sells || 0,
+          h1b: +p?.txns?.h1?.buys || 0, h1s: +p?.txns?.h1?.sells || 0,
           buyers: null, bigSellPct: null, flag: scalpFlag(row.mint), plan: typeof agentPlanFor === 'function' ? agentPlanFor(row.mint) : null,
           pool: p?.pairAddress || '', symbol: p?.baseToken?.symbol || row.symbol, px: +p?.priceUsd || 0
         }
       });
     }).filter(r => r.meta.liq > 0).sort((a, b) => b.vol - a.vol);
-    const top = ranked[0];
-    if (!top) { scalpWhy.symbol = ''; scalpWhy.reason = 'no priced candidates'; scalpWhy.at = Date.now(); return; }
+    let top = null;
+    let fakeTop = null;
+    for (const row of ranked) {
+      const fake = fakeDataReason(row.mint, { px: row.meta.px, liq: row.meta.liq, mcap: row.meta.mcap, vol24: row.meta.vol24, m5b: row.meta.buys, m5s: row.meta.sells, h1b: row.meta.h1b, h1s: row.meta.h1s, h1: row.meta.h1 });
+      if (fake) {
+        if (!fakeTop) fakeTop = { row, fake };
+        if (typeof noteBuyWhy === 'function') noteBuyWhy(row.mint, row.meta.symbol || row.symbol, 'scalp', fake);
+        continue;
+      }
+      top = row;
+      break;
+    }
+    if (!top) {
+      scalpWhy.symbol = fakeTop ? (fakeTop.row.meta.symbol || fakeTop.row.symbol || '') : '';
+      scalpWhy.reason = fakeTop ? fakeTop.fake : 'no priced candidates';
+      scalpWhy.at = Date.now();
+      return;
+    }
     const gate = scalpGate(top.mint);
     if (gate) { scalpWhy.symbol = top.meta.symbol || top.symbol; scalpWhy.reason = gate; scalpWhy.at = Date.now(); return; }
     const openOne = openPositions().filter(p => p.scalp && p.open);
@@ -11542,7 +11664,11 @@ async function scalpTick() {
     const sol = +(size.usd / solPx).toFixed(6);
     const errs = buyGuards('burner', top.mint, sol, { skipMaxOpen: true, scalp: true });
     if (errs.length) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = errs[0]; scalpWhy.at = Date.now(); return; }
-    const qo = await getQuote({ inputMint: WSOL, outputMint: top.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: SCALP_RULE.SLIP_BPS });
+    let qo;
+    try { qo = await getQuote({ inputMint: WSOL, outputMint: top.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: SCALP_RULE.SLIP_BPS }); }
+    catch (e) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = 'fake-data: jupiter quote failed'; scalpWhy.at = Date.now(); if (typeof noteBuyWhy === 'function') noteBuyWhy(top.mint, top.meta.symbol, 'scalp', scalpWhy.reason); return; }
+    const badQuote = fakeImpactReason(qo.quote);
+    if (badQuote) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = badQuote; scalpWhy.at = Date.now(); if (typeof noteBuyWhy === 'function') noteBuyWhy(top.mint, top.meta.symbol, 'scalp', badQuote); return; }
     const impact = impactPct(qo.quote);
     let drift = null;
     try {
