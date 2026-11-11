@@ -9552,7 +9552,14 @@ function listPlan(spec, entryPx, model) {
   const stopPx = spec.mode === 'ath' && isNum(stop) ? stop : spec.stopPx;
   return { myList: true, stop, strat: 'My List ' + spec.mode, exit: { stopPct: spec.stopPct, stopPx, tps, beAtPct: spec.beAtPct, trailAtPct, trailPct, timeStopMin: spec.timeStopMin, timeMinGain: spec.timeMinGain } };
 }
-let listSort = 'ready', listTable = false;
+function loadListSort() {
+  try {
+    const v = localStorage.getItem('sms:mlsort');
+    if (v === 'setup' || v === 'ready' || v === 'distance') return v;
+  } catch { /* default */ }
+  return 'setup';
+}
+let listSort = loadListSort(), listTable = false;
 const listChartMemo = {};
 function plannedStop(spec, px, zone, support) {
   const pct = isNum(spec?.stopPct) && spec.stopPct > 0 && spec.stopPct < 100 ? spec.stopPct : 15;
@@ -10024,7 +10031,15 @@ function myListStructSig() {
     const px = (typeof livePrices !== 'undefined' && livePrices.get(r.mint)?.price) || r.price || 0;
     const bucket = px > 0 ? Math.round(Math.log(px) * 80) : 0;
     const phase = typeof mlBreakView === 'function' ? ((mlBreakView(r.mint) || {}).fa || '') : '';
-    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + phase + bucket;
+    const scored = typeof AG !== 'undefined' && AG.scores && AG.scores.get(r.mint);
+    const sc = scored && isNum(+scored.score) ? Math.round(+scored.score) : '';
+    const planReady = typeof agentPlanUsable === 'function' && agentPlanUsable(typeof agentPlanFor === 'function' ? agentPlanFor(r.mint) : null) ? 'p' : '';
+    let holdOn = '';
+    try {
+      const bars = typeof mlBreakMem !== 'undefined' && mlBreakMem.get(r.id)?.h1;
+      if (bars && typeof h1TrendHold === 'function' && h1TrendHold(bars).buy) holdOn = 'h';
+    } catch { /* sort still uses the score */ }
+    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + phase + sc + planReady + holdOn + bucket;
   }
   return s;
 }
@@ -10040,11 +10055,21 @@ function renderMyList(opts) {
   if ((!opts || !opts.force) && box.dataset.mem === listSig && box.childElementCount) { patchLiveText(); return; }
   const views = MYLIST.rows.map(row => ({ row, ...listContext(row) }));
   views.forEach(v => { listChartMemo[v.row.id] = v.model; });
+  const setupRank = (v) => {
+    const scored = AG.scores && AG.scores.get(v.row.mint);
+    const score = scored && isNum(+scored.score) ? Math.round(+scored.score) : null;
+    const live = typeof mlBreakView === 'function' ? mlBreakView(v.row.mint) : null;
+    let hold = false;
+    try { hold = !!(mlBreakMem.get(v.row.id)?.h1 && h1TrendHold(mlBreakMem.get(v.row.id).h1).buy); } catch { hold = false; }
+    const plan = typeof agentPlanUsable === 'function' && agentPlanUsable(typeof agentPlanFor === 'function' ? agentPlanFor(v.row.mint) : null);
+    const hot = (live && live.state === 'buy') || hold || plan;
+    return [score == null ? 1 : 0, score == null ? 0 : -score, hot ? 0 : 1, v.dist == null ? 1 : 0, v.dist == null ? 0 : Math.abs(v.dist)];
+  };
   const rank = (v) => {
     const badgeOrder = { 'READY — entering': 0, 'In zone': 1, Waiting: 2, Bought: 3, Cooldown: 4, Disabled: 5 };
-    return listSort === 'distance'
-      ? [v.dist == null ? 1 : 0, v.dist == null ? 0 : Math.abs(v.dist)]
-      : [v.ready ? 0 : 1, badgeOrder[v.badge] ?? 9, v.dist == null ? 1e9 : Math.abs(v.dist)];
+    if (listSort === 'distance') return [v.dist == null ? 1 : 0, v.dist == null ? 0 : Math.abs(v.dist)];
+    if (listSort === 'setup') return setupRank(v);
+    return [v.ready ? 0 : 1, badgeOrder[v.badge] ?? 9, v.dist == null ? 1e9 : Math.abs(v.dist)];
   };
   views.sort((a, b) => {
     const ra = rank(a), rb = rank(b);
@@ -10206,7 +10231,7 @@ function renderMyList(opts) {
       <input id="mlAddMint" placeholder="Mint address" class="min-w-0 flex-1 rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" />
       <button type="button" id="mlAdd" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Add</button>
     </div>
-    <div class="mt-2 flex flex-wrap gap-1.5">${sortBtn('ready', 'Ready first')}${sortBtn('distance', 'Distance to trigger')}</div>
+    <div class="mt-2 flex flex-wrap gap-1.5">${sortBtn('setup', 'Best setup')}${sortBtn('ready', 'Ready first')}${sortBtn('distance', 'Distance to trigger')}</div>
     <div class="mt-2 ${listTable ? '' : 'ml-cards'}">${sharedNote}${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
   </div>`;
   $('mlView')?.addEventListener('click', () => { listTable = !listTable; renderMyList(); });
@@ -10225,7 +10250,12 @@ function renderMyList(opts) {
     const parsed = parseInput($('mlAddMint')?.value || '');
     addMintsToList([...new Set([...(parsed.mints || []), ...(parsed.pairs || [])])]);
   });
-  box.querySelectorAll('[data-ml-sort]').forEach(b => b.addEventListener('click', () => { listSort = b.dataset.mlSort; renderMyList(); }));
+  box.querySelectorAll('[data-ml-sort]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.mlSort !== 'setup' && b.dataset.mlSort !== 'ready' && b.dataset.mlSort !== 'distance') return;
+    listSort = b.dataset.mlSort;
+    try { localStorage.setItem('sms:mlsort', listSort); } catch { /* keep this session */ }
+    renderMyList();
+  }));
   box.querySelectorAll('[data-ml-on]').forEach(el => el.addEventListener('change', () => {
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlOn); if (!row) return;
     row.enabled = el.checked; saveMyList(); renderMyList();
