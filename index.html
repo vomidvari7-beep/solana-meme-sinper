@@ -6713,18 +6713,21 @@ async function placeCopyBuy(ev, sol, book, trancheLabel) {
   updateSolFilterBadge();
   if (gate.action === 'pause') { whaleLog({ mint: ev.mint, whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'paused', detail: gate.badge }); return false; }
   if (gate.action === 'halve') sol = +(sol / 2).toFixed(6);
+  const test = liveTestTake(sol);
+  if (!test.ok) { whaleLog({ mint: ev.mint, whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'skipped', detail: test.reason }); return false; }
+  sol = test.sol;
   if (!(sol >= 0.001)) { whaleLog({ mint: ev.mint, whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'skipped', detail: 'SOL filter halved size below 0.001 SOL' }); return false; }
   const errs = buyGuards('burner', ev.mint, sol);
   if (errs.length) { whaleLog({ mint: ev.mint, whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: 'rejected', detail: errs[0] }); return false; }
   try {
     if (typeof window.__smsSend === 'function') {
-      await window.__smsSend({ walletKey: 'burner', side: 'buy', mint: ev.mint, sol, extra: { copy: true, copyState: book } });
+      await window.__smsSend({ walletKey: 'burner', side: 'buy', mint: ev.mint, sol, extra: { copy: true, test: test.test, copyState: book } });
       copyBooks.set(ev.mint, book);
       whaleLog({ mint: ev.mint, whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: trancheLabel, detail: (book.trigger ? 'trigger ' + book.trigger + ' · ' : '') + sol.toFixed(4) + ' SOL' + (book.soft?.length ? ' · ' + book.soft.join('; ') : '') + (book.clamped ? ' · clamped to position cap' : '') });
       return true;
     }
     const qo = await getQuote({ inputMint: WSOL, outputMint: ev.mint, amountRaw: BigInt(Math.round(sol * 1e9)), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
-    const sent = await sendSwap({ walletKey: 'burner', side: 'buy', mint: ev.mint, quoteObj: qo, t: { symbol: ev.symbol || short(ev.mint), mint: ev.mint }, auto: false, extra: { copy: true, copyState: book, plan: copyPlan(ev.price || ev.nowPx) } });
+    const sent = await sendSwap({ walletKey: 'burner', side: 'buy', mint: ev.mint, quoteObj: qo, t: { symbol: ev.symbol || short(ev.mint), mint: ev.mint }, auto: false, extra: { copy: true, test: test.test, copyState: book, plan: copyPlan(ev.price || ev.nowPx) } });
     if (sent === false) return false;
     copyBooks.set(ev.mint, book);
     whaleLog({ mint: ev.mint, whale: ev.label, token: ev.symbol || short(ev.mint), side: 'buy', usd: ev.usd, decision: trancheLabel, detail: (book.trigger ? 'trigger ' + book.trigger + ' · ' : '') + sol.toFixed(4) + ' SOL' + (book.soft?.length ? ' · ' + book.soft.join('; ') : '') + (book.clamped ? ' · clamped to position cap' : '') });
@@ -7611,11 +7614,6 @@ function degenTradeSol() {
   if (degenOpenCost() + usdAmt > cfg.budgetUsd + 1e-6) return null;
   const cash = degenLedger().balanceUsd - degenFeeEstimateUsd(px);
   if (usdAmt > cash + 1e-6) return null;
-  if (typeof liveTestTake === 'function' && liveTestOn()) {
-    const t = liveTestTake(usdAmt / px);
-    if (!t.ok) return null;
-    usdAmt = Math.min(usdAmt, t.usd || 3);
-  }
   if (!(usdAmt > 0)) return null;
   return +(usdAmt / px).toFixed(6);
 }
@@ -7829,8 +7827,11 @@ async function degenBuy(pick, opt) {
     const fake = fakeDataReason(pick.mint, Object.assign({ px: price }, opt.tape || {}));
     if (fake) { degenBlockNote(pick, fake); noteScanHit({ mint: pick.mint, symbol: pick.symbol, ok: false, status: 'BLOCK', conf: opt.conf ?? null, reason: fake, at: Date.now() }); return; }
     if (!solPriceNow()) await refreshSolPrice();
-    const sol = degenTradeSol();
+    let sol = degenTradeSol();
     if (!(sol >= 0.001)) { degenBlockNote(pick, 'degen size too small'); return; }
+    const test = liveTestTake(sol);
+    if (!test.ok) { degenBlockNote(pick, test.reason); return; }
+    sol = test.sol;
     const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
     if (errs.length) { degenBlockNote(pick, errs[0]); return; }
     const slip = Math.min(S.slippagePct, A.slipCap);
@@ -7845,7 +7846,7 @@ async function degenBuy(pick, opt) {
     const plan = degenPlan({ stop_pct: 25, time_stop_min: 45, trail: 20 }, price);
     let r;
     try {
-      r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, test: typeof liveTestOn === 'function' && liveTestOn(), plan, entryReason: 'live scan · conf ' + (opt.conf ?? '') } });
+      r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, test: test.test, plan, entryReason: 'live scan · conf ' + (opt.conf ?? '') } });
     } catch (e) { throw e; }
     degenMark(pick.mint, 'bought', '');
     degenLogEvent(pick.mint, 'bought', pick.symbol);
@@ -7871,8 +7872,11 @@ async function degenBuy(pick, opt) {
     if (!safe.ok) { degenBlockNote(pick, safe.reason); return; }
   }
   if (!solPriceNow()) await refreshSolPrice();
-  const sol = degenTradeSol();
+  let sol = degenTradeSol();
   if (!(sol >= 0.001)) { degenBlockNote(pick, 'degen size too small'); return; }
+  const test = liveTestTake(sol);
+  if (!test.ok) { degenBlockNote(pick, test.reason); return; }
+  sol = test.sol;
   const errs = buyGuards('burner', pick.mint, sol, { skipMaxOpen: true, degen: true });
   if (errs.length) { degenBlockNote(pick, errs[0]); return; }
   const slip = Math.min(S.slippagePct, A.slipCap);
@@ -7884,7 +7888,7 @@ async function degenBuy(pick, opt) {
   const plan = degenPlan(pick, price);
   let r;
   try {
-    r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, test: typeof liveTestOn === 'function' && liveTestOn(), sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick · READY @ ' + price(price) } });
+    r = await executeSwap({ walletKey: 'burner', side: 'buy', mint: pick.mint, quoteObj: qo, t: { symbol: pick.symbol || short(pick.mint), mint: pick.mint }, auto: false, extra: { degen: true, test: test.test, sniper: !!opt?.sniper, plan, entryReason: opt?.sniper ? 'degen sniper' : 'degen pick · READY @ ' + price(price) } });
   } catch (e) { throw e; }
   degenMark(pick.mint, 'bought', '');
   degenLogEvent(pick.mint, 'bought', pick.symbol);
@@ -11957,7 +11961,7 @@ function renderScalp() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L</div><div class="font-mono ${pnlCls}">${eq.pnl >= 0 ? '+' : ''}${usd(eq.pnl, 2)} · ${pct(eq.pct)}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today · win rate</div><div class="font-mono">${todayN} · ${wr}</div></div>
     </div>
-    <p class="mt-2 text-[12px] text-slate-300 whitespace-normal break-words">Next size <b>${sized.usd >= SCALP_RULE.MIN_FREE ? usd(sized.usd, 2) : '—'}</b> <span class="text-slate-500">${esc(sized.label || '')}</span></p>
+    <p class="mt-2 text-[12px] text-slate-300 whitespace-normal break-words">Next size <b>${liveTestOn() ? '$3 (test)' : (sized.usd >= SCALP_RULE.MIN_FREE ? usd(sized.usd, 2) : '—')}</b> <span class="text-slate-500">${esc(liveTestOn() ? 'live test cap' : (sized.label || ''))}</span></p>
     <p class="text-[11px] text-slate-500 whitespace-normal break-words">Free ${usd(eq.book.balanceUsd, 2)} · 50% then remainder · daily stop -$20 · max 2</p>
     ${why}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open</h3>

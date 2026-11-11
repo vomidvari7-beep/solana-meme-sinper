@@ -109,9 +109,24 @@ export function createEngine(cfg, state, net, swap) {
     const why = fakeDataReason(mint, tape, bookView());
     return why;
   }
+  function liveTestTake(solAmt) {
+    if (state.data.liveTest === false) return { ok: true, sol: solAmt, test: false };
+    if (state.data.positions.some(p => p.open && p.plan?.test)) return { ok: false, sol: 0, test: true, reason: 'live test position open' };
+    const px = sol.price || 0;
+    if (!(px > 0)) return { ok: false, sol: 0, test: true, reason: 'SOL price unavailable' };
+    const sized = Math.min(+solAmt || 0, 3 / px);
+    if (!(sized >= 0.001)) return { ok: false, sol: 0, test: true, reason: 'test size under 0.001 SOL' };
+    return { ok: true, sol: +sized.toFixed(6), test: true, usd: Math.min(3, sized * px) };
+  }
   async function safeBuy(mode, mint, symbol, solAmt, slipBps, plan, liq) {
     if (state.data.paused || !state.data.toggles[mode === 'scan' ? 'scan' : mode]) return;
     if (state.findOpen(mint)) { state.note(mode, mint, symbol, 'already open'); return; }
+    const test = liveTestTake(solAmt);
+    if (!test.ok) { state.note(mode, mint, symbol, test.reason); return; }
+    solAmt = test.sol;
+    plan = { ...(plan || {}), test: test.test };
+    if (test.test && (mode === 'scan' || mode === 'degen')) plan.degenUsd = test.usd;
+    if (test.test && mode === 'scalp') plan.scalpUsd = test.usd;
     const tape = live(mint) || {};
     const fake = guard(mint, tape);
     if (fake) { state.note(mode, mint, symbol, fake); return; }
