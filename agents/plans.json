@@ -1,2279 +1,2283 @@
 [
-  {
-    "mint": "9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump",
-    "symbol": "ANSEM",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": 0.05937,
-    "resistance_band": [
-      0.06006,
-      0.06472
+ {
+  "mint": "9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump",
+  "symbol": "ANSEM",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": 0.05937,
+  "resistance_band": [
+   0.06006,
+   0.06472
+  ],
+  "ath": 0.4489,
+  "trigger_price": 0.0648,
+  "trigger_condition": "zone",
+  "entry_condition": "re-arm: 1h close back above 0.0648 (or a live hold above it for 2+ 15m candles); then buy the retest of 0.06006-0.0648",
+  "entry_mode": "zone",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": null,
+  "leg1_condition": "buy 50% on first hold of 0.06006-0.0648 (15m closes stay above 0.06006)",
+  "leg2_zone": [
+   0.06006,
+   0.0648
+  ],
+  "leg2_condition": "buy remaining 50% on a second touch of 0.06006-0.0648 that holds, or add on the same hold if only one fill is available",
+  "leg1_target": null,
+  "leg2_target": 0.08116,
+  "stop": 0.059,
+  "target": 0.08116,
+  "tp1": 0.08116,
+  "tp2": 0.08116,
+  "rr": 5.4606,
+  "confidence": 52,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "BACK TO WAITING: 1h 19:30 IRST closed 0.06185, back inside the 0.06006-0.0648 band after the 18:30 re-break (15m 19:45 dumped 0.0653->0.0623 on 54k); stop 0.059 kept 1.1% under the 16:30 IRST 1h breakout low 0.05967; re-arm on a 1h close >0.0648; invalid on a 1h close <0.06006",
+  "warnings": [
+   "16:30 IRST first break failed: 17:30 1h closed 0.06358 back inside the band",
+   "18:30 IRST 1h wicked to 0.05973, almost to the 0.059 stop, then recovered to close 0.06577",
+   "Hunter: RugCheck danger / single-holder concentration; top-10 share ~66%; Vahid still wants to trade it",
+   "h1 sellers slightly ahead at the 19:30 close (414 vs 453); m5 was still buyers 52/12",
+   "4h has a long upper wick to 0.07267; next supply 0.0697-0.0706",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = zone mid x1.30 (0.08116)",
+   "A 1h close back below 0.0648 returns this to waiting; a 1h close below 0.06006 invalidates",
+   "20:31 IRST: second failed hold above 0.0648 today; confidence cut to 52 so the panel stops auto-buying the zone"
+  ],
+  "live": 0.06122,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.1057,
+       0.1071
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.1256,
+       0.1286
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.146,
+       0.1482
+      ],
+      "touches": 2
+     }
     ],
-    "ath": 0.4489,
-    "trigger_price": 0.0648,
-    "trigger_condition": "zone",
-    "entry_condition": "CONFIRMED 1h+4h close above 0.0648 at 19:30 IRST; buy on a retest of 0.06006-0.0648 that holds (no 15m close below 0.06006). Do not chase live ~0.0652.",
-    "entry_mode": "zone",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": null,
-    "leg1_condition": "buy 50% on first hold of 0.06006-0.0648 (15m closes stay above 0.06006)",
-    "leg2_zone": [
-      0.06006,
-      0.0648
+    "support": []
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.06651,
+       0.06701
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.06972,
+       0.07057
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.07622,
+       0.07809
+      ],
+      "touches": 4
+     }
     ],
-    "leg2_condition": "buy remaining 50% on a second touch of 0.06006-0.0648 that holds, or add on the same hold if only one fill is available",
-    "leg1_target": null,
-    "leg2_target": 0.08116,
-    "stop": 0.059,
-    "target": 0.08116,
-    "tp1": 0.08116,
-    "tp2": 0.08116,
-    "rr": 5.4606,
-    "confidence": 60,
-    "status": "ready",
-    "expires": 1794420504178,
-    "reason": "CONFIRMED 19:30 IRST: 1h closed 0.06577 and 4h closed 0.06577 above the 0.0648 band; 19:30 15m holds ~0.0652. Entry is the retest of 0.06006-0.0648 (not a chase). Stop 0.059 = 1.1% under the 16:30 IRST 1h breakout low 0.05967 (18:30 wick low 0.05973 also held). Target zone mid x1.30 (0.08116). Conf 60: 1h+4h close and $1.47M liq earn the auto-buy threshold; the 16:30 fake-out, 18:30 wick to 0.05973, and h1 sellers 414/453 keep it at 60 not higher.",
-    "warnings": [
-      "16:30 IRST first break failed: 17:30 1h closed 0.06358 back inside the band",
-      "18:30 IRST 1h wicked to 0.05973, almost to the 0.059 stop, then recovered to close 0.06577",
-      "Hunter: RugCheck danger / single-holder concentration; top-10 share ~66%; Vahid still wants to trade it",
-      "h1 sellers slightly ahead at the 19:30 close (414 vs 453); m5 was still buyers 52/12",
-      "4h has a long upper wick to 0.07267; next supply 0.0697-0.0706",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = zone mid x1.30 (0.08116)",
-      "A 1h close back below 0.0648 returns this to waiting; a 1h close below 0.06006 invalidates"
-    ],
-    "live": 0.06518,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.1057,
-              0.1071
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.1256,
-              0.1286
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.146,
-              0.1482
-            ],
-            "touches": 2
-          }
-        ],
-        "support": []
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.06651,
-              0.06701
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.06972,
-              0.07057
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.07622,
-              0.07809
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.06006,
-              0.06134
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.05613,
-              0.05684
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.05072,
-              0.05126
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.06006,
-              0.06134
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.05672,
-              0.05698
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.05501,
-              0.05558
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.06125,
-              0.06134
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.05797,
-              0.05852
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.05646,
-              0.05765
-            ],
-            "touches": 4
-          }
-        ]
-      }
-    },
-    "fast_move_zone": {
-      "break_level": 0.06035,
-      "ran_to": 0.07057,
-      "note": "price ran >=15% within 3 candles after breaking 0.06035"
-    },
-    "manualTp": "30:100"
+    "support": [
+     {
+      "zone": [
+       0.06006,
+       0.06134
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.05613,
+       0.05684
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.05072,
+       0.05126
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.06006,
+       0.06134
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.05672,
+       0.05698
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.05501,
+       0.05558
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.06125,
+       0.06134
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.05797,
+       0.05852
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.05646,
+       0.05765
+      ],
+      "touches": 4
+     }
+    ]
+   }
   },
-  {
-    "mint": "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",
-    "symbol": "BOME",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": 0.0006447,
-    "resistance_band": [
-      0.000628,
-      0.0006424
-    ],
-    "ath": 0.001163,
-    "trigger_price": 0.0006285,
-    "trigger_condition": "above",
-    "entry_condition": "1h close above 0.0006285 (nearest 1h/4h band 0.000628-0.000642, 10-14 touches), or two 15m closes holding above it",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": 0.0006285,
-    "leg1_condition": "buy 50% on 1h close above 0.0006285 (or two 15m holds above it)",
-    "leg2_zone": [
-      0.000621,
-      0.000632
-    ],
-    "leg2_condition": "buy 50% on a retest of 0.000621-0.000632 that holds (1h close back above)",
-    "leg1_target": null,
-    "leg2_target": 0.0008158,
-    "stop": 0.0006,
-    "target": 0.0008158,
-    "tp1": 0.0008158,
-    "tp2": 0.0008158,
-    "rr": 6.8473,
-    "confidence": 56,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Best clean coil on the list: $12.0M liq, 1h/15m HH/HL, price above a rising 1h and 4h EMA21, h1 buyers 97/81. 19:30 IRST 1h closed 0.0006198, session high 0.0006244, just under the nearest band 0.000628-0.000642. Buy on a 1h close above 0.0006285; stop 0.000600 = 1.5% under the 16:30-18:45 HL cluster 0.000605-0.000610. Target avg x1.30. Conf 56: structure and liq are strong, but the level is not broken yet and 18:30 volume was only modest.",
-    "warnings": [
-      "Nearest band 0.000628-0.000642; next supply 0.000650-0.000664 (old 4h trigger was 0.0006519)",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "Liquidity excellent (~$12.0M); 24h volume ~$560k"
-    ],
-    "live": 0.0006164,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.0006311,
-              0.000639
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0006503,
-              0.0006644
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.0007287,
-              0.0007455
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.000571,
-              0.0005849
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.0005536,
-              0.0005574
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0004692,
-              0.0004795
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.0006278,
-              0.0006424
-            ],
-            "touches": 10
-          },
-          {
-            "zone": [
-              0.0006503,
-              0.0006644
-            ],
-            "touches": 9
-          },
-          {
-            "zone": [
-              0.0006874,
-              0.0007037
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.0005947,
-              0.0006071
-            ],
-            "touches": 12
-          },
-          {
-            "zone": [
-              0.0005755,
-              0.0005885
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.0005574,
-              0.000571
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.000628,
-              0.0006424
-            ],
-            "touches": 14
-          },
-          {
-            "zone": [
-              0.0006445,
-              0.0006588
-            ],
-            "touches": 8
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.0005951,
-              0.0006071
-            ],
-            "touches": 12
-          },
-          {
-            "zone": [
-              0.0005755,
-              0.0005862
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.000628,
-              0.00063
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.0005951,
-              0.0006096
-            ],
-            "touches": 25
-          }
-        ]
-      }
-    },
-    "fast_move_zone": null,
-    "manualTp": "30:100"
+  "fast_move_zone": {
+   "break_level": 0.06035,
+   "ran_to": 0.07057,
+   "note": "price ran >=15% within 3 candles after breaking 0.06035"
   },
-  {
-    "mint": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
-    "symbol": "PUMP",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": 0.003455,
-    "resistance_band": [
-      0.003726,
-      0.003768
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",
+  "symbol": "BOME",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": 0.0006447,
+  "resistance_band": [
+   0.000628,
+   0.0006424
+  ],
+  "ath": 0.001163,
+  "trigger_price": 0.0006285,
+  "trigger_condition": "above",
+  "entry_condition": "1h close above 0.0006285 (nearest 1h/4h band 0.000628-0.000642, 10-14 touches), or two 15m closes holding above it",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": 0.0006285,
+  "leg1_condition": "buy 50% on 1h close above 0.0006285 (or two 15m holds above it)",
+  "leg2_zone": [
+   0.000621,
+   0.000632
+  ],
+  "leg2_condition": "buy 50% on a retest of 0.000621-0.000632 that holds (1h close back above)",
+  "leg1_target": null,
+  "leg2_target": 0.0008158,
+  "stop": 0.0006,
+  "target": 0.0008158,
+  "tp1": 0.0008158,
+  "tp2": 0.0008158,
+  "rr": 6.8473,
+  "confidence": 56,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Best clean coil on the list: $12.0M liq, 1h/15m HH/HL, price above a rising 1h and 4h EMA21, h1 buyers 97/81. 19:30 IRST 1h closed 0.0006198, session high 0.0006244, just under the nearest band 0.000628-0.000642. Buy on a 1h close above 0.0006285; stop 0.000600 = 1.5% under the 16:30-18:45 HL cluster 0.000605-0.000610. Target avg x1.30. Conf 56: structure and liq are strong, but the level is not broken yet and 18:30 volume was only modest.",
+  "warnings": [
+   "Nearest band 0.000628-0.000642; next supply 0.000650-0.000664 (old 4h trigger was 0.0006519)",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "Liquidity excellent (~$12.0M); 24h volume ~$560k"
+  ],
+  "live": 0.0006146,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.0006311,
+       0.000639
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0006503,
+       0.0006644
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.0007287,
+       0.0007455
+      ],
+      "touches": 2
+     }
     ],
-    "ath": 0.006024,
-    "trigger_price": 0.003772,
-    "trigger_condition": "above",
-    "entry_condition": "1h close above 0.003772 (nearest 1h/4h band 0.003726-0.003768), or two 15m closes holding above it",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": 0.003772,
-    "leg1_condition": "buy 50% on 1h close above 0.003772 (or two 15m holds above it)",
-    "leg2_zone": [
-      0.003726,
-      0.00379
+    "support": [
+     {
+      "zone": [
+       0.000571,
+       0.0005849
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.0005536,
+       0.0005574
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0004692,
+       0.0004795
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.0006278,
+       0.0006424
+      ],
+      "touches": 10
+     },
+     {
+      "zone": [
+       0.0006503,
+       0.0006644
+      ],
+      "touches": 9
+     },
+     {
+      "zone": [
+       0.0006874,
+       0.0007037
+      ],
+      "touches": 2
+     }
     ],
-    "leg2_condition": "buy 50% on a retest of 0.003726-0.003790 that holds (1h close back above)",
-    "leg1_target": null,
-    "leg2_target": 0.004895,
-    "stop": 0.003512,
-    "target": 0.004895,
-    "tp1": 0.004895,
-    "tp2": 0.004895,
-    "rr": 4.4664,
-    "confidence": 55,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Clean uptrend, $21.4M liq, 1h/15m HH/HL, above a rising 1h and 4h EMA21, h1 buyers 272/224, 18:30 1h volume 2.7x average (high 0.003687). Live 0.003616 is ~4% under the nearest band 0.003726-0.003768 (old trigger 0.004042 was the higher stack). Buy on a 1h close above 0.003772; stop 0.003512 = 1.5% under the 17:30-18:15 HL 0.003566. Conf 55: quality is high, but 0.00382-0.00404 supply sits right above so the +30% target has to clear that stack. Not 60 until the close happens on volume.",
-    "warnings": [
-      "Overhead supply 0.00382-0.00388 and 0.00392-0.00404; the old 4h trigger 0.004042 clears that stack",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "Liquidity excellent (~$21.4M)"
+    "support": [
+     {
+      "zone": [
+       0.0005947,
+       0.0006071
+      ],
+      "touches": 12
+     },
+     {
+      "zone": [
+       0.0005755,
+       0.0005885
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.0005574,
+       0.000571
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.000628,
+       0.0006424
+      ],
+      "touches": 14
+     },
+     {
+      "zone": [
+       0.0006445,
+       0.0006588
+      ],
+      "touches": 8
+     }
     ],
-    "live": 0.003616,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.003748,
-              0.00383
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.003876,
-              0.003926
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.004355,
-              0.004461
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.002944,
-              0.003002
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.002587,
-              0.002634
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.001781,
-              0.001807
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.003726,
-              0.003768
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.00382,
-              0.003883
-            ],
-            "touches": 5
-          },
-          {
-            "zone": [
-              0.003917,
-              0.003956
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.003486,
-              0.003565
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.003663,
-              0.003738
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.003768,
-              0.00382
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.003868,
-              0.003956
-            ],
-            "touches": 8
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.003476,
-              0.003545
-            ],
-            "touches": 6
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.003616,
-              0.003705
-            ],
-            "touches": 9
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.003439,
-              0.003521
-            ],
-            "touches": 13
-          },
-          {
-            "zone": [
-              0.003346,
-              0.00341
-            ],
-            "touches": 4
-          }
-        ]
-      }
-    },
-    "fast_move_zone": null,
-    "manualTp": "30:100"
+    "support": [
+     {
+      "zone": [
+       0.0005951,
+       0.0006071
+      ],
+      "touches": 12
+     },
+     {
+      "zone": [
+       0.0005755,
+       0.0005862
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.000628,
+       0.00063
+      ],
+      "touches": 4
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.0005951,
+       0.0006096
+      ],
+      "touches": 25
+     }
+    ]
+   }
   },
-  {
-    "mint": "6mXFCoZ515w37YfmwXGJMPfQfiK5tr9WkihW3oN9pump",
-    "symbol": "PIRATE",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": null,
-    "resistance_band": [
-      0.00048,
-      0.000492
+  "fast_move_zone": null,
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+  "symbol": "PUMP",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": 0.003455,
+  "resistance_band": [
+   0.003726,
+   0.003768
+  ],
+  "ath": 0.006024,
+  "trigger_price": 0.003772,
+  "trigger_condition": "above",
+  "entry_condition": "1h close above 0.003772 (nearest 1h/4h band 0.003726-0.003768), or two 15m closes holding above it",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": 0.003772,
+  "leg1_condition": "buy 50% on 1h close above 0.003772 (or two 15m holds above it)",
+  "leg2_zone": [
+   0.003726,
+   0.00379
+  ],
+  "leg2_condition": "buy 50% on a retest of 0.003726-0.003790 that holds (1h close back above)",
+  "leg1_target": null,
+  "leg2_target": 0.004895,
+  "stop": 0.003512,
+  "target": 0.004895,
+  "tp1": 0.004895,
+  "tp2": 0.004895,
+  "rr": 4.4664,
+  "confidence": 55,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Clean uptrend, $21.4M liq, 1h/15m HH/HL, above a rising 1h and 4h EMA21, h1 buyers 272/224, 18:30 1h volume 2.7x average (high 0.003687). Live 0.003616 is ~4% under the nearest band 0.003726-0.003768 (old trigger 0.004042 was the higher stack). Buy on a 1h close above 0.003772; stop 0.003512 = 1.5% under the 17:30-18:15 HL 0.003566. Conf 55: quality is high, but 0.00382-0.00404 supply sits right above so the +30% target has to clear that stack. Not 60 until the close happens on volume.",
+  "warnings": [
+   "Overhead supply 0.00382-0.00388 and 0.00392-0.00404; the old 4h trigger 0.004042 clears that stack",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "Liquidity excellent (~$21.4M)"
+  ],
+  "live": 0.003633,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.003748,
+       0.00383
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.003876,
+       0.003926
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.004355,
+       0.004461
+      ],
+      "touches": 2
+     }
     ],
-    "ath": 0.0008089,
-    "trigger_price": 0.000505,
-    "trigger_condition": "zone",
-    "entry_condition": "1h+4h already closed above 0.0004935 at 19:30 IRST; buy only on a retest of 0.000482-0.000505 that holds (no 15m close below 0.000482). Do not chase live ~0.000519.",
-    "entry_mode": "zone",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": null,
-    "leg1_condition": "skipped: live is extended above the zone; both legs fill on a hold of 0.000482-0.000505",
-    "leg2_zone": [
-      0.000482,
-      0.000505
+    "support": [
+     {
+      "zone": [
+       0.002944,
+       0.003002
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.002587,
+       0.002634
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.001781,
+       0.001807
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.003726,
+       0.003768
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.00382,
+       0.003883
+      ],
+      "touches": 5
+     },
+     {
+      "zone": [
+       0.003917,
+       0.003956
+      ],
+      "touches": 2
+     }
     ],
-    "leg2_condition": "buy on a retest of 0.000482-0.000505 that holds (15m closes stay above 0.000482)",
-    "leg1_target": null,
-    "leg2_target": 0.0006416,
-    "stop": 0.000436,
-    "target": 0.0006416,
-    "tp1": 0.0006416,
-    "tp2": 0.0006416,
-    "rr": 2.5757,
-    "confidence": 52,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "CONFIRMED 19:30 IRST: 1h closed 0.0005423 and 4h closed 0.0005423 above 0.0004935, volume 2.8x (1h V 67k). Live ~0.000519 is ~5-10% above the broken band, so this is waiting for a retest of 0.000482-0.000505, not ready. The 19:30 15m already wicked to 0.000492 (band top). Stop 0.000436 = 1.3% under the 15m 19:00 breakout low 0.0004419 (the 1h 18:30 low 0.000405 is >15% below the zone). Conf 52: break is real, but liq is only $76k, m5 sellers 47/68, and the 18:45 15m already closed 0.000445 below the band before recovering.",
-    "warnings": [
-      "Thin liquidity (~$76k) — below the $300k preference; slippage can be large. Warn, do not size up.",
-      "18:45 IRST 15m closed 0.000445 below 0.000482 during the breakout hour, then recovered",
-      "19:15 15m wick to 0.000632; 4h next resistance ~0.00062",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = zone mid x1.30 (0.0006416)",
-      "A 1h close back below 0.000482 invalidates the retest",
-      "Confidence 52 (<60): panel will not auto-buy"
+    "support": [
+     {
+      "zone": [
+       0.003486,
+       0.003565
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.003663,
+       0.003738
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.003768,
+       0.00382
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.003868,
+       0.003956
+      ],
+      "touches": 8
+     }
     ],
-    "live": 0.000519,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [],
-        "support": []
-      },
-      "4h": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              6.47e-05,
-              6.491e-05
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.00048,
-              0.000492
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.000515,
-              0.000515
-            ],
-            "touches": 1,
-            "note": "18:30 IRST wick"
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.0004157,
-              0.0004205
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0003967,
-              0.0003993
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0003789,
-              0.0003833
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.000432,
-              0.0004396
-            ],
-            "touches": 3
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.000391,
-              0.0003999
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.0003789,
-              0.0003833
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.000366,
-              0.0003725
-            ],
-            "touches": 3
-          }
-        ]
-      }
-    },
-    "fast_move_zone": {
-      "break_level": 0.0004157,
-      "ran_to": 0.0008089,
-      "note": "price ran >=15% within 3 candles after breaking 0.0004157"
-    },
-    "manualTp": "30:100"
+    "support": [
+     {
+      "zone": [
+       0.003476,
+       0.003545
+      ],
+      "touches": 6
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.003616,
+       0.003705
+      ],
+      "touches": 9
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.003439,
+       0.003521
+      ],
+      "touches": 13
+     },
+     {
+      "zone": [
+       0.003346,
+       0.00341
+      ],
+      "touches": 4
+     }
+    ]
+   }
   },
-  {
-    "mint": "9Pfync3ejPC9eHqVzq3nYQJAhyhjqpnB9UsaSfLxpump",
-    "symbol": "KET",
-    "setup": "pullback in uptrend",
-    "tf": "1h",
-    "trendline_now": null,
-    "resistance_band": [
-      0.002191,
-      0.002373
+  "fast_move_zone": null,
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "6mXFCoZ515w37YfmwXGJMPfQfiK5tr9WkihW3oN9pump",
+  "symbol": "PIRATE",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": null,
+  "resistance_band": [
+   0.00048,
+   0.000492
+  ],
+  "ath": 0.0008089,
+  "trigger_price": 0.000505,
+  "trigger_condition": "zone",
+  "entry_condition": "re-arm only on a 1h close back above 0.0004935 (band top), then buy the retest",
+  "entry_mode": "zone",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": null,
+  "leg1_condition": "skipped: live is extended above the zone; both legs fill on a hold of 0.000482-0.000505",
+  "leg2_zone": [
+   0.000482,
+   0.000505
+  ],
+  "leg2_condition": "buy on a retest of 0.000482-0.000505 that holds (15m closes stay above 0.000482)",
+  "leg1_target": null,
+  "leg2_target": 0.0006416,
+  "stop": 0.000436,
+  "target": 0.0006416,
+  "tp1": 0.0006416,
+  "tp2": 0.0006416,
+  "rr": 2.5757,
+  "confidence": 25,
+  "status": "invalid",
+  "expires": 1794423701837,
+  "reason": "INVALID: 1h 19:30 IRST closed 0.000464, below the 0.000482 retest-zone low, after the 18:30 IRST break wicked to 0.000632; failed break; re-arm only on a 1h close back above 0.0004935",
+  "warnings": [
+   "Thin liquidity (~$76k) \u2014 below the $300k preference; slippage can be large. Warn, do not size up.",
+   "18:45 IRST 15m closed 0.000445 below 0.000482 during the breakout hour, then recovered",
+   "19:15 15m wick to 0.000632; 4h next resistance ~0.00062",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = zone mid x1.30 (0.0006416)",
+   "A 1h close back below 0.000482 invalidates the retest",
+   "Confidence 52 (<60): panel will not auto-buy",
+   "20:31 IRST: invalidation hit (1h close 0.000464 < 0.000482); live 0.0004627, stop 0.000436 kept below"
+  ],
+  "live": 0.0004627,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [],
+    "support": []
+   },
+   "4h": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       6.47e-05,
+       6.491e-05
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.00048,
+       0.000492
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.000515,
+       0.000515
+      ],
+      "touches": 1,
+      "note": "18:30 IRST wick"
+     }
     ],
-    "ath": 0.00277,
-    "trigger_price": 0.00233,
-    "trigger_condition": "retest",
-    "entry_condition": "pullback in a confirmed 1h uptrend (HH/HL, above a rising 1h EMA21 0.001933): buy a hold of 0.00219-0.00233 (broken 16:30-17:30 range / last HL). Prefer the lower half so the stop stays inside 15%. Do not chase the 0.00267 wick.",
-    "entry_mode": "zone",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": null,
-    "leg1_condition": "buy 50% on a hold of 0.00219-0.00226 (lower half of the demand zone)",
-    "leg2_zone": [
-      0.00219,
-      0.00233
+    "support": [
+     {
+      "zone": [
+       0.0004157,
+       0.0004205
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0003967,
+       0.0003993
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0003789,
+       0.0003833
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.000432,
+       0.0004396
+      ],
+      "touches": 3
+     }
     ],
-    "leg2_condition": "buy 50% on a hold of 0.00219-0.00233; skip fills above 0.00233 (stop would exceed 15%)",
-    "leg1_target": null,
-    "leg2_target": 0.002938,
-    "stop": 0.001923,
-    "target": 0.002938,
-    "tp1": 0.002938,
-    "tp2": 0.002938,
-    "rr": 2.0119,
-    "confidence": 48,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "24h +82% uptrend still HH/HL and above a rising 1h/4h EMA21, but the 18:30 1h (high 0.002673, close 0.002390) and 19:15 15m (high 0.002673, close 0.002390) put a rejection wick at the local ATH. h1 sellers 45/115. Entry is a pullback to 0.00219-0.00233, not a breakout chase. Stop 0.001923 = 1.5% under the 16:30 IRST 1h low 0.001952. Target avg x1.30. Conf 48: trend is up, but sellers just took the wick, liq is only $175k, and 24h volume is modest (~$77k).",
-    "warnings": [
-      "Liquidity ~$175k — below the $300k preference",
-      "h1 sellers 45 vs 115 after the 0.002673 rejection; wait for the zone to actually hold",
-      "Fills above 0.00233 make the 0.001923 stop wider than 15% — skip those",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "A 1h close below 0.001952 invalidates the pullback"
-    ],
-    "live": 0.002368,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.002528,
-              0.002586
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.003261,
-              0.003267
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.003667,
-              0.003748
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.00206,
-              0.002108
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.002155,
-              0.002168
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.002083,
-              0.002108
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.002028,
-              0.00206
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.001964,
-              0.002006
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.001763,
-              0.001766
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.001688,
-              0.001727
-            ],
-            "touches": 7
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.001963,
-              0.002006
-            ],
-            "touches": 8
-          },
-          {
-            "zone": [
-              0.001915,
-              0.001951
-            ],
-            "touches": 5
-          },
-          {
-            "zone": [
-              0.001851,
-              0.001877
-            ],
-            "touches": 4
-          }
-        ]
-      }
-    },
-    "fast_move_zone": null,
-    "manualTp": "30:100"
+    "support": [
+     {
+      "zone": [
+       0.000391,
+       0.0003999
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.0003789,
+       0.0003833
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.000366,
+       0.0003725
+      ],
+      "touches": 3
+     }
+    ]
+   }
   },
-  {
-    "mint": "Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk",
-    "symbol": "USELESS",
-    "setup": "trendline+resistance breakout",
-    "tf": "4h",
-    "trendline_now": 0.1429,
-    "resistance_band": [
-      0.1458,
-      0.1525
-    ],
-    "ath": 0.2107,
-    "trigger_price": 0.153,
-    "trigger_condition": "above",
-    "entry_condition": "1h close above 0.153 confirmed by a 4h close (clears the whole 0.1405-0.1525 supply stack). Today already rejected at 0.1450; do not buy the first band.",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": 0.153,
-    "leg1_condition": "buy 50% on 1h close above 0.153 also held on the 4h",
-    "leg2_zone": [
-      0.1503,
-      0.1541
-    ],
-    "leg2_condition": "buy 50% on a retest of 0.1503-0.1541 that holds (1h close back above)",
-    "leg1_target": null,
-    "leg2_target": 0.1984,
-    "stop": 0.1345,
-    "target": 0.1984,
-    "tp1": 0.1984,
-    "tp2": 0.1984,
-    "rr": 2.5304,
-    "confidence": 48,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Quality backdrop ($3.5M liq, above a rising 1h/4h EMA21, h1 buyers 178/152) but price is chopping in the first 1h band 0.1405-0.1437; 13:30 high 0.1450 and 18:30 high 0.1440 were rejected. The +30% target only has room after clearing the 0.1458-0.1525 stack (12 touches), so the trigger stays 0.153, not the nearer first band. Stop 0.1345 below 0.1355-0.1378 support. Conf 48: not a tight entry today.",
-    "warnings": [
-      "Do not buy a poke through 0.1405-0.1450 — that band already rejected twice today and 0.1458-0.1525 sits immediately above",
-      "1D resistance 0.174-0.177 is next after a real break",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "Liquidity excellent (~$3.5M)"
-    ],
-    "live": 0.1406,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.1741,
-              0.1773
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.2107,
-              0.2134
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.118,
-              0.1189
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.09311,
-              0.0941
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.08247,
-              0.08348
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.1405,
-              0.1436
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.1458,
-              0.1494
-            ],
-            "touches": 8
-          },
-          {
-            "zone": [
-              0.1496,
-              0.1525
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.1355,
-              0.1378
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.1316,
-              0.1331
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.1279,
-              0.1301
-            ],
-            "touches": 4
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.1405,
-              0.1437
-            ],
-            "touches": 7
-          },
-          {
-            "zone": [
-              0.1445,
-              0.1471
-            ],
-            "touches": 5
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.1369,
-              0.1397
-            ],
-            "touches": 12
-          },
-          {
-            "zone": [
-              0.1332,
-              0.1364
-            ],
-            "touches": 10
-          },
-          {
-            "zone": [
-              0.13,
-              0.1329
-            ],
-            "touches": 13
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.1431,
-              0.145
-            ],
-            "touches": 5
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.1359,
-              0.139
-            ],
-            "touches": 21
-          },
-          {
-            "zone": [
-              0.1325,
-              0.1356
-            ],
-            "touches": 21
-          },
-          {
-            "zone": [
-              0.1279,
-              0.1296
-            ],
-            "touches": 2
-          }
-        ]
-      }
-    },
-    "fast_move_zone": null,
-    "manualTp": "30:100"
+  "fast_move_zone": {
+   "break_level": 0.0004157,
+   "ran_to": 0.0008089,
+   "note": "price ran >=15% within 3 candles after breaking 0.0004157"
   },
-  {
-    "mint": "5tCju6YNxHq5zrA6tGndr6F7TK42mpUFmeE31cSFpump",
-    "symbol": "swordcat",
-    "setup": "range-high breakout",
-    "tf": "1h",
-    "trendline_now": 0.00128,
-    "resistance_band": [
-      0.000962,
-      0.001016
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "9Pfync3ejPC9eHqVzq3nYQJAhyhjqpnB9UsaSfLxpump",
+  "symbol": "KET",
+  "setup": "pullback in uptrend",
+  "tf": "1h",
+  "trendline_now": null,
+  "resistance_band": [
+   0.002191,
+   0.002373
+  ],
+  "ath": 0.00277,
+  "trigger_price": 0.00233,
+  "trigger_condition": "retest",
+  "entry_condition": "pullback in a confirmed 1h uptrend (HH/HL, above a rising 1h EMA21 0.001933): buy a hold of 0.00219-0.00233 (broken 16:30-17:30 range / last HL). Prefer the lower half so the stop stays inside 15%. Do not chase the 0.00267 wick.",
+  "entry_mode": "zone",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": null,
+  "leg1_condition": "buy 50% on a hold of 0.00219-0.00226 (lower half of the demand zone)",
+  "leg2_zone": [
+   0.00219,
+   0.00233
+  ],
+  "leg2_condition": "buy 50% on a hold of 0.00219-0.00233; skip fills above 0.00233 (stop would exceed 15%)",
+  "leg1_target": null,
+  "leg2_target": 0.002938,
+  "stop": 0.001923,
+  "target": 0.002938,
+  "tp1": 0.002938,
+  "tp2": 0.002938,
+  "rr": 2.0119,
+  "confidence": 48,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "24h +82% uptrend still HH/HL and above a rising 1h/4h EMA21, but the 18:30 1h (high 0.002673, close 0.002390) and 19:15 15m (high 0.002673, close 0.002390) put a rejection wick at the local ATH. h1 sellers 45/115. Entry is a pullback to 0.00219-0.00233, not a breakout chase. Stop 0.001923 = 1.5% under the 16:30 IRST 1h low 0.001952. Target avg x1.30. Conf 48: trend is up, but sellers just took the wick, liq is only $175k, and 24h volume is modest (~$77k).",
+  "warnings": [
+   "Liquidity ~$175k \u2014 below the $300k preference",
+   "h1 sellers 45 vs 115 after the 0.002673 rejection; wait for the zone to actually hold",
+   "Fills above 0.00233 make the 0.001923 stop wider than 15% \u2014 skip those",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "A 1h close below 0.001952 invalidates the pullback"
+  ],
+  "live": 0.002485,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.002528,
+       0.002586
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.003261,
+       0.003267
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.003667,
+       0.003748
+      ],
+      "touches": 2
+     }
     ],
-    "ath": 0.004471,
-    "trigger_price": 0.00102,
-    "trigger_condition": "zone",
-    "entry_condition": "18:30 IRST 1h closed 0.001087 on 4.3x volume, breaking 0.000962-0.001016; buy only a retest of 0.000960-0.001020 that holds. Do not chase a vertical close at the high.",
-    "entry_mode": "zone",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": null,
-    "leg1_condition": "skipped: 1h 18:30 low 0.000833 is >15% under a chase entry; both legs fill on the retest zone",
-    "leg2_zone": [
-      0.00096,
-      0.00102
-    ],
-    "leg2_condition": "buy on a retest of 0.000960-0.001020 that holds (15m closes stay above 0.000960)",
-    "leg1_target": null,
-    "leg2_target": 0.001138,
-    "stop": 0.000848,
-    "target": 0.001138,
-    "tp1": 0.001138,
-    "tp2": 0.001138,
-    "rr": 1.0423,
-    "confidence": 46,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Hunter #1 (score 99, +41% 24h). 18:30 1h and 15:30 4h both closed at 0.001087, breaking the 0.000962-0.001016 band on 4.3x volume. Entry is a retest of that band, not a chase. Stop 0.000848 = 1.5% under the 15m 19:00 breakout low 0.000861 (the 1h low 0.000833 is too wide). Hunter target x1.15. Conf 46: liq only $134k, 4h EMA21 is still falling, h1 sellers 113/144, and the 18:30 candle was vertical.",
-    "warnings": [
-      "Liquidity ~$134k — below the $300k preference; slippage risk",
-      "Hunter safety: top10 23.7%, insiders 14.1%, RugCheck 1, LP 100% locked, mint/freeze revoked",
-      "4h EMA21 is still falling; next supply 0.00128 then 0.00145-0.00146",
-      "Hunter candidate target = avg entry x1.15 (not 1.30)",
-      "A 1h close back below 0.000960 invalidates"
-    ],
-    "live": 0.000995,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [],
-        "support": []
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.0008444,
-              0.0008585
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0009623,
-              0.0009832
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.0009998,
-              0.001016
-            ],
-            "touches": 2
-          }
-        ],
-        "support": []
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.0008333,
-              0.0008461
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.0009144,
-              0.0009153
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0009623,
-              0.0009832
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.000744,
-              0.0007482
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0006967,
-              0.0007111
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.0008333,
-              0.0008488
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.0009144,
-              0.0009315
-            ],
-            "touches": 5
-          },
-          {
-            "zone": [
-              0.0009447,
-              0.0009635
-            ],
-            "touches": 3
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.0007963,
-              0.0007964
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0007769,
-              0.0007937
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.0007568,
-              0.0007713
-            ],
-            "touches": 4
-          }
-        ]
-      }
-    },
-    "fast_move_zone": {
-      "break_level": 0.001359,
-      "ran_to": 0.002837,
-      "note": "price ran >=15% within 3 candles after breaking 0.001359"
-    }
+    "support": [
+     {
+      "zone": [
+       0.00206,
+       0.002108
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.002155,
+       0.002168
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.002083,
+       0.002108
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.002028,
+       0.00206
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.001964,
+       0.002006
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.001763,
+       0.001766
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.001688,
+       0.001727
+      ],
+      "touches": 7
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.001963,
+       0.002006
+      ],
+      "touches": 8
+     },
+     {
+      "zone": [
+       0.001915,
+       0.001951
+      ],
+      "touches": 5
+     },
+     {
+      "zone": [
+       0.001851,
+       0.001877
+      ],
+      "touches": 4
+     }
+    ]
+   }
   },
-  {
-    "mint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
-    "symbol": "TROLL",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": 0.02888,
-    "resistance_band": [
-      0.02881,
-      0.02912
+  "fast_move_zone": null,
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk",
+  "symbol": "USELESS",
+  "setup": "trendline+resistance breakout",
+  "tf": "4h",
+  "trendline_now": 0.1429,
+  "resistance_band": [
+   0.1458,
+   0.1525
+  ],
+  "ath": 0.2107,
+  "trigger_price": 0.153,
+  "trigger_condition": "above",
+  "entry_condition": "1h close above 0.153 confirmed by a 4h close (clears the whole 0.1405-0.1525 supply stack). Today already rejected at 0.1450; do not buy the first band.",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": 0.153,
+  "leg1_condition": "buy 50% on 1h close above 0.153 also held on the 4h",
+  "leg2_zone": [
+   0.1503,
+   0.1541
+  ],
+  "leg2_condition": "buy 50% on a retest of 0.1503-0.1541 that holds (1h close back above)",
+  "leg1_target": null,
+  "leg2_target": 0.1984,
+  "stop": 0.1345,
+  "target": 0.1984,
+  "tp1": 0.1984,
+  "tp2": 0.1984,
+  "rr": 2.5304,
+  "confidence": 48,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Quality backdrop ($3.5M liq, above a rising 1h/4h EMA21, h1 buyers 178/152) but price is chopping in the first 1h band 0.1405-0.1437; 13:30 high 0.1450 and 18:30 high 0.1440 were rejected. The +30% target only has room after clearing the 0.1458-0.1525 stack (12 touches), so the trigger stays 0.153, not the nearer first band. Stop 0.1345 below 0.1355-0.1378 support. Conf 48: not a tight entry today.",
+  "warnings": [
+   "Do not buy a poke through 0.1405-0.1450 \u2014 that band already rejected twice today and 0.1458-0.1525 sits immediately above",
+   "1D resistance 0.174-0.177 is next after a real break",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "Liquidity excellent (~$3.5M)"
+  ],
+  "live": 0.1404,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.1741,
+       0.1773
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.2107,
+       0.2134
+      ],
+      "touches": 2
+     }
     ],
-    "ath": 0.04174,
-    "trigger_price": 0.02921,
-    "trigger_condition": "above",
-    "entry_condition": "1h close above 0.02921 (band 0.02881-0.02912 + trendline 0.02888), preferably with above-average volume. 14:30 already tagged 0.02893 and failed — require a real close.",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": 0.02921,
-    "leg1_condition": "buy 50% on 1h close above 0.02921 with volume not dead",
-    "leg2_zone": [
-      0.02868,
-      0.02941
+    "support": [
+     {
+      "zone": [
+       0.118,
+       0.1189
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.09311,
+       0.0941
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.08247,
+       0.08348
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.1405,
+       0.1436
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.1458,
+       0.1494
+      ],
+      "touches": 8
+     },
+     {
+      "zone": [
+       0.1496,
+       0.1525
+      ],
+      "touches": 4
+     }
     ],
-    "leg2_condition": "buy 50% on a retest of 0.02868-0.02941 that holds (1h close back above)",
-    "leg1_target": null,
-    "leg2_target": 0.03787,
-    "stop": 0.02755,
-    "target": 0.03787,
-    "tp1": 0.03787,
-    "tp2": 0.03787,
-    "rr": 5.542,
-    "confidence": 45,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Live 0.02851 is only ~2.4% under the 0.02881-0.02912 band, $2.3M liq, price above a rising 1h/4h EMA21. But 14:30 IRST already tagged 0.02893 and closed back below, and current 1h volume is tiny (~$4k, h1 5 buys / 25 sells). Buy only on a 1h close above 0.02921 with volume. Stop 0.02755 = 1.5% under the 14:30 low 0.02770 (tighter than the old 0.027). Conf 45: close to the level, but participation is too weak for a strong signal.",
-    "warnings": [
-      "Volume is dead on the last 1h (~$4k, sellers 25 vs 5) — a close on that tape is not a signal",
-      "14:30 IRST already tagged 0.02893 and failed",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "Liquidity excellent (~$2.3M)"
+    "support": [
+     {
+      "zone": [
+       0.1355,
+       0.1378
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.1316,
+       0.1331
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.1279,
+       0.1301
+      ],
+      "touches": 4
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.1405,
+       0.1437
+      ],
+      "touches": 7
+     },
+     {
+      "zone": [
+       0.1445,
+       0.1471
+      ],
+      "touches": 5
+     }
     ],
-    "live": 0.02851,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.03016,
-              0.03029
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.03129,
-              0.03203
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.03554,
-              0.03617
-            ],
-            "touches": 5
-          }
-        ],
-        "support": []
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.02857,
-              0.0292
-            ],
-            "touches": 5
-          },
-          {
-            "zone": [
-              0.02988,
-              0.03029
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.0307,
-              0.03129
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.02679,
-              0.0269
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.02593,
-              0.02655
-            ],
-            "touches": 4
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.02885,
-              0.02919
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.03016,
-              0.0306
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.03266,
-              0.03323
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.02725,
-              0.02786
-            ],
-            "touches": 12
-          },
-          {
-            "zone": [
-              0.02658,
-              0.0272
-            ],
-            "touches": 11
-          },
-          {
-            "zone": [
-              0.02593,
-              0.02655
-            ],
-            "touches": 5
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.02871,
-              0.02919
-            ],
-            "touches": 17
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.02722,
-              0.02786
-            ],
-            "touches": 18
-          },
-          {
-            "zone": [
-              0.02655,
-              0.0272
-            ],
-            "touches": 7
-          }
-        ]
-      }
-    },
-    "fast_move_zone": {
-      "break_level": 0.02832,
-      "ran_to": 0.03266,
-      "note": "price ran >=15% within 3 candles after breaking 0.02832"
-    },
-    "manualTp": "30:100"
+    "support": [
+     {
+      "zone": [
+       0.1369,
+       0.1397
+      ],
+      "touches": 12
+     },
+     {
+      "zone": [
+       0.1332,
+       0.1364
+      ],
+      "touches": 10
+     },
+     {
+      "zone": [
+       0.13,
+       0.1329
+      ],
+      "touches": 13
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.1431,
+       0.145
+      ],
+      "touches": 5
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.1359,
+       0.139
+      ],
+      "touches": 21
+     },
+     {
+      "zone": [
+       0.1325,
+       0.1356
+      ],
+      "touches": 21
+     },
+     {
+      "zone": [
+       0.1279,
+       0.1296
+      ],
+      "touches": 2
+     }
+    ]
+   }
   },
-  {
-    "mint": "Ce2gx9KGXJ6C9Mp5b5x1sn9Mg87JwEbrQby4Zqo3pump",
-    "symbol": "neet",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": 0.02906,
-    "resistance_band": [
-      0.02906,
-      0.02961
+  "fast_move_zone": null,
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "5tCju6YNxHq5zrA6tGndr6F7TK42mpUFmeE31cSFpump",
+  "symbol": "swordcat",
+  "setup": "range-high breakout",
+  "tf": "1h",
+  "trendline_now": 0.00128,
+  "resistance_band": [
+   0.000962,
+   0.001016
+  ],
+  "ath": 0.004471,
+  "trigger_price": 0.00102,
+  "trigger_condition": "zone",
+  "entry_condition": "18:30 IRST 1h closed 0.001087 on 4.3x volume, breaking 0.000962-0.001016; buy only a retest of 0.000960-0.001020 that holds. Do not chase a vertical close at the high.",
+  "entry_mode": "zone",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": null,
+  "leg1_condition": "skipped: 1h 18:30 low 0.000833 is >15% under a chase entry; both legs fill on the retest zone",
+  "leg2_zone": [
+   0.00096,
+   0.00102
+  ],
+  "leg2_condition": "buy on a retest of 0.000960-0.001020 that holds (15m closes stay above 0.000960)",
+  "leg1_target": null,
+  "leg2_target": 0.001138,
+  "stop": 0.000848,
+  "target": 0.001138,
+  "tp1": 0.001138,
+  "tp2": 0.001138,
+  "rr": 1.0423,
+  "confidence": 46,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Hunter #1 (score 99, +41% 24h). 18:30 1h and 15:30 4h both closed at 0.001087, breaking the 0.000962-0.001016 band on 4.3x volume. Entry is a retest of that band, not a chase. Stop 0.000848 = 1.5% under the 15m 19:00 breakout low 0.000861 (the 1h low 0.000833 is too wide). Hunter target x1.15. Conf 46: liq only $134k, 4h EMA21 is still falling, h1 sellers 113/144, and the 18:30 candle was vertical.",
+  "warnings": [
+   "Liquidity ~$134k \u2014 below the $300k preference; slippage risk",
+   "Hunter safety: top10 23.7%, insiders 14.1%, RugCheck 1, LP 100% locked, mint/freeze revoked",
+   "4h EMA21 is still falling; next supply 0.00128 then 0.00145-0.00146",
+   "Hunter candidate target = avg entry x1.15 (not 1.30)",
+   "A 1h close back below 0.000960 invalidates"
+  ],
+  "live": 0.001035,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [],
+    "support": []
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.0008444,
+       0.0008585
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0009623,
+       0.0009832
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.0009998,
+       0.001016
+      ],
+      "touches": 2
+     }
     ],
-    "ath": 0.0364,
-    "trigger_price": 0.0293,
-    "trigger_condition": "above",
-    "entry_condition": "1h close above 0.02930 (this morning 4h high 0.02928 / band 0.02906-0.02961). The old 0.0318 trigger still sits above as the next stack (0.0311-0.0317).",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": 0.0293,
-    "leg1_condition": "buy 50% on 1h close above 0.02930",
-    "leg2_zone": [
-      0.0288,
-      0.0295
+    "support": []
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.0008333,
+       0.0008461
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.0009144,
+       0.0009153
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0009623,
+       0.0009832
+      ],
+      "touches": 2
+     }
     ],
-    "leg2_condition": "buy 50% on a retest of 0.02880-0.02950 that holds (1h close back above)",
-    "leg1_target": null,
-    "leg2_target": 0.03799,
-    "stop": 0.02544,
-    "target": 0.03799,
-    "tp1": 0.03799,
-    "tp2": 0.03799,
-    "rr": 2.3157,
-    "confidence": 44,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Above a rising 1h/4h EMA21, $1.5M liq, 24h +13%. Live 0.02729 is under the nearest real cap: 03:30 IRST 4h high 0.02928, then rejected. Old trigger 0.0318 was the higher 0.0311-0.0317 stack — this plan uses the nearer 0.02930 close. Stop 0.02544 = 1.5% under the 15:30 1h low 0.02583. Conf 44: h1 sellers 30/95, 14:30 already failed 0.02781, and 0.0311-0.0317 still caps the +30% path.",
-    "warnings": [
-      "Overhead: 0.0311-0.0317 (old trigger 0.0318) still sits above 0.02930",
-      "h1 sellers 30 vs 95; 14:30 IRST already tagged 0.02781 and closed 0.02612",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "Liquidity good (~$1.5M); 24h volume modest (~$430k)"
+    "support": [
+     {
+      "zone": [
+       0.000744,
+       0.0007482
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0006967,
+       0.0007111
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.0008333,
+       0.0008488
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.0009144,
+       0.0009315
+      ],
+      "touches": 5
+     },
+     {
+      "zone": [
+       0.0009447,
+       0.0009635
+      ],
+      "touches": 3
+     }
     ],
-    "live": 0.02729,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.02724,
-              0.02756
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.02792,
-              0.02806
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.0287,
-              0.02937
-            ],
-            "touches": 3
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.02572,
-              0.02627
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.02295,
-              0.02331
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.02183,
-              0.02185
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.02724,
-              0.02782
-            ],
-            "touches": 5
-          },
-          {
-            "zone": [
-              0.02797,
-              0.02856
-            ],
-            "touches": 8
-          },
-          {
-            "zone": [
-              0.02906,
-              0.02961
-            ],
-            "touches": 6
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.02574,
-              0.02635
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.02313,
-              0.02331
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.02705,
-              0.02766
-            ],
-            "touches": 11
-          },
-          {
-            "zone": [
-              0.02781,
-              0.02845
-            ],
-            "touches": 5
-          },
-          {
-            "zone": [
-              0.02853,
-              0.02922
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.02618,
-              0.02682
-            ],
-            "touches": 7
-          },
-          {
-            "zone": [
-              0.02544,
-              0.02604
-            ],
-            "touches": 10
-          },
-          {
-            "zone": [
-              0.02454,
-              0.02504
-            ],
-            "touches": 7
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.02769,
-              0.02814
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.02851,
-              0.02882
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.02924,
-              0.02928
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.02568,
-              0.02601
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.02487,
-              0.02547
-            ],
-            "touches": 13
-          },
-          {
-            "zone": [
-              0.02425,
-              0.02481
-            ],
-            "touches": 18
-          }
-        ]
-      }
-    },
-    "fast_move_zone": {
-      "break_level": 0.02531,
-      "ran_to": 0.02917,
-      "note": "price ran >=15% within 3 candles after breaking 0.02531"
-    },
-    "manualTp": "30:100"
+    "support": [
+     {
+      "zone": [
+       0.0007963,
+       0.0007964
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0007769,
+       0.0007937
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.0007568,
+       0.0007713
+      ],
+      "touches": 4
+     }
+    ]
+   }
   },
-  {
-    "mint": "DtcicPCKTKeAh7TDEzTym3hXeoHAoMiBdYJhMYxZpump",
-    "symbol": "CBUCKS",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": null,
-    "resistance_band": [
-      0.00472,
-      0.00506
-    ],
-    "ath": 0.006486,
-    "trigger_price": 0.005075,
-    "trigger_condition": "above",
-    "entry_condition": "1h close above 0.005075 (and preferably above the 17:30 wick high 0.005117). 16:30 closed 0.005020 then 17:30 failed — require a real close, not a poke.",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": 0.005075,
-    "leg1_condition": "buy 50% on 1h close above 0.005075 (ideally also above 0.005117)",
-    "leg2_zone": [
-      0.004985,
-      0.00511
-    ],
-    "leg2_condition": "buy 50% on a retest of 0.004985-0.00511 that holds (1h close back above)",
-    "leg1_target": null,
-    "leg2_target": 0.00658,
-    "stop": 0.00433,
-    "target": 0.00658,
-    "tp1": 0.00658,
-    "tp2": 0.00658,
-    "rr": 2.0769,
-    "confidence": 42,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Live 0.004845 is back at the 0.00472-0.00506 1h band after a failed poke: 16:30 closed 0.005020, 17:30 high 0.005117 then closed 0.004493. 1h/4h EMAs are rising and structure is HH/HL, but 1h EMA9 is still under EMA21 and 16:30-17:30 already failed this band. Buy only on a 1h close above 0.005075. Stop 0.004330 = 1.5% under the 17:30 low 0.004397. Conf 42: near the level, but a fresh fail and liq only $240k.",
-    "warnings": [
-      "Liquidity ~$240k — below the $300k preference",
-      "Same band failed 16:30-17:30 IRST (high 0.005117, close 0.004493)",
-      "Hunter previously flagged top10 ~35% — size down",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "1h EMA9 is still below EMA21"
-    ],
-    "live": 0.004845,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.00154,
-              0.001545
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.002012,
-              0.002025
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.001915,
-              0.001938
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.001587,
-              0.001597
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.004144,
-              0.004233
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.003968,
-              0.004062
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.003796,
-              0.003831
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.004673,
-              0.004762
-            ],
-            "touches": 5
-          },
-          {
-            "zone": [
-              0.004874,
-              0.004976
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.005076,
-              0.0052
-            ],
-            "touches": 6
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.004325,
-              0.004396
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.00421,
-              0.004233
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.004102,
-              0.004144
-            ],
-            "touches": 3
-          }
-        ]
-      }
-    },
-    "fast_move_zone": {
-      "break_level": 0.004221,
-      "ran_to": 0.004892,
-      "note": "price ran >=15% within 3 candles after breaking 0.004221"
-    },
-    "manualTp": "30:100"
-  },
-  {
-    "mint": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
-    "symbol": "Fartcoin ",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": 0.116,
-    "resistance_band": [
-      0.1198,
-      0.1207
-    ],
-    "ath": 0.1746,
-    "trigger_price": 0.121,
-    "trigger_condition": "above",
-    "entry_condition": "1h close above 0.121 (band 0.1198-0.1207, 1h resistance 0.1184-0.1205 with 17 touches). Volume must pick up — the last 1h did only ~$4k.",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": 0.121,
-    "leg1_condition": "buy 50% on 1h close above 0.121 with volume not dead",
-    "leg2_zone": [
-      0.1189,
-      0.1219
-    ],
-    "leg2_condition": "buy 50% on a retest of 0.1189-0.1219 that holds (1h close back above)",
-    "leg1_target": null,
-    "leg2_target": 0.1569,
-    "stop": 0.1132,
-    "target": 0.1569,
-    "tp1": 0.1569,
-    "tp2": 0.1569,
-    "rr": 4.8267,
-    "confidence": 40,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "Live 0.1177 is ~2.7% under 0.121, $6.1M liq, HH/HL, above a rising 1h/4h EMA21. Tight stop 0.1132 = 1.5% under the 13:30 HL 0.1149 (tighter than the old 0.1049). Conf 40: the tape is too quiet (last 1h volume ~$4k, 6 buys / 9 sells) for a strong signal. Need a 1h close above 0.121 on real volume.",
-    "warnings": [
-      "Last 1h volume is tiny (~$4k) — do not treat a quiet poke as a break",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = avg entry x1.30",
-      "Liquidity excellent (~$6.1M)"
-    ],
-    "live": 0.1177,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [
-          {
-            "zone": [
-              0.1176,
-              0.1205
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.1228,
-              0.1246
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.1274,
-              0.1282
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.1095,
-              0.1107
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.1064,
-              0.1087
-            ],
-            "touches": 3
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.1167,
-              0.1196
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.1197,
-              0.1226
-            ],
-            "touches": 7
-          },
-          {
-            "zone": [
-              0.1233,
-              0.1264
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.1137,
-              0.1153
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.1107,
-              0.1129
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.1064,
-              0.1087
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.1184,
-              0.1205
-            ],
-            "touches": 17
-          },
-          {
-            "zone": [
-              0.1224,
-              0.1246
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.1256,
-              0.1269
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.1125,
-              0.115
-            ],
-            "touches": 7
-          },
-          {
-            "zone": [
-              0.1087,
-              0.1108
-            ],
-            "touches": 4
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.1189,
-              0.1205
-            ],
-            "touches": 12
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.1129,
-              0.1157
-            ],
-            "touches": 24
-          }
-        ]
-      }
-    },
-    "fast_move_zone": null,
-    "manualTp": "30:100"
-  },
-  {
-    "mint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
-    "symbol": "GATO",
-    "setup": "trendline+resistance breakout",
-    "tf": "1h",
-    "trendline_now": 0.00895,
-    "resistance_band": [
-      0.0093,
-      0.0096
-    ],
-    "ath": 0.01512,
-    "trigger_price": 0.00962,
-    "trigger_condition": "above",
-    "entry_condition": "re-arm only: 1h close back above 0.00960 (band top). The 16:30 break and the 15:30-19:30 4h both failed (4h closed 0.00871).",
-    "entry_mode": "split",
-    "scale_in": true,
-    "starter_pct": 50,
-    "leg1_price": null,
-    "leg1_condition": "skipped until a fresh 1h close above 0.00960; even then prefer the retest (the 16:30 low 0.008201 is >15% under a high-band fill)",
-    "leg2_zone": [
-      0.0093,
-      0.0096
-    ],
-    "leg2_condition": "after a 1h close back above 0.00960, buy a retest of 0.00930-0.00960 that holds",
-    "leg1_target": null,
-    "leg2_target": 0.01229,
-    "stop": 0.00808,
-    "target": 0.01229,
-    "tp1": 0.01229,
-    "tp2": 0.01229,
-    "rr": 2.073,
-    "confidence": 32,
-    "status": "waiting",
-    "expires": 1794420504178,
-    "reason": "INVALIDATED break, kept only as a re-arm: 17:30 1h closed 0.00871 below 0.0093, and the 15:30-19:30 IRST 4h closed 0.00871 after wicking 0.01029 — 4h failed too. 4h EMA9<EMA21 and falling. Re-arm only on a 1h close back above 0.00960, then buy the retest of 0.00930-0.00960. Stop 0.00808 = 1.5% under the 16:30 1h low 0.008201. Conf 32.",
-    "warnings": [
-      "4h 15:30-19:30 IRST closed 0.00871 back below 0.00960 after a 0.01029 wick — failed break on both 1h and 4h",
-      "Same band already failed once on Nov 10 22:30-23:30 IRST (high 0.01042)",
-      "4h EMA9 < EMA21 and falling",
-      "Liquidity OK (~$315k, just at the preference)",
-      "Your manualTp 30:100 overrides the plan target on the panel",
-      "My List risk 1:2: target = zone mid x1.30",
-      "Confidence 32 (<60): panel will not auto-buy"
-    ],
-    "live": 0.00871,
-    "ts": 1794413304178,
-    "updatedAt": 1794413304178,
-    "key_levels": {
-      "1D": {
-        "resistance": [],
-        "support": [
-          {
-            "zone": [
-              0.002048,
-              0.002096
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.001499,
-              0.0015
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "4h": {
-        "resistance": [
-          {
-            "zone": [
-              0.01071,
-              0.01096
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.01255,
-              0.01261
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.01443,
-              0.01466
-            ],
-            "touches": 2
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.007646,
-              0.007746
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.006593,
-              0.006716
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.005723,
-              0.005725
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "1h": {
-        "resistance": [
-          {
-            "zone": [
-              0.00912,
-              0.00928
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.009369,
-              0.009549
-            ],
-            "touches": 3
-          },
-          {
-            "zone": [
-              0.009955,
-              0.0102
-            ],
-            "touches": 3
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.006593,
-              0.006716
-            ],
-            "touches": 2
-          }
-        ]
-      },
-      "15m": {
-        "resistance": [
-          {
-            "zone": [
-              0.00928,
-              0.009497
-            ],
-            "touches": 4
-          },
-          {
-            "zone": [
-              0.0102,
-              0.01045
-            ],
-            "touches": 6
-          },
-          {
-            "zone": [
-              0.01046,
-              0.01061
-            ],
-            "touches": 4
-          }
-        ],
-        "support": [
-          {
-            "zone": [
-              0.008664,
-              0.008698
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.008297,
-              0.008477
-            ],
-            "touches": 2
-          },
-          {
-            "zone": [
-              0.00804,
-              0.008202
-            ],
-            "touches": 3
-          }
-        ]
-      }
-    },
-    "fast_move_zone": {
-      "break_level": 0.0093,
-      "ran_to": 0.01029,
-      "note": "16:30 Tehran 1h broke the 0.0093-0.0096 band from 0.00845 and ran to 0.01029 on that same candle (~21% from the open)"
-    },
-    "manualTp": "30:100"
+  "fast_move_zone": {
+   "break_level": 0.001359,
+   "ran_to": 0.002837,
+   "note": "price ran >=15% within 3 candles after breaking 0.001359"
   }
+ },
+ {
+  "mint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
+  "symbol": "TROLL",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": 0.02888,
+  "resistance_band": [
+   0.02881,
+   0.02912
+  ],
+  "ath": 0.04174,
+  "trigger_price": 0.02921,
+  "trigger_condition": "above",
+  "entry_condition": "1h close above 0.02921 (band 0.02881-0.02912 + trendline 0.02888), preferably with above-average volume. 14:30 already tagged 0.02893 and failed \u2014 require a real close.",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": 0.02921,
+  "leg1_condition": "buy 50% on 1h close above 0.02921 with volume not dead",
+  "leg2_zone": [
+   0.02868,
+   0.02941
+  ],
+  "leg2_condition": "buy 50% on a retest of 0.02868-0.02941 that holds (1h close back above)",
+  "leg1_target": null,
+  "leg2_target": 0.03787,
+  "stop": 0.02755,
+  "target": 0.03787,
+  "tp1": 0.03787,
+  "tp2": 0.03787,
+  "rr": 5.542,
+  "confidence": 45,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Live 0.02851 is only ~2.4% under the 0.02881-0.02912 band, $2.3M liq, price above a rising 1h/4h EMA21. But 14:30 IRST already tagged 0.02893 and closed back below, and current 1h volume is tiny (~$4k, h1 5 buys / 25 sells). Buy only on a 1h close above 0.02921 with volume. Stop 0.02755 = 1.5% under the 14:30 low 0.02770 (tighter than the old 0.027). Conf 45: close to the level, but participation is too weak for a strong signal.",
+  "warnings": [
+   "Volume is dead on the last 1h (~$4k, sellers 25 vs 5) \u2014 a close on that tape is not a signal",
+   "14:30 IRST already tagged 0.02893 and failed",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "Liquidity excellent (~$2.3M)",
+   "20:31 IRST: 1h 19:30 closed 0.02911 inside the band, 0.3% under the 0.02921 trigger, on 23.6k (5x the prior hours); third tag of the band today - breakout imminent but not confirmed"
+  ],
+  "live": 0.02913,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.03016,
+       0.03029
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.03129,
+       0.03203
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.03554,
+       0.03617
+      ],
+      "touches": 5
+     }
+    ],
+    "support": []
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.02857,
+       0.0292
+      ],
+      "touches": 5
+     },
+     {
+      "zone": [
+       0.02988,
+       0.03029
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.0307,
+       0.03129
+      ],
+      "touches": 4
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.02679,
+       0.0269
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.02593,
+       0.02655
+      ],
+      "touches": 4
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.02885,
+       0.02919
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.03016,
+       0.0306
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.03266,
+       0.03323
+      ],
+      "touches": 2
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.02725,
+       0.02786
+      ],
+      "touches": 12
+     },
+     {
+      "zone": [
+       0.02658,
+       0.0272
+      ],
+      "touches": 11
+     },
+     {
+      "zone": [
+       0.02593,
+       0.02655
+      ],
+      "touches": 5
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.02871,
+       0.02919
+      ],
+      "touches": 17
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.02722,
+       0.02786
+      ],
+      "touches": 18
+     },
+     {
+      "zone": [
+       0.02655,
+       0.0272
+      ],
+      "touches": 7
+     }
+    ]
+   }
+  },
+  "fast_move_zone": {
+   "break_level": 0.02832,
+   "ran_to": 0.03266,
+   "note": "price ran >=15% within 3 candles after breaking 0.02832"
+  },
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "Ce2gx9KGXJ6C9Mp5b5x1sn9Mg87JwEbrQby4Zqo3pump",
+  "symbol": "neet",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": 0.02906,
+  "resistance_band": [
+   0.02906,
+   0.02961
+  ],
+  "ath": 0.0364,
+  "trigger_price": 0.0293,
+  "trigger_condition": "above",
+  "entry_condition": "1h close above 0.02930 (this morning 4h high 0.02928 / band 0.02906-0.02961). The old 0.0318 trigger still sits above as the next stack (0.0311-0.0317).",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": 0.0293,
+  "leg1_condition": "buy 50% on 1h close above 0.02930",
+  "leg2_zone": [
+   0.0288,
+   0.0295
+  ],
+  "leg2_condition": "buy 50% on a retest of 0.02880-0.02950 that holds (1h close back above)",
+  "leg1_target": null,
+  "leg2_target": 0.03799,
+  "stop": 0.02544,
+  "target": 0.03799,
+  "tp1": 0.03799,
+  "tp2": 0.03799,
+  "rr": 2.3157,
+  "confidence": 44,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Above a rising 1h/4h EMA21, $1.5M liq, 24h +13%. Live 0.02729 is under the nearest real cap: 03:30 IRST 4h high 0.02928, then rejected. Old trigger 0.0318 was the higher 0.0311-0.0317 stack \u2014 this plan uses the nearer 0.02930 close. Stop 0.02544 = 1.5% under the 15:30 1h low 0.02583. Conf 44: h1 sellers 30/95, 14:30 already failed 0.02781, and 0.0311-0.0317 still caps the +30% path.",
+  "warnings": [
+   "Overhead: 0.0311-0.0317 (old trigger 0.0318) still sits above 0.02930",
+   "h1 sellers 30 vs 95; 14:30 IRST already tagged 0.02781 and closed 0.02612",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "Liquidity good (~$1.5M); 24h volume modest (~$430k)"
+  ],
+  "live": 0.02852,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.02724,
+       0.02756
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.02792,
+       0.02806
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.0287,
+       0.02937
+      ],
+      "touches": 3
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.02572,
+       0.02627
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.02295,
+       0.02331
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.02183,
+       0.02185
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.02724,
+       0.02782
+      ],
+      "touches": 5
+     },
+     {
+      "zone": [
+       0.02797,
+       0.02856
+      ],
+      "touches": 8
+     },
+     {
+      "zone": [
+       0.02906,
+       0.02961
+      ],
+      "touches": 6
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.02574,
+       0.02635
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.02313,
+       0.02331
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.02705,
+       0.02766
+      ],
+      "touches": 11
+     },
+     {
+      "zone": [
+       0.02781,
+       0.02845
+      ],
+      "touches": 5
+     },
+     {
+      "zone": [
+       0.02853,
+       0.02922
+      ],
+      "touches": 4
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.02618,
+       0.02682
+      ],
+      "touches": 7
+     },
+     {
+      "zone": [
+       0.02544,
+       0.02604
+      ],
+      "touches": 10
+     },
+     {
+      "zone": [
+       0.02454,
+       0.02504
+      ],
+      "touches": 7
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.02769,
+       0.02814
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.02851,
+       0.02882
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.02924,
+       0.02928
+      ],
+      "touches": 2
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.02568,
+       0.02601
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.02487,
+       0.02547
+      ],
+      "touches": 13
+     },
+     {
+      "zone": [
+       0.02425,
+       0.02481
+      ],
+      "touches": 18
+     }
+    ]
+   }
+  },
+  "fast_move_zone": {
+   "break_level": 0.02531,
+   "ran_to": 0.02917,
+   "note": "price ran >=15% within 3 candles after breaking 0.02531"
+  },
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "DtcicPCKTKeAh7TDEzTym3hXeoHAoMiBdYJhMYxZpump",
+  "symbol": "CBUCKS",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": null,
+  "resistance_band": [
+   0.00472,
+   0.00506
+  ],
+  "ath": 0.006486,
+  "trigger_price": 0.005075,
+  "trigger_condition": "above",
+  "entry_condition": "1h close above 0.005075 (and preferably above the 17:30 wick high 0.005117). 16:30 closed 0.005020 then 17:30 failed \u2014 require a real close, not a poke.",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": 0.005075,
+  "leg1_condition": "buy 50% on 1h close above 0.005075 (ideally also above 0.005117)",
+  "leg2_zone": [
+   0.004985,
+   0.00511
+  ],
+  "leg2_condition": "buy 50% on a retest of 0.004985-0.00511 that holds (1h close back above)",
+  "leg1_target": null,
+  "leg2_target": 0.00658,
+  "stop": 0.00433,
+  "target": 0.00658,
+  "tp1": 0.00658,
+  "tp2": 0.00658,
+  "rr": 2.0769,
+  "confidence": 42,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Live 0.004845 is back at the 0.00472-0.00506 1h band after a failed poke: 16:30 closed 0.005020, 17:30 high 0.005117 then closed 0.004493. 1h/4h EMAs are rising and structure is HH/HL, but 1h EMA9 is still under EMA21 and 16:30-17:30 already failed this band. Buy only on a 1h close above 0.005075. Stop 0.004330 = 1.5% under the 17:30 low 0.004397. Conf 42: near the level, but a fresh fail and liq only $240k.",
+  "warnings": [
+   "Liquidity ~$240k \u2014 below the $300k preference",
+   "Same band failed 16:30-17:30 IRST (high 0.005117, close 0.004493)",
+   "Hunter previously flagged top10 ~35% \u2014 size down",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "1h EMA9 is still below EMA21"
+  ],
+  "live": 0.004741,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.00154,
+       0.001545
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.002012,
+       0.002025
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.001915,
+       0.001938
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.001587,
+       0.001597
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.004144,
+       0.004233
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.003968,
+       0.004062
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.003796,
+       0.003831
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.004673,
+       0.004762
+      ],
+      "touches": 5
+     },
+     {
+      "zone": [
+       0.004874,
+       0.004976
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.005076,
+       0.0052
+      ],
+      "touches": 6
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.004325,
+       0.004396
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.00421,
+       0.004233
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.004102,
+       0.004144
+      ],
+      "touches": 3
+     }
+    ]
+   }
+  },
+  "fast_move_zone": {
+   "break_level": 0.004221,
+   "ran_to": 0.004892,
+   "note": "price ran >=15% within 3 candles after breaking 0.004221"
+  },
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+  "symbol": "Fartcoin ",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": 0.116,
+  "resistance_band": [
+   0.1198,
+   0.1207
+  ],
+  "ath": 0.1746,
+  "trigger_price": 0.121,
+  "trigger_condition": "above",
+  "entry_condition": "1h close above 0.121 (band 0.1198-0.1207, 1h resistance 0.1184-0.1205 with 17 touches). Volume must pick up \u2014 the last 1h did only ~$4k.",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": 0.121,
+  "leg1_condition": "buy 50% on 1h close above 0.121 with volume not dead",
+  "leg2_zone": [
+   0.1189,
+   0.1219
+  ],
+  "leg2_condition": "buy 50% on a retest of 0.1189-0.1219 that holds (1h close back above)",
+  "leg1_target": null,
+  "leg2_target": 0.1569,
+  "stop": 0.1132,
+  "target": 0.1569,
+  "tp1": 0.1569,
+  "tp2": 0.1569,
+  "rr": 4.8267,
+  "confidence": 40,
+  "status": "waiting",
+  "expires": 1794423701837,
+  "reason": "Live 0.1177 is ~2.7% under 0.121, $6.1M liq, HH/HL, above a rising 1h/4h EMA21. Tight stop 0.1132 = 1.5% under the 13:30 HL 0.1149 (tighter than the old 0.1049). Conf 40: the tape is too quiet (last 1h volume ~$4k, 6 buys / 9 sells) for a strong signal. Need a 1h close above 0.121 on real volume.",
+  "warnings": [
+   "Last 1h volume is tiny (~$4k) \u2014 do not treat a quiet poke as a break",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = avg entry x1.30",
+   "Liquidity excellent (~$6.1M)"
+  ],
+  "live": 0.1178,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [
+     {
+      "zone": [
+       0.1176,
+       0.1205
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.1228,
+       0.1246
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.1274,
+       0.1282
+      ],
+      "touches": 2
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.1095,
+       0.1107
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.1064,
+       0.1087
+      ],
+      "touches": 3
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.1167,
+       0.1196
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.1197,
+       0.1226
+      ],
+      "touches": 7
+     },
+     {
+      "zone": [
+       0.1233,
+       0.1264
+      ],
+      "touches": 4
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.1137,
+       0.1153
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.1107,
+       0.1129
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.1064,
+       0.1087
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.1184,
+       0.1205
+      ],
+      "touches": 17
+     },
+     {
+      "zone": [
+       0.1224,
+       0.1246
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.1256,
+       0.1269
+      ],
+      "touches": 4
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.1125,
+       0.115
+      ],
+      "touches": 7
+     },
+     {
+      "zone": [
+       0.1087,
+       0.1108
+      ],
+      "touches": 4
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.1189,
+       0.1205
+      ],
+      "touches": 12
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.1129,
+       0.1157
+      ],
+      "touches": 24
+     }
+    ]
+   }
+  },
+  "fast_move_zone": null,
+  "manualTp": "30:100"
+ },
+ {
+  "mint": "HsprHxBRgiVaQdRf3TnKNuZZtaX9JUSPgMFdAkk6pump",
+  "symbol": "GATO",
+  "setup": "trendline+resistance breakout",
+  "tf": "1h",
+  "trendline_now": 0.00895,
+  "resistance_band": [
+   0.0093,
+   0.0096
+  ],
+  "ath": 0.01512,
+  "trigger_price": 0.00962,
+  "trigger_condition": "above",
+  "entry_condition": "re-arm only: 1h close back above 0.00960 (band top). The 16:30 break and the 15:30-19:30 4h both failed (4h closed 0.00871).",
+  "entry_mode": "split",
+  "scale_in": true,
+  "starter_pct": 50,
+  "leg1_price": null,
+  "leg1_condition": "skipped until a fresh 1h close above 0.00960; even then prefer the retest (the 16:30 low 0.008201 is >15% under a high-band fill)",
+  "leg2_zone": [
+   0.0093,
+   0.0096
+  ],
+  "leg2_condition": "after a 1h close back above 0.00960, buy a retest of 0.00930-0.00960 that holds",
+  "leg1_target": null,
+  "leg2_target": 0.01229,
+  "stop": 0.007049,
+  "target": 0.01229,
+  "tp1": 0.01229,
+  "tp2": 0.01229,
+  "rr": 2.073,
+  "confidence": 15,
+  "status": "invalid",
+  "expires": 1794423701837,
+  "reason": "INVALID: live 0.007832 fell through the 0.00808 stop (1.5% under the 16:30 IRST breakout low 0.008201); breakout fully failed; re-arm only on a 1h close back above 0.0096",
+  "warnings": [
+   "4h 15:30-19:30 IRST closed 0.00871 back below 0.00960 after a 0.01029 wick \u2014 failed break on both 1h and 4h",
+   "Same band already failed once on Nov 10 22:30-23:30 IRST (high 0.01042)",
+   "4h EMA9 < EMA21 and falling",
+   "Liquidity OK (~$315k, just at the preference)",
+   "Your manualTp 30:100 overrides the plan target on the panel",
+   "My List risk 1:2: target = zone mid x1.30",
+   "Confidence 32 (<60): panel will not auto-buy",
+   "20:31 IRST: price broke the 0.00808 stop; stop parked 10% under live (no setup)"
+  ],
+  "live": 0.007832,
+  "ts": 1794416501837,
+  "updatedAt": 1794416501837,
+  "key_levels": {
+   "1D": {
+    "resistance": [],
+    "support": [
+     {
+      "zone": [
+       0.002048,
+       0.002096
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.001499,
+       0.0015
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "4h": {
+    "resistance": [
+     {
+      "zone": [
+       0.01071,
+       0.01096
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.01255,
+       0.01261
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.01443,
+       0.01466
+      ],
+      "touches": 2
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.007646,
+       0.007746
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.006593,
+       0.006716
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.005723,
+       0.005725
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "1h": {
+    "resistance": [
+     {
+      "zone": [
+       0.00912,
+       0.00928
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.009369,
+       0.009549
+      ],
+      "touches": 3
+     },
+     {
+      "zone": [
+       0.009955,
+       0.0102
+      ],
+      "touches": 3
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.006593,
+       0.006716
+      ],
+      "touches": 2
+     }
+    ]
+   },
+   "15m": {
+    "resistance": [
+     {
+      "zone": [
+       0.00928,
+       0.009497
+      ],
+      "touches": 4
+     },
+     {
+      "zone": [
+       0.0102,
+       0.01045
+      ],
+      "touches": 6
+     },
+     {
+      "zone": [
+       0.01046,
+       0.01061
+      ],
+      "touches": 4
+     }
+    ],
+    "support": [
+     {
+      "zone": [
+       0.008664,
+       0.008698
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.008297,
+       0.008477
+      ],
+      "touches": 2
+     },
+     {
+      "zone": [
+       0.00804,
+       0.008202
+      ],
+      "touches": 3
+     }
+    ]
+   }
+  },
+  "fast_move_zone": {
+   "break_level": 0.0093,
+   "ran_to": 0.01029,
+   "note": "16:30 Tehran 1h broke the 0.0093-0.0096 band from 0.00845 and ran to 0.01029 on that same candle (~21% from the open)"
+  },
+  "manualTp": "30:100"
+ }
 ]
