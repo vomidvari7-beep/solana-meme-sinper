@@ -1,5 +1,5 @@
 import { tapeFromDex } from './net.js';
-import { CAPS, fakeDataReason, h1BreakSignal, h1TrendHold, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, pushSolSample, quoteImpact, resolveSolM15, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
+import { CAPS, ceilingBreakSignal, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, lhBreakSignal, listWalletSize, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, pushSolSample, quoteImpact, resolveSolM15, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
 import { isNum, log, tehranDayKey, WSOL } from './util.js';
 
 function pairTape(p) { return tapeFromDex(p); }
@@ -178,6 +178,8 @@ export function createEngine(cfg, state, net, swap) {
   }
 
   async function scalpTick() {
+    state.data.toggles.scalp = false;
+    return;
     if (!state.data.toggles.scalp || state.data.paused) return;
     await refreshSol();
     const solMood = scalpSolBlockReason(sol);
@@ -251,7 +253,7 @@ export function createEngine(cfg, state, net, swap) {
       const tape = live(mint);
       if (!tape?.pool) continue;
       let h1;
-      try { h1 = await net.ohlcv(tape.pool, '1h'); } catch { continue; }
+      try { h1 = await net.ohlcv(tape.pool, '1h', mint); } catch { continue; }
       const liveSig = h1BreakSignal(h1, Date.now(), tape.px);
       const sig = liveSig.buy ? liveSig : h1TrendHold(h1, Date.now());
       if (!sig.buy) continue;
@@ -280,33 +282,52 @@ export function createEngine(cfg, state, net, swap) {
     if (!state.data.toggles.breakout || state.data.paused) return;
     const rows = agents.mylist?.tokens || [];
     if (!rows.length) return;
+    const openN = state.open().filter(p => p.mode === 'breakout').length;
+    if (openN >= 2) { state.note('breakout', '', '', 'max 2 open'); return; }
     const cursor = state.data.breakCursor || 0;
     const row = rows[cursor % rows.length];
     state.data.breakCursor = cursor + 1;
     const tape = live(row.mint);
     if (!tape?.pool) return;
-    let h1;
-    try { h1 = await net.ohlcv(tape.pool, '1h'); } catch { return; }
-    const liveSig = h1BreakSignal(h1, Date.now(), tape.px);
-    const hold = h1TrendHold(h1, Date.now());
-    const sig = liveSig.buy ? liveSig : hold;
-    breakViews.set(row.mint, { mint: row.mint, symbol: row.symbol || tape.symbol || '', fa: liveSig.fa, zoneLo: liveSig.zoneLo, zoneHi: liveSig.zoneHi, stop: sig.stop, target: sig.target || liveSig.target, entry: sig.entry, state: liveSig.state });
+    let h1 = [];
+    let m15 = [];
+    try { h1 = await net.ohlcv(tape.pool, '1h', row.mint); } catch { return; }
+    try { m15 = (await net.ohlcv(tape.pool, '15m', row.mint)).slice(-96); } catch { m15 = []; }
+    let h4 = [];
+    try { h4 = (await net.ohlcv(tape.pool, '4h', row.mint)).slice(-80); } catch { h4 = []; }
+    const now = Date.now();
+    const liveSig = h1BreakSignal(h1, now, tape.px);
+    const hold = h1TrendHold(h1, now);
+    const ceiling = ceilingBreakSignal(h1, m15, now);
+    const lh = lhBreakSignal(h1, m15, now, tape.px);
+    let htf = htfRetestSignal(h4, h1, now, 4 * 3600e3);
+    if (!htf.lastLH) {
+      try {
+        const d1 = (await net.ohlcv(tape.pool, '1d', row.mint)).slice(-80);
+        const alt = htfRetestSignal(d1, h1, now, 24 * 3600e3);
+        if (alt.lastLH) htf = alt;
+      } catch { /* 4h stands */ }
+    }
+    const sig = liveSig.buy ? liveSig : hold.buy ? hold : ceiling.buy ? ceiling : lh.buy ? lh : htf.buy ? htf : liveSig;
+    breakViews.set(row.mint, {
+      mint: row.mint, symbol: row.symbol || tape.symbol || '', fa: liveSig.fa || (htf.phase ? 'HTF retest' : '') || (lh.broken ? 'LH break' : ''),
+      kind: sig.kind || (sig.buy ? 'breakout1h' : ''), zoneLo: liveSig.zoneLo || ceiling.ceilingLo, zoneHi: liveSig.zoneHi || ceiling.ceilingHi,
+      lastLH: lh.lastLH || htf.lastLH, line: htf.line || lh.line || liveSig.line, hl: lh.hl || htf.hl, ceilingLo: ceiling.ceilingLo, ceilingHi: ceiling.ceilingHi,
+      htf: htf.phase || '', htfLevel: htf.level, stop: sig.stop, target: sig.target || (sig.entry ? sig.entry * 1.3 : liveSig.target), entry: sig.entry, state: sig.buy ? 'buy' : liveSig.state, broken: !!lh.broken
+    });
     if (breakViews.size > 40) breakViews.delete(breakViews.keys().next().value);
     if (!sig.buy) return;
+    if (state.findOpen(row.mint)) { state.note('breakout', row.mint, row.symbol || tape.symbol, 'already open'); return; }
     const fake = guard(row.mint, tape);
     if (fake) { state.note('breakout', row.mint, row.symbol || tape.symbol, fake); return; }
     state.data.seenBreaks = state.data.seenBreaks || {};
     if (state.data.seenBreaks[row.mint] === sig.key) return;
-    await refreshSol();
-    if (!(sol.price > 0)) return;
-    const want = CAPS.listUsd / sol.price;
     const bal = await swap.balance();
-    const sized = (await import('./state.js')).clampMainBuy(state, want, bal);
-    if (sized.err) { state.note('breakout', row.mint, row.symbol || tape.symbol, sized.err); return; }
+    const sized = listWalletSize(bal, CAPS.reserveSol, openN);
+    if (!(sized.sol > 0)) { state.note('breakout', row.mint, row.symbol || tape.symbol, sized.label); return; }
     state.data.seenBreaks[row.mint] = sig.key;
-    const trendHold = sig.kind === 'trendhold1h';
-    const plan = { myList: true, mlBreak: true, mlBreakKey: sig.key, stop: sig.stop, tp: sig.entry * 1.3, reason: trendHold ? 'trend break + hold' : '1h breakout', exit: { stopPx: sig.stop, tps: [{ gainPct: 30, sellPct: 100 }] } };
-    if (trendHold) plan.kind = 'trendhold1h';
+    const kind = sig.kind || 'breakout1h';
+    const plan = { myList: true, mlBreak: true, mlBreakKey: sig.key, kind, stop: sig.stop, tp: (sig.entry || tape.px) * 1.3, reason: kind, exit: { stopPx: sig.stop, tps: [{ gainPct: 30, sellPct: 100 }] } };
     await safeBuy('breakout', row.mint, row.symbol || tape.symbol, sized.sol, 100, plan, tape.liq);
   }
 
@@ -398,9 +419,13 @@ export function createEngine(cfg, state, net, swap) {
       } else if (p.mode === 'degen') {
         decision = degenExitDecision(p, lp, { liq: tape.liq, m5b: tape.m5b, m5s: tape.m5s });
       } else if (p.mode === 'breakout') {
-        const stop = +p.plan?.stop || 0;
-        const tp = +p.plan?.tp || (p.avgUsd > 0 ? p.avgUsd * 1.3 : 0);
-        if (stop > 0 && lp <= stop) decision = { pct: 100, tag: 'stop', reason: 'chart stop' };
+        const entry = p.avgUsd;
+        const high = Math.max(p.prot?.high || 0, entry || 0, lp);
+        p.prot = { ...(p.prot || {}), high };
+        let stop = +p.plan?.stop || 0;
+        if (entry > 0 && high >= entry * 1.2) stop = Math.max(stop, entry * 1.05);
+        const tp = entry > 0 ? entry * 1.3 : (+p.plan?.tp || 0);
+        if (stop > 0 && lp <= stop) decision = { pct: 100, tag: 'stop', reason: entry > 0 && high >= entry * 1.2 && stop >= entry * 1.05 - 1e-12 ? '+5% stop' : 'chart stop' };
         else if (tp > 0 && lp >= tp) decision = { pct: 100, tag: 'tp', reason: 'tp +30%' };
       } else if (p.mode === 'plans') {
         const stop = +p.plan?.stop || (p.avgUsd > 0 ? p.avgUsd * 0.85 : 0);

@@ -65,6 +65,7 @@ export function startApi(cfg, state, engine) {
       if (req.method === 'POST' && url.pathname === '/api/mode') {
         const body = await readBody(req);
         for (const key of MODES) if (typeof body[key] === 'boolean') state.data.toggles[key] = body[key];
+        state.data.toggles.scalp = false;
         if (typeof body.degenTradeUsd === 'number' && body.degenTradeUsd >= 0.5 && body.degenTradeUsd <= 1000) state.data.degenTradeUsd = body.degenTradeUsd;
         state.save();
         log('api', 'toggles ' + JSON.stringify(state.data.toggles));

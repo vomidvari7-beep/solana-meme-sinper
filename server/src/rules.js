@@ -496,6 +496,195 @@ export function h1TrendHold(candles, now = Date.now()) {
   return { buy: true, kind: 'trendhold1h', entry: hold2.c, stop, target: hold2.c * 1.3, line, low: br.l, key, reason: 'trend break + hold' };
 }
 
+function ceilingZone(prior) {
+  const src = (prior || []).slice(-48);
+  if (src.length < 10) return null;
+  const { highs } = swingPoints(src, 2);
+  if (highs.length < 2) return null;
+  let best = null;
+  for (let i = 0; i < highs.length; i++) {
+    for (let j = i + 1; j < highs.length; j++) {
+      const lo = Math.min(highs[i].price, highs[j].price);
+      const hi = Math.max(highs[i].price, highs[j].price);
+      if (!(hi > 0) || Math.log(hi) - Math.log(lo) > Math.log(1.07)) continue;
+      const last = Math.max(highs[i].i, highs[j].i);
+      const first = Math.min(highs[i].i, highs[j].i);
+      const after = src.slice(last + 1);
+      if (!after.length) continue;
+      const preClose = after[after.length - 1].c;
+      if (!(lo > preClose)) continue;
+      if (!after.some(c => c.h > 0 && c.h < lo)) continue;
+      if (!src.slice(first + 1, last + 2).some(c => c.l > 0 && c.l <= lo * 0.97)) continue;
+      if (!best || last > best.last) best = { lo, hi, last, first };
+    }
+  }
+  return best;
+}
+
+function closedM15(m15, now) {
+  return (m15 || []).filter(c => c && c.c > 0 && c.t > 0 && c.t + 15 * 60e3 <= now).sort((a, b) => a.t - b.t);
+}
+
+/** 1h ceiling break, then the 15m close that finishes above the box. */
+export function ceilingBreakSignal(h1, m15, now = Date.now()) {
+  const empty = { buy: false, kind: 'ceilingbreak', entry: null, stop: null, target: null, ceilingLo: null, ceilingHi: null, base: null, key: '', reason: 'waiting' };
+  const { closed, forming } = h1Parts(h1, now);
+  const bars = forming ? closed.concat([forming]) : closed.slice();
+  if (bars.length < 16) return empty;
+  let found = null;
+  for (let i = 12; i < bars.length; i++) {
+    const prior = bars.slice(0, i);
+    const zone = ceilingZone(prior);
+    if (!zone) continue;
+    const bar = bars[i];
+    if (!(bar.c > zone.hi || bar.h > zone.hi)) continue;
+    found = { zone, bar, prior };
+  }
+  if (!found) return empty;
+  const after = found.prior.slice(found.zone.last + 1);
+  const lows = (after.length ? after : found.prior.slice(-4)).map(c => c.l).filter(x => x > 0);
+  const base = lows.length ? Math.min(...lows) : null;
+  const stop = base > 0 ? base * 0.99 : null;
+  const view = { ...empty, ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base, stop, reason: 'waiting 15m close' };
+  const breakT = found.bar.t || 0;
+  const hit = closedM15(m15, now).find(c => c.c > found.zone.hi && (!breakT || c.t + 15 * 60e3 > breakT));
+  if (!hit) return view;
+  if (!(stop > 0) || !(stop < hit.c)) return { ...view, reason: 'stop' };
+  return {
+    buy: true, kind: 'ceilingbreak', entry: hit.c, stop, target: hit.c * 1.3,
+    ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base,
+    key: 'ceil:' + Math.round(found.zone.hi * 1e8) + ':' + hit.t, reason: 'ceilingbreak'
+  };
+}
+
+export function lhStructure(closed) {
+  const { highs, lows } = swingPoints(closed || [], 2);
+  if (highs.length < 2) return null;
+  const seq = [highs[highs.length - 1]];
+  for (let i = highs.length - 2; i >= 0; i--) {
+    if (highs[i].price > seq[0].price) seq.unshift(highs[i]);
+    else break;
+  }
+  if (seq.length < 2 || !(seq[seq.length - 1].price < seq[0].price)) return null;
+  const a = seq[0];
+  const b = seq[seq.length - 1];
+  let hl = null;
+  for (let i = lows.length - 1; i >= 1; i--) {
+    if (lows[i].i > b.i) continue;
+    if (lows[i].price > lows[i - 1].price) { hl = lows[i]; break; }
+  }
+  return { a, b, lastLH: b.price, lhIndex: b.i, hl };
+}
+
+/** Downtrend line plus the last lower high. Score bonus when the LH breaks; buy on the 15m close. */
+export function lhBreakSignal(h1, m15, now = Date.now(), livePx = null) {
+  const empty = { buy: false, kind: 'lhbreak', broken: false, entry: null, stop: null, target: null, lastLH: null, line: null, hl: null, key: '', reason: 'waiting' };
+  const { closed, forming } = h1Parts(h1, now);
+  if (closed.length < 20) return empty;
+  const st = lhStructure(closed);
+  if (!st) return empty;
+  const idx = forming ? closed.length : closed.length - 1;
+  const line = lineAt(st.a, st.b, idx);
+  const px = isNum(livePx) && livePx > 0 ? livePx : (forming?.c || closed[closed.length - 1].c);
+  const broken = px > st.lastLH;
+  const aboveLine = line > 0 && px > line;
+  const stop = st.hl && st.hl.price > 0 ? st.hl.price * 0.99 : null;
+  const view = { ...empty, broken, lastLH: st.lastLH, line, hl: st.hl ? st.hl.price : null, stop, reason: broken ? 'waiting 15m close' : 'watching LH' };
+  const lhT = closed[st.lhIndex]?.t || 0;
+  const hit = closedM15(m15, now).filter(c => c.c > st.lastLH && (!lhT || c.t >= lhT)).at(-1);
+  if (!(broken && aboveLine && hit && stop > 0 && stop < hit.c)) return view;
+  return {
+    buy: true, kind: 'lhbreak', broken: true, entry: hit.c, stop, target: hit.c * 1.3,
+    lastLH: st.lastLH, line, hl: st.hl.price,
+    key: 'lh:' + Math.round(st.lastLH * 1e8) + ':' + hit.t, reason: 'lhbreak'
+  };
+}
+
+function tfParts(candles, now, span) {
+  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0 && c.o > 0);
+  const stamped = cs.filter(c => c.t > 0).sort((a, b) => a.t - b.t);
+  if (stamped.length) {
+    return {
+      closed: stamped.filter(c => c.t + span <= now),
+      forming: stamped.filter(c => c.t <= now && c.t + span > now).at(-1) || null
+    };
+  }
+  if (cs.length < 2) return { closed: [], forming: cs[0] || null };
+  return { closed: cs.slice(0, -1), forming: cs[cs.length - 1] };
+}
+
+/** 4h or 1d downtrend break, then a 1h retest that closes back above the broken level. */
+export function htfRetestSignal(htf, h1, now = Date.now(), span = 4 * 3600e3) {
+  const empty = { buy: false, kind: 'htfretest', phase: '', entry: null, stop: null, target: null, line: null, lastLH: null, level: null, hl: null, key: '', reason: 'waiting', tf: span >= 20 * 3600e3 ? '1d' : '4h' };
+  const { closed } = tfParts(htf, now, span);
+  if (closed.length < 16) return empty;
+  const latest = lhStructure(closed);
+  let watch = null;
+  if (latest && latest.b.i - latest.a.i >= 8) {
+    watch = { ...empty, phase: 'watch', line: lineAt(latest.a, latest.b, closed.length - 1), lastLH: latest.lastLH, reason: 'HTF downtrend, unbroken' };
+  }
+  let chosen = null;
+  for (let i = 12; i < closed.length; i++) {
+    const prior = closed.slice(0, i);
+    const st = lhStructure(prior);
+    if (!st || st.b.i - st.a.i < 8) continue;
+    const line = lineAt(st.a, st.b, i);
+    const bar = closed[i];
+    if (!(line > 0) || !(bar.c > line) || !(bar.c > st.lastLH)) continue;
+    const vol = prior.slice(-20);
+    if (vol.length < 20) continue;
+    const avg = vol.reduce((s, c) => s + (c.v > 0 ? c.v : 0), 0) / 20;
+    if (!(avg > 0) || !(bar.v > avg)) continue;
+    const level = Math.max(line, st.lastLH);
+    if (closed.slice(i + 1).some(c => c.c > 0 && c.c < level)) continue;
+    chosen = { line, level, lastLH: st.lastLH, breakClose: (bar.t || 0) + span, bar };
+  }
+  if (!chosen) return watch || empty;
+  const deadline = chosen.breakClose + 72 * 3600e3;
+  const { closed: h1c } = tfParts(h1, now, 3600e3);
+  const after = h1c.filter(c => (c.t || 0) + 3600e3 > chosen.breakClose);
+  let touched = false;
+  let hold = null;
+  for (const c of after) {
+    if (c.l > 0 && c.l <= chosen.level * 1.03) touched = true;
+    if (touched && c.c > chosen.level) {
+      if ((c.t || 0) + 3600e3 <= deadline) hold = c;
+      break;
+    }
+  }
+  const priorH1 = h1c.filter(c => !hold || c.t < hold.t);
+  const { lows } = swingPoints(priorH1, 2);
+  const recent = lows.filter(l => (priorH1[l.i]?.t || 0) >= chosen.breakClose - 3600e3);
+  let base = null;
+  for (let i = recent.length - 1; i >= 1; i--) {
+    if (recent[i].price > recent[i - 1].price) { base = recent[i].price; break; }
+  }
+  if (!(base > 0) && recent.length) base = recent[recent.length - 1].price;
+  if (!(base > 0)) {
+    const pull = priorH1.filter(c => (c.t || 0) >= chosen.breakClose - 3600e3).map(c => c.l).filter(x => x > 0);
+    if (pull.length) base = Math.min(...pull);
+  }
+  const stop = base > 0 ? base * 0.99 : null;
+  const expired = !hold && now > deadline;
+  const view = {
+    ...empty, phase: expired ? 'expired' : 'retest', line: chosen.line, lastLH: chosen.lastLH, level: chosen.level, hl: base, stop,
+    key: 'htf:' + Math.round(chosen.level * 1e8) + ':' + (chosen.bar.t || 0),
+    reason: expired ? 'HTF retest expired' : 'waiting for the 1h hold'
+  };
+  if (!hold || !(stop > 0) || !(stop < hold.c)) return view;
+  return { ...view, buy: true, phase: 'buy', entry: hold.c, stop, target: hold.c * 1.3, reason: 'htfretest' };
+}
+
+export function listWalletSize(balance, reserve, openCount) {
+  const n = +openCount || 0;
+  const tradable = (+balance || 0) - (+reserve || 0);
+  if (n >= 2) return { sol: 0, label: 'max 2 open' };
+  if (!(tradable >= 0.002)) return { sol: 0, label: 'balance under reserve' };
+  if (n === 1) return { sol: +tradable.toFixed(6), label: 'remainder ' + tradable.toFixed(3) + ' SOL · max 2' };
+  const half = tradable * 0.5;
+  return { sol: +half.toFixed(6), label: '50% · ' + half.toFixed(3) + ' SOL of ' + tradable.toFixed(3) + ' · max 2' };
+}
+
 export function planFresh(p, now = Date.now()) {
   const ts = +p?.ts || +p?.updatedAt || 0;
   const stamp = ts > 0 && ts < 1e12 ? ts * 1000 : ts;

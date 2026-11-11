@@ -1303,7 +1303,8 @@ const OHLCV_TF = {
   '5m':  { path: 'minute', aggregate: 5, limit: 120 },
   '15m': { path: 'minute', aggregate: 15, limit: 120 },
   '1h':  { path: 'hour', aggregate: 1, limit: 200 },
-  '4h':  { path: 'hour', aggregate: 4, limit: 200 },
+  '4h':  { path: 'hour', aggregate: 4, limit: 120 },
+  '1d':  { path: 'day', aggregate: 1, limit: 80 },
   '1m':  { path: 'minute', aggregate: 1, limit: 60 }
 };
 const ohlcvCache = new Map();
@@ -1409,7 +1410,7 @@ function swingPoints(cs, k = 2) {
   }
   return { highs, lows };
 }
-function lineAt(a, b, i) { if (b.i === a.i) return b.price; return a.price + (b.price - a.price) * (i - a.i) / (b.i - a.i); }
+function lineAt(a, b, i) { if (!a || !b || b.i === a.i) return b ? b.price : 0; if (!(a.price > 0) || !(b.price > 0)) return 0; const t = (i - a.i) / (b.i - a.i); return Math.exp(Math.log(a.price) + (Math.log(b.price) - Math.log(a.price)) * t); }
 function analyzeStructure(candles, tf) {
   const cs = (candles || []).filter(c => isNum(c.h) && isNum(c.l) && isNum(c.c) && c.h > 0);
   const empty = { tf, trend: 'range', hLabel: null, lLabel: null, trendlineBreak: false, bos: false, breakout: false, lastLH: null, lastHigh: null, lastLow: null, newHL: null, brokenLevel: null, retest: 'none', supports: [] };
@@ -1629,7 +1630,7 @@ function formatTa(primary, confirm, signal) {
   return `TA ${primary.tf}/${confirm.tf}: ${bits.join(' · ')} · ${primary.tf} ${primary.trend} · ${confirm.tf} ${confirm.trend}`;
 }
 function ohlcvTtl(tfKey) {
-  if (tfKey === '4h') return 15 * 60e3;
+  if (tfKey === '4h' || tfKey === '1d') return 15 * 60e3;
   if (tfKey === '1h') return 5 * 60e3;
   return 4 * 60e3;
 }
@@ -6094,7 +6095,7 @@ async function cappedBuy(opt) {
   sol = test.sol;
   const spend = quoteSpend(sol);
   if (!spend.ok) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' — ' + spend.error, 'warn'); return 'skip'; }
-  const errs = opt.myList ? listBuyBlocks(sol, t.mint) : buyGuards('burner', t.mint, sol, { auto: true });
+  const errs = opt.myList ? (opt.walletHalf ? listHalfBlocks(sol, t.mint) : listBuyBlocks(sol, t.mint)) : buyGuards('burner', t.mint, sol, { auto: true });
   if (errs.length) { autoLog((t.symbol || 'token') + ': ' + opt.reason + ' blocked — ' + errs[0], 'warn'); return 'block'; }
   const slip = Math.min(15, opt.myList ? S.slippagePct : A.slipCap);
   let qo;
@@ -6329,13 +6330,23 @@ function enableAuto() {
       renderBurner(); renderPortfolio(); rememberBot('auto', true); toast('🤖 Auto-trading ON — keep this tab open', 'warn', 6000); setTimeout(autoTick, 500); if (A.autoScan && !lastResult) setTimeout(autoScan, 1000); } });
 }
 const BOT_LS = 'sms:bots';
+function forceScalpOff() {
+  try {
+    if (localStorage.getItem('sms:scalpoff1')) return;
+    const raw = localStorage.getItem(BOT_LS);
+    const v = raw ? JSON.parse(raw) : {};
+    if (v && typeof v === 'object') { v.scalp = false; localStorage.setItem(BOT_LS, JSON.stringify(v)); }
+    localStorage.setItem('sms:scalpoff1', '1');
+  } catch { /* ignore */ }
+}
 function botPrefs() {
+  forceScalpOff();
   const fallback = { auto: false, mylist: false, copy: false, sniper: false, momentum: !!A.momentumOn, plans: true, exits: false, quick: A.quickOn !== false, degen: false, scalp: false, scan: false, split: true };
   try {
     const raw = localStorage.getItem(BOT_LS);
     if (!raw) { saveBotPrefs(fallback); return { ...fallback }; }
     const v = JSON.parse(raw);
-    if (v && typeof v === 'object') return { ...fallback, ...v };
+    if (v && typeof v === 'object') return { ...fallback, ...v, scalp: false };
   } catch { /* defaults */ }
   return { ...fallback };
 }
@@ -6496,6 +6507,7 @@ function mountServerMode() {
   paint(null);
 }
 function setExecBot(key, on) {
+  if (key === 'scalp') on = false;
   if (on && serverModeOn()) { toast('Server mode is on. This browser will not trade.', 'warn', 6000); return; }
   const locked = !burnerReady();
   if (key === 'auto') {
@@ -6550,6 +6562,7 @@ function toggleBot(key) {
   if (key === 'exits') { saveAgentCfg({ exits: next }); rememberBot('exits', next); renderPortfolio(); return; }
   if (key === 'quick') { saveQuick({ quickOn: next }); rememberBot('quick', next); return; }
   if (key === 'split') { rememberBot('split', next); renderPortfolio(); try { renderMyList(); } catch { /* list not ready */ } return; }
+  if (key === 'scalp') { toast('Scalp is off (disabled)', 'warn'); rememberBot('scalp', false); return; }
   setExecBot(key, next);
 }
 function allBotsGo() {
@@ -6557,7 +6570,6 @@ function allBotsGo() {
   if (typeof serverModeOn === 'function' && serverModeOn()) { toast('Server mode is on. This browser will not trade.', 'warn', 6000); paintRunDesk(); return; }
   setExecBot('auto', true);
   setExecBot('mylist', true);
-  setExecBot('scalp', true);
   setExecBot('degen', true);
   setExecBot('copy', true);
   setExecBot('sniper', true);
@@ -6575,13 +6587,14 @@ function allBotsOn() {
   if (!burnerReady()) { startAllPending = true; unlockBurner(); return; }
   resetModalButtons();
   openModal({ title: 'Turn bots on', confirmLabel: 'All ON', danger: true,
-    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">AUTO, My List, Scalp, Degen, Copy, and the Launch Sniper will place trades without asking. The switches stay on after a reload. Unlock again to run. Agent exits stays off.</p><label class="mt-3 flex gap-2 text-xs"><input id="allAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand.</label>`,
+    html: `<p class="text-xs text-slate-300 whitespace-normal break-words">Start all turns on AUTO, My List, and Degen. Scalp stays off. The switches stay on after a reload. Unlock again to run.</p><label class="mt-3 flex gap-2 text-xs"><input id="allAck" type="checkbox" class="mt-0.5 accent-rose-500" /> I understand.</label>`,
     validate: () => $('allAck')?.checked,
     onConfirm: async () => { allBotsGo(); toast('Bots ON', 'warn', 6000); } });
 }
 function switchReason(key) {
   const prefs = botPrefs();
   if (key === 'unlocked') return burnerRec() ? (burnerReady() ? '' : 'locked') : 'no burner';
+  if (key === 'scalp') return 'off (disabled)';
   if (!prefs[key]) return 'off';
   if (typeof serverModeOn === 'function' && serverModeOn()) return 'server mode';
   if (!burnerReady()) return 'locked';
@@ -8237,7 +8250,7 @@ function openDegenDesk() {
   showTokenSeg('degen');
   $('degenDesk')?.scrollIntoView({ block: 'start' });
 }
-let tokenSeg = 'scalp';
+let tokenSeg = 'degen';
 let tradeSeg = 'open';
 function placeDegenDesk() {
   const desk = $('degenDesk'); if (!desk) return;
@@ -8250,7 +8263,8 @@ function placeDegenDesk() {
   desk.hidden = tokenSeg !== 'degen';
 }
 function showTokenSeg(name) {
-  tokenSeg = name === 'degen' ? 'degen' : 'scalp';
+  tokenSeg = 'degen';
+  name = 'degen';
   const pane = $('tabTokens');
   if (pane) {
     pane.classList.toggle('seg-degen', tokenSeg === 'degen');
@@ -9311,6 +9325,8 @@ function previewAmount(amount) {
   return '≈ $' + (n * px).toFixed(2);
 }
 function strategySizeText(spec) {
+  const sized = typeof myListWalletSize === 'function' ? myListWalletSize() : null;
+  if (sized && sized.label) return 'Size ' + sized.label + ' · TP +30% · +20% moves stop to +5%';
   if (spec.sizeMode === 'pct') {
     const pct = spec.sizePct > 0 ? spec.sizePct : 10;
     const bal = burnerSolBal();
@@ -9492,6 +9508,34 @@ function listBuyBlocks(sol, mint) {
   if (!heldMint && openPositions().filter(p => p.open && !p.degen && !p.scalp).length >= maxPos()) errs.push('max positions');
   return errs;
 }
+function myListOpenCount() {
+  return openPositions().filter(p => p.open && (p.myList || p.plan?.myList) && !p.degen && !p.scalp).length;
+}
+function myListWalletSize() {
+  const open = myListOpenCount();
+  const bal = isNum(WALLETS.burner?.sol) ? WALLETS.burner.sol : null;
+  const reserve = isNum(S.reserveSol) ? S.reserveSol : 0.01;
+  if (open >= 2) return { ok: false, sol: 0, error: 'max 2 open', label: 'max 2 open' };
+  if (!(bal > reserve)) return { ok: false, sol: 0, error: 'balance under reserve', label: 'balance under reserve' };
+  const tradable = bal - reserve;
+  if (open === 1) {
+    const sol = +tradable.toFixed(6);
+    return { ok: sol >= 0.001, sol, error: sol >= 0.001 ? '' : 'remainder under 0.001', label: 'remainder ' + sol.toFixed(3) + ' SOL · max 2' };
+  }
+  const sol = +(tradable * 0.5).toFixed(6);
+  return { ok: sol >= 0.001, sol, error: sol >= 0.001 ? '' : '50% under 0.001', label: '50% · ' + sol.toFixed(3) + ' SOL of ' + tradable.toFixed(3) + ' · max 2' };
+}
+function listHalfBlocks(sol, mint) {
+  const errs = [];
+  if (!burnerReady()) errs.push('Burner wallet is locked — unlock it first');
+  if (!(sol > 0)) errs.push('Amount must be > 0');
+  const bal = WALLETS.burner?.sol;
+  const reserve = isNum(S.reserveSol) ? S.reserveSol : 0;
+  if (isNum(bal) && sol + reserve > bal + 1e-9) errs.push('Insufficient SOL: need the buy plus the reserve');
+  if (mint && listPosition(mint)) errs.push('already open');
+  else if (myListOpenCount() >= 2) errs.push('max 2 open');
+  return errs;
+}
 function myListSpec(p) {
   const exit = p?.plan?.exit || {};
   const m = manualOf(p) || {};
@@ -9524,6 +9568,7 @@ function myListEffectiveStop(p, lp) {
   let reason = 'initial';
   const raise = (px, why) => { if (isNum(px) && (!isNum(stop) || px > stop)) { stop = px; reason = why; } };
   if (!(p?.plan?.split && !manualLevelFlags(p).tp) && isNum(entry) && entry > 0 && isNum(spec.beAtPct) && spec.beAtPct > 0 && high >= entry * (1 + spec.beAtPct / 100)) raise(entry * 1.01, 'break-even');
+  if (isNum(entry) && entry > 0 && high >= entry * 1.2) raise(entry * 1.05, '+5%');
   if (!(p?.plan?.split && !manualLevelFlags(p).tp) && isNum(entry) && isNum(spec.trailAtPct) && spec.trailAtPct >= 0 && isNum(spec.trailPct) && spec.trailPct > 0 && high >= entry * (1 + Math.max(0, spec.trailAtPct) / 100)) raise(high * (1 - spec.trailPct / 100), 'trail');
   const prev = autoStop[p.key];
   if (prev && isNum(prev.stop) && prev.stop > (stop || 0)) { stop = prev.stop; reason = prev.reason || reason; }
@@ -9694,7 +9739,7 @@ function listChartSvg(model, opt) {
   const cs = model?.candles || [];
   if (cs.length < 2) return { svg: '', empty: true };
   const minC = Math.min(...cs.map(c => c.l)), maxC = Math.max(...cs.map(c => c.h));
-  const log = minC > 0 && (maxC / minC >= 2.5 || maxC < 1);
+  const log = minC > 0;
   const pad = 0.08;
   let lo, hi, y;
   if (log) {
@@ -9813,7 +9858,8 @@ function listDefaultChip() {
   const tp = formatTps(MYLIST.tps) || '15:100';
   const size = MYLIST.sizeMode === 'pct' ? (MYLIST.sizePct + '% of balance') : (sizeHint(MYLIST.sizeSol) || (MYLIST.sizeSol + ' ' + unitWord()));
   const tfBit = isBreakMode(MYLIST.mode) ? ' · ' + (LIST_TFS.includes(MYLIST.tf) ? MYLIST.tf : '4h') + (MYLIST.mode === 'ath' ? ' · ' + (MYLIST.athEntry || 'retest') : '') + (MYLIST.earlyBreak ? ' · early 5m' : '') : '';
-  return modeLabel(MYLIST.mode || 'zone') + tfBit + ' · ' + size + ' · stop ' + MYLIST.stopPct + '%' + (isNum(MYLIST.stopPx) ? ' / ' + price(MYLIST.stopPx) : '') + ' · TP ' + tp;
+  const half = typeof myListWalletSize === 'function' ? myListWalletSize().label : size;
+  return modeLabel(MYLIST.mode || 'zone') + tfBit + ' · ' + half + ' · TP +30% · +20%→+5% stop';
 }
 function modalNum(id) { const el = $(id); if (!el || !String(el.value || '').trim()) return null; const n = +el.value; return Number.isFinite(n) ? n : null; }
 function listField(label, inner) { return `<label class="block min-w-0 text-[11px] text-slate-400">${label}${inner}</label>`; }
@@ -10081,7 +10127,9 @@ function myListStructSig() {
       const bars = typeof mlBreakMem !== 'undefined' && mlBreakMem.get(r.id)?.h1;
       if (bars && typeof h1TrendHold === 'function' && h1TrendHold(bars).buy) holdOn = 'h';
     } catch { /* sort still uses the score */ }
-    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + phase + sc + planReady + holdOn + bucket;
+    const liveNow = typeof mlLiveView === 'function' ? mlLiveView(r.mint) : null;
+    const liveKind = liveNow ? liveNow.kind + (liveNow.broken ? 'b' : '') + (liveNow.htfPhase || '') : '';
+    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + phase + sc + planReady + holdOn + bucket + liveKind;
   }
   return s;
 }
@@ -10098,8 +10146,7 @@ function renderMyList(opts) {
   const views = MYLIST.rows.map(row => ({ row, ...listContext(row) }));
   views.forEach(v => { listChartMemo[v.row.id] = v.model; });
   const setupRank = (v) => {
-    const scored = AG.scores && AG.scores.get(v.row.mint);
-    const score = scored && isNum(+scored.score) ? Math.round(+scored.score) : null;
+    const score = mlShownScore(v.row.mint);
     const live = typeof mlBreakView === 'function' ? mlBreakView(v.row.mint) : null;
     let hold = false;
     try { hold = !!(mlBreakMem.get(v.row.id)?.h1 && h1TrendHold(mlBreakMem.get(v.row.id).h1).buy); } catch { hold = false; }
@@ -10191,8 +10238,22 @@ function renderMyList(opts) {
     if (info.imageUrl) rememberLogo(row.mint, info.imageUrl, { src: 'dex' });
     const setupTag = v.spec.mode === 'ath' ? 'ATH' : (v.model.buyZone ? 'BUY ZONE' : '');
     const scored = AG.scores && AG.scores.get(row.mint);
-    const setupFull = [scored && scored.setup ? esc(scored.setup) : '', scored && scored.entry ? esc(scored.entry) : ''].filter(Boolean).join(' · ');
-    const setupHtml = scored && isNum(+scored.score) ? `<details class="ml-setup"><summary class="setup-chip">Setup ${Math.round(+scored.score)} ▸</summary>${setupFull ? `<p class="ml-setup-body">${setupFull}</p>` : ''}</details>` : '';
+    const shownScore = mlShownScore(row.mint);
+    const live = mlLiveView(row.mint);
+    const setupFull = [scored && scored.setup ? esc(scored.setup) : '', scored && scored.entry ? esc(scored.entry) : '', live && live.broken ? 'LH break +15' : '', live && live.htf ? 'HTF retest +15' : ''].filter(Boolean).join(' · ');
+    const setupHtml = shownScore != null ? `<details class="ml-setup"><summary class="setup-chip">Setup ${shownScore}${live && live.broken ? ' · LH break' : ''}${live && live.htf ? ' · HTF retest' : ''} ▸</summary>${setupFull ? `<p class="ml-setup-body">${setupFull}</p>` : ''}</details>` : '';
+    const kindChip = live && live.kind ? `<span class="setup-chip shrink-0">${esc(live.kind === 'htfretest' ? 'HTF retest' : live.kind)}</span>` : '';
+    const levelBits = [];
+    if (live && live.ceilingHi) levelBits.push('ceiling ' + price(live.ceilingLo) + '–' + price(live.ceilingHi));
+    if (live && live.htfLine) levelBits.push('HTF line ' + price(live.htfLine));
+    if (live && live.htfLH) levelBits.push('HTF LH ' + price(live.htfLH));
+    if (live && live.htfLevel) levelBits.push('retest ' + price(live.htfLevel));
+    if (live && live.lastLH && !live.htfLH) levelBits.push('LH ' + price(live.lastLH));
+    if (live && live.hl) levelBits.push('HL ' + price(live.hl));
+    if (live && live.base) levelBits.push('base ' + price(live.base));
+    if (live && live.stop) levelBits.push('stop ' + price(live.stop));
+    levelBits.push('TP +30% · +20%→+5%');
+    const levelLine = `<span class="block truncate text-[11px] text-slate-500">${esc(levelBits.join(' · '))}</span>`;
     if (!window.__pxSeen) window.__pxSeen = {};
     const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
     if (isNum(v.px)) window.__pxSeen[row.mint] = v.px;
@@ -10202,9 +10263,10 @@ function renderMyList(opts) {
         <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
           ${logo}
           <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${(typeof mlBreakView === 'function' && mlBreakView(row.mint)?.fa) ? `<span class="setup-chip shrink-0">${esc(mlBreakView(row.mint).fa)}</span>` : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
+            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${kindChip}${(typeof mlBreakView === 'function' && mlBreakView(row.mint)?.fa) ? `<span class="setup-chip shrink-0">${esc(mlBreakView(row.mint).fa)}</span>` : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
             <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
+            ${levelLine}
             ${faZoneHtml(row.mint)}
           </span>
           <span class="row-px">
@@ -10256,7 +10318,7 @@ function renderMyList(opts) {
       </div>
     </article>`;
   }).join('');
-  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => { const scored = AG.scores && AG.scores.get(v.row.mint); const setupBit = scored && isNum(+scored.score) ? `<div class="text-[10px] whitespace-normal break-words"><span class="setup-score">Setup ${Math.round(+scored.score)}</span>${scored.entry ? ' · ' + esc(scored.entry) : ''}</div>` : ''; return `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><span class="inline-flex items-center gap-2">${logoHtml(v.row.mint, v.row.symbol, 2, 'sm')}<span><b>${esc(v.row.symbol || short(v.row.mint))}</b>${setupBit}</span></span></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc(modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" data-ml-mint="${esc(v.row.mint)}" class="text-rose-300">Remove</button></td></tr>`; }).join('')}</tbody></table></div>`;
+  const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => { const shown = mlShownScore(v.row.mint); const live = mlLiveView(v.row.mint); const setupBit = shown != null ? `<div class="text-[10px] whitespace-normal break-words"><span class="setup-score">Setup ${shown}</span>${live && live.broken ? ' · LH break' : ''}${live && live.kind ? ' · ' + esc(live.kind === 'htfretest' ? 'HTF retest' : live.kind) : ''}</div>` : ''; return `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><span class="inline-flex items-center gap-2">${logoHtml(v.row.mint, v.row.symbol, 2, 'sm')}<span><b>${esc(v.row.symbol || short(v.row.mint))}</b>${setupBit}</span></span></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc((live && live.kind) || modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" data-ml-mint="${esc(v.row.mint)}" class="text-rose-300">Remove</button></td></tr>`; }).join('')}</tbody></table></div>`;
   const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="rounded-full border px-2.5 py-1 text-[11px] ${listSort === key ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
   box.dataset.mem = listSig;
   releaseMedia(box);
@@ -10272,6 +10334,7 @@ function renderMyList(opts) {
       <button type="button" id="mlAdd" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Add</button>
     </div>
     <div class="mt-2 flex flex-wrap gap-1.5">${sortBtn('setup', 'Best setup')}${sortBtn('ready', 'Ready first')}${sortBtn('distance', 'Distance to trigger')}</div>
+    <p class="mt-2 text-[12px] text-slate-400 whitespace-normal break-words">My List · ${esc(myListWalletSize().label)} · log chart · TP +30% · +20% moves the stop to +5%</p>
     <div class="mt-2 ${listTable ? '' : 'ml-cards'}">${sharedNote}${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
   </div>`;
   $('mlView')?.addEventListener('click', () => { listTable = !listTable; renderMyList(); });
@@ -10495,7 +10558,7 @@ async function myListBuys() {
     const candles = model.candles || [];
     const hg = holderTrend(row.mint);
     const strong = strongRead({ candles, px, holdersUp: isNum(hg?.p1h) && hg.p1h > 0.4, volH1: row.dexPair?.volume?.h1, volH24: row.dexPair?.volume?.h24 });
-    const resolved = resolveListSpend(spec);
+    const resolved = myListWalletSize();
     if (!resolved.ok) { autoLog('My List ' + (row.symbol || short(row.mint)) + ' — ' + resolved.error, 'warn'); botLog('mylist', row.mint, resolved.error); continue; }
     const full = resolved.sol;
     const agentLive = agentPlansOn() && agent && agentPlanUsable(agent) && agentTriggerHit(agent, px);
@@ -10551,9 +10614,11 @@ async function myListBuys() {
         }
       }
     }
+    if (pos) sol = null;
+    else if (sol > 0) { sol = full; scale = null; }
     if (!(sol > 0)) continue;
     try {
-      const hit = await cappedBuy({ t, sol, reason, scale, plan, myList: true });
+      const hit = await cappedBuy({ t, sol, reason, scale, plan, myList: true, walletHalf: true });
       if (hit === 'bought') {
         row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
         toast('My List buy ' + t.symbol + ' — ' + reason, 'ok', 8000);
@@ -10755,6 +10820,153 @@ function h1BreakSignal(candles, now, livePx, spike) {
   if (!crossed || !h1VolOk(forming, closed, spike) || !(stop > 0) || !(stop < px)) return { ...wait, fa: 'منتظر شکست', zoneLo, zoneHi, line, key, reason: crossed ? 'no volume' : 'waiting for the cross' };
   return { buy: true, fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3, zoneLo, zoneHi, line, low: forming.l, key, reason: '1h breakout' };
 }
+function ceilingZone(prior) {
+  const src = (prior || []).slice(-48);
+  if (src.length < 10) return null;
+  const { highs } = swingPoints(src, 2);
+  if (highs.length < 2) return null;
+  let best = null;
+  for (let i = 0; i < highs.length; i++) {
+    for (let j = i + 1; j < highs.length; j++) {
+      const lo = Math.min(highs[i].price, highs[j].price);
+      const hi = Math.max(highs[i].price, highs[j].price);
+      if (!(hi > 0) || Math.log(hi) - Math.log(lo) > Math.log(1.07)) continue;
+      const last = Math.max(highs[i].i, highs[j].i);
+      const first = Math.min(highs[i].i, highs[j].i);
+      const after = src.slice(last + 1);
+      if (!after.length) continue;
+      const preClose = after[after.length - 1].c;
+      if (!(lo > preClose)) continue;
+      if (!after.some(c => c.h > 0 && c.h < lo)) continue;
+      if (!src.slice(first + 1, last + 2).some(c => c.l > 0 && c.l <= lo * 0.97)) continue;
+      if (!best || last > best.last) best = { lo, hi, last, first };
+    }
+  }
+  return best;
+}
+function closedM15(m15, now) {
+  return (m15 || []).filter(c => c && c.c > 0 && c.t > 0 && c.t + 15 * 60e3 <= now).sort((a, b) => a.t - b.t);
+}
+function ceilingBreakSignal(h1, m15, now) {
+  const empty = { buy: false, kind: 'ceilingbreak', entry: null, stop: null, target: null, ceilingLo: null, ceilingHi: null, base: null, key: '', reason: 'waiting' };
+  const { closed, forming } = h1Parts(h1, now || Date.now());
+  const bars = forming ? closed.concat([forming]) : closed.slice();
+  if (bars.length < 16) return empty;
+  let found = null;
+  for (let i = 12; i < bars.length; i++) {
+    const prior = bars.slice(0, i);
+    const zone = ceilingZone(prior);
+    if (!zone) continue;
+    const bar = bars[i];
+    if (!(bar.c > zone.hi || bar.h > zone.hi)) continue;
+    found = { zone, bar, prior };
+  }
+  if (!found) return empty;
+  const after = found.prior.slice(found.zone.last + 1);
+  const lows = (after.length ? after : found.prior.slice(-4)).map(c => c.l).filter(x => x > 0);
+  const base = lows.length ? Math.min(...lows) : null;
+  const stop = base > 0 ? base * 0.99 : null;
+  const view = Object.assign({}, empty, { ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base, stop, reason: 'waiting 15m close' });
+  const breakT = found.bar.t || 0;
+  const hit = closedM15(m15, now || Date.now()).find(c => c.c > found.zone.hi && (!breakT || c.t + 15 * 60e3 > breakT));
+  if (!hit) return view;
+  if (!(stop > 0) || !(stop < hit.c)) return Object.assign({}, view, { reason: 'stop' });
+  return { buy: true, kind: 'ceilingbreak', entry: hit.c, stop, target: hit.c * 1.3, ceilingLo: found.zone.lo, ceilingHi: found.zone.hi, base, key: 'ceil:' + Math.round(found.zone.hi * 1e8) + ':' + hit.t, reason: 'ceilingbreak' };
+}
+function lhStructure(closed) {
+  const { highs, lows } = swingPoints(closed || [], 2);
+  if (highs.length < 2) return null;
+  const seq = [highs[highs.length - 1]];
+  for (let i = highs.length - 2; i >= 0; i--) { if (highs[i].price > seq[0].price) seq.unshift(highs[i]); else break; }
+  if (seq.length < 2 || !(seq[seq.length - 1].price < seq[0].price)) return null;
+  const a = seq[0], b = seq[seq.length - 1];
+  let hl = null;
+  for (let i = lows.length - 1; i >= 1; i--) { if (lows[i].i > b.i) continue; if (lows[i].price > lows[i - 1].price) { hl = lows[i]; break; } }
+  return { a, b, lastLH: b.price, lhIndex: b.i, hl };
+}
+function lhBreakSignal(h1, m15, now, livePx) {
+  const empty = { buy: false, kind: 'lhbreak', broken: false, entry: null, stop: null, target: null, lastLH: null, line: null, hl: null, key: '', reason: 'waiting' };
+  const stamp = now || Date.now();
+  const { closed, forming } = h1Parts(h1, stamp);
+  if (closed.length < 20) return empty;
+  const st = lhStructure(closed);
+  if (!st) return empty;
+  const idx = forming ? closed.length : closed.length - 1;
+  const line = lineAt(st.a, st.b, idx);
+  const px = isNum(livePx) && livePx > 0 ? livePx : (forming && forming.c ? forming.c : closed[closed.length - 1].c);
+  const broken = px > st.lastLH;
+  const aboveLine = line > 0 && px > line;
+  const stop = st.hl && st.hl.price > 0 ? st.hl.price * 0.99 : null;
+  const view = Object.assign({}, empty, { broken, lastLH: st.lastLH, line, hl: st.hl ? st.hl.price : null, stop, reason: broken ? 'waiting 15m close' : 'watching LH' });
+  const lhT = closed[st.lhIndex] && closed[st.lhIndex].t || 0;
+  const hits = closedM15(m15, stamp).filter(c => c.c > st.lastLH && (!lhT || c.t >= lhT));
+  const hit = hits.length ? hits[hits.length - 1] : null;
+  if (!(broken && aboveLine && hit && stop > 0 && stop < hit.c)) return view;
+  return { buy: true, kind: 'lhbreak', broken: true, entry: hit.c, stop, target: hit.c * 1.3, lastLH: st.lastLH, line, hl: st.hl.price, key: 'lh:' + Math.round(st.lastLH * 1e8) + ':' + hit.t, reason: 'lhbreak' };
+}
+function tfParts(candles, now, span) {
+  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0 && c.o > 0 && c.t > 0).sort((a, b) => a.t - b.t);
+  if (!cs.length) return { closed: [], forming: null };
+  return { closed: cs.filter(c => c.t + span <= now), forming: cs.filter(c => c.t <= now && c.t + span > now).slice(-1)[0] || null };
+}
+function htfRetestSignal(htf, h1, now, span) {
+  const empty = { buy: false, kind: 'htfretest', phase: '', entry: null, stop: null, target: null, line: null, lastLH: null, level: null, hl: null, key: '', reason: 'waiting', tf: span >= 20 * 3600e3 ? '1d' : '4h' };
+  const stamp = now || Date.now();
+  const width = span || 4 * 3600e3;
+  const closed = tfParts(htf, stamp, width).closed;
+  if (closed.length < 16) return empty;
+  const latest = lhStructure(closed);
+  let watch = null;
+  if (latest && latest.b.i - latest.a.i >= 8) watch = Object.assign({}, empty, { phase: 'watch', line: lineAt(latest.a, latest.b, closed.length - 1), lastLH: latest.lastLH, reason: 'HTF downtrend, unbroken' });
+  let chosen = null;
+  for (let i = 12; i < closed.length; i++) {
+    const prior = closed.slice(0, i);
+    const st = lhStructure(prior);
+    if (!st || st.b.i - st.a.i < 8) continue;
+    const line = lineAt(st.a, st.b, i);
+    const bar = closed[i];
+    if (!(line > 0) || !(bar.c > line) || !(bar.c > st.lastLH)) continue;
+    const vol = prior.slice(-20);
+    if (vol.length < 20) continue;
+    const avg = vol.reduce((s, c) => s + (c.v > 0 ? c.v : 0), 0) / 20;
+    if (!(avg > 0) || !(bar.v > avg)) continue;
+    const level = Math.max(line, st.lastLH);
+    if (closed.slice(i + 1).some(c => c.c > 0 && c.c < level)) continue;
+    chosen = { line, level, lastLH: st.lastLH, breakClose: (bar.t || 0) + width, bar };
+  }
+  if (!chosen) return watch || empty;
+  const deadline = chosen.breakClose + 72 * 3600e3;
+  const h1c = tfParts(h1, stamp, 3600e3).closed;
+  const after = h1c.filter(c => (c.t || 0) + 3600e3 > chosen.breakClose);
+  let touched = false, hold = null;
+  for (const c of after) {
+    if (c.l > 0 && c.l <= chosen.level * 1.03) touched = true;
+    if (touched && c.c > chosen.level) { if ((c.t || 0) + 3600e3 <= deadline) hold = c; break; }
+  }
+  const priorH1 = h1c.filter(c => !hold || c.t < hold.t);
+  const recent = swingPoints(priorH1, 2).lows.filter(l => (priorH1[l.i] && priorH1[l.i].t || 0) >= chosen.breakClose - 3600e3);
+  let base = null;
+  for (let i = recent.length - 1; i >= 1; i--) if (recent[i].price > recent[i - 1].price) { base = recent[i].price; break; }
+  if (!(base > 0) && recent.length) base = recent[recent.length - 1].price;
+  if (!(base > 0)) {
+    const pull = priorH1.filter(c => (c.t || 0) >= chosen.breakClose - 3600e3).map(c => c.l).filter(x => x > 0);
+    if (pull.length) base = Math.min.apply(null, pull);
+  }
+  const stop = base > 0 ? base * 0.99 : null;
+  const expired = !hold && stamp > deadline;
+  const view = Object.assign({}, empty, { phase: expired ? 'expired' : 'retest', line: chosen.line, lastLH: chosen.lastLH, level: chosen.level, hl: base, stop, key: 'htf:' + Math.round(chosen.level * 1e8) + ':' + (chosen.bar.t || 0), reason: expired ? 'HTF retest expired' : 'waiting for the 1h hold' });
+  if (!hold || !(stop > 0) || !(stop < hold.c)) return view;
+  return Object.assign({}, view, { buy: true, phase: 'buy', entry: hold.c, stop, target: hold.c * 1.3, reason: 'htfretest' });
+}
+const mlLive = new Map();
+function mlLiveView(mint) { return mlLive.get(mint) || null; }
+function mlShownScore(mint) {
+  const scored = AG.scores && AG.scores.get(mint);
+  const base = scored && isNum(+scored.score) ? +scored.score : null;
+  const bonus = (mlLiveView(mint)?.broken ? 15 : 0) + (mlLiveView(mint)?.htf ? 15 : 0);
+  if (base == null && !bonus) return null;
+  return Math.round((base || 0) + bonus);
+}
 function mlBreakView(mint) {
   if (mint && typeof serverModeOn === 'function' && serverModeOn()) {
     const hit = (window.__SMS_SRV?.breaks || []).find(s => s && s.mint === mint);
@@ -10773,7 +10985,11 @@ async function mlBreakPass() {
     try {
       const px = livePrices.get(row.mint)?.price || row.price;
       const h1 = alignCandlesToToken(await fetchOhlcv(row.pool, '1h', row.mint), px).slice(-60);
-      mlBreakMem.set(row.id, { at: Date.now(), h1 });
+      let m15 = [];
+      let h4 = [];
+      try { m15 = alignCandlesToToken(await fetchOhlcv(row.pool, '15m', row.mint), px).slice(-96); } catch { m15 = []; }
+      try { h4 = alignCandlesToToken(await fetchOhlcv(row.pool, '4h', row.mint), px).slice(-80); } catch { h4 = []; }
+      mlBreakMem.set(row.id, { at: Date.now(), h1, m15, h4 });
     } catch { /* next token */ }
   }
   let painted = false;
@@ -10781,12 +10997,29 @@ async function mlBreakPass() {
     const book = mlBreakMem.get(r.id);
     if (!book?.h1) continue;
     const px = livePrices.get(r.mint)?.price || r.price;
-    const sig = h1BreakSignal(book.h1, Date.now(), px, h1Spike(r.mint));
-    const hold = h1TrendHold(book.h1, Date.now());
-    const order = sig.buy ? sig : hold;
+    const now = Date.now();
+    const sig = h1BreakSignal(book.h1, now, px, h1Spike(r.mint));
+    const hold = h1TrendHold(book.h1, now);
+    const ceiling = ceilingBreakSignal(book.h1, book.m15 || [], now);
+    const lh = lhBreakSignal(book.h1, book.m15 || [], now, px);
+    let htf = htfRetestSignal(book.h4 || [], book.h1, now, 4 * 3600e3);
+    if (!htf.lastLH && book.d1) htf = htfRetestSignal(book.d1, book.h1, now, 24 * 3600e3);
+    if (!htf.lastLH && r.id === row.id && !book.d1Tried) {
+      book.d1Tried = true;
+      try {
+        const d1 = alignCandlesToToken(await fetchOhlcv(r.pool, '1d', r.mint), px).slice(-80);
+        book.d1 = d1;
+        const alt = htfRetestSignal(d1, book.h1, now, 24 * 3600e3);
+        if (alt.lastLH) htf = alt;
+      } catch { book.d1 = []; }
+    }
+    const order = sig.buy ? sig : hold.buy ? hold : ceiling.buy ? ceiling : lh.buy ? lh : htf.buy ? htf : null;
+    mlLive.set(r.mint, { kind: (order && order.kind) || (htf.phase && htf.phase !== 'expired' ? 'htfretest' : lh.lastLH ? 'lhbreak' : ceiling.ceilingHi ? 'ceilingbreak' : ''), ceilingLo: ceiling.ceilingLo, ceilingHi: ceiling.ceilingHi, base: ceiling.base, lastLH: lh.lastLH || htf.lastLH, line: htf.line || lh.line || sig.line, hl: lh.hl || htf.hl, stop: (order && order.stop) || htf.stop || lh.stop || ceiling.stop, broken: !!lh.broken, htf: !!(htf.phase && htf.phase !== 'expired'), htfLabel: htf.phase && htf.phase !== 'expired' ? 'HTF retest' : '', htfLine: htf.line, htfLH: htf.lastLH, htfLevel: htf.level, htfPhase: htf.phase || '' });
+    if (mlLive.size > 40) mlLive.delete(mlLive.keys().next().value);
     mlBreakByMint.set(r.mint, Object.assign({ mint: r.mint, symbol: r.symbol || '' }, sig));
     if ((r.mlFa || '') !== (sig.fa || '')) { r.mlFa = sig.fa || ''; painted = true; }
-    if (!order.buy || !MYLIST.on || !burnerReady()) continue;
+    if (!order || !order.buy || !MYLIST.on || !burnerReady()) continue;
+    if (myListOpenCount() >= 2) { botLog('mylist', r.mint, 'max 2 open'); continue; }
     const flow = livePrices.get(r.mint) || {};
     const pair = r.dexPair || {};
     const fake = fakeDataReason(r.mint, {
@@ -10800,7 +11033,7 @@ async function mlBreakPass() {
     if (mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy')) continue;
     if (LOG.some(t => t.myList && t.mint === r.mint && t.side === 'buy' && (t.status === 'pending' || t.status === 'confirmed') && t.plan?.mlBreakKey === key)) continue;
     if (listPosition(r.mint) || mlBreakLock.has(r.mint)) continue;
-    const resolved = resolveListSpend(listStrategy(r));
+    const resolved = myListWalletSize();
     if (!resolved.ok) { botLog('mylist', r.mint, resolved.error); continue; }
     const safe = await degenSafety(r.mint);
     if (!safe.ok) { botLog('mylist', r.mint, safe.reason || 'safety'); continue; }
@@ -10814,18 +11047,17 @@ async function mlBreakPass() {
     const badQuote = fakeImpactReason(qo.quote);
     if (badQuote) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', badQuote); botLog('mylist', r.mint, badQuote); continue; }
     if (impactPct(qo.quote) > 1) { botLog('mylist', r.mint, 'impact > 1%'); continue; }
-    const trendHold = order.kind === 'trendhold1h';
-    const plan = { myList: true, mlBreak: true, mlBreakKey: key, agent: false, stop: order.stop, strat: trendHold ? 'My List trend hold' : 'My List 1h breakout', exit: { stopPx: order.stop, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } };
-    if (trendHold) plan.kind = 'trendhold1h';
+    const kind = order.kind || 'breakout1h';
+    const plan = { myList: true, mlBreak: true, mlBreakKey: key, kind, agent: false, stop: order.stop, strat: 'My List ' + kind, exit: { stopPx: order.stop, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } };
     mlBreakLock.add(r.mint);
     try {
-      await executeSwap({ walletKey: 'burner', side: 'buy', mint: r.mint, quoteObj: qo, t: { mint: r.mint, symbol: r.symbol || short(r.mint) }, auto: true, extra: { plan, myList: true, test: test.test, entryReason: trendHold ? 'trend break + hold' : '1h breakout' } });
-      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, line: order.line, zoneLo: order.zoneLo, zoneHi: order.zoneHi, stop: order.stop });
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: r.mint, quoteObj: qo, t: { mint: r.mint, symbol: r.symbol || short(r.mint) }, auto: true, extra: { plan, myList: true, test: test.test, entryReason: kind } });
+      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, setup: kind, line: order.line, zoneLo: order.zoneLo || order.ceilingLo, zoneHi: order.zoneHi || order.ceilingHi, stop: order.stop });
     } finally { mlBreakLock.delete(r.mint); }
     r.boughtOnce = true; r.dayKey = todayKey(); r.buysToday = (r.buysToday || 0) + 1;
     r.mlFa = sig.fa;
     saveMyList();
-    toast((trendHold ? 'My List trend hold ' : 'My List breakout ') + (r.symbol || ''), 'ok', 6000);
+    toast('My List ' + kind + ' ' + (r.symbol || ''), 'ok', 6000);
     painted = true;
     break;
   }
@@ -12283,6 +12515,8 @@ async function scalpH1Buy(ranked) {
   return false;
 }
 async function scalpTick() {
+  SCALP_ON = false;
+  return;
   if (serverModeOn()) return;
   if (!SCALP_ON || scalpBusy || document.hidden || window.__SMS_SAFE) return;
   const solMood = await scalpSolBlock();
@@ -12402,10 +12636,9 @@ async function scalpTick() {
   } finally { scalpBusy = false; renderScalp(); }
 }
 function startScalp() {
-  SCALP_ON = true;
+  SCALP_ON = false;
   clearInterval(scalpTimer);
-  scalpTimer = setInterval(() => { if (!document.hidden) scalpTick(); }, 12000);
-  setTimeout(scalpTick, 600);
+  scalpTimer = null;
 }
 function stopScalp() {
   SCALP_ON = false;
@@ -12418,6 +12651,11 @@ function placeScalpDesk() {
   desk.hidden = tokenSeg !== 'scalp';
 }
 function renderScalp() {
+  const note = '<p class="text-[12px] text-slate-500 px-1 py-2">Scalp is off (disabled).</p>';
+  const paintOff = (el) => { if (!el || el.dataset.mem === 'scalp-off') return; el.dataset.mem = 'scalp-off'; el.replaceChildren(); el.textContent = ''; el.innerHTML = note; };
+  paintOff($('scalpCard'));
+  paintOff($('scalpDesk'));
+  return;
   const eq = scalpEquity();
   const sized = scalpSizeUsd();
   const book = scalpLedger();
@@ -12616,11 +12854,12 @@ function mountLiteChart(frame, model) {
       height: 220,
       layout: { background: { color: '#0A0B0F' }, textColor: '#8E95A3', fontFamily: 'Inter' },
       grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)', mode: 1 },
       timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, secondsVisible: false },
       crosshair: { vertLine: { color: 'rgba(255,255,255,0.18)' }, horzLine: { color: 'rgba(255,255,255,0.18)' } }
     });
     host._chart = chart;
+    try { chart.priceScale('right').applyOptions({ mode: 1 }); } catch { /* keep the axis */ }
     const series = chart.addCandlestickSeries({ upColor: themeColor('--up','#5EAF86'), downColor: themeColor('--down','#E07A84'), borderUpColor: themeColor('--up','#5EAF86'), borderDownColor: themeColor('--down','#E07A84'), wickUpColor: themeColor('--up','#5EAF86'), wickDownColor: themeColor('--down','#E07A84') });
     const vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' } });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
@@ -12685,7 +12924,7 @@ function paintSheetChart(frame, model) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const minC = Math.min(...cs.map(c => c.l));
   const maxC = Math.max(...cs.map(c => c.h));
-  const log = minC > 0 && (maxC / minC >= 2.5 || maxC < 1);
+  const log = minC > 0;
   const pad = 0.08;
   let lo, hi, y;
   if (log) {
@@ -12844,7 +13083,7 @@ function mountApp() {
   if (tokens) {
     const seg = document.createElement('div');
     seg.id = 'tokenSeg'; seg.className = 'seg';
-    seg.innerHTML = '<button type="button" data-seg="scalp" class="on">Scalp</button><button type="button" data-seg="degen">Degen</button>';
+    seg.innerHTML = '<button type="button" data-seg="degen" class="on">Degen</button>';
     const desk = document.createElement('div');
     desk.id = 'degenDesk'; desk.hidden = true;
     const scalpDesk = document.createElement('div');
@@ -12909,7 +13148,7 @@ function mountApp() {
   $('sheetScrim')?.addEventListener('click', closeTokenSheet);
   let saved = 'home'; try { saved = localStorage.getItem('sms:tab') || 'home'; } catch { /* ignore */ }
   showTab(saved);
-  try { showTokenSeg('scalp'); } catch { /* tokens later */ }
+  try { showTokenSeg('degen'); } catch { /* tokens later */ }
   try { paintRunDesk(); } catch { /* desk later */ }
 }
 window.showTab = showTab;

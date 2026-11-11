@@ -30,8 +30,11 @@ export function swingPoints(cs, k = 2) {
 }
 
 export function lineAt(a, b, i) {
+  if (!a || !b) return 0;
   if (b.i === a.i) return b.price;
-  return a.price + (b.price - a.price) * (i - a.i) / (b.i - a.i);
+  if (!(a.price > 0) || !(b.price > 0)) return 0;
+  const t = (i - a.i) / (b.i - a.i);
+  return Math.exp(Math.log(a.price) + (Math.log(b.price) - Math.log(a.price)) * t);
 }
 
 export function usd6(n) { return Math.round((+n || 0) * 1e6) / 1e6; }

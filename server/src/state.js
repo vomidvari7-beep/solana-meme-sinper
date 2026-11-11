@@ -30,7 +30,7 @@ export function openState(path) {
   if (existsSync(path)) {
     try {
       const raw = JSON.parse(readFileSync(path, 'utf8'));
-      data = { ...EMPTY(), ...raw, toggles: { ...EMPTY().toggles, ...(raw.toggles || {}) }, ledgers: { ...EMPTY().ledgers, ...(raw.ledgers || {}) } };
+      data = { ...EMPTY(), ...raw, toggles: { ...EMPTY().toggles, ...(raw.toggles || {}), scalp: false }, ledgers: { ...EMPTY().ledgers, ...(raw.ledgers || {}) } };
     } catch { data = EMPTY(); }
   }
   let timer = null;

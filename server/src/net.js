@@ -3,7 +3,9 @@ import { log } from './util.js';
 const OHLCV = {
   '1m': { path: 'minute', aggregate: 1, limit: 80 },
   '15m': { path: 'minute', aggregate: 15, limit: 80 },
-  '1h': { path: 'hour', aggregate: 1, limit: 80 }
+  '1h': { path: 'hour', aggregate: 1, limit: 80 },
+  '4h': { path: 'hour', aggregate: 4, limit: 80 },
+  '1d': { path: 'day', aggregate: 1, limit: 80 }
 };
 
 export function createNet(cfg) {
@@ -49,13 +51,14 @@ export function createNet(cfg) {
     }
     return best;
   }
-  async function ohlcv(pool, tf) {
+  async function ohlcv(pool, tf, mint) {
     const spec = OHLCV[tf];
     if (!pool || !spec) return [];
-    const key = pool + '|' + tf;
+    const key = pool + '|' + tf + (mint ? '|' + mint : '');
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < 20000) return hit.candles;
-    const url = 'https://api.geckoterminal.com/api/v2/networks/solana/pools/' + pool + '/ohlcv/' + spec.path + '?aggregate=' + spec.aggregate + '&limit=' + spec.limit + '&currency=usd';
+    const tokenQ = mint ? '&token=' + encodeURIComponent(mint) : '';
+    const url = 'https://api.geckoterminal.com/api/v2/networks/solana/pools/' + pool + '/ohlcv/' + spec.path + '?aggregate=' + spec.aggregate + '&limit=' + spec.limit + '&currency=usd' + tokenQ;
     const j = await getJSON(url, 12000);
     const list = j?.data?.attributes?.ohlcv_list || [];
     const candles = list.map(r => ({ t: +r[0] * (r[0] < 1e12 ? 1000 : 1), o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] })).filter(c => c.c > 0 && c.l > 0).sort((a, b) => a.t - b.t).slice(-300);

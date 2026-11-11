@@ -1,6 +1,6 @@
-import { degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
+import { ceilingBreakSignal, degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, solRingChange, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
-import { tehranDayKey } from './util.js';
+import { lineAt, tehranDayKey } from './util.js';
 
 function assert(cond, msg) {
   if (!cond) { console.error('FAIL ' + msg); process.exit(1); }
@@ -141,4 +141,88 @@ assert(scalpSolBlockReason({ h1: null, m5: null, m15: null, m15Source: '' }) ===
 const viaOhlcv = resolveSolM15({ candles: [{ c: 100 }, { c: 98 }], samples: [], m5: -9, h1: -9, now: solNow });
 assert(viaOhlcv.m15Source === 'ohlcv' && Math.abs(viaOhlcv.m15 + 2) < 1e-9, '15m candles win over the proxy');
 assert(scalpSolBlockReason({ h1: -1, m5: -9, m15: viaOhlcv.m15, m15Source: 'ohlcv' }) === 'SOL 15m -2.0%', 'ohlcv still uses the -1.5% line');
+
+const geo = lineAt({ i: 0, price: 1 }, { i: 2, price: 4 }, 1);
+assert(Math.abs(geo - 2) < 1e-9, 'trendline midpoint is the log midpoint');
+assert(Math.abs(listWalletSize(1.01, 0.01, 0).sol - 0.5) < 1e-9, 'first my list buy is half the tradable balance');
+assert(Math.abs(listWalletSize(0.51, 0.01, 1).sol - 0.5) < 1e-9, 'second my list buy is the remainder');
+assert(listWalletSize(1, 0.01, 2).label === 'max 2 open', 'third my list buy is blocked');
+
+function hourBars(spec) {
+  const t0 = Date.parse('2026-11-11T00:00:00Z');
+  return spec.map((px, i) => ({ t: t0 + i * 3600e3, o: px.o, h: px.h, l: px.l, c: px.c, v: px.v || 20 }));
+}
+const ceilSpec = [];
+for (let i = 0; i < 28; i++) ceilSpec.push({ o: 0.9, h: 0.93, l: 0.86, c: 0.9 });
+ceilSpec[8] = { o: 0.9, h: 1.0, l: 0.88, c: 0.92 };
+ceilSpec[14] = { o: 0.92, h: 1.03, l: 0.9, c: 0.94 };
+ceilSpec[11] = { o: 0.95, h: 0.97, l: 0.9, c: 0.93 };
+for (let i = 15; i < 27; i++) ceilSpec[i] = { o: 0.94, h: 0.96, l: 0.9, c: 0.94 };
+ceilSpec[27] = { o: 0.95, h: 1.14, l: 0.94, c: 1.12, v: 80 };
+const ceilH1 = hourBars(ceilSpec);
+const ceilM15 = [{ t: ceilH1[27].t + 15 * 60e3, o: 1.05, h: 1.12, l: 1.02, c: 1.08, v: 10 }];
+const ceilNow = ceilM15[0].t + 15 * 60e3 + 1000;
+const ceil = ceilingBreakSignal(ceilH1, ceilM15, ceilNow);
+assert(ceil.buy && ceil.kind === 'ceilingbreak', 'ceiling break buys the 15m close');
+assert(Math.abs(ceil.entry - 1.08) < 1e-12, 'ceiling entry is the 15m close');
+assert(ceil.stop < ceil.base && ceil.stop > ceil.base * 0.98, 'ceiling stop is about 1% under the base');
+assert(Math.abs(ceil.target - 1.08 * 1.3) < 1e-12, 'ceiling target is +30%');
+assert(!ceilingBreakSignal(ceilH1, [], ceilNow).buy, 'ceiling waits for a 15m close');
+
+const lhSpec = [];
+for (let i = 0; i < 30; i++) lhSpec.push({ o: 1, h: 1.02, l: 0.98, c: 1 });
+lhSpec[6] = { o: 1.1, h: 1.3, l: 1.05, c: 1.15 };
+lhSpec[12] = { o: 1.05, h: 1.12, l: 0.8, c: 0.9 };
+lhSpec[18] = { o: 0.95, h: 0.99, l: 0.86, c: 0.92 };
+lhSpec[22] = { o: 0.9, h: 0.91, l: 0.84, c: 0.9 };
+lhSpec[23] = { o: 0.9, h: 0.92, l: 0.84, c: 0.91 };
+lhSpec[24] = { o: 0.91, h: 0.98, l: 0.82, c: 0.9 };
+lhSpec[25] = { o: 0.9, h: 0.93, l: 0.84, c: 0.91 };
+lhSpec[26] = { o: 0.9, h: 0.92, l: 0.84, c: 0.9 };
+lhSpec[29] = { o: 0.95, h: 1.08, l: 0.94, c: 1.06, v: 80 };
+const lhH1 = hourBars(lhSpec);
+const lhM15 = [{ t: lhH1[29].t + 10 * 60e3, o: 1.0, h: 1.08, l: 0.98, c: 1.05, v: 8 }];
+const lhNow = lhM15[0].t + 15 * 60e3 + 1000;
+const lh = lhBreakSignal(lhH1, lhM15, lhNow, 1.06);
+assert(lh.broken, 'breaking the last LH is marked');
+assert(lh.buy && lh.kind === 'lhbreak', 'LH break buys the 15m close');
+assert(Math.abs(lh.entry - 1.05) < 1e-12, 'LH entry is the 15m close');
+assert(lh.stop > 0 && lh.stop < lh.hl, 'LH stop is under the higher low');
+assert(!lhBreakSignal(lhH1, [], lhNow, 1.06).buy, 'LH break waits for a 15m close');
+
+function htfBars() {
+  const span = 4 * 3600e3;
+  const t0 = Date.parse('2026-11-01T00:00:00Z');
+  const cs = [];
+  for (let i = 0; i < 33; i++) {
+    let o = 1, h = 1.02, l = 0.98, c = 1, v = 20;
+    if (i === 6) { o = 1.1; h = 1.4; l = 1.05; c = 1.2; }
+    if (i === 16) { o = 1.05; h = 1.15; l = 0.9; c = 1.0; }
+    if (i === 26) { o = 0.95; h = 1.0; l = 0.82; c = 0.9; }
+    if (i > 26 && i < 32) { o = 0.9; h = 0.94; l = 0.84; c = 0.9; v = 10; }
+    if (i === 32) { o = 0.92; h = 1.3; l = 0.9; c = 1.25; v = 80; }
+    cs.push({ t: t0 + i * span, o, h, l, c, v });
+  }
+  const breakClose = cs[32].t + span;
+  const h1 = [];
+  for (let i = 0; i < 6; i++) {
+    const t = breakClose + i * 3600e3;
+    h1.push({ t, o: 1.12, h: 1.16, l: 1.08, c: 1.12, v: 5 });
+  }
+  h1.push({ t: breakClose + 6 * 3600e3, o: 1.16, h: 1.24, l: 1.16, c: 1.2, v: 8 });
+  const now = h1[h1.length - 1].t + 3600e3 + 1000;
+  return { cs, h1, now };
+}
+const htf = htfBars();
+const watched = htfRetestSignal(htf.cs.slice(0, 32), [], htf.cs[31].t + 4 * 3600e3, 4 * 3600e3);
+assert(watched.phase === 'watch' && !watched.buy, 'HTF downtrend is watched and not bought');
+const armed = htfRetestSignal(htf.cs, htf.h1.slice(0, 4), htf.h1[3].t + 3600e3, 4 * 3600e3);
+assert(!armed.buy && armed.phase === 'retest', 'HTF waits for the pullback hold');
+const bought = htfRetestSignal(htf.cs, htf.h1, htf.now, 4 * 3600e3);
+assert(bought.buy && bought.kind === 'htfretest', 'HTF retest buys the 1h close');
+assert(Math.abs(bought.entry - 1.2) < 1e-12, 'HTF entry is the 1h close');
+assert(bought.stop > 0 && bought.stop < bought.entry, 'HTF stop is under the retest base');
+const late = htf.h1.map(c => ({ ...c, t: c.t + 80 * 3600e3 }));
+const chased = htfRetestSignal(htf.cs, late, late[late.length - 1].t + 3600e3, 4 * 3600e3);
+assert(!chased.buy && chased.phase === 'expired', 'HTF does not chase after 72h');
 console.log('selftest ok');
