@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
+<script>
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem('sms:theme'); } catch (e) {}
+  var theme = saved === 'day' || saved === 'night' ? saved : (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'day' : 'night');
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.toggle('dark', theme !== 'day');
+  document.documentElement.style.colorScheme = theme === 'day' ? 'light' : 'dark';
+})();
+</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SolanaMemeSniper — Theme preview</title>
@@ -8,32 +18,94 @@
 <script>
 tailwind.config = { darkMode: 'class', theme: { extend: {
   fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'], mono: ['Inter','ui-sans-serif','system-ui','sans-serif'] },
-  colors: { ink: { 950:'#0B0D10', 900:'#0B0D10', 850:'#181C22', 800:'#1E232B', 700:'#1E232B', 600:'#2A313B' } }
+  colors: { ink: { 950:'#0A0B0F', 900:'#0A0B0F', 850:'#12141A', 800:'#181B22', 700:'#181B22', 600:'#242B38' } }
 }}};
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0B0D10;
-    --card: #181C22;
-    --elev: #1E232B;
-    --line: rgba(255,255,255,0.06);
-    --accent: #C6F432;
-    --on-accent: #14180C;
-    --up: #3DDC97;
-    --down: #FF5C7A;
-    --text: #F7F8FA;
-    --muted: #8E98A6;
-    --violet: #C6F432;
-    --emerald: #3DDC97;
-    --rose: #FF5C7A;
-    --amber: #E6B450;
-    --gold: #E6B450;
+  :root, html[data-theme="night"] {
+    color-scheme: dark;
+    --bg: #0A0B0F;
+    --bg-2: #141A24;
+    --card: #12141A;
+    --elev: #181B22;
+    --line: rgba(255,255,255,.08);
+    --accent: #7AA2D6;
+    --accent-soft: rgba(122,162,214,.18);
+    --accent-line: rgba(122,162,214,.45);
+    --on-accent: #101820;
+    --up: #5EAF86;
+    --up-soft: rgba(94,175,134,.16);
+    --down: #E07A84;
+    --down-soft: rgba(224,122,132,.18);
+    --text: #E7EAF0;
+    --muted: #8E95A3;
+    --amber: #C4A574;
+    --amber-soft: rgba(196,165,116,.18);
+    --gold: #C4A574;
+    --violet: #7AA2D6;
+    --emerald: #5EAF86;
+    --rose: #E07A84;
+    --alarm: #9E3148;
+    --block: #E7A8B4;
     --radius: 22px;
+    --tab: rgba(18,22,32,.9);
+    --tab-solid: #161B26;
+    --tab-btn: #242B38;
+    --tab-icon: #8E95A3;
+    --shadow: 0 12px 32px rgba(0,0,0,.28);
+    --knob: #F4F5F7;
   }
-  html, body { background: #0B0D10; color: var(--text); }
-  body { background: linear-gradient(180deg, #0B0D10 0%, #15181D 48%, #0B0D10 100%); }
+  html[data-theme="day"] {
+    color-scheme: light;
+    --bg: #E6EDF5;
+    --bg-2: #F4F7FB;
+    --card: #F7F9FC;
+    --elev: #FFFFFF;
+    --line: rgba(24,42,72,.12);
+    --accent: #6E94C8;
+    --accent-soft: rgba(110,148,200,.18);
+    --accent-line: rgba(70,104,150,.4);
+    --on-accent: #102033;
+    --up: #2F8A60;
+    --up-soft: rgba(47,138,96,.14);
+    --down: #C4545E;
+    --down-soft: rgba(196,84,94,.14);
+    --text: #1C2A42;
+    --muted: #5C6B82;
+    --amber: #8F7040;
+    --amber-soft: rgba(143,112,64,.16);
+    --gold: #8F7040;
+    --violet: #6E94C8;
+    --emerald: #2F8A60;
+    --rose: #C4545E;
+    --alarm: #A84852;
+    --block: #A85A64;
+    --tab: rgba(255,255,255,.92);
+    --tab-solid: #F7F9FC;
+    --tab-btn: #E3EAF3;
+    --tab-icon: #5C6B82;
+    --shadow: 0 10px 28px rgba(28,42,66,.08);
+    --knob: #FFFFFF;
+  }
+  html[data-theme="day"] .bg-ink-950,
+  html[data-theme="day"] .bg-ink-900 { background-color: var(--bg) !important; }
+  html[data-theme="day"] .bg-ink-850 { background-color: var(--card) !important; }
+  html[data-theme="day"] .bg-ink-800,
+  html[data-theme="day"] .bg-ink-700,
+  html[data-theme="day"] .bg-ink-600 { background-color: var(--elev) !important; }
+  html[data-theme="day"] .text-white,
+  html[data-theme="day"] .hover\:text-white:hover { color: var(--text) !important; }
+
+  .appbar-actions { display: flex; align-items: center; gap: 8px; }
+  .theme-toggle { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--elev); color: var(--text); display: grid; place-items: center; padding: 0; }
+  .theme-toggle svg { width: 18px; height: 18px; }
+  .theme-toggle-row { width: 100%; height: 40px; border-radius: 999px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 650; }
+  .theme-toggle-row svg { width: 16px; height: 16px; }
+
+  html, body { background: var(--bg); color: var(--text); }
+  body { background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 48%, var(--bg) 100%); }
   body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-weight: 400; letter-spacing: -0.011em; }
   .num, .font-mono, .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
   .glass { background: var(--elev); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0,0,0,.28); }
@@ -41,9 +113,9 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .grad-text { color: var(--text); }
   .btn-primary { background: var(--accent); color: var(--on-accent); box-shadow: none; border-radius: 999px; font-weight: 700; }
   .btn-primary:hover { filter: brightness(1.06); }
-  select, input, textarea { color-scheme: dark; }
+  select, input, textarea { color-scheme: inherit; }
   .font-mono, .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
-  .scroll-thin::-webkit-scrollbar { height: 6px; width: 6px; } .scroll-thin::-webkit-scrollbar-thumb { background:#2A313B; border-radius: 6px; }
+  .scroll-thin::-webkit-scrollbar { height: 6px; width: 6px; } .scroll-thin::-webkit-scrollbar-thumb { background:var(--tab-btn); border-radius: 6px; }
   .spinner, .skel-line { height: 12px; border-radius: 8px; background: var(--elev); display: block; }
   .spinner { width: 72px; border: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -57,13 +129,13 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
   details[open] > :not(summary) { animation: detailIn .2s ease; }
   @keyframes detailIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-  .ios-sw { width: 44px; height: 26px; border-radius: 13px; background: #2A313B; position: relative; flex: 0 0 auto; transition: background-color 200ms ease; }
-  .ios-sw.on { background: #C6F432; }
-  .sec-title .ico { display: grid; background: rgba(198,244,50,.16); color: #C6F432; }
-  .ios-sw i { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform 200ms ease; }
-  .ios-sw.on i { background: #14180C; transform: translateX(18px); }
+  .ios-sw { width: 44px; height: 26px; border-radius: 13px; background: var(--tab-btn); position: relative; flex: 0 0 auto; transition: background-color 200ms ease; }
+  .ios-sw.on { background: var(--accent); }
+  .sec-title .ico { display: grid; background: var(--accent-soft); color: var(--accent); }
+  .ios-sw i { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform 200ms ease; }
+  .ios-sw.on i { background: var(--on-accent); transform: translateX(18px); }
   .sec-title { display: flex; align-items: center; gap: .5rem; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  .sec-title .ico { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: rgba(198,244,50,.16); color: #C6F432; font-size: 12px; flex: 0 0 auto; }
+  .sec-title .ico { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 12px; flex: 0 0 auto; }
   .kicker, label > span:first-child { letter-spacing: .04em; }
   .stat-strip { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
   .stat-pill { min-width: 0; }
@@ -74,8 +146,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   #btnAnalyze, #btnWallet, #tmConfirm, #tmCancel, #btnSaveSettings, [data-mb-buy] { min-height: 44px; }
   button.bg-violet-600, button.bg-emerald-600, .btn-primary { background: var(--accent); color: var(--on-accent); border-radius: 999px; box-shadow: none; font-weight: 700; }
   button.bg-emerald-500, [data-mb-buy] { background: var(--accent); color: var(--on-accent); border-radius: 999px; font-weight: 700; }
-  button.bg-ink-700 { background: transparent; border: 1px solid rgba(198,244,50,.55); border-radius: 999px; color: #C6F432; }
-  button.bg-rose-600, button[data-sell], button[data-degen-sell] { background: transparent; color: var(--down); border: 1px solid rgba(255,92,122,.45); border-radius: var(--radius); }
+  button.bg-ink-700 { background: transparent; border: 1px solid var(--accent-line); border-radius: 999px; color: var(--accent); }
+  button.bg-rose-600, button[data-sell], button[data-degen-sell] { background: transparent; color: var(--down); border: 1px solid var(--down-soft); border-radius: var(--radius); }
   button.bg-amber-300, button.bg-amber-400, button.bg-orange-600 { background: var(--elev); color: var(--text); border: 1px solid var(--line); border-radius: 14px; }
   .manual-buy[data-compact="1"] > div { flex-wrap: wrap; }
   .manual-buy[data-compact="1"] input { height: 44px !important; border-radius: 12px; }
@@ -86,61 +158,61 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .empty-note::before { content: none; }
   .flash-up { animation: flashUp .22s ease; }
   .flash-down { animation: flashDown .22s ease; }
-  @keyframes flashUp { from { color: #3DDC97; } }
-  @keyframes flashDown { from { color: #FF5C7A; } }
+  @keyframes flashUp { from { color: var(--up); } }
+  @keyframes flashDown { from { color: var(--down); } }
   #botBar .glass { box-shadow: none; background: var(--elev); }
-  .appbar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: calc(52px + env(safe-area-inset-top)); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: env(safe-area-inset-top) 16px 0; background: #0B0D10; border-bottom: 1px solid transparent; }
-  #liveStat::after { content: " · PREVIEW"; color: #C6F432; font-weight: 600; }
-  .lock-banner { position: fixed; top: env(safe-area-inset-top); left: 0; right: 0; z-index: 55; display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #9E3148; color: #fff; animation: lockPulse 2.4s ease-in-out infinite; }
+  .appbar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: calc(52px + env(safe-area-inset-top)); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: env(safe-area-inset-top) 16px 0; background: var(--bg); border-bottom: 1px solid transparent; }
+  #liveStat::after { content: " · PREVIEW"; color: var(--accent); font-weight: 600; }
+  .lock-banner { position: fixed; top: env(safe-area-inset-top); left: 0; right: 0; z-index: 55; display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--alarm); color: var(--text); animation: lockPulse 2.4s ease-in-out infinite; }
   .lock-banner[hidden] { display: none !important; }
   .lock-banner .lock-copy { min-width: 0; flex: 1; }
   .lock-banner .lock-title { display: block; font-size: 15px; font-weight: 700; line-height: 1.35; }
   .lock-banner .lock-sub { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; line-height: 1.3; }
-  .lock-banner button { flex: 0 0 auto; min-height: 48px; min-width: 104px; padding: 0 16px; border: 0; border-radius: 12px; background: #fff; color: #9E3148; font-size: 17px; font-weight: 800; }
-  @keyframes lockPulse { 0%, 100% { background: #9E3148; } 50% { background: #FF5C7A; } }
+  .lock-banner button { flex: 0 0 auto; min-height: 48px; min-width: 104px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--knob); color: var(--alarm); font-size: 17px; font-weight: 800; }
+  @keyframes lockPulse { 0%, 100% { background: var(--alarm); } 50% { background: var(--down); } }
   body.lock-warn .appbar { top: calc(env(safe-area-inset-top) + var(--lock-h, 0px)); height: 52px; padding-top: 0; }
   body.lock-warn .tab-pane { padding-top: calc(68px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
   body.lock-warn #pullHint { top: calc(58px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
   body.scrolled .appbar { border-bottom-color: var(--line); }
-  .large-title { font-size: 34px; line-height: 1.05; font-weight: 700; letter-spacing: -0.04em; margin: 0; color: #fff; transition: font-size .22s cubic-bezier(.2,.8,.2,1), opacity .22s; }
+  .large-title { font-size: 34px; line-height: 1.05; font-weight: 700; letter-spacing: -0.04em; margin: 0; color: var(--text); transition: font-size .22s cubic-bezier(.2,.8,.2,1), opacity .22s; }
   body.scrolled .large-title { font-size: 17px; }
   #liveStat { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
-  #liveStat::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #C6F432; box-shadow: 0 0 0 4px rgba(198,244,50,.16); }
-  .bal-pill { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; background: #1E232B; border: 1px solid rgba(255,255,255,.08); color: #fff; font-size: 14px; font-weight: 700; letter-spacing: -.02em; }
+  #liveStat::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .bal-pill { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--elev); border: 1px solid rgba(255,255,255,.08); color: var(--text); font-size: 14px; font-weight: 700; letter-spacing: -.02em; }
   .dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a4154; flex: 0 0 auto; }
-  .dot.on, .status-dot.on { background: #C6F432; }
+  .dot.on, .status-dot.on { background: var(--accent); }
   .dot.armed, .status-dot.armed { background: #C4A35A; }
   .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(112px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
   .tab-pane[hidden] { display: none !important; }
-  #tabBar { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 45; display: flex; align-items: center; justify-content: space-evenly; height: 72px; padding: 8px; border-radius: 32px; background: rgba(26,31,39,.7); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 32px rgba(0,0,0,.38); }
-  #tabBar button { width: 52px; height: 52px; min-height: 52px; padding: 0; border: 0; border-radius: 50%; background: #232A35; color: #8B98A9; font-size: 0; line-height: 0; display: grid; place-items: center; }
+  #tabBar { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 45; display: flex; align-items: center; justify-content: space-evenly; height: 72px; padding: 8px; border-radius: 32px; background: var(--tab); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 32px rgba(0,0,0,.38); }
+  #tabBar button { width: 52px; height: 52px; min-height: 52px; padding: 0; border: 0; border-radius: 50%; background: var(--tab-btn); color: #8B98A9; font-size: 0; line-height: 0; display: grid; place-items: center; }
   #tabBar button svg { width: 25px; height: 25px; display: block; }
-  #tabBar button.on { width: 56px; height: 56px; min-height: 56px; background: #C6F432; color: #14180C; transform: translateY(-2px); box-shadow: 0 8px 18px rgba(198,244,50,.38); }
-  .hero-card { background: #1E232B; border: 1px solid rgba(255,255,255,.06); border-radius: 22px; padding: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.32); }
-  .hero-num { font-size: 44px; line-height: 1.02; font-weight: 700; letter-spacing: -.04em; color: #fff; }
-  .hero-num .dec, .dec { color: #8E98A6; font-weight: 600; }
+  #tabBar button.on { width: 56px; height: 56px; min-height: 56px; background: var(--accent); color: var(--on-accent); transform: translateY(-2px); box-shadow: 0 8px 18px var(--accent-soft); }
+  .hero-card { background: var(--elev); border: 1px solid rgba(255,255,255,.06); border-radius: 22px; padding: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.32); }
+  .hero-num { font-size: 44px; line-height: 1.02; font-weight: 700; letter-spacing: -.04em; color: var(--text); }
+  .hero-num .dec, .dec { color: var(--muted); font-weight: 600; }
   .safe-banner { margin: 0 0 8px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--elev); color: var(--text); font-size: 13px; line-height: 1.4; }
-  .safe-banner button { margin-top: 8px; min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: #22262F; color: var(--text); font-weight: 600; }
-  .status-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px; border-radius: 22px; border: 1px solid rgba(255,255,255,.06); background: #181C22; color: inherit; text-align: left; box-shadow: 0 10px 28px rgba(0,0,0,.24); }
+  .safe-banner button { margin-top: 8px; min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--elev); color: var(--text); font-weight: 600; }
+  .status-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px; border-radius: 22px; border: 1px solid rgba(255,255,255,.06); background: var(--card); color: inherit; text-align: left; box-shadow: 0 10px 28px rgba(0,0,0,.24); }
   .status-row b { display: block; font-size: 15px; font-weight: 600; }
   .status-row span span { display: block; color: var(--muted); font-size: 12px; }
   .watch-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 76px; padding: 12px 4px; border: 0; border-bottom: 1px solid rgba(255,255,255,.06); background: transparent; color: inherit; text-align: left; overflow: hidden; border-radius: 0; }
-  .watch-row b { font-size: 16px; font-weight: 650; letter-spacing: -.02em; color: #fff; }
-  .watch-row .row-px .num, .watch-row .row-px .text-\[15px\] { font-size: 17px; font-weight: 700; color: #fff; }
+  .watch-row b { font-size: 16px; font-weight: 650; letter-spacing: -.02em; color: var(--text); }
+  .watch-row .row-px .num, .watch-row .row-px .text-\[15px\] { font-size: 17px; font-weight: 700; color: var(--text); }
   .watch-row svg { display: none; }
   .row-px { flex: 0 0 auto; min-width: 92px; text-align: right; }
   .row-px .num { white-space: nowrap; }
-  .setup-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 999px; border: 1px solid rgba(198,244,50,.35); background: rgba(198,244,50,.1); color: #C6F432; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+  .setup-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
   .chart-frame { overflow: hidden; }
   .chart-frame canvas { display: block; width: 100%; height: 220px; }
-  .mono-logo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: #2A313B; color: #fff; font-size: 13px; font-weight: 700; overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+  .mono-logo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--tab-btn); color: var(--text); font-size: 13px; font-weight: 700; overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
   .chg-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 600; }
-  .chg-up, .pnl-up { color: var(--up); background: rgba(61,220,151,.14); }
-  .chg-down, .pnl-down { color: var(--down); background: rgba(255,92,122,.14); }
+  .chg-up, .pnl-up { color: var(--up); background: var(--up-soft); }
+  .chg-down, .pnl-down { color: var(--down); background: var(--down-soft); }
   .text-emerald-300, .text-emerald-400 { color: var(--up); }
   .row-px .pnl-up, .row-px .pnl-down, .row-px .chg-pill { background: transparent; border-radius: 999px; padding: 2px 8px; font-weight: 700; }
-  .row-px .chg-up, .row-px .pnl-up { background: rgba(61,220,151,.14); }
-  .row-px .chg-down, .row-px .pnl-down { background: rgba(255,92,122,.14); }
+  .row-px .chg-up, .row-px .pnl-up { background: var(--up-soft); }
+  .row-px .chg-down, .row-px .pnl-down { background: var(--down-soft); }
   .sub { font-size: .72em; vertical-align: sub; }
   .token-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; max-height: 92vh; overflow: auto; background: var(--card); color: var(--text); border-radius: var(--radius) var(--radius) 0 0; border: 1px solid var(--line); padding: 8px 16px calc(28px + env(safe-area-inset-bottom)); transform: translateY(105%); transition: transform .2s ease; }
   .token-sheet.open { transform: translateY(0); }
@@ -158,18 +230,18 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .text-violet-100, .text-violet-200, .text-violet-300 { color: var(--violet); }
   .text-amber-100, .text-amber-200, .text-amber-300 { color: var(--amber); }
   .text-fuchsia-100, .text-fuchsia-200, .text-fuchsia-300 { color: var(--gold); }
-  .border-fuchsia-400\/40 { border-color: rgba(230,180,80,.45); }
-  .bg-fuchsia-500\/15 { background: rgba(230,180,80,.12); }
-  .deg-chip { color: var(--gold); border-color: rgba(234,179,8,.4); }
+  .border-fuchsia-400\/40 { border-color: var(--amber-soft); }
+  .bg-fuchsia-500\/15 { background: var(--amber-soft); }
+  .deg-chip { color: var(--gold); border-color: var(--amber-soft); }
   .border-white\/5, .border-white\/10 { border-color: var(--line); }
   @keyframes sk { to { background-position: -200% 0; } }
   #toasts { top: 60px; bottom: auto; }
   #killFab { bottom: calc(108px + env(safe-area-inset-bottom)) !important; }
-  details.adv { background: #12161F; border: 1px solid rgba(255,255,255,.06); border-radius: 16px; }
+  details.adv { background: var(--card); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; }
   details.adv > summary { padding: 14px 16px; font-weight: 650; cursor: pointer; }
-  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: #181C22; border: 1px solid rgba(255,255,255,.06); }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: var(--card); border: 1px solid rgba(255,255,255,.06); }
   .seg button { min-height: 32px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; }
-  .seg button.on { background: #C6F432; color: #14180C; }
+  .seg button.on { background: var(--accent); color: var(--on-accent); }
   #portfolio[data-view="open"] .trade-closed, #portfolio[data-view="closed"] .trade-open { display: none; }
   #tradeDegenHost { display: none; }
   body.trades-degen #tradeDegenHost { display: block; }
@@ -179,10 +251,10 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .text-rose-300, .text-rose-400 { color: var(--down); }
   #tabTokens.seg-degen #myListBox, #tabTokens.seg-degen #emptyState, #tabTokens.seg-degen #results { display: none !important; }
   .deg-chip { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); padding: 1px 6px; font-size: 10px; font-weight: 700; letter-spacing: .03em; }
-  .deg-ready { color: var(--up); border-color: rgba(61,220,151,.35); background: rgba(61,220,151,.08); }
-  .deg-watch { color: #E6B450; border-color: rgba(230,180,80,.35); background: rgba(230,180,80,.08); }
+  .deg-ready { color: var(--up); border-color: var(--up-soft); background: var(--up-soft); }
+  .deg-watch { color: var(--amber); border-color: var(--amber-soft); background: var(--amber-soft); }
   .deg-expired { color: var(--muted); }
-  .deg-above { color: var(--down); border-color: rgba(255,92,122,.35); background: rgba(255,92,122,.08); }
+  .deg-above { color: var(--down); border-color: var(--down-soft); background: var(--down-soft); }
   .bot-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 8px 14px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; }
   .bot-ico { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--elev); color: var(--text); flex: 0 0 auto; }
   .bot-ico svg { width: 16px; height: 16px; }
@@ -197,8 +269,8 @@ window.__SMS_PREVIEW = true;
 (function () {
   var rawSet = localStorage.setItem.bind(localStorage);
   var rawRemove = localStorage.removeItem.bind(localStorage);
-  localStorage.setItem = function (k, v) { if (String(k).indexOf('sms:') === 0) return; return rawSet(k, v); };
-  localStorage.removeItem = function (k) { if (String(k).indexOf('sms:') === 0) return; return rawRemove(k); };
+  localStorage.setItem = function (k, v) { if (String(k).indexOf('sms:') === 0 && k !== 'sms:theme') return; return rawSet(k, v); };
+  localStorage.removeItem = function (k) { if (String(k).indexOf('sms:') === 0 && k !== 'sms:theme') return; return rawRemove(k); };
 })();
 (function () {
   var key = 'sms:booting';
@@ -219,7 +291,10 @@ window.__SMS_PREVIEW = true;
 </div>
 <header class="appbar">
   <div class="min-w-0"><div id="liveStat" class="text-[12px] text-slate-500 num">Live</div></div>
-  <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
+  <div class="appbar-actions">
+    <button type="button" id="themeToggle" class="theme-toggle" data-theme-toggle aria-label="Switch day or night"></button>
+    <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
+  </div>
 </header>
 <div id="pullHint">Release to refresh</div>
 <div id="safeBanner" class="safe-banner" hidden>Safe mode is on because the last open did not finish starting. Live scan and 1-second candles are paused. Prices refresh every 3 seconds. Stops on open positions still run. <button type="button" id="safeLeave">Full speed</button></div>
@@ -237,13 +312,13 @@ window.__SMS_PREVIEW = true;
           <div id="solGaugeState" class="text-[10px] text-slate-400 truncate"></div>
         </div>
         <svg id="solGauge" viewBox="0 0 80 46" class="w-12 h-7 shrink-0" role="img" aria-label="SOL fear and greed">
-          <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="#FF5C7A" stroke-width="6" stroke-linecap="butt"/>
-          <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="#E08A62" stroke-width="6"/>
-          <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="#E6B450" stroke-width="6"/>
-          <path d="M55.4 14.2 A32 32 0 0 1 68.2 28" fill="none" stroke="#8FE0B4" stroke-width="6"/>
-          <path d="M68.2 28 A32 32 0 0 1 72 40" fill="none" stroke="#3DDC97" stroke-width="6" stroke-linecap="butt"/>
-          <line id="solGaugeNeedle" x1="40" y1="40" x2="40" y2="16" stroke="#f8fafc" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="40" cy="40" r="2.4" fill="#f8fafc"/>
+          <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="var(--down)" stroke-width="6" stroke-linecap="butt"/>
+          <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="var(--down)" stroke-width="6"/>
+          <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="var(--amber)" stroke-width="6"/>
+          <path d="M55.4 14.2 A32 32 0 0 1 68.2 28" fill="none" stroke="var(--up)" stroke-width="6"/>
+          <path d="M68.2 28 A32 32 0 0 1 72 40" fill="none" stroke="var(--up)" stroke-width="6" stroke-linecap="butt"/>
+          <line id="solGaugeNeedle" x1="40" y1="40" x2="40" y2="16" stroke="var(--text)" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="40" cy="40" r="2.4" fill="var(--text)"/>
         </svg>
       </div>
       <div id="dexTicker" class="stat-pill flex items-center gap-1.5 text-sm glass rounded-xl px-2 py-1.5" title="DEX Mood from the latest scan">
@@ -253,15 +328,15 @@ window.__SMS_PREVIEW = true;
           <div id="dexTrend" class="text-[10px] text-slate-500 font-mono">1h — · 24h —</div>
         </div>
         <svg id="dexGauge" viewBox="0 0 80 46" class="w-12 h-7 shrink-0" role="img" aria-label="DEX mood">
-          <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="#FF5C7A" stroke-width="6" stroke-linecap="butt"/>
-          <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="#E08A62" stroke-width="6"/>
-          <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="#E6B450" stroke-width="6"/>
-          <path d="M55.4 14.2 A32 32 0 0 1 68.2 28" fill="none" stroke="#8FE0B4" stroke-width="6"/>
-          <path d="M68.2 28 A32 32 0 0 1 72 40" fill="none" stroke="#3DDC97" stroke-width="6" stroke-linecap="butt"/>
-          <line id="dexGaugeNeedle" x1="40" y1="40" x2="40" y2="16" stroke="#f8fafc" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="40" cy="40" r="2.4" fill="#f8fafc"/>
+          <path d="M8 40 A32 32 0 0 1 24.6 14.2" fill="none" stroke="var(--down)" stroke-width="6" stroke-linecap="butt"/>
+          <path d="M24.6 14.2 A32 32 0 0 1 40 8" fill="none" stroke="var(--down)" stroke-width="6"/>
+          <path d="M40 8 A32 32 0 0 1 55.4 14.2" fill="none" stroke="var(--amber)" stroke-width="6"/>
+          <path d="M55.4 14.2 A32 32 0 0 1 68.2 28" fill="none" stroke="var(--up)" stroke-width="6"/>
+          <path d="M68.2 28 A32 32 0 0 1 72 40" fill="none" stroke="var(--up)" stroke-width="6" stroke-linecap="butt"/>
+          <line id="dexGaugeNeedle" x1="40" y1="40" x2="40" y2="16" stroke="var(--text)" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="40" cy="40" r="2.4" fill="var(--text)"/>
         </svg>
-        <svg id="dexSpark" viewBox="0 0 64 28" class="w-10 h-6 shrink-0 hidden sm:block" role="img" aria-label="DEX mood last 24h, Tehran time"><path id="dexSparkPath" d="" fill="none" stroke="#C6F432" stroke-width="1.5"/></svg>
+        <svg id="dexSpark" viewBox="0 0 64 28" class="w-10 h-6 shrink-0 hidden sm:block" role="img" aria-label="DEX mood last 24h, Tehran time"><path id="dexSparkPath" d="" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>
       </div>
     </div>
   <div id="degenCard"></div>
@@ -370,6 +445,7 @@ window.__SMS_PREVIEW = true;
       <details id="settingsBox" class="mt-3 rounded-xl bg-ink-850 border border-white/5">
         <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white">⚙️ Safety guards &amp; settings</summary>
         <div class="px-3 pb-3 space-y-2.5 text-xs">
+          <button type="button" id="themeToggleSettings" class="theme-toggle theme-toggle-row" data-theme-toggle></button>
           <label class="block"><span class="text-slate-400">RPC URL <span class="text-slate-600">(reads balances &amp; confirmations)</span></span>
             <input id="setRpc" type="url" spellcheck="false" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-violet-500" />
             <select id="setRpcPreset" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 text-[11px]">
@@ -495,6 +571,38 @@ window.__SMS_PREVIEW = true;
 <div id="toasts" class="fixed top-16 right-3 left-3 sm:left-auto z-[80] flex flex-col gap-2 items-end pointer-events-none"></div>
 <script>
 'use strict';
+
+function themeColor(token, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    if (v) return v;
+  } catch { /* use the night fallback */ }
+  return fallback;
+}
+function paintThemeToggles() {
+  const day = document.documentElement.getAttribute('data-theme') === 'day';
+  const sun = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const moon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg>';
+  document.querySelectorAll('[data-theme-toggle]').forEach(b => {
+    b.setAttribute('aria-pressed', day ? 'true' : 'false');
+    b.setAttribute('aria-label', day ? 'Switch to night' : 'Switch to day');
+    if (b.id === 'themeToggle') b.innerHTML = day ? sun : moon;
+    else b.innerHTML = (day ? sun : moon) + '<span>' + (day ? 'Day' : 'Night') + '</span>';
+  });
+}
+function setTheme(theme, persist) {
+  const next = theme === 'day' ? 'day' : 'night';
+  document.documentElement.setAttribute('data-theme', next);
+  document.documentElement.classList.toggle('dark', next !== 'day');
+  document.documentElement.style.colorScheme = next === 'day' ? 'light' : 'dark';
+  if (persist) { try { localStorage.setItem('sms:theme', next); } catch { /* storage blocked */ } }
+  paintThemeToggles();
+  try { renderPortfolio(); } catch { /* portfolio later */ }
+  try { renderMyList(); } catch { /* list later */ }
+  try { if (typeof renderDegen === 'function') renderDegen(); } catch { /* degen later */ }
+  try { if (typeof renderAgentPicks === 'function') renderAgentPicks(); } catch { /* agents later */ }
+  try { if (typeof lastResult !== 'undefined' && lastResult && typeof render === 'function') render(lastResult); } catch { /* scan later */ }
+}
 /* ============================ CONFIG ============================ */
 const DEMO_MINTS = [
   'ejrz94zR4A2ScS8LdvRaQih2xUxaE2ydreqUNKmpump',
@@ -963,7 +1071,7 @@ function holderSpark(pts) {
     return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
   }).join(' ');
   const up = xs[xs.length - 1].n >= xs[0].n;
-  return `<svg viewBox="0 0 ${w} ${h}" class="w-16 h-4 shrink-0" aria-hidden="true"><path d="${d}" fill="none" stroke="${up ? '#3DDC97' : '#FF5C7A'}" stroke-width="1.5"></path></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="w-16 h-4 shrink-0" aria-hidden="true"><path d="${d}" fill="none" stroke="${up ? themeColor('--up','#5EAF86') : themeColor('--down','#E07A84')}" stroke-width="1.5"></path></svg>`;
 }
 function holderLine(mint) {
   const hg = holderTrend(mint);
@@ -3593,7 +3701,7 @@ function equityChart(series, unit, up) {
     const y = padT + (1 - t) * (VB_H - padT - padB);
     return { x, y };
   });
-  const stroke = up == null ? '#8E98A6' : up ? '#C6F432' : '#FF5C7A';
+  const stroke = up == null ? themeColor('--muted','#8E95A3') : up ? themeColor('--accent','#7AA2D6') : themeColor('--down','#E07A84');
   const line = smoothLine(xy);
   const area = line ? `${line} L ${xy[xy.length - 1].x.toFixed(2)} ${VB_H} L ${xy[0].x.toFixed(2)} ${VB_H} Z` : '';
   const dot = xy.length === 1 ? `<circle cx="${xy[0].x.toFixed(2)}" cy="${xy[0].y.toFixed(2)}" r="3.5" fill="${stroke}"/>` : '';
@@ -3623,7 +3731,7 @@ function dailyBars(stats, fromTs, unit) {
     const y = r.v >= 0 ? mid - h : mid;
     const p = tehranParts(tehranDayStartFromKey(r.k));
     const label = pad2(p.m) + '/' + pad2(p.day) + ' ' + fmtEquity(r.v, unit, true);
-    return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" rx="1" fill="${r.v > 0 ? '#3DDC97' : r.v < 0 ? '#FF5C7A' : 'rgba(148,163,184,0.45)'}"><title>${esc(label)}</title></rect>`;
+    return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" rx="1" fill="${r.v > 0 ? themeColor('--up','#5EAF86') : r.v < 0 ? themeColor('--down','#E07A84') : 'rgba(148,163,184,0.45)'}"><title>${esc(label)}</title></rect>`;
   }).join('');
   const picks = [rows[0], rows[Math.floor((rows.length - 1) / 2)], rows[rows.length - 1]];
   let best = rows[0], worst = rows[0];
@@ -8346,7 +8454,7 @@ function listChartSvg(model, opt) {
     const open = isNum(c.o) ? c.o : c.c;
     const up = c.c >= open;
     const top = y(Math.max(open, c.c)), bot = y(Math.min(open, c.c));
-    const col = up ? '#3DDC97' : '#FF5C7A';
+    const col = up ? themeColor('--up','#5EAF86') : themeColor('--down','#E07A84');
     return `<line x1="${x(i).toFixed(2)}" y1="${y(c.h).toFixed(2)}" x2="${x(i).toFixed(2)}" y2="${y(c.l).toFixed(2)}" stroke="${col}" stroke-width="1"/><rect x="${(x(i) - bw / 2).toFixed(2)}" y="${Math.min(top, bot).toFixed(2)}" width="${bw.toFixed(2)}" height="${Math.max(1, Math.abs(bot - top)).toFixed(2)}" fill="${col}"/>`;
   }).join('');
   const band = (zone, fill) => {
@@ -8359,7 +8467,7 @@ function listChartSvg(model, opt) {
   if (model.trendLine) {
     const a = model.trendLine.a, b = model.trendLine.b;
     const p0 = lineAt(a, b, a.i), pEnd = lineAt(a, b, cs.length - 1);
-    if (isNum(p0) && isNum(pEnd) && p0 > 0 && pEnd > 0) tl = `<line x1="${x(a.i).toFixed(2)}" y1="${y(p0).toFixed(2)}" x2="${x(cs.length - 1).toFixed(2)}" y2="${y(pEnd).toFixed(2)}" stroke="#C6F432" stroke-width="1.6" stroke-linecap="round"/>`;
+    if (isNum(p0) && isNum(pEnd) && p0 > 0 && pEnd > 0) tl = `<line x1="${x(a.i).toFixed(2)}" y1="${y(p0).toFixed(2)}" x2="${x(cs.length - 1).toFixed(2)}" y2="${y(pEnd).toFixed(2)}" stroke="${themeColor('--accent','#7AA2D6')}" stroke-width="1.6" stroke-linecap="round"/>`;
   }
   const distinct = model.srBand && model.ath && Math.abs(model.srBand.mid - model.ath.mid) / model.ath.mid > 0.1;
   const labelSize = 11;
@@ -8373,9 +8481,9 @@ function listChartSvg(model, opt) {
     const zone = model.srBand || model.ath;
     const x1 = x(model.buyZone.i);
     const y1 = y(zone.hi), y2 = y(zone.lo);
-    buy = `<rect x="${x1.toFixed(2)}" y="${Math.min(y1, y2).toFixed(2)}" width="${Math.max(8, w - 4 - x1).toFixed(2)}" height="${Math.max(1.5, Math.abs(y2 - y1)).toFixed(2)}" fill="rgba(198,244,50,0.10)" stroke="#C6F432" stroke-width="0.6"/><text x="${Math.min(w - 52, x1 + 3).toFixed(2)}" y="${Math.min(h - 4, Math.max(labelSize, Math.min(y1, y2) + labelSize)).toFixed(2)}" fill="#C6F432" font-size="${labelSize}" font-weight="700">BUY ZONE</text>`;
+    buy = `<rect x="${x1.toFixed(2)}" y="${Math.min(y1, y2).toFixed(2)}" width="${Math.max(8, w - 4 - x1).toFixed(2)}" height="${Math.max(1.5, Math.abs(y2 - y1)).toFixed(2)}" fill="${themeColor('--accent-soft','rgba(122,162,214,0.18)')}" stroke="${themeColor('--accent','#7AA2D6')}" stroke-width="0.6"/><text x="${Math.min(w - 52, x1 + 3).toFixed(2)}" y="${Math.min(h - 4, Math.max(labelSize, Math.min(y1, y2) + labelSize)).toFixed(2)}" fill="${themeColor('--accent','#7AA2D6')}" font-size="${labelSize}" font-weight="700">BUY ZONE</text>`;
   }
-  const svg = `<svg viewBox="0 0 ${w} ${h}" data-log="${log ? 1 : 0}" data-lo="${lo}" data-hi="${hi}" data-vh="${h}" class="w-full h-auto" role="img" aria-label="Price chart with trendline, ATH zone, and buy zone">${band(model.ath, 'rgba(198,244,50,0.10)')}${distinct ? band(model.srBand, 'rgba(198,244,50,0.06)') : ''}${bodies}${tl}${hline(model.stop, '#FF5C7A')}${hline(model.tp1, '#3DDC97')}${athLabel}${buy}</svg>`;
+  const svg = `<svg viewBox="0 0 ${w} ${h}" data-log="${log ? 1 : 0}" data-lo="${lo}" data-hi="${hi}" data-vh="${h}" class="w-full h-auto" role="img" aria-label="Price chart with trendline, ATH zone, and buy zone">${band(model.ath, themeColor('--accent-soft','rgba(122,162,214,0.18)'))}${distinct ? band(model.srBand, themeColor('--accent-soft','rgba(122,162,214,0.12)')) : ''}${bodies}${tl}${hline(model.stop, themeColor('--down','#E07A84'))}${hline(model.tp1, themeColor('--up','#5EAF86'))}${athLabel}${buy}</svg>`;
   return { svg, empty: false, bars: cs.length, log };
 }
 function listContext(row) {
@@ -9864,14 +9972,14 @@ function mountLiteChart(frame, model) {
     const chart = L.createChart(host, {
       width: host.clientWidth || 340,
       height: 220,
-      layout: { background: { color: '#0B0D10' }, textColor: '#8E98A6', fontFamily: 'Inter' },
+      layout: { background: { color: '#0B0D10' }, textColor: themeColor('--muted','#8E95A3'), fontFamily: 'Inter' },
       grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
       timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, secondsVisible: false },
       crosshair: { vertLine: { color: 'rgba(255,255,255,0.18)' }, horzLine: { color: 'rgba(255,255,255,0.18)' } }
     });
     host._chart = chart;
-    const series = chart.addCandlestickSeries({ upColor: '#3DDC97', downColor: '#FF5C7A', borderUpColor: '#3DDC97', borderDownColor: '#FF5C7A', wickUpColor: '#3DDC97', wickDownColor: '#FF5C7A' });
+    const series = chart.addCandlestickSeries({ upColor: themeColor('--up','#5EAF86'), downColor: themeColor('--down','#E07A84'), borderUpColor: themeColor('--up','#5EAF86'), borderDownColor: themeColor('--down','#E07A84'), wickUpColor: themeColor('--up','#5EAF86'), wickDownColor: themeColor('--down','#E07A84') });
     const vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' } });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
     let seq = 1;
@@ -9886,9 +9994,9 @@ function mountLiteChart(frame, model) {
     series.setData(rows.map(r => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close })));
     vol.setData(rows.map(r => ({ time: r.time, value: r.vol, color: r.close >= r.open ? 'rgba(61,220,151,0.35)' : 'rgba(255,92,122,0.35)' })));
     const mark = (price, color, title) => { if (price > 0) series.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, title }); };
-    mark(+model.stop, '#FF5C7A', 'Stop');
-    mark(+model.tp1, '#3DDC97', 'Target');
-    mark(+model.trigger, '#C6F432', 'Entry');
+    mark(+model.stop, themeColor('--down','#E07A84'), 'Stop');
+    mark(+model.tp1, themeColor('--up','#5EAF86'), 'Target');
+    mark(+model.trigger, themeColor('--accent','#7AA2D6'), 'Entry');
     chart.timeScale().fitContent();
     frame.querySelectorAll('svg').forEach(svg => { svg.style.display = 'none'; });
   }).catch(() => { /* keep the drawn sparkline */ });
@@ -9952,13 +10060,13 @@ function paintSheetChart(frame, model) {
     ctx.fillRect(0, Math.min(y1, y2), cssW, Math.max(1, Math.abs(y2 - y1)));
   };
   ctx.clearRect(0, 0, cssW, cssH);
-  band(model.ath, 'rgba(198,244,50,0.12)');
-  if (model.srBand && model.ath && Math.abs(model.srBand.mid - model.ath.mid) / model.ath.mid > 0.1) band(model.srBand, 'rgba(198,244,50,0.07)');
+  band(model.ath, themeColor('--accent-soft','rgba(122,162,214,0.18)'));
+  if (model.srBand && model.ath && Math.abs(model.srBand.mid - model.ath.mid) / model.ath.mid > 0.1) band(model.srBand, themeColor('--accent-soft','rgba(122,162,214,0.12)'));
   const bw = Math.max(1, (cssW - 16) / cs.length * 0.62);
   cs.forEach((c, i) => {
     const open = isNum(c.o) ? c.o : c.c;
     const up = c.c >= open;
-    ctx.strokeStyle = up ? '#3DDC97' : '#FF5C7A';
+    ctx.strokeStyle = up ? themeColor('--up','#5EAF86') : themeColor('--down','#E07A84');
     ctx.fillStyle = ctx.strokeStyle;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -9972,7 +10080,7 @@ function paintSheetChart(frame, model) {
     const a = model.trendLine.a, b = model.trendLine.b;
     const p0 = lineAt(a, b, a.i), pEnd = lineAt(a, b, cs.length - 1);
     if (isNum(p0) && isNum(pEnd) && p0 > 0 && pEnd > 0) {
-      ctx.strokeStyle = '#C6F432';
+      ctx.strokeStyle = themeColor('--accent','#7AA2D6');
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(x(a.i), y(p0));
@@ -9993,12 +10101,12 @@ function paintSheetChart(frame, model) {
     ctx.stroke();
     ctx.setLineDash([]);
   };
-  guide(model.stop, '#FF5C7A');
-  guide(model.tp1, '#3DDC97');
+  guide(model.stop, themeColor('--down','#E07A84'));
+  guide(model.tp1, themeColor('--up','#5EAF86'));
   ctx.font = '11px Inter, sans-serif';
   ctx.textBaseline = 'top';
   if (model.ath) {
-    ctx.fillStyle = '#F7F8FA';
+    ctx.fillStyle = themeColor('--text','#E7EAF0');
     ctx.fillText('ATH zone', 8, Math.max(6, Math.min(cssH - 16, y(model.ath.hi) + 2)));
   }
   if (model.buyZone && (model.srBand || model.ath)) {
@@ -10007,7 +10115,7 @@ function paintSheetChart(frame, model) {
     const y1 = y(zone.hi), y2 = y(zone.lo);
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     ctx.fillRect(x1, Math.min(y1, y2), Math.max(8, cssW - 8 - x1), Math.max(1, Math.abs(y2 - y1)));
-    ctx.fillStyle = '#C6F432';
+    ctx.fillStyle = themeColor('--accent','#7AA2D6');
     ctx.fillText('BUY ZONE', Math.min(cssW - 78, x1 + 4), Math.max(6, Math.min(cssH - 16, Math.min(y1, y2) + 2)));
   }
 }
@@ -10143,6 +10251,9 @@ if (openPositions().length) setTimeout(refreshPrices, 1500);
 setInterval(() => { if (recordEquity(false)) renderPortfolio(); }, 5 * 60 * 1000);
 setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 
+
+document.querySelectorAll('[data-theme-toggle]').forEach(b => b.addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') === 'day' ? 'night' : 'day', true)));
+paintThemeToggles();
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
   encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
@@ -10154,54 +10265,54 @@ window.__smsScanChart = T.openScanChart;
 </script>
 
 <style id="theme-unify">
-  .text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-400, .text-emerald-400\/80 { color: #3DDC97 !important; }
-  .text-rose-50, .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400, .text-rose-300\/80 { color: #FF5C7A !important; }
-  .text-amber-100, .text-amber-200, .text-amber-300, .text-amber-400, .text-amber-200\/90, .text-amber-300\/90, .text-orange-200 { color: #E6B450 !important; }
-  .text-violet-100, .text-violet-200, .text-violet-300, .text-sky-100, .text-sky-200, .text-fuchsia-100, .text-fuchsia-200, .text-fuchsia-300 { color: #C6F432 !important; }
-  .bg-emerald-300 { background-color: #3DDC97 !important; }
-  .bg-emerald-500\/10, .bg-emerald-500\/15 { background-color: rgba(61,220,151,.14) !important; }
-  .bg-rose-500\/10, .bg-rose-500\/15, .bg-rose-500\/20, .bg-rose-500\/25, .bg-rose-500\/30, .bg-rose-600\/30 { background-color: rgba(255,92,122,.14) !important; }
+  .text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-400, .text-emerald-400\/80 { color: var(--up) !important; }
+  .text-rose-50, .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400, .text-rose-300\/80 { color: var(--down) !important; }
+  .text-amber-100, .text-amber-200, .text-amber-300, .text-amber-400, .text-amber-200\/90, .text-amber-300\/90, .text-orange-200 { color: var(--amber) !important; }
+  .text-violet-100, .text-violet-200, .text-violet-300, .text-sky-100, .text-sky-200, .text-fuchsia-100, .text-fuchsia-200, .text-fuchsia-300 { color: var(--accent) !important; }
+  .bg-emerald-300 { background-color: var(--up) !important; }
+  .bg-emerald-500\/10, .bg-emerald-500\/15 { background-color: var(--up-soft) !important; }
+  .bg-rose-500\/10, .bg-rose-500\/15, .bg-rose-500\/20, .bg-rose-500\/25, .bg-rose-500\/30, .bg-rose-600\/30 { background-color: var(--down-soft) !important; }
   .bg-amber-500\/10, .bg-amber-500\/15, .bg-amber-400\/10, .bg-amber-400\/15, .bg-orange-500\/15 { background-color: rgba(230,180,80,.14) !important; }
-  .bg-violet-500\/10, .bg-violet-500\/15, .bg-violet-500\/20, .bg-sky-500\/5, .bg-sky-500\/15 { background-color: rgba(198,244,50,.12) !important; }
-  .bg-fuchsia-500\/15 { background-color: rgba(230,180,80,.12) !important; }
-  .bg-violet-500, .bg-violet-600, .bg-sky-500 { background-color: #C6F432 !important; }
-  .bg-emerald-400, .bg-emerald-500, .bg-emerald-600 { background-color: #3DDC97 !important; }
-  .bg-amber-300, .bg-amber-400, .bg-amber-500, .bg-orange-500, .bg-orange-600, .bg-fuchsia-500 { background-color: #E6B450 !important; }
-  .bg-rose-500, .bg-rose-600 { background-color: #FF5C7A !important; }
-  .border-emerald-400\/40, .border-emerald-500\/20, .border-emerald-500\/25, .border-emerald-500\/30, .border-emerald-500\/40, .border-emerald-950 { border-color: rgba(61,220,151,.45) !important; }
-  .border-rose-400, .border-rose-400\/40, .border-rose-400\/50, .border-rose-500\/20, .border-rose-500\/25, .border-rose-500\/30, .border-rose-500\/40, .border-rose-500\/50 { border-color: rgba(255,92,122,.4) !important; }
+  .bg-violet-500\/10, .bg-violet-500\/15, .bg-violet-500\/20, .bg-sky-500\/5, .bg-sky-500\/15 { background-color: var(--accent-soft) !important; }
+  .bg-fuchsia-500\/15 { background-color: var(--amber-soft) !important; }
+  .bg-violet-500, .bg-violet-600, .bg-sky-500 { background-color: var(--accent) !important; }
+  .bg-emerald-400, .bg-emerald-500, .bg-emerald-600 { background-color: var(--up) !important; }
+  .bg-amber-300, .bg-amber-400, .bg-amber-500, .bg-orange-500, .bg-orange-600, .bg-fuchsia-500 { background-color: var(--amber) !important; }
+  .bg-rose-500, .bg-rose-600 { background-color: var(--down) !important; }
+  .border-emerald-400\/40, .border-emerald-500\/20, .border-emerald-500\/25, .border-emerald-500\/30, .border-emerald-500\/40, .border-emerald-950 { border-color: var(--up-soft) !important; }
+  .border-rose-400, .border-rose-400\/40, .border-rose-400\/50, .border-rose-500\/20, .border-rose-500\/25, .border-rose-500\/30, .border-rose-500\/40, .border-rose-500\/50 { border-color: var(--down-soft) !important; }
   .border-amber-300\/30, .border-amber-300\/40, .border-amber-400\/40, .border-amber-400\/50, .border-amber-500\/20, .border-amber-500\/30, .border-amber-500\/40, .border-orange-400\/40, .border-orange-500\/50 { border-color: rgba(230,180,80,.4) !important; }
-  .border-violet-400\/30, .border-violet-400\/40, .border-violet-400\/50, .border-violet-500\/30, .border-violet-500\/40, .border-sky-400\/20, .border-sky-400\/40 { border-color: rgba(198,244,50,.4) !important; }
-  .border-fuchsia-400, .border-fuchsia-400\/40 { border-color: rgba(230,180,80,.45) !important; }
-  .ring-violet-400, .ring-violet-500 { --tw-ring-color: rgba(198,244,50,.55) !important; }
-  .accent-violet-500, .accent-emerald-500 { accent-color: #C6F432 !important; }
-  .accent-amber-500 { accent-color: #E6B450 !important; }
-  .accent-rose-500 { accent-color: #FF5C7A !important; }
-  .from-rose-500\/40 { --tw-gradient-from: rgba(255,92,122,.4) var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(255,92,122,0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
-  .from-rose-400\/80 { --tw-gradient-from: rgba(255,92,122,.8) var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(255,92,122,0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
-  .to-emerald-500\/50 { --tw-gradient-to: rgba(61,220,151,.5) var(--tw-gradient-to-position) !important; }
-  button.bg-violet-600, button.bg-violet-500, button.bg-emerald-500, button.bg-emerald-600, button.bg-emerald-400, button.hover\:bg-violet-500, button.hover\:bg-emerald-400, .btn-primary, [data-mb-buy] { background: #C6F432 !important; color: #14180C !important; border-color: transparent !important; }
-  button.bg-rose-600, button.hover\:bg-rose-500, button[data-sell], button[data-degen-sell] { background: transparent !important; color: #FF5C7A !important; border-color: rgba(255,92,122,.45) !important; }
-  button.bg-amber-300, button.bg-amber-400, button.bg-orange-600, button.hover\:bg-amber-300, button.hover\:bg-orange-500 { background: #1E232B !important; color: #F7F8FA !important; border-color: rgba(255,255,255,.08) !important; }
-  .hover\:bg-violet-500:hover { background-color: #C6F432 !important; color: #14180C !important; }
-  .hover\:text-violet-300:hover { color: #C6F432 !important; }
-  .hover\:bg-rose-500:hover, .hover\:bg-rose-500\/20:hover, .hover\:bg-rose-500\/25:hover { background-color: rgba(255,92,122,.22) !important; }
-  .hover\:bg-emerald-400:hover { background-color: #3DDC97 !important; }
-  .toast-card[data-kind="ok"]::before { background: #3DDC97; }
-  .toast-card[data-kind="err"]::before { background: #FF5C7A; }
-  .toast-card[data-kind="warn"]::before { background: #E6B450; }
+  .border-violet-400\/30, .border-violet-400\/40, .border-violet-400\/50, .border-violet-500\/30, .border-violet-500\/40, .border-sky-400\/20, .border-sky-400\/40 { border-color: var(--accent-line) !important; }
+  .border-fuchsia-400, .border-fuchsia-400\/40 { border-color: var(--amber-soft) !important; }
+  .ring-violet-400, .ring-violet-500 { --tw-ring-color: var(--accent-line) !important; }
+  .accent-violet-500, .accent-emerald-500 { accent-color: var(--accent) !important; }
+  .accent-amber-500 { accent-color: var(--amber) !important; }
+  .accent-rose-500 { accent-color: var(--down) !important; }
+  .from-rose-500\/40 { --tw-gradient-from: var(--down-soft) var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(255,92,122,0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
+  .from-rose-400\/80 { --tw-gradient-from: var(--down) var(--tw-gradient-from-position) !important; --tw-gradient-to: rgba(255,92,122,0) var(--tw-gradient-to-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important; }
+  .to-emerald-500\/50 { --tw-gradient-to: var(--up-soft) var(--tw-gradient-to-position) !important; }
+  button.bg-violet-600, button.bg-violet-500, button.bg-emerald-500, button.bg-emerald-600, button.bg-emerald-400, button.hover\:bg-violet-500, button.hover\:bg-emerald-400, .btn-primary, [data-mb-buy] { background: var(--accent) !important; color: var(--on-accent) !important; border-color: transparent !important; }
+  button.bg-rose-600, button.hover\:bg-rose-500, button[data-sell], button[data-degen-sell] { background: transparent !important; color: var(--down) !important; border-color: var(--down-soft) !important; }
+  button.bg-amber-300, button.bg-amber-400, button.bg-orange-600, button.hover\:bg-amber-300, button.hover\:bg-orange-500 { background: var(--elev) !important; color: var(--text) !important; border-color: var(--line) !important; }
+  .hover\:bg-violet-500:hover { background-color: var(--accent) !important; color: var(--on-accent) !important; }
+  .hover\:text-violet-300:hover { color: var(--accent) !important; }
+  .hover\:bg-rose-500:hover, .hover\:bg-rose-500\/20:hover, .hover\:bg-rose-500\/25:hover { background-color: var(--down-soft) !important; }
+  .hover\:bg-emerald-400:hover { background-color: var(--up) !important; }
+  .toast-card[data-kind="ok"]::before { background: var(--up); }
+  .toast-card[data-kind="err"]::before { background: var(--down); }
+  .toast-card[data-kind="warn"]::before { background: var(--amber); }
   button.bg-rose-600, button.hover\:bg-rose-500, button.bg-rose-500\/10, button.bg-rose-500\/15, button.bg-rose-500\/20, button.bg-rose-500\/30, #degenStop, #degenReset, #btnClear, #bDelete, #pfClear, button[data-sell], button[data-degen-sell], button.btn-sell {
-    background: #181C22 !important;
-    color: #FF5C7A !important;
-    border: 1px solid #FF5C7A !important;
+    background: var(--card) !important;
+    color: var(--down) !important;
+    border: 1px solid var(--down) !important;
     box-shadow: none !important;
   }
   #degenStop.is-live, #aKill, #cOff, #sOff, #mlOff {
-    background: #FF5C7A !important;
-    color: #1A0B10 !important;
-    border-color: #FF5C7A !important;
+    background: var(--down) !important;
+    color: var(--on-accent) !important;
+    border-color: var(--down) !important;
   }
-  .block-note { color: #E7A8B4 !important; }
+  .block-note { color: var(--block) !important; }
 </style>
 </body>
 </html>
