@@ -3089,14 +3089,14 @@ async function livePriceBatch(mints) {
       if (!m) continue;
       if (!best.has(m) || (p.liquidity?.usd || 0) > (best.get(m).liquidity?.usd || 0)) best.set(m, p);
     }
-    for (const [m, p] of best) if (+p.priceUsd > 0) out.set(m, +p.priceUsd);
+    for (const [m, p] of best) if (+p.priceUsd > 0) out.set(m, { price: +p.priceUsd, liq: isNum(+p.liquidity?.usd) ? +p.liquidity.usd : null, m5b: +p.txns?.m5?.buys || 0, m5s: +p.txns?.m5?.sells || 0 });
   }
   const missing = mints.filter(m => !out.has(m));
   if (missing.length) {
     try {
       const j = await fetchJSONOnce('https://lite-api.jup.ag/price/v2?ids=' + missing.slice(0, 50).join(','), { timeout: 4000 });
       const data = j?.data || {};
-      for (const m of missing) { const px = +data[m]?.price; if (px > 0) out.set(m, px); }
+      for (const m of missing) { const px = +data[m]?.price; if (px > 0) out.set(m, { price: px, liq: null, m5b: null, m5s: null }); }
     } catch { /* DexScreener prices still stand */ }
   }
   return out;
@@ -3186,8 +3186,16 @@ async function liveTick() {
     const now = Date.now();
     const held = new Set(openMints());
     const focus = sheetMint();
-    got.forEach((px, mint) => {
-      livePrices.set(mint, { price: px, liq: livePrices.get(mint)?.liq ?? null, at: now });
+    got.forEach((row, mint) => {
+      const prev = livePrices.get(mint);
+      const px = row?.price;
+      livePrices.set(mint, {
+        price: px,
+        liq: isNum(row?.liq) ? row.liq : (prev?.liq ?? null),
+        m5b: row?.m5b == null ? prev?.m5b : row.m5b,
+        m5s: row?.m5s == null ? prev?.m5s : row.m5s,
+        at: now
+      });
       if (!hidden && (held.has(mint) || mint === focus)) pushTick(mint, px, now);
       try {
         const row = (MYLIST?.rows || []).find(r => r.mint === mint);
@@ -4774,50 +4782,84 @@ function degenNoteTape(p, lp) {
   while (arr.length && arr[0].t < cut) arr.shift();
   if (arr.length > 40) arr.splice(0, arr.length - 40);
 }
-function degenRugReason(p, lp) {
-  if (!p?.tp1Done || !(lp > 0)) return '';
+function degenRugReason(p, lp, entryLiq) {
+  if (!(lp > 0)) return '';
   const arr = degenTape[p.key] || [];
-  let hi = 0, liqThen = null;
-  for (const s of arr) {
-    if (isNum(s.px)) hi = Math.max(hi, s.px);
-    if (liqThen == null && isNum(s.liq)) liqThen = s.liq;
-  }
-  if (hi > 0 && lp <= hi * 0.65) return 'price drop';
+  let hi = 0;
+  for (const s of arr) if (isNum(s.px)) hi = Math.max(hi, s.px);
+  if (hi > 0 && lp <= hi * 0.65) return 'rug exit';
   const liqNow = livePrices.get(p.mint)?.liq;
-  if (isNum(liqNow) && isNum(liqThen) && liqThen > 0 && liqNow <= liqThen * 0.5) return 'liquidity drop';
+  if (isNum(liqNow) && isNum(entryLiq) && entryLiq > 0 && liqNow <= entryLiq * 0.5) return 'rug exit';
   return '';
 }
-function degenEffective(p, lp) {
+const DEGEN_PROT_LS = 'sms:degenprot';
+function degenProtAll() { const v = load(DEGEN_PROT_LS, {}); return v && typeof v === 'object' ? v : {}; }
+function degenProtSave(key, row) {
+  const all = degenProtAll();
+  all[key] = { high: row.high || 0, entryLiq: isNum(row.entryLiq) ? row.entryLiq : null, be: !!row.be, trail80: !!row.trail80, tp1Trail: !!row.tp1Trail, log: (row.log || []).slice(-30) };
+  const open = new Set();
+  try { openPositions().forEach(p => { if (p.degen && p.key) open.add(p.key); }); } catch { /* keep the book */ }
+  if (open.size) for (const k of Object.keys(all)) if (!open.has(k)) delete all[k];
+  save(DEGEN_PROT_LS, all);
+}
+function degenProtect(p, lp) {
   const chain = degenChainEntry(p);
-  const entry = chain || p?.avgUsd;
+  const entry = chain > 0 ? chain : p?.avgUsd;
+  const all = degenProtAll();
+  const prev = all[p.key] && typeof all[p.key] === 'object' ? all[p.key] : {};
+  const st = { high: +prev.high || 0, entryLiq: isNum(prev.entryLiq) ? prev.entryLiq : null, be: !!prev.be, trail80: !!prev.trail80, tp1Trail: !!prev.tp1Trail, log: Array.isArray(prev.log) ? prev.log.slice() : [] };
+  let dirty = false;
+  const quote = livePrices.get(p.mint);
+  if (st.entryLiq == null && isNum(quote?.liq) && quote.liq > 0) { st.entryLiq = quote.liq; dirty = true; }
+  const high = Math.max(st.high || 0, entry > 0 ? entry : 0, lp > 0 ? lp : 0);
+  if (high > (st.high || 0) + 1e-12) { st.high = high; dirty = true; if (p?.key) { autoHigh[p.key] = high; save('sms:autohigh', autoHigh); } }
+  const gain = entry > 0 && lp > 0 ? lp / entry - 1 : -1;
+  const note = (msg) => { st.log.push({ t: Date.now(), msg }); if (st.log.length > 30) st.log.splice(0, st.log.length - 30); dirty = true; };
+  if (!st.be && gain >= 0.5) { st.be = true; note('BE@+50'); }
+  if (!st.trail80 && gain >= 0.8) { st.trail80 = true; note('trail@+80'); }
+  if (p?.tp1Done && !st.tp1Trail && high > 0) { st.tp1Trail = true; note('TP1 trail'); }
+  if (dirty && p?.key) degenProtSave(p.key, st);
   const loss = degenLossPct(p?.plan?.stopPct);
   const trail = isNum(p?.plan?.trail) ? Math.abs(p.plan.trail) : 20;
+  let stop = entry > 0 ? degenStopPx(entry, loss) : null;
+  let rule = 'degen -' + loss + '%';
+  const raise = (px, name) => {
+    if (!(px > 0)) return;
+    if (!isNum(stop) || px > stop + 1e-12) { stop = px; rule = name; }
+    else if (Math.abs(px - stop) <= 1e-9 && name === 'TP1 trail') rule = name;
+  };
+  if (st.be && entry > 0) raise(entry * 1.01, 'BE@+50');
+  if (st.trail80 && st.high > 0) raise(st.high * 0.8, 'trail@+80');
+  if (p?.tp1Done && st.high > 0 && trail > 0 && trail < 100) raise(st.high * (1 - trail / 100), 'TP1 trail');
+  return { stop, rule, high: st.high, entry, chain, trail, entryLiq: st.entryLiq, log: st.log, m5b: quote?.m5b, m5s: quote?.m5s };
+}
+function degenEffective(p, lp) {
+  const prot = degenProtect(p, lp);
   const timeStopMin = isNum(p?.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
-  let high = Math.max(isNum(lp) ? lp : 0, autoHigh[p.key] || 0);
-  if (isNum(lp) && lp > (autoHigh[p.key] || 0)) { autoHigh[p.key] = lp; high = lp; save('sms:autohigh', autoHigh); }
-  let stop = isNum(entry) ? degenStopPx(entry, loss) : null;
-  let reason = 'degen -' + loss + '%';
-  if (p?.tp1Done && high > 0 && trail > 0 && trail < 100) {
-    const trailed = high * (1 - trail / 100);
-    if (!isNum(stop) || trailed > stop) { stop = trailed; reason = 'degen trail'; }
-  }
-  return { stop, tp1: isNum(entry) ? entry * 2 : null, tp2: null, trail, timeStopMin, reason, quick: false, high, chainEntry: chain };
+  return { stop: prot.stop, tp1: prot.entry > 0 ? prot.entry * 2 : null, tp2: null, trail: prot.trail, timeStopMin, reason: prot.rule, quick: false, high: prot.high, chainEntry: prot.chain, log: prot.log, entryLiq: prot.entryLiq };
 }
 function degenExit(p, lp) {
   if (!p?.degen || !isNum(lp) || !(p.avgUsd > 0)) return null;
   degenNoteTape(p, lp);
-  const rug = degenRugReason(p, lp);
-  if (rug) return { pctSell: 100, tag: 'rug' };
   const eff = degenEffective(p, lp);
-  if (p.tp1Done && eff.reason === 'degen trail' && isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: 'trail' };
-  if (!p.tp1Done && isNum(eff.stop) && eff.stop < p.avgUsd && lp <= eff.stop) return { pctSell: 100, tag: 'stop' };
-  const chain = eff.chainEntry;
-  if (!p.tp1Done && isNum(chain) && chain > 0 && lp >= chain * 2) {
+  const rug = degenRugReason(p, lp, eff.entryLiq);
+  if (rug) return { pctSell: 100, tag: 'rug', reason: 'rug exit' };
+  if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'TP1 trail' || eff.reason === 'trail@+80' ? 'trail' : 'stop', reason: eff.reason };
+  const entry = eff.chainEntry > 0 ? eff.chainEntry : p.avgUsd;
+  const gain = entry > 0 ? lp / entry - 1 : -1;
+  if (!p.tp1Done && gain > 0.6 && entry > 0) {
+    const sells = isNum(eff.m5s) ? eff.m5s : livePrices.get(p.mint)?.m5s;
+    const buys = isNum(eff.m5b) ? eff.m5b : livePrices.get(p.mint)?.m5b;
+    const pressure = isNum(sells) && isNum(buys) && sells > buys;
+    const offHigh = eff.high > 0 && lp <= eff.high * 0.85;
+    if (pressure || offHigh) return { pctSell: 50, tag: 'tp1', reason: pressure ? 'early 50% (sells>buys)' : 'early 50% (-15% from high)' };
+  }
+  if (!p.tp1Done && isNum(eff.chainEntry) && eff.chainEntry > 0 && lp >= eff.chainEntry * 2) {
     degenTpStreak[p.key] = (degenTpStreak[p.key] || 0) + 1;
-    if (degenTpStreak[p.key] >= 2) return { pctSell: 50, tag: 'tp1' };
+    if (degenTpStreak[p.key] >= 2) return { pctSell: 50, tag: 'tp1', reason: '2x' };
   } else if (!p.tp1Done) degenTpStreak[p.key] = 0;
   const ageMin = (Date.now() - p.firstTs) / 60000;
-  if (!p.tp1Done && ageMin >= eff.timeStopMin && lp <= p.avgUsd) return { pctSell: 100, tag: 'time' };
+  if (!p.tp1Done && ageMin >= eff.timeStopMin && lp <= entry) return { pctSell: 100, tag: 'time', reason: 'time' };
   return null;
 }
 function effectiveStop(p, lp) {
@@ -6533,7 +6575,7 @@ async function degenBuy(pick, opt) {
   return r;
 }
 let degenSelling = false;
-async function degenSell(p, pct, tag, lp) {
+async function degenSell(p, pct, tag, lp, reason) {
   if (degenSelling) return;
   degenSelling = true;
   try {
@@ -6544,9 +6586,9 @@ async function degenSell(p, pct, tag, lp) {
     if (!h || h.raw === 0n) return;
     const raw = pct >= 100 ? h.raw : (h.raw * BigInt(pct)) / 100n;
     if (raw === 0n) return;
-    const slipPct = tag === 'rug' ? 15 : Math.min(15, Math.max(A.slipCap, S.slippagePct));
+    const slipPct = tag === 'rug' ? 25 : Math.min(15, Math.max(A.slipCap, S.slippagePct));
     const qo = await getQuote({ inputMint: p.mint, outputMint: WSOL, amountRaw: raw, slippageBps: Math.round(slipPct * 100) });
-    const why = tag + ' ' + pct + '% at ' + price(lp);
+    const why = reason || (tag + ' ' + pct + '% at ' + price(lp));
     await executeSwap({ walletKey: 'burner', side: 'sell', mint: p.mint, quoteObj: qo, t: { symbol: p.symbol, mint: p.mint }, auto: false, exitTag: tag, extra: { degen: true, sniper: !!p.sniper, entryReason: why } });
     degenNote(p.symbol + ' ' + why);
     renderDegen();
@@ -6560,7 +6602,7 @@ async function degenExitTick(skipRefresh) {
     const lp = livePrices.get(p.mint)?.price;
     const ex = degenExit(p, lp);
     if (!ex) continue;
-    try { await degenSell(p, ex.pctSell, ex.tag, lp); } catch (e) { degenNote(p.symbol + ' sell failed — ' + e.message); }
+    try { await degenSell(p, ex.pctSell, ex.tag, lp, ex.reason); } catch (e) { degenNote(p.symbol + ' sell failed — ' + e.message); }
   }
 }
 async function degenPoll() {
@@ -6884,6 +6926,7 @@ function renderDegen() {
         <span class="${chipCls[st] || 'deg-chip'}">${st}</span>
       </div>
       <div class="mt-1 flex items-baseline justify-between gap-2 text-[12px]"><span class="num">${priceHtml(px)} <span class="text-slate-500">/ max ${priceHtml(+pick.max_entry_price)}</span></span><span class="text-slate-400">conf ${isNum(+pick.confidence) ? Math.round(+pick.confidence) : '—'}</span></div>
+      ${pick.tp_plan ? `<p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.tp_plan)}</p>` : ''}
       ${pick.reason ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400">Reason</summary><p class="mt-1 text-[11px] text-slate-300 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
     </article>`;
   }).join('');
@@ -6897,7 +6940,8 @@ function renderDegen() {
     const trail = isNum(eff.trail) ? eff.trail : 20;
     const mins = isNum(p.plan?.timeStopMin) ? p.plan.timeStopMin : 45;
     const leftMin = p.tp1Done ? null : Math.ceil((mins * 60000 - (Date.now() - p.firstTs)) / 60000);
-    const trailTxt = p.tp1Done ? 'trailing ' + trail + '% off the high' : 'trail arms after 2x';
+    const trailTxt = eff.reason === 'TP1 trail' ? 'TP1 trail ' + trail + '% off the high' : eff.reason === 'trail@+80' ? 'trail 20% off the high' : eff.reason === 'BE@+50' ? 'stop at breakeven' : (p.tp1Done ? 'trailing ' + trail + '% off the high' : 'trail arms after +80% or 2x');
+    const protLog = (eff.log || []).slice(-4).map(x => esc(x.msg)).join(' · ');
     const timeTxt = p.tp1Done ? 'time stop done' : (leftMin <= 0 ? 'time stop due' : leftMin + 'm left');
     const pnlCls = !isNum(money.pnl) ? 'text-slate-400' : (money.pnl >= 0 ? 'text-emerald-300' : 'text-rose-300');
     return `<article class="border-b border-white/10 py-2.5">
@@ -6907,10 +6951,12 @@ function renderDegen() {
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Now</div><div class="font-mono">${price(lp)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L</div><div class="font-mono ${pnlCls}">${isNum(money.pnlUsd) ? (money.pnlUsd >= 0 ? '+' : '') + usd(money.pnlUsd, 2) : '—'} · ${pct(money.pnl)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Stop</div><div class="font-mono text-rose-300">${price(stopPx)}</div><div class="text-[10px] text-slate-500">${esc(eff.reason || '')}</div></div>
+        <div><div class="text-[10px] uppercase tracking-wide text-slate-500">High</div><div class="font-mono">${price(eff.high)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">2x</div><div class="font-mono text-emerald-300">${price(tpPx)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Time stop</div><div class="font-mono">${timeTxt}</div></div>
       </div>
       <p class="mt-1 text-[11px] text-slate-500">${trailTxt}</p>
+      ${protLog ? `<p class="mt-1 text-[11px] text-slate-400 whitespace-normal break-words">${protLog}</p>` : ''}
       <button type="button" data-degen-sell="${esc(p.mint)}" class="mt-2 rounded-xl border border-rose-400/40 px-3 text-[12px] font-semibold text-rose-200" style="min-height:44px">Sell</button>
     </article>`;
   }).join('');
