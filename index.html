@@ -196,7 +196,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .dot, .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a4154; flex: 0 0 auto; }
   .dot.on, .status-dot.on { background: var(--accent); }
   .dot.armed, .status-dot.armed { background: #C4A35A; }
-  .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(156px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
+  .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(196px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
   .tab-pane[hidden] { display: none !important; }
   #tabBar { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 45; display: flex; align-items: center; justify-content: space-evenly; height: 72px; padding: 8px; border-radius: 32px; background: var(--tab); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 32px rgba(0,0,0,.38); }
   #tabBar button { width: 52px; height: 52px; min-height: 52px; padding: 0; border: 0; border-radius: 50%; background: var(--tab-btn); color: #8B98A9; font-size: 0; line-height: 0; display: grid; place-items: center; }
@@ -214,17 +214,44 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .watch-row b { font-size: 16px; font-weight: 650; letter-spacing: -.02em; color: var(--text); }
   .watch-row .row-px .num, .watch-row .row-px .text-\[15px\] { font-size: 17px; font-weight: 700; color: var(--text); }
   .watch-row svg { display: none; }
-  #myListBox .watch-row { min-height: 44px; gap: 8px; padding: 4px 2px; }
-  #myListBox .ml-cards { display: flex; flex-direction: column; }
-  #myListBox .ml-cards > article { border-bottom: 1px solid var(--line); }
-  #myListBox .ml-meta { display: flex; align-items: center; gap: 4px; min-height: 44px; }
-  #myListBox .ml-setup { min-width: 0; }
-  #myListBox .ml-setup summary { min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; list-style: none; }
-  #myListBox .ml-setup summary::-webkit-details-marker { display: none; }
-  #myListBox .ml-setup-body { margin: 0 0 6px; font-size: 11px; line-height: 1.35; color: var(--muted); }
-  #myListBox .ml-chart-toggle { min-height: 44px; min-width: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 700; }
-  #myListBox label:has(input[data-ml-on]) { min-width: 44px; min-height: 44px; justify-content: center; }
-  #myListBox .ml-chart-host { margin: 0 0 6px; }
+  #myListBox .ml-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  #myListBox .ml-rule { margin: 4px 0 0; font-size: 12px; line-height: 1.35; color: var(--muted); }
+  #myListBox .ml-head-actions { display: flex; gap: 8px; }
+  #myListBox .ml-head-actions button, #myListBox #mlEditDefault, #myListBox #mlAdd { min-height: 44px; }
+  #myListBox .ml-sort { margin-top: 12px; }
+  #myListBox .ml-sort button { min-height: 44px; }
+  #myListBox .ml-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+  #myListBox .ml-cards > article { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: var(--card); padding: 12px 12px 8px; }
+  #myListBox .ml-top { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+  #myListBox .ml-top b { display: block; font-size: 16px; font-weight: 700; letter-spacing: -.02em; color: var(--text); }
+  #myListBox .ml-name { display: block; margin-top: 1px; font-size: 12px; color: var(--muted); }
+  #myListBox .ml-px { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
+  #myListBox .ml-px .num { font-size: 16px; font-weight: 750; }
+  .ml-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; direction: ltr; }
+  .ml-lv { min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+  .ml-lv span { display: block; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .ml-lv b { display: block; margin-top: 2px; direction: ltr; unicode-bidi: isolate; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; color: var(--text); word-break: break-all; }
+  #myListBox .ml-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+  #myListBox .ml-pill { display: inline-flex; align-items: center; max-width: 100%; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.2; }
+  #myListBox .ml-pill.ceil { color: var(--amber); background: var(--amber-soft); }
+  #myListBox .ml-pill.lh { color: var(--violet); background: var(--accent-soft); }
+  #myListBox .ml-pill.htf { color: #9ecbff; background: rgba(122,162,214,.16); }
+  #myListBox .ml-pill.trend { color: var(--up); background: var(--up-soft); }
+  #myListBox .ml-pill.brk { color: var(--gold); background: var(--amber-soft); }
+  #myListBox .ml-pill.rule { color: var(--muted); background: transparent; border: 1px solid var(--line); font-weight: 650; }
+  #myListBox .ml-pill.wait { color: var(--amber); background: var(--amber-soft); }
+  #myListBox .ml-pill.ready { color: var(--up); background: var(--up-soft); }
+  #myListBox .ml-pill.block { color: var(--down); background: var(--down-soft); }
+  #myListBox .ml-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  #myListBox .ml-chart-toggle { min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--accent); font-size: 13px; font-weight: 700; }
+  #myListBox label:has(input[data-ml-on]) { min-width: 44px; min-height: 44px; margin-left: auto; display: flex; align-items: center; justify-content: center; }
+  #myListBox .ml-ring { position: relative; width: 36px; height: 36px; display: inline-grid; place-items: center; }
+  #myListBox .ml-ring svg { width: 36px; height: 36px; transform: rotate(-90deg); }
+  #myListBox .ml-ring circle { fill: none; stroke-width: 3; }
+  #myListBox .ml-ring .bg { stroke: rgba(255,255,255,.08); }
+  #myListBox .ml-ring .fg { stroke: var(--accent); stroke-linecap: round; }
+  #myListBox .ml-ring b { position: absolute; font-size: 10px; font-variant-numeric: tabular-nums; color: var(--text); }
+  #myListBox .ml-chart-host { margin: 8px 0; }
   .bot-skip { margin: 2px 0 0; max-width: 100%; font-size: 11px; font-weight: 500; line-height: 1.25; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bot-skip-ok { color: var(--up); }
   .row-px { flex: 0 0 auto; min-width: 92px; text-align: right; }
@@ -9767,7 +9794,7 @@ function listChartSvg(model, opt) {
     return `<rect x="0" y="${Math.min(y1, y2).toFixed(2)}" width="${w}" height="${Math.max(1.5, Math.abs(y2 - y1)).toFixed(2)}" fill="${fill}"/>`;
   };
   const hline = (p, color) => show(p) ? `<line x1="0" y1="${y(p).toFixed(2)}" x2="${w}" y2="${y(p).toFixed(2)}" stroke="${color}" stroke-width="0.7" stroke-dasharray="2 3" opacity="0.55"/>` : '';
-  const entryBand = model.entryZone && isNum(model.entryZone.zoneLo) && isNum(model.entryZone.zoneHi) ? band({ lo: +model.entryZone.zoneLo, hi: +model.entryZone.zoneHi }, 'rgba(250,204,21,0.22)') + (show(model.entryZone.zoneHi) ? `<text x="6" y="${Math.max(12, y(model.entryZone.zoneHi) - 2).toFixed(1)}" fill="#facc15" font-size="10">محدوده ورود</text>` : '') + hline(model.entryZone.stop, '#E07A84') + hline(model.entryZone.target, '#5EAF86') : '';
+  const entryBand = model.entryZone && isNum(model.entryZone.zoneLo) && isNum(model.entryZone.zoneHi) ? band({ lo: +model.entryZone.zoneLo, hi: +model.entryZone.zoneHi }, 'rgba(250,204,21,0.22)') + (show(model.entryZone.zoneHi) ? `<text x="6" y="${Math.max(12, y(model.entryZone.zoneHi) - 2).toFixed(1)}" fill="#facc15" font-size="10">Entry</text>` : '') + hline(model.entryZone.stop, '#E07A84') + hline(model.entryZone.target, '#5EAF86') : '';
   let tl = '';
   if (model.trendLine) {
     const a = model.trendLine.a, b = model.trendLine.b;
@@ -10218,7 +10245,7 @@ function renderMyList(opts) {
     const exitStop = v.spec.stopPct > 0 ? v.spec.stopPct : 15;
     const exitTp = v.spec.tps?.[0]?.gainPct > 0 ? v.spec.tps[0].gainPct : 30;
     const pctBit = (n) => { const x = Math.round(+n * 10) / 10; return Number.isInteger(x) ? String(x) : x.toFixed(1); };
-    const exitLine = (v.spec.mode === 'ath' && !v.spec.athUserStop ? 'stop under band' : 'stop −' + pctBit(exitStop) + '%') + ' · TP +' + pctBit(exitTp) + '%';
+    const exitLine = 'TP +' + pctBit(exitTp) + '% · +20%→+5%';
     const stopSum = v.spec.mode === 'ath' && !v.spec.athUserStop ? 'under band' : (pctBit(exitStop) + '%');
     const upside = isNum(v.model.room?.up) ? v.model.room.up : (isNum(v.px) && isNum(v.model.tp1) && v.model.tp1 > v.px ? (v.model.tp1 / v.px - 1) * 100 : null);
     const rrShow = isNum(v.model.room?.rr) ? v.model.room.rr : v.model.rr;
@@ -10241,49 +10268,59 @@ function renderMyList(opts) {
     const shownScore = mlShownScore(row.mint);
     const live = mlLiveView(row.mint);
     const setupFull = [scored && scored.setup ? esc(scored.setup) : '', scored && scored.entry ? esc(scored.entry) : '', live && live.broken ? 'LH break +15' : '', live && live.htf ? 'HTF retest +15' : ''].filter(Boolean).join(' · ');
-    const setupHtml = shownScore != null ? `<details class="ml-setup"><summary class="setup-chip">Setup ${shownScore}${live && live.broken ? ' · LH break' : ''}${live && live.htf ? ' · HTF retest' : ''} ▸</summary>${setupFull ? `<p class="ml-setup-body">${setupFull}</p>` : ''}</details>` : '';
-    const kindChip = live && live.kind ? `<span class="setup-chip shrink-0">${esc(live.kind === 'htfretest' ? 'HTF retest' : live.kind)}</span>` : '';
-    const levelBits = [];
-    if (live && live.ceilingHi) levelBits.push('ceiling ' + price(live.ceilingLo) + '–' + price(live.ceilingHi));
-    if (live && live.htfLine) levelBits.push('HTF line ' + price(live.htfLine));
-    if (live && live.htfLH) levelBits.push('HTF LH ' + price(live.htfLH));
-    if (live && live.htfLevel) levelBits.push('retest ' + price(live.htfLevel));
-    if (live && live.lastLH && !live.htfLH) levelBits.push('LH ' + price(live.lastLH));
-    if (live && live.hl) levelBits.push('HL ' + price(live.hl));
-    if (live && live.base) levelBits.push('base ' + price(live.base));
-    if (live && live.stop) levelBits.push('stop ' + price(live.stop));
-    levelBits.push('TP +30% · +20%→+5%');
-    const levelLine = `<span class="block truncate text-[11px] text-slate-500">${esc(levelBits.join(' · '))}</span>`;
+    const kindKey = (live && live.kind) || '';
+    const kindPair = kindKey === 'ceilingbreak' ? ['Ceiling break', 'ceil'] : kindKey === 'lhbreak' ? ['LH break', 'lh'] : kindKey === 'htfretest' ? ['HTF retest', 'htf'] : kindKey === 'trendhold1h' ? ['Trend break', 'trend'] : kindKey === 'breakout1h' ? ['Breakout', 'brk'] : v.spec.mode === 'trend' ? ['Trend break', 'trend'] : (v.spec.mode === 'confluence' || v.spec.mode === 'resist' || v.spec.mode === 'ath') ? ['Breakout', 'brk'] : [modeShort(v.spec.mode), 'trend'];
+    const sigLv = signalLevels(row.mint) || {};
+    const zoneLo = +sigLv.zoneLo > 0 ? +sigLv.zoneLo : (live && +live.ceilingLo > 0 ? +live.ceilingLo : null);
+    const zoneHi = +sigLv.zoneHi > 0 ? +sigLv.zoneHi : (live && +live.ceilingHi > 0 ? +live.ceilingHi : null);
+    const entryTxt = zoneLo ? (zoneHi && Math.abs(zoneHi - zoneLo) > zoneLo * 1e-8 ? price(Math.min(zoneLo, zoneHi)) + '–' + price(Math.max(zoneLo, zoneHi)) : price(zoneLo)) : (isNum(v.model.trigger) ? price(v.model.trigger) : '');
+    const stopLv = (live && +live.stop > 0) ? +live.stop : (+sigLv.stop > 0 ? +sigLv.stop : (isNum(v.model.stop) ? v.model.stop : null));
+    const tgtLv = +sigLv.target > 0 ? +sigLv.target : (isNum(v.model.tp1) ? v.model.tp1 : null);
+    const lv = (label, value) => `<div class="ml-lv"><span>${label}</span><b>${value || '—'}</b></div>`;
+    const ring = shownScore == null ? '<span class="ml-ring"><b>—</b></span>' : (() => { const p = Math.max(0, Math.min(100, shownScore)); const c = 87.96; const d = (p / 100) * c; return `<span class="ml-ring" aria-label="Score ${Math.round(shownScore)}"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="bg" cx="18" cy="18" r="14"/><circle class="fg" cx="18" cy="18" r="14" style="stroke-dasharray:${d.toFixed(2)} ${c.toFixed(2)}"/></svg><b>${Math.round(shownScore)}</b></span>`; })();
+    const skip = botLast('mylist', row.mint);
+    const blockedReason = skip && skip.reason && skip.reason !== 'unlocked ok' && skip.reason !== 'bought' ? skip.reason : '';
+    const statusName = blockedReason ? 'Blocked' : (v.ready ? 'Ready' : 'Waiting');
+    const statusCls = blockedReason ? 'block' : (v.ready ? 'ready' : 'wait');
+    const statusTxt = blockedReason ? ('Blocked · ' + blockedReason) : statusName;
     if (!window.__pxSeen) window.__pxSeen = {};
     const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
     if (isNum(v.px)) window.__pxSeen[row.mint] = v.px;
     const logo = logoHtml(row.mint, row.symbol, 2);
-    return `<article data-row="${esc(row.id)}">
-      <div class="flex items-center gap-1">
-        <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
-          ${logo}
-          <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${kindChip}${(typeof mlBreakView === 'function' && mlBreakView(row.mint)?.fa) ? `<span class="setup-chip shrink-0">${esc(mlBreakView(row.mint).fa)}</span>` : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
-            <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
-            <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
-            ${levelLine}
-            ${faZoneHtml(row.mint)}
-          </span>
-          <span class="row-px">
-            <span class="block num text-[15px] font-semibold ${flash}" data-live-mint="${esc(row.mint)}">${priceHtml(v.px)}</span>
-            ${isNum(h24) ? `<span class="chg-pill ${h24 >= 0 ? 'chg-up' : 'chg-down'}">${pct(h24, 1)}</span>` : ''}
-          </span>
-        </button>
-        <label class="flex items-center text-[11px] text-slate-400 shrink-0"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
+    return `<article data-row="${esc(row.id)}" class="ml-card">
+      <button type="button" data-ml-open="${esc(row.id)}" class="ml-top">
+        ${logo}
+        <span class="min-w-0 flex-1">
+          <b class="truncate">${esc(row.symbol || short(row.mint))}</b>
+          <span class="ml-name truncate">${esc(name || short(row.mint))}</span>
+        </span>
+        <span class="ml-px">
+          <span class="block num ${flash}" data-live-mint="${esc(row.mint)}">${priceHtml(v.px)}</span>
+          ${isNum(h24) ? `<span class="chg-pill ${h24 >= 0 ? 'chg-up' : 'chg-down'}">${pct(h24, 1)}</span>` : ''}
+        </span>
+      </button>
+      <div class="ml-grid">
+        ${lv('Entry zone', entryTxt)}
+        ${lv('Stop', stopLv ? price(stopLv) : '')}
+        ${lv('Target', tgtLv ? price(tgtLv) : '')}
+        <div class="ml-lv ml-score"><span>Score</span>${ring}</div>
       </div>
-      <div class="ml-meta">${setupHtml}<button type="button" class="ml-chart-toggle" data-ml-chart-toggle="${esc(row.id)}">Chart ▸</button></div>
-      ${sharedBlock ? '' : botSkipHtml('mylist', row.mint)}
+      <div class="ml-pills">
+        <span class="ml-pill ${kindPair[1]}">${esc(kindPair[0])}</span>
+        <span class="ml-pill ${statusCls}">${esc(statusTxt)}</span>
+        <span class="ml-pill rule">${esc(exitLine)}</span>
+      </div>
+      <div class="ml-actions">
+        <button type="button" class="ml-chart-toggle" data-ml-chart-toggle="${esc(row.id)}">Chart</button>
+        <label class="text-[11px] text-slate-400"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
+      </div>
       <div class="token-sheet">
         <div class="sheet-grab"></div>
         <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">${esc(row.symbol || short(row.mint))}</b><button type="button" data-sheet-close class="text-sm text-slate-400">Close</button></div>
         <span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
         <span class="ml-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">1:2</span>
-        <span class="mt-1 block text-[12px] text-slate-300">${esc(exitLine)} · full exit</span>
+        <span class="ml-pill rule">${esc(exitLine)}</span>
+        ${setupFull ? `<p class="mt-2 text-[11px] text-slate-500 whitespace-normal break-words">${setupFull}</p>` : ''}
       <div data-sheet-chart-slot></div>
       <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
         ${cell('Setup', esc(setupSum))}
@@ -10319,23 +10356,22 @@ function renderMyList(opts) {
     </article>`;
   }).join('');
   const table = `<div class="overflow-x-auto scroll-thin"><table class="w-full text-xs min-w-[640px]"><thead class="text-slate-500 text-left"><tr><th class="py-1">Token</th><th>State</th><th>Price</th><th>To trigger</th><th>Setup</th><th></th></tr></thead><tbody>${views.map(v => { const shown = mlShownScore(v.row.mint); const live = mlLiveView(v.row.mint); const setupBit = shown != null ? `<div class="text-[10px] whitespace-normal break-words"><span class="setup-score">Setup ${shown}</span>${live && live.broken ? ' · LH break' : ''}${live && live.kind ? ' · ' + esc(live.kind === 'htfretest' ? 'HTF retest' : live.kind) : ''}</div>` : ''; return `<tr class="border-t border-white/5 align-top"><td class="py-1.5 pr-2"><span class="inline-flex items-center gap-2">${logoHtml(v.row.mint, v.row.symbol, 2, 'sm')}<span><b>${esc(v.row.symbol || short(v.row.mint))}</b>${setupBit}</span></span></td><td class="pr-2"><span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span></td><td class="pr-2 font-mono whitespace-normal break-words">${price(v.px)}</td><td class="pr-2 whitespace-normal break-words">${listDistText(v.dist)}</td><td class="pr-2">${esc((live && live.kind) || modeLabel(v.spec.mode))}</td><td class="whitespace-normal"><button type="button" data-ml-edit="${esc(v.row.id)}" class="text-violet-300">Strategy</button> <button type="button" data-ml-buy="${esc(v.row.id)}" class="text-emerald-300">Buy</button> <button type="button" data-ml-chart="${esc(v.row.id)}" class="text-slate-300">Chart</button> <button type="button" data-ml-del="${esc(v.row.id)}" data-ml-mint="${esc(v.row.mint)}" class="text-rose-300">Remove</button></td></tr>`; }).join('')}</tbody></table></div>`;
-  const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="rounded-full border px-2.5 py-1 text-[11px] ${listSort === key ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
+  const sortBtn = (key, label) => `<button type="button" data-ml-sort="${key}" class="${listSort === key ? 'on' : ''}">${label}</button>`;
   box.dataset.mem = listSig;
   releaseMedia(box);
-  box.innerHTML = `<div class="rounded-2xl border ${MYLIST.on ? 'border-amber-300/40' : 'border-white/10'} bg-ink-900/30 p-3">
-    <div class="flex flex-wrap items-baseline justify-between gap-2"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3>
-      <div class="flex flex-wrap gap-2 text-[11px]"><button type="button" id="mlView" class="text-violet-300">${listTable ? 'Cards' : 'Table view'}</button><button type="button" id="mlClear" class="text-rose-300">Clear list</button></div></div>
-    <div class="mt-2 flex flex-wrap items-center gap-2">
-      <span class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-200 whitespace-normal break-words">${esc(listDefaultChip())}</span>
-      <button type="button" id="mlEditDefault" class="rounded-lg px-2.5 py-1.5 text-[11px] border border-white/10 text-violet-200">Edit default strategy</button>
+  box.innerHTML = `<div class="ml-head">
+      <div class="min-w-0"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3><p class="ml-rule">${esc(myListWalletSize().label)} · TP +30% · +20%→+5%</p></div>
+      <div class="ml-head-actions"><button type="button" id="mlView" class="text-violet-300">${listTable ? 'Cards' : 'Table'}</button><button type="button" id="mlClear" class="text-rose-300">Clear</button></div>
     </div>
-    <div class="mt-2 flex flex-wrap gap-2">
-      <input id="mlAddMint" placeholder="Mint address" class="min-w-0 flex-1 rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono text-[11px]" />
-      <button type="button" id="mlAdd" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Add</button>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <button type="button" id="mlEditDefault" class="rounded-xl px-3 text-[12px] font-semibold border border-white/10 text-violet-200">Edit default strategy</button>
     </div>
-    <div class="mt-2 flex flex-wrap gap-1.5">${sortBtn('setup', 'Best setup')}${sortBtn('ready', 'Ready first')}${sortBtn('distance', 'Distance to trigger')}</div>
-    <p class="mt-2 text-[12px] text-slate-400 whitespace-normal break-words">My List · ${esc(myListWalletSize().label)} · log chart · TP +30% · +20% moves the stop to +5%</p>
-    <div class="mt-2 ${listTable ? '' : 'ml-cards'}">${sharedNote}${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <input id="mlAddMint" placeholder="Mint address" class="min-w-0 flex-1 rounded-xl bg-ink-800 border border-white/10 px-3 font-mono text-[13px]" style="min-height:44px" />
+      <button type="button" id="mlAdd" class="rounded-xl px-4 text-[13px] font-semibold bg-violet-600 text-white">Add</button>
+    </div>
+    <div class="seg ml-sort">${sortBtn('setup', 'Best setup')}${sortBtn('ready', 'Ready first')}${sortBtn('distance', 'Distance')}</div>
+    <div class="mt-2 ${listTable ? '' : 'ml-cards'}">${views.length ? (listTable ? table : cards) : '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No tokens yet. Paste mints above, or add one here.</p>'}</div>
   </div>`;
   $('mlView')?.addEventListener('click', () => { listTable = !listTable; renderMyList(); });
   $('mlClear')?.addEventListener('click', () => { dropListRows(() => true); });
@@ -11531,17 +11567,16 @@ function faZoneHtml(mint) {
   const hasTgt = +s.target > 0;
   if (!lo && !hasConf && !hasStop && !hasTgt) return '';
   const bits = [];
+  const cell = (label, value) => value ? `<div class="ml-lv"><span>${label}</span><b>${value}</b></div>` : '';
   if (lo) {
     const zone = hi && Math.abs(hi - lo) > lo * 1e-8 ? price(Math.min(lo, hi)) + '–' + price(Math.max(lo, hi)) : price(lo);
-    bits.push(`<p class="mt-1 text-[12px] whitespace-normal break-words text-slate-200">محدوده ورود: ${zone}</p>`);
+    bits.push(cell('Entry zone', zone));
   }
-  const sub = [];
-  if (hasConf) sub.push('امتیاز ورود: ' + Math.round(+s.conf));
-  if (hasStop) sub.push('<span class="text-rose-300">حد ضرر ' + price(+s.stop) + '</span>');
-  if (hasTgt) sub.push('<span class="text-emerald-300">تارگت ' + price(+s.target) + '</span>');
-  if (s.state && s.state !== 'waiting') sub.push(esc(String(s.state)));
-  if (sub.length) bits.push(`<p class="text-[11px] text-slate-400 whitespace-normal break-words">${sub.join(' · ')}</p>`);
-  return bits.join('');
+  if (hasStop) bits.push(cell('Stop', price(+s.stop)));
+  if (hasTgt) bits.push(cell('Target', price(+s.target)));
+  if (hasConf) bits.push(cell('Score', String(Math.round(+s.conf))));
+  if (!bits.length) return '';
+  return `<div class="ml-grid">${bits.join('')}</div>`;
 }
 function hunterPlanBox(plan, px) {
   if (!plan) return '';
@@ -12875,13 +12910,13 @@ function mountLiteChart(frame, model) {
     series.setData(rows.map(r => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close })));
     vol.setData(rows.map(r => ({ time: r.time, value: r.vol, color: r.close >= r.open ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)' })));
     const mark = (price, color, title) => { if (price > 0) series.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, title }); };
-    mark(+model.stop, themeColor('--down','#E07A84'), 'حد ضرر');
-    mark(+model.tp1, themeColor('--up','#5EAF86'), 'تارگت');
+    mark(+model.stop, themeColor('--down','#E07A84'), 'Stop');
+    mark(+model.tp1, themeColor('--up','#5EAF86'), 'Target');
     const lv = model.entryZone || (typeof signalLevels === 'function' ? signalLevels(model.faMint) : null);
     if (lv && +lv.zoneLo > 0) {
-      mark(+lv.zoneLo, '#facc15', 'محدوده ورود');
+      mark(+lv.zoneLo, '#facc15', 'Entry');
       if (+lv.zoneHi > +lv.zoneLo) mark(+lv.zoneHi, '#facc15', '');
-    } else mark(+model.trigger, '#facc15', 'محدوده ورود');
+    } else mark(+model.trigger, '#facc15', 'Entry');
     chart.timeScale().fitContent();
     frame.querySelectorAll('svg').forEach(svg => { svg.style.display = 'none'; });
   }).catch(() => { /* keep the drawn sparkline */ });
@@ -12995,7 +13030,7 @@ function paintSheetChart(frame, model) {
     ctx.fillStyle = '#facc15';
     ctx.font = '11px Inter, sans-serif';
     ctx.textBaseline = 'top';
-    ctx.fillText('محدوده ورود', 8, Math.max(6, Math.min(cssH - 16, y(+lv.zoneHi) + 2)));
+    ctx.fillText('Entry', 8, Math.max(6, Math.min(cssH - 16, y(+lv.zoneHi) + 2)));
     guide(+lv.stop, '#E07A84');
     guide(+lv.target, '#5EAF86');
   }
