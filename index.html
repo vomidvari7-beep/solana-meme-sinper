@@ -3132,12 +3132,11 @@ function profileStopPct() {
 }
 function freshStop(p) {
   if (p?.degen && isNum(p.avgUsd) && p.avgUsd > 0) return degenStopPx(p.avgUsd, p.plan?.stopPct);
-  if (p?.scalp && isNum(p.avgUsd) && p.avgUsd > 0) return scalpStopLevel(p.avgUsd, p.plan?.breakLow, p.avgUsd, 0, false).stop;
+  if (p?.scalp && isNum(p.avgUsd) && p.avgUsd > 0) return p.avgUsd * 0.97;
   const avg = p.avgUsd;
   const planStop = p.plan?.stop;
   const byPct = isNum(avg) && avg > 0 ? avg * (1 - profileStopPct() / 100) : null;
   if (p?.plan?.myList && isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) return planStop;
-  if (p?.plan?.agent && isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) return planStop;
   // A plan stop is the analyzed level. If that level sits much further below the
   // actual fill than the profile stop (a dip-zone stop after a market buy), use the profile stop.
   if (isNum(planStop) && planStop > 0 && (!isNum(avg) || planStop < avg * 0.999)) {
@@ -3597,8 +3596,8 @@ function paneShown(id) {
 function liveMints() {
   const list = openMints();
   if (document.hidden) return [...new Set(list)];
-  if ((paneShown('tabTokens') && (typeof tokenSeg === 'undefined' || tokenSeg !== 'degen')) || (typeof MYLIST !== 'undefined' && MYLIST.on)) {
-    try { (MYLIST?.rows || []).forEach(r => { if (r.mint && r.enabled !== false) list.push(r.mint); }); } catch { /* list not ready */ }
+  if (paneShown('tabTokens') && (typeof tokenSeg === 'undefined' || tokenSeg !== 'degen')) {
+    try { (MYLIST?.rows || []).forEach(r => { if (r.mint) list.push(r.mint); }); } catch { /* list not ready */ }
   }
   if (paneShown('tabAgents') || (typeof A !== 'undefined' && A.on)) {
     try { (typeof AG !== 'undefined' ? [...AG.plans.values()] : []).forEach(p => { if (p?.mint) list.push(p.mint); }); } catch { /* plans not ready */ }
@@ -3714,8 +3713,7 @@ async function liveTick() {
         m5s: row?.m5s == null ? prev?.m5s : row.m5s,
         at: now
       });
-      const listOn = typeof MYLIST !== 'undefined' && MYLIST.on && (MYLIST.rows || []).some(r => r && r.enabled !== false && r.mint === mint);
-      if (!hidden && (held.has(mint) || mint === focus || listOn)) pushTick(mint, px, now);
+      if (!hidden && (held.has(mint) || mint === focus)) pushTick(mint, px, now);
       try {
         const row = (MYLIST?.rows || []).find(r => r.mint === mint);
         if (row) row.price = px;
@@ -3727,7 +3725,6 @@ async function liveTick() {
     if (!hidden) paintLive(0, performance.now() - t0);
     checkAlerts();
     if (!hidden) schedulePaint();
-    if (typeof mlBreakScan === 'function') mlBreakScan();
     pruneMemory();
   } catch (e) {
     if (e && e.name === 'AbortError') { /* a newer poll or a hidden tab replaced this fetch */ }
@@ -5769,8 +5766,7 @@ function applyQuickOverlay(p, eff) {
     next.trail = null;
     next.beAtPct = null;
   }
-  const keepAgentStop = !!(p?.plan?.agent && isNum(p.plan.stop) && p.plan.stop > 0 && p.plan.stop < entry);
-  if (!man.stop && !keepAgentStop) {
+  if (!man.stop) {
     next.quick = true;
     const cap = entry * (1 - maxStop / 100);
     if (!isNum(next.stop) || !(next.stop > 0 && next.stop < entry) || next.stop < cap - 1e-12) {
@@ -9585,7 +9581,7 @@ function myListStructSig() {
   for (const r of MYLIST.rows) {
     const px = (typeof livePrices !== 'undefined' && livePrices.get(r.mint)?.price) || r.price || 0;
     const bucket = px > 0 ? Math.round(Math.log(px) * 80) : 0;
-    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + (r.mlArmed ? 'B' : '') + bucket;
+    s += ';' + r.id + (r.enabled ? 1 : 0) + (r.symbol || '') + (r.detailsOpen ? 'd' : '') + (r.inZone ? 'z' : '') + (r.momState || '') + (r.breakState || '') + (r.displayTf || '') + (r.boughtOnce ? 'b' : '') + bucket;
   }
   return s;
 }
@@ -9692,10 +9688,9 @@ function renderMyList(opts) {
         <button type="button" data-ml-open="${esc(row.id)}" class="watch-row">
           ${logo}
           <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${row.mlArmed ? '<span class="setup-chip shrink-0">Breakout armed</span>' : ''}${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
+            <span class="flex items-center gap-1"><b class="truncate text-sm">${esc(row.symbol || short(row.mint))}</b><span class="shrink-0 rounded-full border border-white/10 px-1.5 text-[10px] text-slate-300">1:2</span>${setupTag ? `<span class="setup-chip shrink-0">${setupTag}</span>` : ''}</span>
             <span class="block truncate text-[11px] text-slate-500">${esc(name || v.badge)}</span>
             <span class="block truncate text-[11px] text-slate-400">${esc(exitLine)}</span>
-            ${row.mlGeo ? mlBreakSpark(row.mlGeo) : ''}
           </span>
           <span class="row-px">
             <span class="block num text-[15px] font-semibold ${flash}" data-live-mint="${esc(row.mint)}">${priceHtml(v.px)}</span>
@@ -9944,7 +9939,6 @@ async function myListBuys() {
     const px = row.price;
     if (!row.enabled || !(px > 0)) { if (row.enabled) botLog('mylist', row.mint, 'no live price'); continue; }
     if (LOG.some(r => r.myList && r.mint === row.mint && r.side === 'buy' && r.status === 'pending')) { botLog('mylist', row.mint, 'buy already pending'); continue; }
-    if (typeof mlBreakLock !== 'undefined' && mlBreakLock.has(row.mint)) continue;
     const pos = listPosition(row.mint);
     const taAge = row.lastTaAt ? (Date.now() - row.lastTaAt) / 60000 : null;
     const gate = listEntryReady(spec, { enabled: row.enabled, open: !!pos, price: px, inZone: row.inZone, momState: row.momState, breakState: row.breakState, cooldownUntil: row.cooldownUntil, buysToday: row.dayKey === todayKey() ? (row.buysToday || 0) : 0, boughtOnce: row.boughtOnce, taAgeMin: taAge, now: Date.now() });
@@ -10026,159 +10020,6 @@ async function myListBuys() {
       if (hit === 'block') break;
     } catch { /* trade log records the failure */ }
   }
-}
-const ML_BREAK_PAD = 0.015;
-const ML_BREAK_CAP = 0.15;
-const ML_BREAK_LS = 'sms:mlbreak';
-const mlBreakMem = new Map();
-let mlBreakBusy = false;
-let mlBreakCursor = 0;
-const mlBreakLock = new Set();
-function mlBreakBook() {
-  const v = load(ML_BREAK_LS, []);
-  return Array.isArray(v) ? v : [];
-}
-function mlBreakNote(row) {
-  const rows = mlBreakBook();
-  rows.push(Object.assign({ at: Date.now() }, row));
-  save(ML_BREAK_LS, rows.slice(-80));
-}
-function mlBreakKey(geo) {
-  if (!geo) return '';
-  return Math.round(geo.line * 1e6) + ':' + Math.round(geo.zoneHi * 1e6);
-}
-function mlBreakGeometry(candles) {
-  const cs = (candles || []).filter(c => c && c.h > 0 && c.l > 0 && c.c > 0).slice(-48);
-  if (cs.length < 15) return null;
-  const { highs } = swingPoints(cs, 2);
-  if (highs.length < 2) return null;
-  let use = highs.slice(-2);
-  const tail = highs.slice(-3);
-  if (tail.length === 3 && tail[1].price < tail[0].price && tail[2].price < tail[1].price) use = tail;
-  else if (!(highs.at(-1).price < highs.at(-2).price)) return null;
-  const a = use[0], b = use[use.length - 1];
-  if (!(b.price < a.price)) return null;
-  const lastI = cs.length - 1;
-  const line = lineAt(a, b, lastI);
-  let best = null;
-  for (const h of highs) {
-    const cluster = highs.filter(x => Math.abs(x.price - h.price) / h.price <= 0.015);
-    if (cluster.length < 2) continue;
-    const lo = Math.min(...cluster.map(x => x.price));
-    const hi = Math.max(...cluster.map(x => x.price));
-    const mid = (lo + hi) / 2;
-    if (!best || cluster.length > best.n || (cluster.length === best.n && Math.abs(mid - line) < Math.abs(best.mid - line))) best = { lo, hi, mid, n: cluster.length };
-  }
-  if (!best) {
-    const h = highs.at(-1);
-    best = { lo: h.price * 0.992, hi: h.price * 1.008, mid: h.price, n: 1 };
-  }
-  return { line, zoneLo: best.lo, zoneHi: best.hi, a, b, lastI };
-}
-function mlBreakStop(entry, candleLow) {
-  if (!(entry > 0)) return null;
-  const raw = (candleLow > 0 ? candleLow : entry) * (1 - ML_BREAK_PAD);
-  const floor = entry * (1 - ML_BREAK_CAP);
-  const stop = Math.max(raw, floor);
-  return stop < entry ? stop : floor;
-}
-function mlStrongBreakCandle(candles, lineOf) {
-  const cs = (candles || []).filter(c => c && c.c > 0 && c.l > 0);
-  let best = null, score = -1;
-  for (let i = 2; i < cs.length; i++) {
-    const lv = lineOf(i);
-    if (!(lv > 0) || !(cs[i].c > lv)) continue;
-    const body = cs[i].o > 0 ? Math.abs(cs[i].c - cs[i].o) : Math.abs(cs[i].c - cs[i].l);
-    const vol = cs[i].v > 0 ? cs[i].v : 1;
-    const s = body * vol;
-    if (s > score) { score = s; best = cs[i]; }
-  }
-  return best;
-}
-function mlMinuteClose(mint) {
-  const bars = typeof tickBars === 'function' ? (tickBars(mint, '1s') || []) : [];
-  if (!bars.length) return null;
-  const lastT = bars[bars.length - 1].t;
-  const minute = Math.floor(lastT / 60000) * 60000;
-  const prev = minute - 60000;
-  let c = null;
-  for (const b of bars) {
-    if (Math.floor(b.t / 60000) * 60000 !== prev || !(b.c > 0)) continue;
-    c = b.c;
-  }
-  return c;
-}
-function mlBreakSpark(geo) {
-  if (!geo || !(geo.zoneHi > geo.zoneLo)) return '';
-  const hi = Math.max(geo.zoneHi, geo.line) * 1.04;
-  const lo = Math.min(geo.zoneLo, geo.line) * 0.96;
-  const y = (p) => (1 - (p - lo) / (hi - lo || 1)) * 28 + 4;
-  return `<svg viewBox="0 0 140 36" class="mt-1 h-9 w-full" role="img" aria-label="Breakout line and zone"><rect x="0" y="${Math.min(y(geo.zoneHi), y(geo.zoneLo)).toFixed(1)}" width="140" height="${Math.max(2, Math.abs(y(geo.zoneHi) - y(geo.zoneLo))).toFixed(1)}" fill="rgba(122,162,214,0.18)"/><line x1="8" y1="${y(geo.line * 1.02).toFixed(1)}" x2="132" y2="${y(geo.line).toFixed(1)}" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
-}
-async function mlBreakPass() {
-  const rows = (MYLIST.rows || []).filter(r => r && r.enabled !== false && r.pool && r.mint);
-  if (!rows.length) return;
-  const row = rows[mlBreakCursor % rows.length];
-  mlBreakCursor++;
-  const mem = mlBreakMem.get(row.id);
-  if (!mem || Date.now() - mem.at > 120000) {
-    try {
-      const px = livePrices.get(row.mint)?.price || row.price;
-      const h1 = alignCandlesToToken(await fetchOhlcv(row.pool, '1h', row.mint), px).slice(-48);
-      const geo = mlBreakGeometry(h1);
-      let m15 = [];
-      try { m15 = alignCandlesToToken(await fetchOhlcv(row.pool, '15m', row.mint), px).slice(-48); } catch { m15 = []; }
-      if (geo) {
-        const lineOf = (i) => lineAt(geo.a, geo.b, i);
-        const strong = mlStrongBreakCandle(h1, lineOf) || mlStrongBreakCandle(m15, () => geo.line);
-        mlBreakMem.set(row.id, { ...geo, at: Date.now(), armed: true, candleLow: strong ? strong.l : null, h1 });
-      } else mlBreakMem.set(row.id, { at: Date.now(), armed: false });
-      const armed = !!(mlBreakMem.get(row.id) && mlBreakMem.get(row.id).armed);
-      if (!!row.mlArmed !== armed) { row.mlArmed = armed; row.mlGeo = armed ? { line: geo.line, zoneLo: geo.zoneLo, zoneHi: geo.zoneHi } : null; renderMyList(); }
-    } catch { /* next token */ }
-  }
-  if (!MYLIST.on || !burnerReady()) return;
-  for (const r of rows) {
-    const geo = mlBreakMem.get(r.id);
-    if (!geo || !geo.armed || !(geo.line > 0) || !(geo.zoneHi > 0)) continue;
-    const close = mlMinuteClose(r.mint);
-    const px = livePrices.get(r.mint)?.price || r.price;
-    if (!(close > geo.line && close > geo.zoneHi)) continue;
-    const flow = livePrices.get(r.mint) || {};
-    const buys = isNum(flow.m5b) ? flow.m5b : (r.dexPair?.txns?.m5?.buys || 0);
-    const sells = isNum(flow.m5s) ? flow.m5s : (r.dexPair?.txns?.m5?.sells || 0);
-    if (!(buys >= sells) || buys + sells === 0) continue;
-    const key = mlBreakKey(geo);
-    if ((mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy'))) continue;
-    if (LOG.some(t => t.myList && t.mint === r.mint && t.side === 'buy' && (t.status === 'pending' || t.status === 'confirmed') && t.plan?.mlBreakKey === key)) continue;
-    if (listPosition(r.mint) || mlBreakLock.has(r.mint)) continue;
-    const spec = listStrategy(r);
-    const resolved = resolveListSpend(spec);
-    if (!resolved.ok) { botLog('mylist', r.mint, resolved.error); continue; }
-    const safe = await degenSafety(r.mint);
-    if (!safe.ok) { botLog('mylist', r.mint, safe.reason || 'safety'); continue; }
-    const solPx = solPriceNow() || liveSolPx();
-    if (!(solPx > 0)) continue;
-    const qo = await getQuote({ inputMint: WSOL, outputMint: r.mint, amountRaw: BigInt(Math.round(resolved.sol * 1e9)), slippageBps: 100 });
-    if (impactPct(qo.quote) > 1) { botLog('mylist', r.mint, 'impact > 1%'); continue; }
-    const entry = px > 0 ? px : close;
-    const stop = mlBreakStop(entry, geo.candleLow);
-    const plan = { myList: true, mlBreak: true, mlBreakKey: key, agent: false, stop, strat: 'My List 1h breakout', exit: { stopPct: 15, stopPx: stop, tps: [{ gainPct: 30, sellPct: 100 }] } };
-    mlBreakLock.add(r.mint);
-    try {
-      await executeSwap({ walletKey: 'burner', side: 'buy', mint: r.mint, quoteObj: qo, t: { mint: r.mint, symbol: r.symbol || short(r.mint) }, auto: true, extra: { plan, myList: true, entryReason: '1h breakout' } });
-      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, line: geo.line, zoneLo: geo.zoneLo, zoneHi: geo.zoneHi, stop });
-    } finally { mlBreakLock.delete(r.mint); }
-    r.boughtOnce = true; r.dayKey = todayKey(); r.buysToday = (r.buysToday || 0) + 1;
-    saveMyList();
-    toast('My List breakout ' + (r.symbol || ''), 'ok', 6000);
-    break;
-  }
-}
-function mlBreakScan() {
-  if (mlBreakBusy || document.hidden) return;
-  mlBreakBusy = true;
-  mlBreakPass().catch(() => {}).finally(() => { mlBreakBusy = false; });
 }
 async function myListExits() {
   if (A.on && A.autoExit) return;
@@ -10968,51 +10809,21 @@ paintLockBanner();
 /* ---------------- Scalp (own ledger, own toggle) ---------------- */
 const SCALP_RULE = {
   START_USD: 100,
-  MIN_FREE: 5,
+  TRADE_USD: 20,
   MAX_OPEN: 2,
-  DAY_LOSS: 20,
+  DAY_LOSS: 15,
   LIQ_MIN: 50000,
   VOL24_MIN: 100000,
-  AGE_MIN_H: 2,
-  TOP10_MAX: 30,
-  INSIDER_MAX: 20,
   M5_MIN: 1,
-  M5_MAX: 10,
-  H1_MAX: 60,
-  BODY_MAX: 0.04,
-  EMA20_MAX_ABOVE: 0.03,
-  LAST3_MAX: 0.08,
-  VOL_MULT: 2,
-  FLOW: 1.2,
-  BUYERS_MIN: 15,
-  BUYS_MIN: 15,
-  BIG_SELL: 0.02,
-  IMPACT_MAX: 0.5,
-  SLIP_BPS: 150,
-  QUOTE_DRIFT: 0.01,
-  SOL_15M_MIN: -1.5,
-  SOL_1H_MIN: -3,
+  M5_MAX: 15,
+  IMPACT_MAX: 1,
+  SLIP_BPS: 100,
   STOP_PCT: 0.03,
-  STOP_BUF: 0.003,
-  STOP_TICKS: 2,
-  STOP_MS: 5000,
-  BE_ARM: 0.03,
-  BE_STOP: 0.005,
-  TIME_FLAT_MIN: 4,
-  TIME_FLAT_NEED: 0.015,
-  TIME_HARD_MIN: 10,
-  RUNNER_AT: 0.05,
-  TRAIL: 0.03,
-  TRAIL_TIGHT: 0.02,
-  TRAIL_TIGHT_AT: 0.15,
-  FLOOR: 0.03,
-  ROOM: 0.05,
-  CD_LOSS_MS: 15 * 60e3,
-  CD_WIN_MS: 60e3,
-  MAX_PER_DAY: 3,
+  TP_PCT: 0.05,
+  TIME_MIN: 10,
+  CD_MS: 60e3,
   LOSS_STREAK: 3,
-  PAUSE_MS: 30 * 60e3,
-  MAX_PAUSES: 2
+  PAUSE_MS: 30 * 60e3
 };
 const SCALP_LOG_LS = 'sms:scalp';
 const SCALP_LEDGER_LS = 'sms:scalpledger';
@@ -11049,47 +10860,19 @@ function scalpRoomReason(entry, level, candle) {
 }
 function scalpEntryFail(ctx) {
   const R = SCALP_RULE;
-  if (!(ctx.ageH >= R.AGE_MIN_H)) return 'pair age < 2h';
-  if (ctx.curve) return 'bonding curve';
-  if (!ctx.dexOk) return 'not a graduated pool';
+  if (ctx.flag) return ctx.flag;
   if (!(ctx.liq >= R.LIQ_MIN)) return 'liquidity < $50k';
   if (!(ctx.vol24 >= R.VOL24_MIN)) return '24h volume < $100k';
-  if (ctx.flag) return ctx.flag;
-  if (isNum(ctx.top10) && ctx.top10 > R.TOP10_MAX) return 'top10 ' + ctx.top10.toFixed(0) + '%';
-  if (isNum(ctx.insiders) && ctx.insiders > R.INSIDER_MAX) return 'insiders ' + ctx.insiders.toFixed(0) + '%';
-  if (!(ctx.px > ctx.ema15)) return 'price below 15m EMA20';
-  if (!(ctx.ema15 > ctx.ema15Prev)) return '15m EMA20 not rising';
-  if (ctx.lowerLow1h) return '1h lower low';
-  if (ctx.room) return ctx.room;
-  if (!ctx.broke) return 'no 1m breakout';
-  if (!(ctx.volX >= R.VOL_MULT)) return 'breakout volume under 2x';
-  if (!(ctx.body <= R.BODY_MAX)) return 'breakout body > 4%';
+  if (!ctx.broke) return 'no 1m momentum breakout';
   if (!(ctx.px > ctx.ema20)) return 'price below 1m EMA20';
-  if (!(ctx.px <= ctx.ema20 * (1 + R.EMA20_MAX_ABOVE))) return 'more than 3% above 1m EMA20';
-  if (!(ctx.last3 <= R.LAST3_MAX)) return 'last 3 candles > +8%';
-  if (!(ctx.m5 >= R.M5_MIN && ctx.m5 <= R.M5_MAX)) return 'm5 change out of +1% to +10%';
-  if (isNum(ctx.h1) && ctx.h1 > R.H1_MAX) return 'h1 > +60%';
-  if (!(ctx.buys >= ctx.sells * R.FLOW)) return 'm5 buys < 1.2x sells';
-  if (isNum(ctx.buyers)) { if (!(ctx.buyers >= R.BUYERS_MIN)) return 'unique m5 buyers < 15'; }
-  else if (!(ctx.buys >= R.BUYS_MIN)) return 'm5 buy txns < 15';
-  if (isNum(ctx.bigSellPct) && ctx.bigSellPct > R.BIG_SELL) return 'large m5 sell vs liquidity';
+  if (!(ctx.m5 >= R.M5_MIN && ctx.m5 <= R.M5_MAX)) return 'm5 change out of +1% to +15%';
+  if (!(ctx.buys >= ctx.sells)) return 'm5 sells exceed buys';
   if (isNum(ctx.impact) && ctx.impact > R.IMPACT_MAX) return 'price impact ' + ctx.impact.toFixed(2) + '%';
-  if (isNum(ctx.drift) && Math.abs(ctx.drift) > R.QUOTE_DRIFT) return 'quote differs from last price > 1%';
   return '';
 }
-function scalpStopLevel(entry, breakLow, lp, high, runner) {
-  const hard = entry * (1 - SCALP_RULE.STOP_PCT);
-  let stop = hard;
-  if (isNum(breakLow) && breakLow > 0 && breakLow < entry) stop = Math.max(breakLow, hard);
-  const peak = Math.max(entry, isNum(high) ? high : 0, isNum(lp) ? lp : 0);
-  const up = peak / entry - 1;
-  if (up >= SCALP_RULE.BE_ARM) stop = Math.max(stop, entry * (1 + SCALP_RULE.BE_STOP));
-  const ran = !!runner || up >= SCALP_RULE.RUNNER_AT;
-  if (ran) {
-    const trailPct = up > SCALP_RULE.TRAIL_TIGHT_AT ? SCALP_RULE.TRAIL_TIGHT : SCALP_RULE.TRAIL;
-    stop = Math.max(stop, entry * (1 + SCALP_RULE.FLOOR), peak * (1 - trailPct));
-  }
-  return { stop, runner: ran, peak };
+function scalpStopLevel(entry) {
+  const stop = entry > 0 ? entry * (1 - SCALP_RULE.STOP_PCT) : null;
+  return { stop, runner: false, peak: entry };
 }
 function scalpFadeReason(candles, m5b, m5s) {
   if (isNum(m5b) && isNum(m5s) && m5s >= m5b && (m5b + m5s) > 0) return 'm5 sells >= buys';
@@ -11199,8 +10982,7 @@ function scalpRoll(book) {
 function scalpDayStopped(book) {
   scalpRoll(book);
   if (book.haltDay === book.dayKey) return 'scalp stopped for the day';
-  if ((+book.pausesToday || 0) >= SCALP_RULE.MAX_PAUSES) return 'two pauses today';
-  if (scalpTodayPnl() <= -SCALP_RULE.DAY_LOSS) return 'daily -$20 stop';
+  if (scalpTodayPnl() <= -SCALP_RULE.DAY_LOSS) return 'daily -$15 stop';
   try {
     const cap = solCap(S.dailyMaxSol);
     if (cap > 0 && spentToday(mainBookFill) + 1e-9 >= cap) return 'daily cap hit';
@@ -11211,19 +10993,9 @@ function scalpSizeUsd() {
   const free = scalpLedger().balanceUsd;
   const open = openPositions().filter(p => p.scalp && p.open);
   if (open.length >= SCALP_RULE.MAX_OPEN) return { usd: 0, label: 'max 2 open' };
-  if (!(free >= SCALP_RULE.MIN_FREE)) return { usd: 0, label: 'free balance under $5' };
-  if (open.length === 1) {
-    const p = open[0];
-    const lp = livePrices.get(p.mint)?.price;
-    if (!(isNum(lp) && isNum(p.avgUsd) && lp >= p.avgUsd)) return { usd: 0, label: 'first scalp under breakeven' };
-    const fee = typeof degenFeeEstimateUsd === 'function' ? degenFeeEstimateUsd() : 0.25;
-    const usd = free - fee;
-    if (usd < SCALP_RULE.MIN_FREE) return { usd: 0, label: 'remainder under $5' };
-    return { usd, label: 'remainder $' + usd.toFixed(2) };
-  }
-  const half = free * 0.5;
-  if (half < SCALP_RULE.MIN_FREE) return { usd: 0, label: '50% under $5' };
-  return { usd: half, label: '50% · $' + half.toFixed(2) + ' of $' + free.toFixed(2) };
+  const fee = typeof degenFeeEstimateUsd === 'function' ? degenFeeEstimateUsd() : 0.25;
+  if (free < SCALP_RULE.TRADE_USD + fee) return { usd: 0, label: 'ledger under $20' };
+  return { usd: SCALP_RULE.TRADE_USD, label: '$20' };
 }
 function scalpProtAll() { const v = load(SCALP_PROT_LS, {}); return v && typeof v === 'object' ? v : {}; }
 function scalpProt(p, lp) {
@@ -11231,7 +11003,7 @@ function scalpProt(p, lp) {
   const prev = all[p.key] && typeof all[p.key] === 'object' ? all[p.key] : {};
   const entry = p.avgUsd;
   const high = Math.max(+prev.high || 0, entry > 0 ? entry : 0, lp > 0 ? lp : 0);
-  const runner = !!prev.runner || (entry > 0 && high >= entry * (1 + SCALP_RULE.RUNNER_AT));
+  const runner = false;
   let entryLiq = isNum(prev.entryLiq) ? prev.entryLiq : (isNum(p.plan?.entryLiq) ? p.plan.entryLiq : null);
   const quote = livePrices.get(p.mint);
   if (entryLiq == null && isNum(quote?.liq) && quote.liq > 0) entryLiq = quote.liq;
@@ -11247,7 +11019,7 @@ function scalpStopHeld(key, lp, stop) {
   if (!(lp <= stop)) { row.ticks = 0; row.since = 0; return false; }
   row.ticks += 1;
   if (!row.since) row.since = Date.now();
-  return row.ticks >= SCALP_RULE.STOP_TICKS || (Date.now() - row.since) >= SCALP_RULE.STOP_MS;
+  return false;
 }
 function scalpExitReason(p, lp) {
   const entry = p.avgUsd;
@@ -11255,29 +11027,18 @@ function scalpExitReason(p, lp) {
   const prot = scalpProt(p, lp);
   const flow = livePrices.get(p.mint) || {};
   if (scalpLiqPull(prot.entryLiq, flow.liq)) return 'liquidity pull';
-  const candles = SCALP_BARS.get(p.mint) || [];
+  if (lp >= entry * (1 + SCALP_RULE.TP_PCT)) return 'tp +5%';
+  if (lp <= entry * (1 - SCALP_RULE.STOP_PCT)) return 'stop -3%';
   const ageMin = (Date.now() - (p.firstTs || Date.now())) / 60000;
-  const high = prot.high;
-  if (!prot.runner && ageMin >= SCALP_RULE.TIME_FLAT_MIN && high < entry * (1 + SCALP_RULE.TIME_FLAT_NEED)) return 'no +1.5% in 4m';
-  if (!prot.runner && ageMin >= SCALP_RULE.TIME_HARD_MIN) return 'time stop 10m';
-  if (prot.runner) {
-    const closes = candles.map(c => c.c).filter(n => n > 0);
-    const ema9 = closes.length >= 9 ? emaLast(closes, 9) : null;
-    const last = candles[candles.length - 1];
-    if (isNum(ema9) && last && last.c < ema9) return '1m close below EMA9';
-    const fade = scalpFadeReason(candles, flow.m5b, flow.m5s);
-    if (fade) return fade;
-  }
-  const lvl = scalpStopLevel(entry, p.plan?.breakLow, lp, high, prot.runner);
-  if (lp <= lvl.stop && scalpStopHeld(p.key, lp, lvl.stop)) return prot.runner ? 'trail stop' : (lvl.stop >= entry ? 'stop to +0.5%' : 'stop -3%');
+  if (ageMin >= SCALP_RULE.TIME_MIN) return 'time stop 10m';
   return '';
 }
 function scalpEffective(p, lp) {
   const entry = p?.avgUsd;
   if (!(entry > 0)) return { stop: null, tp1: null, tp2: null, reason: 'scalp', high: null, quick: false };
   const prot = scalpProt(p, lp);
-  const lvl = scalpStopLevel(entry, p.plan?.breakLow, lp, prot.high, prot.runner);
-  return { stop: lvl.stop, tp1: entry * (1 + SCALP_RULE.RUNNER_AT), tp2: null, reason: prot.runner ? 'scalp trail' : 'scalp stop', high: prot.high, quick: false };
+  const lvl = scalpStopLevel(entry);
+  return { stop: lvl.stop, tp1: entry * (1 + SCALP_RULE.TP_PCT), tp2: null, reason: 'scalp -3%', high: prot.high, quick: false };
 }
 const SCALP_BARS = new Map();
 async function scalpBars(mint, pool) {
@@ -11317,11 +11078,11 @@ function scalpCandleCtx(bars, px, meta) {
   const plan = meta.plan;
   const level = plan ? (+plan.trigger_price || 0) : 0;
   const strong = scalpStrongBreak(m1);
-  const breakLow = strong && strong.l > 0 ? strong.l * (1 - SCALP_RULE.STOP_BUF) : (last && last.l > 0 ? last.l * (1 - SCALP_RULE.STOP_BUF) : null);
+  const breakLow = null;
   return {
     ageH: meta.ageH, curve: !!meta.curve, dexOk: !!meta.dexOk, liq: meta.liq, vol24: meta.vol24, flag: meta.flag || '',
     top10: meta.top10, insiders: meta.insiders, px, ema15, ema15Prev, lowerLow1h: scalpLowerLow(h1),
-    room: scalpRoomReason(px, level, last), broke, volX, body, ema20, last3, m5: meta.m5, h1: meta.h1,
+    room: '', broke, volX, body, ema20, last3, m5: meta.m5, h1: meta.h1,
     buys: meta.buys, sells: meta.sells, buyers: meta.buyers, bigSellPct: meta.bigSellPct, impact: meta.impact, drift: meta.drift,
     breakLow
   };
@@ -11370,14 +11131,12 @@ function applyScalpLedger(rec) {
     book.balanceUsd = usd6(book.balanceUsd + usd);
     book.realizedUsd = usd6(book.realizedUsd + pnlUsd);
     book.trades.push({ ts: rec.ts || Date.now(), side: 'sell', mint: rec.mint, symbol: rec.symbol || '', usd: usd6(usd), pnlUsd: usd6(pnlUsd), sig: rec.signature || '', tokenAmount: rec.tokenAmount || 0, tag: rec.exitTag || '' });
-    log.cooldowns[rec.mint] = Date.now() + (pnlUsd < 0 ? SCALP_RULE.CD_LOSS_MS : SCALP_RULE.CD_WIN_MS);
+    log.cooldowns[rec.mint] = Date.now() + SCALP_RULE.CD_MS;
     if (pnlUsd < 0) {
       log.streak = (log.streak || 0) + 1;
       if (log.streak >= SCALP_RULE.LOSS_STREAK) {
         log.streak = 0;
-        log.pausesToday = (log.pausesToday || 0) + 1;
         log.pauseUntil = Date.now() + SCALP_RULE.PAUSE_MS;
-        if (log.pausesToday >= SCALP_RULE.MAX_PAUSES) log.haltDay = tehranDayKey(Date.now());
       }
     } else log.streak = 0;
     if (scalpTodayPnl(book) <= -SCALP_RULE.DAY_LOSS) log.haltDay = tehranDayKey(Date.now());
@@ -11422,7 +11181,6 @@ function scalpGate(mint) {
   const cd = book.cooldowns && book.cooldowns[mint];
   if (cd > Date.now()) return 'cooldown';
   const count = book.counts && book.counts[mint];
-  if (count && count.day === book.dayKey && count.n >= SCALP_RULE.MAX_PER_DAY) return '3 scalps today';
   if (openPositions().some(p => p.open && p.mint === mint)) return 'already open';
   return '';
 }
@@ -11473,9 +11231,7 @@ function scalpFlag(mint) {
 async function scalpTick() {
   if (!SCALP_ON || scalpBusy || document.hidden || window.__SMS_SAFE) return;
   const sized = scalpSizeUsd();
-  if (!(sized.usd >= SCALP_RULE.MIN_FREE)) { scalpWhy.symbol = ''; scalpWhy.reason = sized.label; scalpWhy.at = Date.now(); renderScalp(); return; }
-  const solMood = await scalpSolBlock();
-  if (solMood) { scalpWhy.symbol = 'SOL'; scalpWhy.reason = solMood; scalpWhy.at = Date.now(); renderScalp(); return; }
+  if (!(sized.usd >= SCALP_RULE.TRADE_USD)) { scalpWhy.symbol = ''; scalpWhy.reason = sized.label; scalpWhy.at = Date.now(); renderScalp(); return; }
   scalpBusy = true;
   try {
     if (Date.now() - SCALP_SCAN_AT > 45000 && typeof discoverLivePairs === 'function') {
@@ -11531,7 +11287,7 @@ async function scalpTick() {
     const safe = await degenSafety(top.mint);
     if (!safe.ok) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = safe.reason || 'safety'; scalpWhy.at = Date.now(); return; }
     const size = scalpSizeUsd();
-    if (!(size.usd >= SCALP_RULE.MIN_FREE)) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = size.label; scalpWhy.at = Date.now(); return; }
+    if (!(size.usd >= SCALP_RULE.TRADE_USD)) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = size.label; scalpWhy.at = Date.now(); return; }
     const solPx = solPriceNow() || liveSolPx();
     if (!(solPx > 0)) { scalpWhy.symbol = top.meta.symbol; scalpWhy.reason = 'SOL price unavailable'; scalpWhy.at = Date.now(); return; }
     const sol = +(size.usd / solPx).toFixed(6);
@@ -11607,8 +11363,8 @@ function renderScalp() {
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L</div><div class="font-mono ${pnlCls}">${eq.pnl >= 0 ? '+' : ''}${usd(eq.pnl, 2)} · ${pct(eq.pct)}</div></div>
       <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Today · win rate</div><div class="font-mono">${todayN} · ${wr}</div></div>
     </div>
-    <p class="mt-2 text-[12px] text-slate-300 whitespace-normal break-words">Next size <b>${sized.usd >= SCALP_RULE.MIN_FREE ? usd(sized.usd, 2) : '—'}</b> <span class="text-slate-500">${esc(sized.label || '')}</span></p>
-    <p class="text-[11px] text-slate-500 whitespace-normal break-words">Free ${usd(eq.book.balanceUsd, 2)} · daily stop -$20 · max 2</p>
+    <p class="mt-2 text-[12px] text-slate-300 whitespace-normal break-words">Next size <b>${sized.usd >= SCALP_RULE.TRADE_USD ? usd(sized.usd, 2) : '—'}</b> <span class="text-slate-500">${esc(sized.label || '')}</span></p>
+    <p class="text-[11px] text-slate-500 whitespace-normal break-words">Free ${usd(eq.book.balanceUsd, 2)} · $20 per trade · daily stop -$15 · max 2</p>
     ${why}
     <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open</h3>
     ${openHtml || '<p class="empty-note mt-1">No open scalp.</p>'}
