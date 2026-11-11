@@ -1,4 +1,4 @@
-import { degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, mlStop, planTriggerHit, planUsable, quoteImpact, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpStopLevel, textHasRugFlag } from './rules.js';
+import { degenLossPct, degenPotLimits, fakeDataReason, h1BreakSignal, h1TrendHold, mlStop, planTriggerHit, planUsable, quoteImpact, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpStopLevel, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
 
 function assert(cond, msg) {
@@ -87,6 +87,35 @@ const h1pos = { avgUsd: 0.001087, firstTs: Date.now() - 20 * 60e3, plan: { kind:
 assert(scalpExitReason(h1pos, 0.001, [], { liq: 1000 }) === '', 'breakout1h has no time stop');
 assert(scalpExitReason(h1pos, 0.0008, [], { liq: 1000 }) === 'breakout stop', 'breakout1h uses the candle stop');
 assert(scalpExitReason(h1pos, 0.001, [], { liq: 400 }) === 'liquidity pull', 'breakout1h still exits a liquidity pull');
+
+function batonCandles(hold2) {
+  const HOUR = 3600e3;
+  const t0 = Date.parse('2026-11-11T00:00:00Z');
+  const cs = [];
+  for (let i = 0; i < 39; i++) {
+    const t = t0 + i * HOUR;
+    let o = 0.0009, h = 0.00092, l = 0.00088, c = 0.0009, v = 100;
+    if (i === 5) { o = 0.00105; h = 0.0012; l = 0.001; c = 0.00108; }
+    else if (i === 12) { o = 0.001; h = 0.00105; l = 0.00096; c = 0.00098; }
+    else if (i === 20) { o = 0.0009; h = 0.00096; l = 0.00082; c = 0.00086; }
+    else if (i > 20 && i < 36) { o = 0.00085; h = 0.0009; l = 0.00082; c = 0.00086; }
+    else if (i === 36) { o = 0.0007; h = 0.0009; l = 0.00068; c = 0.00085; v = 200; }
+    else if (i === 37) { o = 0.00084; h = 0.00088; l = 0.00078; c = 0.0008; v = 100; }
+    else if (i === 38) { o = 0.00079; h = 0.00086; l = 0.00076; c = hold2; v = 100; }
+    cs.push({ t, o, h, l, c, v });
+  }
+  return { cs, now: t0 + 38 * HOUR + HOUR + 1000 };
+}
+const baton = batonCandles(0.00078);
+const held = h1TrendHold(baton.cs, baton.now);
+assert(held.buy && held.kind === 'trendhold1h', 'baton hold buys after two closes above the line');
+assert(Math.abs(held.entry - 0.00078) < 1e-12, 'baton entry is the second hold close');
+assert(Math.abs(held.stop - 0.00068 * 0.985) < 1e-12, 'baton stop is under the break candle');
+assert(Math.abs(held.stop - held.entry * 0.85) > 1e-8, 'baton stop is not moved to the 15% cap');
+const lost = batonCandles(0.0005);
+assert(!h1TrendHold(lost.cs, lost.now).buy, 'baton cancels when a hold closes back below the line');
+const early = h1TrendHold(baton.cs.filter(c => c.t < Date.parse('2026-11-11T00:00:00Z') + 38 * 3600e3), baton.now);
+assert(!early.buy, 'baton does not buy before the second hold closes');
 
 assert(degenLossPct(8) === 12 && degenLossPct(40) === 25 && degenLossPct(18) === 18, 'stop clamp');
 assert(degenPotLimits({ per_trade_usd: 20, max_open: 5, budget_usd: 40 }).tradeUsd === 12.5, 'pot cannot loosen size');

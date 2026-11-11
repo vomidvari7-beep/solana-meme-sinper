@@ -235,7 +235,7 @@ export function scalpExitReason(p, lp, candles, flow) {
   if (!(entry > 0) || !(lp > 0)) return '';
   const prot = p.prot || {};
   if (isNum(prot.entryLiq) && prot.entryLiq > 0 && isNum(flow?.liq) && flow.liq <= prot.entryLiq * 0.5) return 'liquidity pull';
-  if (p.plan?.kind === 'breakout1h') {
+  if (p.plan?.kind === 'breakout1h' || p.plan?.kind === 'trendhold1h') {
     const stop = +p.plan.stop;
     if (stop > 0 && lp <= stop) return 'breakout stop';
     return '';
@@ -343,18 +343,28 @@ function h1VolOk(bar, prior, spike) {
   if (spike && +spike.avg > 0 && +spike.v >= +spike.avg * 2) return true;
   return false;
 }
-function h1TrendAt(prior, index) {
-  if (!prior || prior.length < 15) return 0;
+function h1TrendPts(prior) {
+  if (!prior || prior.length < 15) return null;
   const { highs } = swingPoints(prior, 2);
-  if (highs.length < 2) return 0;
+  if (highs.length < 2) return null;
   let use = highs.slice(-2);
   const tail = highs.slice(-3);
   if (tail.length === 3 && tail[1].price < tail[0].price && tail[2].price < tail[1].price) use = tail;
-  else if (!(highs.at(-1).price < highs.at(-2).price)) return 0;
+  else if (!(highs.at(-1).price < highs.at(-2).price)) return null;
   const a = use[0], b = use[use.length - 1];
-  if (!(b.price < a.price)) return 0;
-  const lv = lineAt(a, b, index);
+  if (!(b.price < a.price)) return null;
+  return { a, b };
+}
+function h1TrendAt(prior, index) {
+  const fit = h1TrendPts(prior);
+  if (!fit) return 0;
+  const lv = lineAt(fit.a, fit.b, index);
   return lv > 0 ? lv : 0;
+}
+function h1BodyVolBreak(bar, line, avg) {
+  const range = bar.h - bar.l;
+  const body = Math.abs(bar.c - bar.o);
+  return range > 0 && body + 1e-12 >= range * 0.5 && avg > 0 && bar.v >= avg * 1.5 && bar.c > line;
 }
 function h1ResistZone(prior, bar) {
   const src = (prior || []).slice(-48);
@@ -404,8 +414,30 @@ export function h1BreakSignal(candles, now = Date.now(), livePx = null, spike = 
   }
   return {
     buy: true, fa: 'شکست شد · خرید', state: 'buy', entry: px, stop, target: px * 1.3,
-    zoneLo, zoneHi, line, low: forming.l, key, reason: '1h breakout'
+    zoneLo, zoneHi, line, low: forming.l, key,     reason: '1h breakout'
   };
+}
+
+/** Strong closed 1h trendline break, then two closed holds above the line. Buys the second hold's close. */
+export function h1TrendHold(candles, now = Date.now()) {
+  const { closed } = h1Parts(candles, now);
+  const wait = { buy: false, kind: 'trendhold1h', entry: null, stop: null, target: null, line: null, low: null, key: '', reason: 'waiting' };
+  if (closed.length < 24) return wait;
+  const i = closed.length - 3;
+  const prior = closed.slice(0, i);
+  const fit = h1TrendPts(prior);
+  if (!fit) return { ...wait, reason: 'no trendline' };
+  const at = (idx) => lineAt(fit.a, fit.b, idx);
+  const line = at(i);
+  const br = closed[i], hold1 = closed[i + 1], hold2 = closed[i + 2];
+  const vol = prior.slice(-20);
+  const avg = vol.reduce((s, c) => s + (c.v > 0 ? c.v : 0), 0) / 20;
+  if (vol.length < 20 || !(line > 0) || !h1BodyVolBreak(br, line, avg)) return { ...wait, line, reason: 'no strong break' };
+  const stop = br.l > 0 ? br.l * (1 - 0.015) : null;
+  const key = 'hold:' + Math.round(line * 1e8) + ':' + (br.t || i);
+  if (!(hold1.c > at(i + 1)) || !(hold2.c > at(i + 2))) return { ...wait, line, stop, key, reason: 'closed back below the trendline' };
+  if (!(stop > 0) || !(stop < hold2.c)) return { ...wait, line, key, stop, reason: 'stop' };
+  return { buy: true, kind: 'trendhold1h', entry: hold2.c, stop, target: hold2.c * 1.3, line, low: br.l, key, reason: 'trend break + hold' };
 }
 
 export function planFresh(p, now = Date.now()) {

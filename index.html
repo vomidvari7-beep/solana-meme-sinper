@@ -10598,18 +10598,45 @@ function h1Parts(candles, now) {
   if (cs.length < 2) return { closed: [], forming: cs[0] || null };
   return { closed: cs.slice(0, -1), forming: cs[cs.length - 1] };
 }
-function h1TrendAt(prior, index) {
-  if (!prior || prior.length < 15) return 0;
+function h1TrendPts(prior) {
+  if (!prior || prior.length < 15) return null;
   const { highs } = swingPoints(prior, 2);
-  if (highs.length < 2) return 0;
+  if (highs.length < 2) return null;
   let use = highs.slice(-2);
   const tail = highs.slice(-3);
   if (tail.length === 3 && tail[1].price < tail[0].price && tail[2].price < tail[1].price) use = tail;
-  else if (!(highs.at(-1).price < highs.at(-2).price)) return 0;
+  else if (!(highs.at(-1).price < highs.at(-2).price)) return null;
   const a = use[0], b = use[use.length - 1];
-  if (!(b.price < a.price)) return 0;
-  const lv = lineAt(a, b, index);
+  if (!(b.price < a.price)) return null;
+  return { a, b };
+}
+function h1TrendAt(prior, index) {
+  const fit = h1TrendPts(prior);
+  if (!fit) return 0;
+  const lv = lineAt(fit.a, fit.b, index);
   return lv > 0 ? lv : 0;
+}
+function h1TrendHold(candles, now) {
+  const { closed } = h1Parts(candles, now || Date.now());
+  const wait = { buy: false, kind: 'trendhold1h', entry: null, stop: null, target: null, line: null, low: null, key: '', reason: 'waiting' };
+  if (closed.length < 24) return wait;
+  const i = closed.length - 3;
+  const prior = closed.slice(0, i);
+  const fit = h1TrendPts(prior);
+  if (!fit) return { ...wait, reason: 'no trendline' };
+  const at = (idx) => lineAt(fit.a, fit.b, idx);
+  const line = at(i);
+  const br = closed[i], hold1 = closed[i + 1], hold2 = closed[i + 2];
+  const vol = prior.slice(-20);
+  const avg = vol.reduce((s, c) => s + (c.v > 0 ? c.v : 0), 0) / 20;
+  const range = br.h - br.l, body = Math.abs(br.c - br.o);
+  const strong = vol.length >= 20 && line > 0 && range > 0 && body + 1e-12 >= range * 0.5 && avg > 0 && br.v >= avg * 1.5 && br.c > line;
+  if (!strong) return { ...wait, line, reason: 'no strong break' };
+  const stop = br.l > 0 ? br.l * (1 - 0.015) : null;
+  const key = 'hold:' + Math.round(line * 1e8) + ':' + (br.t || i);
+  if (!(hold1.c > at(i + 1)) || !(hold2.c > at(i + 2))) return { ...wait, line, stop, key, reason: 'closed back below the trendline' };
+  if (!(stop > 0) || !(stop < hold2.c)) return { ...wait, line, key, stop, reason: 'stop' };
+  return { buy: true, kind: 'trendhold1h', entry: hold2.c, stop, target: hold2.c * 1.3, line, low: br.l, key, reason: 'trend break + hold' };
 }
 function h1ResistZone(prior, bar) {
   const src = (prior || []).slice(-48);
@@ -10694,9 +10721,11 @@ async function mlBreakPass() {
     if (!book?.h1) continue;
     const px = livePrices.get(r.mint)?.price || r.price;
     const sig = h1BreakSignal(book.h1, Date.now(), px, h1Spike(r.mint));
+    const hold = h1TrendHold(book.h1, Date.now());
+    const order = sig.buy ? sig : hold;
     mlBreakByMint.set(r.mint, Object.assign({ mint: r.mint, symbol: r.symbol || '' }, sig));
     if ((r.mlFa || '') !== (sig.fa || '')) { r.mlFa = sig.fa || ''; painted = true; }
-    if (!sig.buy || !MYLIST.on || !burnerReady()) continue;
+    if (!order.buy || !MYLIST.on || !burnerReady()) continue;
     const flow = livePrices.get(r.mint) || {};
     const pair = r.dexPair || {};
     const fake = fakeDataReason(r.mint, {
@@ -10706,7 +10735,7 @@ async function mlBreakPass() {
       h1: pair.priceChange?.h1 != null ? +pair.priceChange.h1 : null
     });
     if (fake) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', fake); botLog('mylist', r.mint, fake); continue; }
-    const key = sig.key;
+    const key = order.key;
     if (mlBreakBook().find(x => x.mint === r.mint && x.key === key && x.kind === 'buy')) continue;
     if (LOG.some(t => t.myList && t.mint === r.mint && t.side === 'buy' && (t.status === 'pending' || t.status === 'confirmed') && t.plan?.mlBreakKey === key)) continue;
     if (listPosition(r.mint) || mlBreakLock.has(r.mint)) continue;
@@ -10724,16 +10753,18 @@ async function mlBreakPass() {
     const badQuote = fakeImpactReason(qo.quote);
     if (badQuote) { if (typeof noteBuyWhy === 'function') noteBuyWhy(r.mint, r.symbol, 'mylist', badQuote); botLog('mylist', r.mint, badQuote); continue; }
     if (impactPct(qo.quote) > 1) { botLog('mylist', r.mint, 'impact > 1%'); continue; }
-    const plan = { myList: true, mlBreak: true, mlBreakKey: key, agent: false, stop: sig.stop, strat: 'My List 1h breakout', exit: { stopPx: sig.stop, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } };
+    const trendHold = order.kind === 'trendhold1h';
+    const plan = { myList: true, mlBreak: true, mlBreakKey: key, agent: false, stop: order.stop, strat: trendHold ? 'My List trend hold' : 'My List 1h breakout', exit: { stopPx: order.stop, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } };
+    if (trendHold) plan.kind = 'trendhold1h';
     mlBreakLock.add(r.mint);
     try {
-      await executeSwap({ walletKey: 'burner', side: 'buy', mint: r.mint, quoteObj: qo, t: { mint: r.mint, symbol: r.symbol || short(r.mint) }, auto: true, extra: { plan, myList: true, test: test.test, entryReason: '1h breakout' } });
-      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, line: sig.line, zoneLo: sig.zoneLo, zoneHi: sig.zoneHi, stop: sig.stop });
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: r.mint, quoteObj: qo, t: { mint: r.mint, symbol: r.symbol || short(r.mint) }, auto: true, extra: { plan, myList: true, test: test.test, entryReason: trendHold ? 'trend break + hold' : '1h breakout' } });
+      mlBreakNote({ kind: 'buy', mint: r.mint, symbol: r.symbol || '', key, line: order.line, zoneLo: order.zoneLo, zoneHi: order.zoneHi, stop: order.stop });
     } finally { mlBreakLock.delete(r.mint); }
     r.boughtOnce = true; r.dayKey = todayKey(); r.buysToday = (r.buysToday || 0) + 1;
     r.mlFa = sig.fa;
     saveMyList();
-    toast('My List breakout ' + (r.symbol || ''), 'ok', 6000);
+    toast((trendHold ? 'My List trend hold ' : 'My List breakout ') + (r.symbol || ''), 'ok', 6000);
     painted = true;
     break;
   }
@@ -11866,7 +11897,7 @@ function scalpExitReason(p, lp) {
   const prot = scalpProt(p, lp);
   const flow = livePrices.get(p.mint) || {};
   if (scalpLiqPull(prot.entryLiq, flow.liq)) return 'liquidity pull';
-  if (p.plan?.kind === 'breakout1h') return (+p.plan.stop > 0 && lp <= +p.plan.stop) ? 'breakout stop' : '';
+  if (p.plan?.kind === 'breakout1h' || p.plan?.kind === 'trendhold1h') return (+p.plan.stop > 0 && lp <= +p.plan.stop) ? 'breakout stop' : '';
   const candles = (SCALP_BARS.get(p.mint) || {}).m1 || [];
   const ageMin = (Date.now() - (p.firstTs || Date.now())) / 60000;
   const high = prot.high;
@@ -11885,7 +11916,7 @@ function scalpExitReason(p, lp) {
   return '';
 }
 function scalpEffective(p, lp) {
-  if (p?.plan?.kind === 'breakout1h' && +p.plan.stop > 0) return { stop: +p.plan.stop, tp1: null, tp2: null, reason: 'breakout stop', high: null, quick: false };
+  if ((p?.plan?.kind === 'breakout1h' || p?.plan?.kind === 'trendhold1h') && +p.plan.stop > 0) return { stop: +p.plan.stop, tp1: null, tp2: null, reason: 'breakout stop', high: null, quick: false };
   const entry = p?.avgUsd;
   if (!(entry > 0)) return { stop: null, tp1: null, tp2: null, reason: 'scalp', high: null, quick: false };
   const prot = scalpProt(p, lp);
@@ -12095,7 +12126,8 @@ async function scalpH1Buy(ranked) {
     let bars;
     try { bars = await scalpBars(row.mint, row.meta.pool); } catch { continue; }
     const px = row.meta.px || livePrices.get(row.mint)?.price;
-    const sig = h1BreakSignal(bars.h1 || [], Date.now(), px, h1Spike(row.mint));
+    const liveSig = h1BreakSignal(bars.h1 || [], Date.now(), px, h1Spike(row.mint));
+    const sig = liveSig.buy ? liveSig : h1TrendHold(bars.h1 || [], Date.now());
     if (!sig.buy) continue;
     const gate = scalpGate(row.mint);
     if (gate) continue;
@@ -12122,8 +12154,9 @@ async function scalpH1Buy(ranked) {
     const impact = impactPct(qo.quote);
     if (impact > SCALP_RULE.IMPACT_MAX) continue;
     const usd = test.test ? (test.usd || 3) : sol * solPx;
-    const plan = { scalp: true, kind: 'breakout1h', scalpUsd: usd, stop: sig.stop, pool: row.meta.pool, entryLiq: row.meta.liq };
-    await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { symbol: row.meta.symbol || short(row.mint), mint: row.mint }, auto: false, extra: { scalp: true, test: test.test, plan, entryReason: 'scalp 1h breakout' } });
+    const trendHold = sig.kind === 'trendhold1h';
+    const plan = { scalp: true, kind: trendHold ? 'trendhold1h' : 'breakout1h', scalpUsd: usd, stop: sig.stop, pool: row.meta.pool, entryLiq: row.meta.liq };
+    await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { symbol: row.meta.symbol || short(row.mint), mint: row.mint }, auto: false, extra: { scalp: true, test: test.test, plan, entryReason: trendHold ? 'scalp trend hold' : 'scalp 1h breakout' } });
     scalpWhy.symbol = row.meta.symbol || ''; scalpWhy.reason = 'bought'; scalpWhy.at = Date.now();
     toast('Scalp 1h breakout ' + (row.meta.symbol || ''), 'warn', 5000);
     return true;
@@ -12281,7 +12314,7 @@ function renderScalp() {
   const openHtml = open.map(p => {
     const lp = livePrices.get(p.mint)?.price;
     const pnl = isNum(lp) && p.avgUsd ? (lp / p.avgUsd - 1) * 100 : null;
-    const state = p.plan?.kind === 'breakout1h' ? 'exit: TBD (Vahid)' : (scalpProt(p, lp).runner ? 'trailing' : 'armed');
+    const state = (p.plan?.kind === 'breakout1h' || p.plan?.kind === 'trendhold1h') ? 'exit: TBD (Vahid)' : (scalpProt(p, lp).runner ? 'trailing' : 'armed');
     return `<article class="border-b border-white/10 py-2 text-[12px]"><div class="flex items-center justify-between gap-2"><b>${esc(p.symbol || short(p.mint))}</b><span class="num" data-live-mint="${esc(p.mint)}">${price(lp)}</span></div><div class="text-[11px] text-slate-500">${isNum(pnl) ? pct(pnl) : '—'} · ${esc(state)}</div><button type="button" data-scalp-sell="${esc(p.mint)}" class="mt-1 text-[12px] text-rose-300">Sell</button></article>`;
   }).join('');
   const closed = [...sells].reverse().slice(0, 12).map(t => `<article class="border-b border-white/10 py-1.5 text-[12px]"><div class="flex justify-between gap-2"><b>${esc(t.symbol || short(t.mint))}</b><span class="${t.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300'} font-mono">${isNum(t.pnlUsd) ? (t.pnlUsd >= 0 ? '+' : '') + usd(t.pnlUsd, 2) : '—'}</span></div><div class="text-[11px] text-slate-500">${esc(t.tag || 'closed')} · ${tehranClock(t.ts)}</div></article>`).join('');

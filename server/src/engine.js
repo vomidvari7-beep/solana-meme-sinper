@@ -1,5 +1,5 @@
 import { tapeFromDex } from './net.js';
-import { CAPS, fakeDataReason, h1BreakSignal, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
+import { CAPS, fakeDataReason, h1BreakSignal, h1TrendHold, liveConfidence, livePreReason, noteRugDrop, planTriggerHit, planUsable, quoteImpact, scalpContext, scalpDayBlock, scalpDexOk, scalpEntryFail, scalpExitReason, scalpSizeUsd, SCALP, degenExitDecision, degenPotLimits } from './rules.js';
 import { isNum, log, tehranDayKey, WSOL } from './util.js';
 
 function pairTape(p) { return tapeFromDex(p); }
@@ -234,7 +234,8 @@ export function createEngine(cfg, state, net, swap) {
       if (!tape?.pool) continue;
       let h1;
       try { h1 = await net.ohlcv(tape.pool, '1h'); } catch { continue; }
-      const sig = h1BreakSignal(h1, Date.now(), tape.px);
+      const liveSig = h1BreakSignal(h1, Date.now(), tape.px);
+      const sig = liveSig.buy ? liveSig : h1TrendHold(h1, Date.now());
       if (!sig.buy) continue;
       const fake = guard(mint, tape);
       if (fake) { state.note('scalp', mint, tape.symbol, fake); continue; }
@@ -250,7 +251,8 @@ export function createEngine(cfg, state, net, swap) {
       const bal = await swap.balance();
       if (solAmt + CAPS.reserveSol > bal) { state.note('scalp', mint, tape.symbol, 'insufficient SOL'); return false; }
       state.data.seenH1[mint] = sig.key;
-      await safeBuy('scalp', mint, tape.symbol, solAmt, SCALP.SLIP_BPS, { scalp: true, kind: 'breakout1h', scalpUsd: CAPS.listUsd, stop: sig.stop, pool: tape.pool, entryLiq: tape.liq, reason: 'scalp 1h breakout' }, tape.liq);
+      const hold = sig.kind === 'trendhold1h';
+      await safeBuy('scalp', mint, tape.symbol, solAmt, SCALP.SLIP_BPS, { scalp: true, kind: hold ? 'trendhold1h' : 'breakout1h', scalpUsd: CAPS.listUsd, stop: sig.stop, pool: tape.pool, entryLiq: tape.liq, reason: hold ? 'scalp trend hold' : 'scalp 1h breakout' }, tape.liq);
       return true;
     }
     return false;
@@ -267,8 +269,10 @@ export function createEngine(cfg, state, net, swap) {
     if (!tape?.pool) return;
     let h1;
     try { h1 = await net.ohlcv(tape.pool, '1h'); } catch { return; }
-    const sig = h1BreakSignal(h1, Date.now(), tape.px);
-    breakViews.set(row.mint, { mint: row.mint, symbol: row.symbol || tape.symbol || '', fa: sig.fa, zoneLo: sig.zoneLo, zoneHi: sig.zoneHi, stop: sig.stop, target: sig.target, entry: sig.entry, state: sig.state });
+    const liveSig = h1BreakSignal(h1, Date.now(), tape.px);
+    const hold = h1TrendHold(h1, Date.now());
+    const sig = liveSig.buy ? liveSig : hold;
+    breakViews.set(row.mint, { mint: row.mint, symbol: row.symbol || tape.symbol || '', fa: liveSig.fa, zoneLo: liveSig.zoneLo, zoneHi: liveSig.zoneHi, stop: sig.stop, target: sig.target || liveSig.target, entry: sig.entry, state: liveSig.state });
     if (breakViews.size > 40) breakViews.delete(breakViews.keys().next().value);
     if (!sig.buy) return;
     const fake = guard(row.mint, tape);
@@ -282,7 +286,10 @@ export function createEngine(cfg, state, net, swap) {
     const sized = (await import('./state.js')).clampMainBuy(state, want, bal);
     if (sized.err) { state.note('breakout', row.mint, row.symbol || tape.symbol, sized.err); return; }
     state.data.seenBreaks[row.mint] = sig.key;
-    await safeBuy('breakout', row.mint, row.symbol || tape.symbol, sized.sol, 100, { myList: true, mlBreak: true, mlBreakKey: sig.key, stop: sig.stop, tp: sig.entry * 1.3, reason: '1h breakout', exit: { stopPx: sig.stop, tps: [{ gainPct: 30, sellPct: 100 }] } }, tape.liq);
+    const trendHold = sig.kind === 'trendhold1h';
+    const plan = { myList: true, mlBreak: true, mlBreakKey: sig.key, stop: sig.stop, tp: sig.entry * 1.3, reason: trendHold ? 'trend break + hold' : '1h breakout', exit: { stopPx: sig.stop, tps: [{ gainPct: 30, sellPct: 100 }] } };
+    if (trendHold) plan.kind = 'trendhold1h';
+    await safeBuy('breakout', row.mint, row.symbol || tape.symbol, sized.sol, 100, plan, tape.liq);
   }
 
   async function plansTick() {
