@@ -5648,7 +5648,7 @@ function resumeArmedBots() {
   if (p.mylist && typeof MYLIST !== 'undefined' && !MYLIST.on) { MYLIST.on = true; startMyList(); setTimeout(myListTick, 500); }
   if (p.copy && typeof COPY !== 'undefined' && !COPY.on) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 600); }
   if (p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
-  if (p.degen) { const d = degenCfg(); d.on = true; saveDegen(d); startDegen(); }
+  if (p.degen || degenCfg().on) { const d = degenCfg(); d.on = true; saveDegen(d); startDegen(); }
   if (p.scan) { liveScanOn = true; if (!window.__SMS_SAFE) startLiveScan(); }
   A.momentumOn = !!p.momentum;
   renderBotBar();
@@ -6908,13 +6908,13 @@ async function degenBuy(pick, opt) {
     renderDegen();
     return r;
   }
-  if (!opt?.sniper) {
+  if (!opt?.sniper && !opt?.fresh) {
     const picks = await degenFetchFile();
     const fresh = picks.find(p => p && p.mint === pick.mint);
     if (!fresh) { degenBlockNote(pick, 'pick not in fresh degen.json'); return; }
     pick = fresh;
   }
-  const price = await degenTokenPx(pick.mint, true);
+  const price = isNum(opt?.price) ? opt.price : await degenTokenPx(pick.mint, true);
   if (!opt?.sniper && degenStatus(pick, price) !== 'READY') { degenBlockNote(pick, 'not READY on fresh file'); return; }
   const why = degenPickBlock(pick, price);
   if (why) { degenBlockNote(pick, why); return; }
@@ -6977,35 +6977,53 @@ async function degenExitTick(skipRefresh) {
     try { await degenSell(p, ex.pctSell, ex.tag, lp, ex.reason); } catch (e) { degenNote(p.symbol + ' sell failed — ' + e.message); }
   }
 }
-async function degenPoll() {
-  if (!degenOn() || degenBusy) return;
-  if (!WALLETS.burner?.kp) { degenNote('armed, unlock to run'); degenLogEvent('pot', 'burner locked'); renderDegen(); return; }
-  if (degenLedgerShort()) { degenHaltFunds(); degenLogEvent('pot', 'Degen out of funds'); renderDegen(); return; }
+function degenShownPx(pick) {
+  const q = (DEGEN.quotes || {})[pick?.mint];
+  if (isNum(q?.price)) return q.price;
+  const live = livePrices.get(pick?.mint)?.price;
+  return isNum(live) ? live : null;
+}
+async function degenEvaluate(picks) {
+  const list = Array.isArray(picks) ? picks : (DEGEN.picks || []);
+  const ready = list.filter(p => p && degenStatus(p, degenShownPx(p)) === 'READY');
+  if (!degenOn()) { ready.forEach(p => degenBlockNote(p, 'degen pot off')); return; }
+  if (!WALLETS.burner?.kp) { ready.forEach(p => degenBlockNote(p, 'burner locked')); degenNote('armed, unlock to run'); return; }
+  if (degenLedgerShort()) { degenHaltFunds(); ready.forEach(p => degenBlockNote(p, 'Degen out of funds')); return; }
+  if (degenBusy) return;
   degenBusy = true;
+  try {
+    let filled = false;
+    for (const pick of list) {
+      const shown = degenShownPx(pick);
+      if (degenStatus(pick, shown) !== 'READY' && !degenEntryLive(pick)) continue;
+      const block = degenBuyBlock();
+      if (block) { degenBlockNote(pick, block); continue; }
+      let price = shown;
+      try { price = await degenTokenPx(pick.mint, true); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
+      const why = degenPickBlock(pick, price);
+      if (why) { degenBlockNote(pick, why); continue; }
+      if (filled) { degenBlockNote(pick, 'queued — one degen buy per pass'); continue; }
+      try {
+        const bought = await degenBuy(pick, { price, fresh: true });
+        if (bought) filled = true;
+      } catch (e) { degenBlockNote(pick, e.message || 'buy failed'); }
+    }
+  } finally { degenBusy = false; renderDegen(); }
+}
+async function degenPoll() {
+  if (degenBusy) return;
   try {
     const data = await fetchDegenDoc();
     const picks = applyDegenDoc(data);
-    if (!picks) { degenNote('stale degen.json ignored'); return; }
-    for (const pick of picks) {
-      const block = degenBuyBlock();
-      if (block) { degenBlockNote(pick, block); break; }
-      let price = null;
-      try { price = await degenTokenPx(pick.mint); } catch (e) { degenBlockNote(pick, 'price — ' + e.message); continue; }
-      const why = degenPickBlock(pick, price);
-      if (why) { degenBlockNote(pick, why); continue; }
-      try {
-        const bought = await degenBuy(pick, { price });
-        if (bought) break;
-      } catch (e) { degenBlockNote(pick, e.message); }
-    }
-  } catch (e) { DEGEN.error = e.message || String(e); }
-  finally { degenBusy = false; renderDegen(); }
+    if (!picks) degenNote('stale degen.json ignored');
+  } catch (e) { DEGEN.error = e.message || String(e); degenLogEvent('pot', e.message || 'degen.json fetch failed'); }
+  await degenEvaluate(DEGEN.picks);
 }
 function startDegen() {
   clearInterval(degenTimer);
-  degenTimer = setInterval(degenPoll, 60000);
+  degenTimer = setInterval(degenPoll, 15000);
   if (!degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
-  setTimeout(degenPoll, 800);
+  degenPoll();
 }
 function stopDegen() { clearInterval(degenTimer); degenTimer = null; }
 function degenStatus(pick, px) {
@@ -7033,7 +7051,7 @@ async function degenWatch() {
   degenWatchBusy = true;
   try {
     const data = await fetchDegenDoc();
-    if (!applyDegenDoc(data)) { degenNote('stale degen.json ignored'); degenWatchBusy = false; renderDegen(); return; }
+    if (!applyDegenDoc(data)) degenNote('stale degen.json ignored');
     DEGEN.quotes = DEGEN.quotes || {};
     const quoteList = (DEGEN.picks || []).filter(p => p?.mint);
     const take = window.__SMS_SAFE ? 3 : 6;
@@ -7049,7 +7067,8 @@ async function degenWatch() {
       } catch { /* keep the last quote */ }
     }
     if (quoteList.length) degenQuoteCursor = (degenQuoteCursor + take) % quoteList.length;
-  } catch (e) { DEGEN.error = e.message || String(e); }
+    await degenEvaluate(DEGEN.picks);
+  } catch (e) { DEGEN.error = e.message || String(e); degenLogEvent('pot', e.message || 'degen watch failed'); }
   degenWatchBusy = false;
   renderDegen();
 }
