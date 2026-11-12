@@ -1,34 +1,94 @@
 {
   "pause_auto_buy": true,
-  "ts": 1794454380000,
-  "updated_utc": "2026-11-12T03:33:00Z",
-  "updated_tehran": "2026-11-12 07:03 Asia/Tehran",
+  "ts": 1794455280000,
+  "updated_utc": "2026-11-12T03:48:00Z",
+  "updated_tehran": "2026-11-12 07:18 Asia/Tehran",
   "wallet": "4u2MpTT4WXLTaJFhqaXRHu6dw5zKiJc5iuUH1cuamKYU",
-  "wallet_usd": 185.0,
-  "sol_balance": 0.701,
-  "sol_usd": 58.19,
-  "daily_pnl_usd": -22.53,
-  "daily_pnl_pct_of_wallet": -10.86,
+  "wallet_usd": 188.19,
+  "sol_balance": 0.3314,
+  "sol_usd": 27.55,
+  "daily_pnl_usd": -19.34,
+  "daily_pnl_pct_of_wallet": -9.32,
   "positions": [
     {
       "mint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
       "symbol": "TROLL",
       "action": "hold",
       "new_stop": 0.0287,
-      "reason": "Hold; stop 0.0287 kept (~5.1% below). +1.3% vs entry; +0.6% 1h, +4% 6h, above 0.030; buys 31 vs sells 33 1h; liq ~$2.33M steady; no rug signals.",
-      "timestamp": "2026-11-12T03:33:00Z",
-      "price": 0.03025,
-      "price_sol": 0.0003644,
-      "value_usd": 126.81,
+      "reason": "Hold; stop 0.0287 kept (~5.9% below). +2.1% vs entry; +1.4% 1h, +4.5% 6h, holding above 0.030; buys 41 vs sells 51 1h; liq ~$2.34M steady; no rug signals. Another ~25% sold 07:11.",
+      "timestamp": "2026-11-12T03:48:00Z",
+      "price": 0.03051,
+      "price_sol": 0.0003672,
+      "value_usd": 95.93,
       "entry": 0.02987,
       "entry_sol": 0.00035692,
       "entry_note": "from SOL balance change incl. fees (tx 3TZAmgS8wX… 02:04:04)",
-      "qty": 4192.098635,
-      "pnl_pct": 1.3,
+      "qty": 3144.073977,
+      "pnl_pct": 2.1,
       "opened_tehran": "2026-11-12 02:04"
+    },
+    {
+      "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
+      "symbol": "WEALTH",
+      "action": "hold",
+      "new_stop": 0.000537,
+      "reason": "New position (4 buys 07:15-07:16, 0.38 SOL, bought while auto-buy paused). Stop set at 15% cap (0.000537). Flat vs entry; +5% 1h but -15% 24h, sells>buys (125 vs 88 1h); liq only ~$70k; mint/freeze authority renounced. Dumped -34% yesterday; watch closely.",
+      "timestamp": "2026-11-12T03:48:00Z",
+      "price": 0.0006313,
+      "price_sol": 7.596e-06,
+      "value_usd": 31.55,
+      "entry": 0.000632,
+      "entry_sol": 7.605e-06,
+      "entry_note": "from SOL balance change incl. fees (txs M8VTZE46Zp.. 2TtaJWriTi.., 07:15:36-07:16:31)",
+      "qty": 49973.607222,
+      "pnl_pct": -0.1,
+      "opened_tehran": "2026-11-12 07:15"
+    },
+    {
+      "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
+      "symbol": "Max",
+      "action": "hold",
+      "new_stop": 0.001374,
+      "reason": "Re-entry (5 buys 07:10-07:12, 0.38 SOL, bought while auto-buy paused; same token stopped out at 06:57). Stop at 15% cap (0.001374). +5% vs entry but very volatile: -12% 1h, -76% 6h after +4479% 24h pump; sells>buys (103 vs 75 5m... 2433 vs 3080 24h); liq ~$165k; authorities renounced.",
+      "timestamp": "2026-11-12T03:48:00Z",
+      "price": 0.001696,
+      "price_sol": 2.041e-05,
+      "value_usd": 33.16,
+      "entry": 0.001616,
+      "entry_sol": 1.944e-05,
+      "entry_note": "from SOL balance change incl. fees (txs 4oKNvY6UhB.. 667DGs6LBu.., 07:10:07-07:12:03)",
+      "qty": 19550.054252,
+      "pnl_pct": 5.0,
+      "opened_tehran": "2026-11-12 07:10"
     }
   ],
   "closed_today": [
+    {
+      "mint": "5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2",
+      "symbol": "TROLL",
+      "partial": true,
+      "closed_tehran": "2026-11-12 07:11",
+      "qty_sold": 1048.025,
+      "pnl_sol": 0.0078,
+      "pnl_pct": 2.1,
+      "note": "2nd partial sale of 1048.03 for 0.3821 SOL (tx 2CBd1B9iiE..). Not a risk signal (was hold)."
+    },
+    {
+      "mint": "4rYsDHMfKmt6VuVGcM8cGzBgkZNgQT3w2DhdEmtVpump",
+      "opened_tehran": "2026-11-12 07:04",
+      "closed_tehran": "2026-11-12 07:07",
+      "pnl_sol": 0.0126,
+      "pnl_pct": 12.4,
+      "note": "quick round-trip 6925.87 tokens, bought while auto-buy paused"
+    },
+    {
+      "mint": "Hg5Ja55T5wESq4vyFoiVCMeHXtGyVA69X2UHq8hgpump",
+      "opened_tehran": "2026-11-12 07:04",
+      "closed_tehran": "2026-11-12 07:07",
+      "pnl_sol": -0.0041,
+      "pnl_pct": -5.1,
+      "note": "quick round-trip 1487.45 tokens, bought while auto-buy paused"
+    },
     {
       "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
       "symbol": "Max",
@@ -101,7 +161,7 @@
     "reason": "Vahid confirmed the Leonida loss was from his own test buy; auto-buy should resume. Agent exits stay enabled.",
     "expired": "Applied to Tehran day 2026-11-11 only; no longer in effect from 2026-11-12."
   },
-  "sol_price_usd": 83.01,
+  "sol_price_usd": 83.14,
   "daily_pnl_note": "New Tehran day 2026-11-12; P&L baseline = wallet value at 00:01 (incl. open positions at mark). Pause triggers if day loss > 10% of wallet.",
   "closed_prev_day": {
     "tehran_date": "2026-11-11",
@@ -185,5 +245,6 @@
   "day_start_tehran": "2026-11-12 00:00",
   "day_start_wallet_usd": 207.53,
   "pause_reason": "Daily loss -10.21% of wallet (> 10% cap) at 03:16 Tehran 2026-11-12; stays paused for the rest of this Tehran day.",
-  "paused_at_tehran": "2026-11-12 03:16 Asia/Tehran"
+  "paused_at_tehran": "2026-11-12 03:16 Asia/Tehran",
+  "pause_note": "Pause stays on for rest of Tehran day 2026-11-12 (set 03:16). Note: ~1.24 SOL of buys (Max, WEALTH, 4rYsDH, Hg5Ja5) happened 07:04-07:16 while paused; panel may not be honoring pause_auto_buy, or these were manual."
 }
