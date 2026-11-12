@@ -1,17 +1,119 @@
 {
-  "updated_utc": "2026-11-12T14:06:11Z",
-  "updated_tehran": "2026-11-12T17:36:11+03:30",
+  "updated_utc": "2026-11-12T15:14:40Z",
+  "updated_tehran": "2026-11-12T18:44:40+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
-  "cash_usd": 98.2404,
-  "equity_usd": 98.2404,
-  "realized_pnl_usd": -1.7595,
+  "cash_usd": 88.2477,
+  "equity_usd": 88.2477,
+  "realized_pnl_usd": -11.7523,
   "unrealized_pnl_usd": 0.0,
-  "trades": 2,
+  "trades": 5,
   "win_rate": 0.0,
   "open": [],
   "closed": [
+    {
+      "mint": "CAL1iAmqSsxJmLMvWw5GyG5PT3AqUJg5bie71CiYLSYg",
+      "symbol": "mihao",
+      "name": "ni hao cat",
+      "logo": null,
+      "entry_price": 2.0793325199287057e-05,
+      "exit_price": 1.633933634165083e-05,
+      "size_usd": 13.6983,
+      "pnl_usd": -2.9638,
+      "pnl_pct": -21.636,
+      "reason": "stop_loss",
+      "graduated": false,
+      "opened_tehran": "2026-11-12T18:43:06+03:30",
+      "closed_tehran": "2026-11-12T18:43:39+03:30",
+      "hold_min": 0.5,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.0793325199287057e-05,
+          "usd": 13.6983,
+          "reason": "entry",
+          "tehran": "2026-11-12T18:43:06+03:30"
+        },
+        {
+          "venue": "curve",
+          "side": "sell",
+          "price_usd": 1.633933634165083e-05,
+          "usd": 10.7345,
+          "reason": "stop_loss",
+          "tehran": "2026-11-12T18:43:39+03:30"
+        }
+      ]
+    },
+    {
+      "mint": "ASYGfSjeBjQ26Tb5i7fkZbttQzahfLVouqZWh3utpump",
+      "symbol": "Artcoin",
+      "name": "Artcoin",
+      "logo": null,
+      "entry_price": 2.2632728719161927e-05,
+      "exit_price": 1.7305776460928073e-05,
+      "size_usd": 14.2043,
+      "pnl_usd": -3.3726,
+      "pnl_pct": -23.743,
+      "reason": "stop_loss",
+      "graduated": false,
+      "opened_tehran": "2026-11-12T18:08:00+03:30",
+      "closed_tehran": "2026-11-12T18:16:01+03:30",
+      "hold_min": 8.0,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.2632728719161927e-05,
+          "usd": 14.2043,
+          "reason": "entry",
+          "tehran": "2026-11-12T18:08:00+03:30"
+        },
+        {
+          "venue": "curve",
+          "side": "sell",
+          "price_usd": 1.7305776460928073e-05,
+          "usd": 10.8317,
+          "reason": "stop_loss",
+          "tehran": "2026-11-12T18:16:01+03:30"
+        }
+      ]
+    },
+    {
+      "mint": "FuMfqGzdLK12ZvsX3Gz1XjLzAYarjvSuE4hZpEwBpump",
+      "symbol": "小虎",
+      "name": "Xiaohu",
+      "logo": "https://metadata.j7tracker.io/images/8e0405516b324003",
+      "entry_price": 3.1859562026802465e-05,
+      "exit_price": 2.4026174530753148e-05,
+      "size_usd": 14.7527,
+      "pnl_usd": -3.6564,
+      "pnl_pct": -24.784,
+      "reason": "stop_loss",
+      "graduated": false,
+      "opened_tehran": "2026-11-12T17:46:00+03:30",
+      "closed_tehran": "2026-11-12T17:47:18+03:30",
+      "hold_min": 1.3,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 3.1859562026802465e-05,
+          "usd": 14.7527,
+          "reason": "entry",
+          "tehran": "2026-11-12T17:46:00+03:30"
+        },
+        {
+          "venue": "curve",
+          "side": "sell",
+          "price_usd": 2.4026174530753148e-05,
+          "usd": 11.0963,
+          "reason": "stop_loss",
+          "tehran": "2026-11-12T17:47:18+03:30"
+        }
+      ]
+    },
     {
       "mint": "9pvQmvGMXpZYxWgwLVKoQrA3yy22gbDLEmQDZgh9pump",
       "symbol": "CAMERON",
@@ -82,186 +184,157 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 1248,
-    "uptime_min": 15.9,
+    "tokens_tracked": 1261,
+    "uptime_min": 84.4,
     "counters": {
-      "trades": 47694,
-      "entered_band": 17,
-      "watch_accept": 15,
-      "creates": 663,
-      "pp_new_tokens": 143,
-      "pp_migrations": 10,
-      "complete_pumpportal_migrate": 10,
-      "complete_trade_reserves_zero": 140,
-      "complete_CompleteEvent": 10,
-      "complete_CompletePumpAmmMigrationEvent": 10,
-      "entry_reject": 24,
-      "watchdog_pump_logs": 1,
-      "pp_reconnects": 1
+      "trades": 216413,
+      "entered_band": 54,
+      "watch_accept": 48,
+      "creates": 3177,
+      "pp_new_tokens": 767,
+      "pp_migrations": 49,
+      "complete_pumpportal_migrate": 49,
+      "complete_trade_reserves_zero": 524,
+      "complete_CompleteEvent": 47,
+      "complete_CompletePumpAmmMigrationEvent": 47,
+      "entry_reject": 111,
+      "watchdog_pump_logs": 2,
+      "pp_reconnects": 3,
+      "pump_logs_reconnects": 11,
+      "entry_accept": 3
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-12T14:02:58Z",
-        "last_msg_utc": "2026-11-12T14:06:11Z"
+        "connected_utc": "2026-11-12T15:14:38Z",
+        "last_msg_utc": "2026-11-12T15:14:40Z"
       },
       "amm": {
         "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-12T14:04:04Z"
+        "connected_utc": "2026-11-12T15:02:03Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-12T14:03:02Z",
-        "last_msg_utc": "2026-11-12T14:06:06Z"
+        "connected_utc": "2026-11-12T15:01:00Z",
+        "last_msg_utc": "2026-11-12T15:14:06Z"
       }
     },
     "kill_switch": false,
     "recent_decisions": [
       {
-        "ts_tehran": "2026-11-12T17:30:33+03:30",
-        "symbol": "ANTPE",
-        "mint": "BrVJaraVPGnDpkmEzZ38KRciQpEFj4fjqwWPDtxepump",
+        "ts_tehran": "2026-11-12T18:34:54+03:30",
+        "symbol": "MACE",
+        "mint": "6ccUBEfVUNamBRQWmRoBXDnoe6mxJNgoqM5FvewKpump",
         "accepted": false,
         "reasons": [
-          "progress_out_of_band(68%)",
-          "too_young(91s)",
-          "creator_already_sold",
-          "early_buys_heavy(47.41%)"
+          "early_buys_heavy(65.8%)"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:30:35+03:30",
-        "symbol": "KITTY",
-        "mint": "BrjUBC7zGWhkBDvATEP31CUsgBKKjv7gp5pHUANkpump",
+        "ts_tehran": "2026-11-12T18:36:51+03:30",
+        "symbol": "GTA 6.0",
+        "mint": "2hwaRQs4WqThnp26XLpch5MBZhAHqses3vSv1Bkupump",
         "accepted": false,
         "reasons": [
-          "progress_out_of_band(68%)",
-          "too_young(70s)",
-          "creator_already_sold",
-          "early_buys_heavy(40.05%)"
+          "progress_out_of_band(90%)"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:30:35+03:30",
-        "symbol": "KITTY",
-        "mint": "BrjUBC7zGWhkBDvATEP31CUsgBKKjv7gp5pHUANkpump",
+        "ts_tehran": "2026-11-12T18:37:11+03:30",
+        "symbol": "JENFAB",
+        "mint": "6MZZGJutbeEny8KB7Lexu3qxSTe7dHe1kQL3RVwCpump",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:30:35+03:30",
-        "symbol": "ANTPE",
-        "mint": "BrVJaraVPGnDpkmEzZ38KRciQpEFj4fjqwWPDtxepump",
+        "ts_tehran": "2026-11-12T18:37:11+03:30",
+        "symbol": "JENFAB",
+        "mint": "6MZZGJutbeEny8KB7Lexu3qxSTe7dHe1kQL3RVwCpump",
+        "accepted": false,
+        "reasons": [
+          "too_young(3s)",
+          "early_buys_heavy(72.64%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T18:40:24+03:30",
+        "symbol": "FatJ48",
+        "mint": "FatJ48MS6PyLHTy4RG3W46ATRVKiXLrphGj213yVpump",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:31:00+03:30",
-        "symbol": "KITTY",
-        "mint": "BrjUBC7zGWhkBDvATEP31CUsgBKKjv7gp5pHUANkpump",
+        "ts_tehran": "2026-11-12T18:41:02+03:30",
+        "symbol": "GTA 6.0",
+        "mint": "2hwaRQs4WqThnp26XLpch5MBZhAHqses3vSv1Bkupump",
         "accepted": false,
         "reasons": [
-          "too_young(95s)",
-          "creator_already_sold",
-          "early_buys_heavy(40.05%)"
+          "progress_out_of_band(91%)"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:31:11+03:30",
-        "symbol": "3Lf89e",
-        "mint": "3Lf89evNJHVh6KRLRsxfKQpNEH9znumKCbHmdjV8XDjy",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(65%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T17:33:05+03:30",
-        "symbol": "BUCK",
-        "mint": "2ACojQQDAmZKiX4bVtCBybuMzEACF742GXRjr2f3pump",
+        "ts_tehran": "2026-11-12T18:41:44+03:30",
+        "symbol": "SJ",
+        "mint": "GzQH2JLfVzUV7XMX9gj49H9MBHrU7PBuH3876C3Cpump",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:34:42+03:30",
-        "symbol": "Aqo6yZ",
-        "mint": "Aqo6yZPSdypouBuDJXHtSzdKALWzT7cBeFUyXwXApump",
+        "ts_tehran": "2026-11-12T18:43:05+03:30",
+        "symbol": "CAL1iA",
+        "mint": "CAL1iAmqSsxJmLMvWw5GyG5PT3AqUJg5bie71CiYLSYg",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:34:44+03:30",
-        "symbol": "BUCK",
-        "mint": "2ACojQQDAmZKiX4bVtCBybuMzEACF742GXRjr2f3pump",
-        "accepted": false,
+        "ts_tehran": "2026-11-12T18:43:06+03:30",
+        "symbol": "mihao",
+        "mint": "CAL1iAmqSsxJmLMvWw5GyG5PT3AqUJg5bie71CiYLSYg",
+        "accepted": true,
         "reasons": [
-          "progress_out_of_band(90%)",
-          "creator_already_sold",
-          "early_buys_heavy(46.86%)"
+          "all_checks_passed"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T17:35:35+03:30",
-        "symbol": "GOAT",
-        "mint": "5qxvGcfyhrWQCif4fYsug8SS6priF8dcJ9zdqu9Ypump",
-        "accepted": false,
+        "ts_tehran": "2026-11-12T18:44:38+03:30",
+        "symbol": "Dhod8N",
+        "mint": "Dhod8NBLcYy3abs2Rn3RZM7cZ5WoPFQLfbPaL9n7pump",
+        "accepted": true,
         "reasons": [
-          "progress_out_of_band(65%)",
-          "creator_already_sold",
-          "early_buys_heavy(42.73%)"
+          "entered_band"
         ]
       }
     ],
-    "sol_usd": 81.2580714847244,
-    "realized_today_usd": -1.7596,
+    "sol_usd": 80.68545665753449,
+    "realized_today_usd": -11.7523,
     "started_utc": "2026-11-12T13:28:48Z",
     "best_trade_usd": -0.8563,
-    "worst_trade_usd": -0.9032
+    "worst_trade_usd": -3.6564
   },
   "watchlist": [
     {
-      "mint": "GZ2pDdip9spqiZuqV2tGhR1EcvbZzU1XTWk4ZVTGpump",
-      "symbol": null,
-      "progress": 0.862,
-      "sol_in_curve": 73.3,
-      "buyers_seen": 0,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
-    },
-    {
       "mint": "2hwaRQs4WqThnp26XLpch5MBZhAHqses3vSv1Bkupump",
       "symbol": "GTA 6.0",
-      "progress": 0.834,
-      "sol_in_curve": 70.9,
-      "buyers_seen": 26,
+      "progress": 0.917,
+      "sol_in_curve": 78.0,
+      "buyers_seen": 104,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 2
+      "whale_buys": 10
     },
     {
-      "mint": "ATp3AuJK5kJKghJqv4yU1uneurM54zKfD455W8ffpump",
+      "mint": "Dhod8NBLcYy3abs2Rn3RZM7cZ5WoPFQLfbPaL9n7pump",
       "symbol": null,
-      "progress": 0.789,
-      "sol_in_curve": 67.1,
-      "buyers_seen": 0,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
-    },
-    {
-      "mint": "Hn3s5hJRhwAiYxaUv4k4cYiNviEnJAwBVLtBtg5tpump",
-      "symbol": null,
-      "progress": 0.776,
-      "sol_in_curve": 66.0,
-      "buyers_seen": 22,
+      "progress": 0.729,
+      "sol_in_curve": 61.9,
+      "buyers_seen": 30,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 0
@@ -269,32 +342,32 @@
     {
       "mint": "8xfcA3UvYCJBHUMGMd4A586KZb1hi6vewGYThMjSpump",
       "symbol": null,
-      "progress": 0.724,
-      "sol_in_curve": 61.5,
-      "buyers_seen": 20,
+      "progress": 0.674,
+      "sol_in_curve": 57.3,
+      "buyers_seen": 43,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 0
+      "whale_buys": 4
     },
     {
-      "mint": "5qxvGcfyhrWQCif4fYsug8SS6priF8dcJ9zdqu9Ypump",
+      "mint": "6ccUBEfVUNamBRQWmRoBXDnoe6mxJNgoqM5FvewKpump",
+      "symbol": "MACE",
+      "progress": 0.647,
+      "sol_in_curve": 55.0,
+      "buyers_seen": 171,
+      "creator_sold": false,
+      "known_from_creation": true,
+      "whale_buys": 5
+    },
+    {
+      "mint": "7cPKubouxwsSy4aAKHtDKUETZ6uxVZDntRuy7Cappump",
       "symbol": "GOAT",
-      "progress": 0.664,
-      "sol_in_curve": 56.5,
-      "buyers_seen": 35,
+      "progress": 0.638,
+      "sol_in_curve": 54.2,
+      "buyers_seen": 103,
       "creator_sold": true,
       "known_from_creation": true,
-      "whale_buys": 9
-    },
-    {
-      "mint": "J5xM4e1FXnZmvToFsPrZi47uyxKCaQu7k7KSreh8sXFd",
-      "symbol": null,
-      "progress": 0.647,
-      "sol_in_curve": 52.9,
-      "buyers_seen": 2,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
+      "whale_buys": 21
     }
   ],
   "rules": {
