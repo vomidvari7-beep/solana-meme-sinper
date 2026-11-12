@@ -1,11 +1,11 @@
 {
-  "updated_utc": "2026-11-12T09:07:12.319Z",
-  "updated_tehran": "2026-11-12T12:37:12.319+0330",
+  "updated_utc": "2026-11-12T09:14:44.166Z",
+  "updated_tehran": "2026-11-12T12:44:44.166+0330",
   "start_usd": 100.0,
-  "cash_usd": 59.9655,
-  "equity_usd": 74.3148,
+  "cash_usd": 47.9156,
+  "equity_usd": 74.4856,
   "realized_pnl_usd": -24.9495,
-  "unrealized_pnl_usd": -0.7357,
+  "unrealized_pnl_usd": -0.5649,
   "trades": 21,
   "win_rate": 0.3333,
   "open": [
@@ -13,10 +13,19 @@
       "mint": "HFcyhe28iLYRhac2W5FBdtDGFunWDJesCR7f6EZJpump",
       "symbol": "MRPENIS",
       "entry_price": 4.95924e-05,
-      "price": 4.862e-05,
-      "pnl_pct": -4.877,
+      "price": 5.119e-05,
+      "pnl_pct": 0.1511,
       "size_usd": 15.01,
       "opened_tehran": "2026-11-12T12:37:12.114+0330"
+    },
+    {
+      "mint": "2UMho4zUPqSKb2fbJbKNPf1dU1WKD6SfbNmVkvphpump",
+      "symbol": "Shiqi",
+      "entry_price": 6.03432e-05,
+      "price": 5.916e-05,
+      "pnl_pct": -4.8772,
+      "size_usd": 11.99,
+      "opened_tehran": "2026-11-12T12:44:43.944+0330"
     }
   ],
   "closed": [
