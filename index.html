@@ -646,7 +646,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 03:36</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 04:01</p>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -3015,6 +3015,145 @@ async function getBalances(owner) {
   }
   return { sol: lamports / 1e9, lamports, tokens, mode: indexedOk ? 'indexed' : 'ata' };
 }
+const STABLE_MINTS = new Set([
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
+  'USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA'
+]);
+function isStableMint(mint, symbol) {
+  if (!mint || mint === WSOL) return true;
+  if (STABLE_MINTS.has(mint)) return true;
+  return /^(USDC|USDT|USD1|USDS|PYUSD|USDH|UXD|EURC|USDY|FDUSD|TUSD)$/i.test(symbol || '');
+}
+async function listWalletTokens(owner) {
+  const tokens = new Map();
+  for (const prog of TOKEN_PROGRAMS) {
+    const res = await rpc('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+    for (const acc of res.value || []) {
+      const info = acc.account?.data?.parsed?.info; if (!info) continue;
+      const ta = info.tokenAmount; const cur = tokens.get(info.mint);
+      const raw = BigInt(ta.amount || '0') + (cur ? cur.raw : 0n);
+      tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
+      mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
+    }
+  }
+  return tokens;
+}
+function txTokenDelta(tx, owner, mint) {
+  const sum = (arr) => (arr || []).filter(b => b && b.owner === owner && b.mint === mint).reduce((s, b) => s + (+b.uiTokenAmount?.uiAmountString || +b.uiTokenAmount?.uiAmount || 0), 0);
+  return sum(tx?.meta?.postTokenBalances) - sum(tx?.meta?.preTokenBalances);
+}
+function txSolSpent(tx, owner) {
+  const keys = (tx?.transaction?.message?.accountKeys || []).map(k => k.pubkey || k);
+  const i = keys.indexOf(owner);
+  if (i < 0 || !tx?.meta) return 0;
+  const delta = (tx.meta.postBalances[i] - tx.meta.preBalances[i]) / 1e9;
+  if (!(delta < 0)) return 0;
+  const fee = (tx.meta.fee || 0) / 1e9;
+  return keys[0] === owner ? Math.max(0, -delta - fee) : -delta;
+}
+async function latestWalletBuys(owner, mints) {
+  const need = new Set(mints);
+  const found = new Map();
+  if (!need.size) return found;
+  const sigs = await rpc('getSignaturesForAddress', [owner, { limit: 40 }]);
+  let looked = 0;
+  for (const s of sigs || []) {
+    if (!need.size || looked >= 25) break;
+    if (!s || s.err || !s.signature) continue;
+    looked++;
+    let tx = null;
+    try { tx = await rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]); }
+    catch { continue; }
+    if (!tx?.meta) continue;
+    for (const mint of [...need]) {
+      const tokens = txTokenDelta(tx, owner, mint);
+      const sol = txSolSpent(tx, owner);
+      if (!(tokens > 0) || !(sol > 0)) continue;
+      const stamp = (tx.blockTime || s.blockTime || 0) * 1000;
+      found.set(mint, { tokens, sol, ts: stamp > 0 ? stamp : Date.now(), sig: s.signature });
+      need.delete(mint);
+    }
+  }
+  return found;
+}
+let walletSyncBusy = false;
+async function syncWalletHoldings(opt) {
+  const quiet = !!(opt && opt.quiet);
+  const owner = WALLETS.burner?.pubkey;
+  if (!owner) { if (!quiet) toast('Save a burner wallet first', 'warn'); return; }
+  if (walletSyncBusy) return;
+  walletSyncBusy = true;
+  try {
+    const bal = await rpc('getBalance', [owner, { commitment: 'confirmed' }]);
+    WALLETS.burner.sol = bal.value / 1e9;
+    rememberBurnerSol(WALLETS.burner.sol);
+    const tokens = await listWalletTokens(owner);
+    WALLETS.burner.tokens = tokens;
+    WALLETS.burner.err = null;
+    const mints = [...tokens.keys()].filter(m => !isStableMint(m));
+    const quotes = new Map();
+    for (let i = 0; i < mints.length; i += 30) {
+      const arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + mints.slice(i, i + 30).join(','));
+      for (const p of arr || []) {
+        const m = p?.baseToken?.address;
+        if (!m) continue;
+        const prev = quotes.get(m);
+        if (!prev || (p.liquidity?.usd || 0) > (prev.liquidity?.usd || 0)) quotes.set(m, p);
+      }
+    }
+    for (const [m, p] of quotes) {
+      const px = +p.priceUsd;
+      if (px > 0) livePrices.set(m, { price: px, liq: p.liquidity?.usd ?? null, at: Date.now() });
+    }
+    const solPx = solPriceNow() || liveSolPx();
+    const missing = [];
+    for (const [mint, bag] of tokens) {
+      if (!bag || !(bag.ui > 0) || isStableMint(mint, quotes.get(mint)?.baseToken?.symbol)) continue;
+      const px = livePrices.get(mint)?.price;
+      if (!(px > 0) || bag.ui * px <= 1) continue;
+      if (positions().some(p => p.wallet === 'burner' && p.mint === mint && p.open)) continue;
+      missing.push(mint);
+    }
+    const buys = missing.length ? await latestWalletBuys(owner, missing) : new Map();
+    let added = 0;
+    for (const mint of missing) {
+      if (positions().some(p => p.wallet === 'burner' && p.mint === mint && p.open)) continue;
+      const bag = tokens.get(mint);
+      const quote = quotes.get(mint);
+      const symbol = quote?.baseToken?.symbol || short(mint);
+      const buy = buys.get(mint);
+      const mark = livePrices.get(mint)?.price;
+      let priceUsd = null;
+      if (buy && buy.tokens > 0 && solPx > 0) priceUsd = (buy.sol / buy.tokens) * solPx;
+      const recoveredOnly = !(priceUsd > 0);
+      if (recoveredOnly) priceUsd = mark;
+      if (!(priceUsd > 0)) continue;
+      const solAmount = buy && buy.tokens > 0 ? (buy.sol / buy.tokens) * bag.ui : (solPx > 0 ? priceUsd * bag.ui / solPx : 0);
+      logTrade({
+        id: 'rec' + mint.slice(0, 8) + (buy?.ts || Date.now()),
+        ts: buy?.ts || Date.now(),
+        blockTime: buy?.ts ? Math.round(buy.ts / 1000) : 0,
+        wallet: 'burner', auto: true, side: 'buy', mint, symbol,
+        solAmount, tokenAmount: bag.ui, priceUsd, solUsd: solPx || null,
+        status: 'confirmed', fill: recoveredOnly ? 'recovered' : 'chain',
+        signature: buy?.sig || '',
+        entryReason: recoveredOnly ? 'recovered from wallet · recovered' : 'recovered from wallet',
+        myList: true, recovered: true,
+        plan: { myList: true, recovered: true, strat: 'recovered from wallet', stop: priceUsd * 0.85, exit: { stopPct: 15, stopPx: priceUsd * 0.85, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } }
+      });
+      added++;
+    }
+    renderWallet();
+    renderPortfolio();
+    if (added && burnerReady() && typeof myListExits === 'function') await myListExits();
+    if (!quiet) toast(added ? 'Synced ' + added + ' wallet position' + (added === 1 ? '' : 's') : 'Wallet synced', 'ok');
+    else if (added) toast('Recovered ' + added + ' open position' + (added === 1 ? '' : 's') + ' from the wallet', 'ok', 6000);
+  } catch (e) {
+    if (!quiet) toast(e.message || 'Wallet sync failed', 'err', 7000);
+  } finally { walletSyncBusy = false; }
+}
 const decCache = { get: (m) => m === WSOL ? 9 : mintInfo.get(m)?.decimals };
 async function getDecimals(mint) {
   if (mint === WSOL) return 9; if (mintInfo.has(mint)) return mintInfo.get(mint).decimals;
@@ -4174,7 +4313,7 @@ try { const u = localStorage.getItem('sms:wealthunit'); if (u === 'sol' || u ===
 const posBarMem = {};
 function posSource(p) {
   if (p.degen) return { label: 'DEGEN', cls: 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100' };
-  if (p.myList || p.plan?.myList) return { label: 'MY LIST ⭐', cls: 'border-amber-300/40 bg-amber-400/15 text-amber-100' };
+  if (p.myList || p.plan?.myList) return { label: p.plan?.recovered ? 'MY LIST ⭐ · recovered' : 'MY LIST ⭐', cls: 'border-amber-300/40 bg-amber-400/15 text-amber-100' };
   if (p.sniper) return { label: 'SNIPE 🎯', cls: 'border-amber-400/40 bg-amber-500/15 text-amber-200' };
   if (p.copy) return { label: 'WHALE', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-200' };
   if (p.plan?.strat && /momentum/i.test(p.plan.strat)) return { label: 'MOMENTUM ⚡', cls: 'border-sky-400/40 bg-sky-500/15 text-sky-200' };
@@ -4258,23 +4397,33 @@ function saveEquity(pts) {
   try { write(equityMem); }
   catch { equityMem = equityMem.slice(-Math.ceil(equityMem.length / 2) || 1); try { write(equityMem); } catch { /* keep memory */ } }
 }
+function burnerHoldingUsd() {
+  const w = WALLETS.burner;
+  let usd = 0;
+  if (w?.tokens && w.tokens.size) {
+    for (const [mint, bag] of w.tokens) {
+      if (!bag || !(bag.ui > 0) || isStableMint(mint)) continue;
+      const lp = livePrices.get(mint)?.price;
+      if (lp > 0) usd += bag.ui * lp;
+    }
+    return usd;
+  }
+  for (const p of positions()) {
+    if (p.wallet !== 'burner' || !p.open) continue;
+    const lp = livePrices.get(p.mint)?.price;
+    if (lp > 0 && p.qty > 0) usd += p.qty * lp;
+  }
+  return usd;
+}
 function burnerEquity() {
   const w = WALLETS.burner;
   if (!w?.pubkey) return null;
   const bal = isNum(w.sol) ? w.sol : (isNum(w.lastSol) ? w.lastSol : null);
   if (!isNum(bal)) return null;
-  const px = solUsd();
-  let posUsd = 0;
-  for (const p of positions()) {
-    if (p.wallet !== 'burner' || !p.open || p.degen || p.scalp) continue;
-    const lp = livePrices.get(p.mint)?.price;
-    if (!isNum(lp) || !(p.qty > 0)) return null;
-    posUsd += p.qty * lp;
-  }
-  if (posUsd > 0 && !(isNum(px) && px > 0)) return null;
-  const mainSol = bal - degenSolEffect() - scalpSolEffect();
-  const sol = mainSol + (posUsd > 0 ? posUsd / px : 0);
-  const usd = isNum(px) && px > 0 ? mainSol * px + posUsd : null;
+  const px = solUsd() || liveSolPx();
+  const tokenUsd = burnerHoldingUsd();
+  const usd = isNum(px) && px > 0 ? bal * px + tokenUsd : (tokenUsd > 0 ? tokenUsd : null);
+  const sol = isNum(px) && px > 0 ? bal + tokenUsd / px : bal;
   return { t: Date.now(), sol, usd };
 }
 function recordEquity(force) {
@@ -5194,7 +5343,7 @@ function renderPortfolio() {
   releaseMedia(el);
   el.innerHTML = `<section id="sec-portfolio">
     <div class="seg trade-seg mb-3"><button type="button" data-tradeseg="open" class="${tradeSeg === 'open' ? 'on' : ''}">Open</button><button type="button" data-tradeseg="closed" class="${tradeSeg === 'closed' ? 'on' : ''}">Closed</button><button type="button" data-tradeseg="degen" class="${tradeSeg === 'degen' ? 'on' : ''}">Degen</button></div>
-    <div class="flex flex-wrap gap-3 text-[12px] text-slate-500 mb-2"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfRefresh" class="text-slate-300">Refresh</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div>
+    <div class="flex flex-wrap gap-3 text-[12px] text-slate-500 mb-2"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfSync" class="text-slate-300">Sync wallet</button><button id="pfRefresh" class="text-slate-300">Refresh</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div>
     ${equityCardHtml()}
     <div class="trade-open">
     <div class="text-[12px] text-slate-500 mb-2 num">Open ${open.length}/${maxPos()} · today ${solWithUsd(spentToday(mainBookFill))}</div>
@@ -5229,6 +5378,7 @@ function renderPortfolio() {
     if (got.error) { if (warn) { warn.textContent = got.error; warn.classList.remove('hidden'); } return; }
     posLevels[levelId(p)] = got; savePosLevels(); posEditKey = null; renderPortfolio();
   }));
+  $('pfSync')?.addEventListener('click', () => { syncWalletHoldings(); });
   $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
   $('pfCsv').addEventListener('click', () => {
     const cols = ['ts', 'wallet', 'auto', 'side', 'symbol', 'mint', 'solAmount', 'tokenAmount', 'priceUsd', 'status', 'signature', 'impactPct', 'route'];
@@ -5383,7 +5533,7 @@ function unlockBurner() {
     onConfirm: async () => { const phrase = kfVal('u'); kfClear('u'); modalStatus('Decrypting…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
       const sk = await decryptSecret(rec, phrase); const w = await loadWeb3(); const kp = w.Keypair.fromSecretKey(sk);
       if (kp.publicKey.toBase58() !== rec.pub) throw new Error('Decrypted key does not match stored address');
-      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); if (typeof botLog === 'function') botLog('unlock', 'panel', 'unlocked ok'); if (typeof degenLogEvent === 'function') { degenLogEvent('pot', 'unlocked ok'); (DEGEN.picks || []).forEach(p => p && p.mint && degenLogEvent(p.mint, 'unlocked ok', p.symbol)); } resumeArmedBots(); if (startAllPending) { startAllPending = false; allBotsGo(); } if (typeof paintRunDesk === 'function') paintRunDesk(); } });
+      WALLETS.burner.kp = kp; WALLETS.burner.pubkey = rec.pub; renderBurner(); renderWallet(); refreshBalances('burner'); toast('Burner unlocked', 'ok'); if (typeof botLog === 'function') botLog('unlock', 'panel', 'unlocked ok'); if (typeof degenLogEvent === 'function') { degenLogEvent('pot', 'unlocked ok'); (DEGEN.picks || []).forEach(p => p && p.mint && degenLogEvent(p.mint, 'unlocked ok', p.symbol)); } syncWalletHoldings({ quiet: true }); resumeArmedBots(); if (startAllPending) { startAllPending = false; allBotsGo(); } if (typeof paintRunDesk === 'function') paintRunDesk(); } });
   setTimeout(() => kfEl('u')?.focus(), 50);
 }
 function lockBurner() { killSwitch('locked'); WALLETS.burner.kp = null; renderBurner(); renderWallet(); paintLockBanner(); toast('Burner locked (key wiped from memory)', 'info'); }
@@ -13365,7 +13515,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 03:36';
+    stamp.textContent = 'Panel build 2026-11-12 04:01';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -13420,6 +13570,7 @@ if (!window.__smsPolls) {
   window.__smsPolls = 1;
   setInterval(() => { if (!document.hidden && !degenWatchBusy) degenWatch(); }, 15000);
   setInterval(() => { if (!document.hidden) refreshHolderWatch(); }, 60 * 1000);
+  setInterval(() => { if (!document.hidden && WALLETS.burner?.pubkey) syncWalletHoldings({ quiet: true }); }, 60 * 1000);
   setInterval(() => { if (!document.hidden && !liveAt && !priceBusy && !liveBusy) refreshPrices(); }, 30000);
   setInterval(() => { if (recordEquity(false)) renderPortfolio(); }, 5 * 60 * 1000);
 }
@@ -13427,6 +13578,7 @@ startLiveLoop();
 syncAgentPreview();
 maybeLockSizeUnit();
 setTimeout(() => { refreshHolderWatch(); }, 20000);
+setTimeout(() => { if (WALLETS.burner?.pubkey) syncWalletHoldings({ quiet: true }); }, 2500);
 if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
 try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
 updateSolFilterBadge();
