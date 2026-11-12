@@ -1,0 +1,17 @@
+{
+  "budget_usd": 25,
+  "balance_usd": 17.88,
+  "realized_pnl_usd": -7.12,
+  "updated_tehran": "2026-11-12 08:22 IRST",
+  "trades": [
+    {
+      "symbol": "konnichiwa cat",
+      "mint": "57GLjEQGAsLa22z6xCJyFGRpyL32vxdijDzxxFr9pump",
+      "bought_tehran": "2026-11-12 00:39:57",
+      "sold_tehran": "2026-11-12 00:41:23",
+      "buy_sol": 0.14877,
+      "sell_sol": 0.064523,
+      "pnl_usd": -7.12
+    }
+  ]
+}

@@ -678,7 +678,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 08:45</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 08:50</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
@@ -8531,17 +8531,26 @@ const DEGEN_LEDGER_LS = 'sms:degenledger';
 function usd6(n) { return Math.round((+n || 0) * 1e6) / 1e6; }
 function degenLedger() {
   const raw = load(DEGEN_LEDGER_LS, null);
-  const book = { startUsd: 25, balanceUsd: 25, realizedUsd: 0, trades: [] };
+  const book = { startUsd: 25, balanceUsd: 25, realizedUsd: 0, trades: [], base: null, overlay: [], hm: '' };
   if (raw && typeof raw === 'object') {
     if (Number.isFinite(+raw.startUsd) && +raw.startUsd > 0) book.startUsd = +raw.startUsd;
     if (Number.isFinite(+raw.balanceUsd)) book.balanceUsd = +raw.balanceUsd;
     if (Number.isFinite(+raw.realizedUsd)) book.realizedUsd = +raw.realizedUsd;
     if (Array.isArray(raw.trades)) book.trades = raw.trades.filter(t => t && t.mint && (t.side === 'buy' || t.side === 'sell')).slice(-200);
-  } else save(DEGEN_LEDGER_LS, book);
+    if (raw.base && typeof raw.base === 'object') book.base = raw.base;
+    if (Array.isArray(raw.overlay)) book.overlay = raw.overlay.filter(t => t && t.mint && (t.side === 'buy' || t.side === 'sell')).slice(-200);
+    book.hm = typeof raw.hm === 'string' ? raw.hm : (raw.base && typeof raw.base.hm === 'string' ? raw.base.hm : '');
+  }
   return book;
 }
 function saveDegenLedger(book) {
-  save(DEGEN_LEDGER_LS, { startUsd: book.startUsd, balanceUsd: usd6(book.balanceUsd), realizedUsd: usd6(book.realizedUsd), trades: (book.trades || []).slice(-200) });
+  save(DEGEN_LEDGER_LS, {
+    startUsd: book.startUsd, balanceUsd: usd6(book.balanceUsd), realizedUsd: usd6(book.realizedUsd),
+    trades: (book.trades || []).slice(-200),
+    base: book.base || null,
+    overlay: (book.overlay || []).slice(-200),
+    hm: book.hm || (book.base && book.base.hm) || ''
+  });
 }
 function degenFeeEstimateUsd(px) {
   const p = px > 0 ? px : (solPriceNow() || liveSolPx() || 0);
@@ -8603,8 +8612,17 @@ function degenEquity() {
   return { book, mtm, equity, pnl, pct };
 }
 function resetDegenLedger(startUsd) {
+  const cur = degenLedger();
+  if (cur.base && cur.base.fileMs) {
+    const book = {
+      startUsd: cur.base.startUsd, balanceUsd: usd6(cur.base.balanceUsd), realizedUsd: usd6(cur.base.realizedUsd),
+      trades: [], base: cur.base, overlay: [], hm: cur.base.hm || cur.hm || ''
+    };
+    saveDegenLedger(book);
+    return book;
+  }
   const start = Math.min(100000, Math.max(1, +startUsd || 25));
-  const book = { startUsd: start, balanceUsd: start, realizedUsd: 0, trades: [] };
+  const book = { startUsd: start, balanceUsd: start, realizedUsd: 0, trades: [], base: null, overlay: [], hm: '' };
   saveDegenLedger(book);
   return book;
 }
@@ -8628,6 +8646,12 @@ function applyDegenLedger(rec) {
     book.balanceUsd = usd6(book.balanceUsd + usd);
     book.realizedUsd = usd6(book.realizedUsd + usd - costOut);
     book.trades.push({ ts: rec.ts || Date.now(), side: 'sell', mint: rec.mint, symbol: rec.symbol || '', usd: usd6(usd), feeUsd: usd6(px > 0 ? feeSol * px : 0), sol: solNet, solUsd: px, sig: rec.signature || '', tokenAmount: rec.tokenAmount || 0, tag: rec.exitTag || '' });
+  }
+  const row = book.trades[book.trades.length - 1];
+  const fileMs = book.base && +book.base.fileMs || 0;
+  if (row && (!fileMs || (row.ts || 0) > fileMs)) {
+    book.overlay = Array.isArray(book.overlay) ? book.overlay : [];
+    if (!book.overlay.some(t => t && row.sig && t.sig === row.sig && t.side === row.side)) book.overlay.push(row);
   }
   saveDegenLedger(book);
   if (degenLedgerShort()) degenHaltFunds();
@@ -8887,6 +8911,75 @@ async function fetchAgentDoc(name, signal) {
   } finally { clearTimeout(timer); if (signal) signal.removeEventListener('abort', onExt); }
 }
 async function fetchDegenDoc() { return fetchAgentDoc('degen'); }
+/* agents/degen_ledger.json is the shared pot. This panel can read it, not write it. */
+let degenLedgerSync = { busy: false, at: 0 };
+function degenLedgerSameFill(t, row) {
+  if (!t || !row || t.mint !== row.mint) return false;
+  if (t.sig && (row.signature === t.sig || row.sig === t.sig)) return true;
+  const ts = +t.ts || 0;
+  if (!(ts > 0)) return false;
+  const sideMs = t.side === 'sell' ? paperTehranMs(row.sold_tehran) : paperTehranMs(row.bought_tehran);
+  return !!(sideMs && Math.abs(ts - sideMs) <= 120000);
+}
+function degenReplayFill(book, t) {
+  if (t.side === 'buy') book.balanceUsd = usd6(book.balanceUsd - (+t.usd || 0));
+  else {
+    const costOut = degenReleaseCost(book.trades, t.mint, +t.tokenAmount || 0);
+    book.balanceUsd = usd6(book.balanceUsd + (+t.usd || 0));
+    book.realizedUsd = usd6(book.realizedUsd + (+t.usd || 0) - costOut);
+  }
+  book.trades.push(t);
+}
+function adoptDegenLedger(doc) {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc) || !Number.isFinite(+doc.balance_usd)) return;
+  const fileMs = paperTehranMs(doc.updated_tehran) || 0;
+  const hm = (String(doc.updated_tehran || '').match(/(\d{2}:\d{2})/) || [])[1] || '';
+  const start = Number.isFinite(+doc.budget_usd) && +doc.budget_usd > 0 ? +doc.budget_usd : 25;
+  const rounds = (Array.isArray(doc.trades) ? doc.trades : []).filter(t => t && t.mint).slice(-50).map(t => ({
+    symbol: String(t.symbol || ''), mint: t.mint, bought_tehran: t.bought_tehran || '', sold_tehran: t.sold_tehran || '',
+    pnl_usd: Number.isFinite(+t.pnl_usd) ? +t.pnl_usd : null, signature: t.signature || t.sig || ''
+  }));
+  const base = { startUsd: start, balanceUsd: usd6(+doc.balance_usd), realizedUsd: usd6(+doc.realized_pnl_usd || 0), fileMs, hm, when: String(doc.updated_tehran || ''), rounds };
+  const prev = degenLedger();
+  const pool = [];
+  const seen = new Set();
+  for (const t of [...(prev.overlay || []), ...(prev.trades || [])]) {
+    if (!t || !t.mint || (t.side !== 'buy' && t.side !== 'sell')) continue;
+    if (!(+t.ts > fileMs)) continue;
+    if (rounds.some(row => degenLedgerSameFill(t, row))) continue;
+    const id = t.sig ? 'sig:' + t.sig + ':' + t.side : 'mt:' + t.mint + ':' + t.side + ':' + Math.floor(+t.ts / 1000);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    pool.push(t);
+  }
+  pool.sort((a, b) => (+a.ts || 0) - (+b.ts || 0));
+  const book = { startUsd: base.startUsd, balanceUsd: base.balanceUsd, realizedUsd: base.realizedUsd, trades: [], base, overlay: [], hm };
+  for (const t of pool) { degenReplayFill(book, t); book.overlay.push(t); }
+  saveDegenLedger(book);
+}
+async function refreshDegenLedger() {
+  if (degenLedgerSync.busy) return;
+  degenLedgerSync.busy = true;
+  try {
+    const data = await fetchAgentDoc('degen_ledger');
+    adoptDegenLedger(data);
+  } catch { /* keep the last shared baseline */ }
+  finally { degenLedgerSync.busy = false; degenLedgerSync.at = Date.now(); }
+  try { renderDegen(); } catch { /* desk later */ }
+}
+function degenFileHistoryHtml() {
+  const rounds = (degenLedger().base && degenLedger().base.rounds) || [];
+  const have = degenRounds();
+  return rounds.filter(r => {
+    const ms = paperTehranMs(r.sold_tehran) || paperTehranMs(r.bought_tehran) || 0;
+    return !have.some(c => c && c.mint === r.mint && ms && Math.abs((c.closeTs || 0) - ms) < 120000);
+  }).map(r => {
+    const pnl = +r.pnl_usd;
+    const cls = isNum(pnl) && pnl < 0 ? 'text-rose-300' : 'text-emerald-300';
+    const when = r.sold_tehran || r.bought_tehran || '';
+    return `<article class="border-b border-white/10 py-2 text-[12px]"><div class="flex items-center justify-between gap-2"><b>${esc(r.symbol || short(r.mint))}</b><span class="${cls} font-mono">${isNum(pnl) ? (pnl >= 0 ? '+' : '') + usd(pnl, 2) : '—'}</span></div><div class="mt-0.5 text-[11px] text-slate-500 font-mono">${esc(when)}</div></article>`;
+  }).join('');
+}
 /* Paper وحشی is a read-only mirror of agents/degen_paper.json. It must not buy, sell, or change any bot. */
 const PAPER = { doc: null, err: '', at: 0, busy: false };
 function paperNum(v) { const n = +v; return Number.isFinite(n) ? n : null; }
@@ -9270,6 +9363,7 @@ let degenWatchBusy = false;
 let degenQuoteCursor = 0;
 async function degenWatch() {
   if (degenWatchBusy || document.hidden) return;
+  refreshDegenLedger();
   degenWatchBusy = true;
   const ctl = beginFetch('degen');
   try {
@@ -9624,7 +9718,7 @@ function startLiveScan() {
 function stopLiveScan() { clearTimeout(liveScanTimer); liveScanTimer = null; }
 function degenViewSig(eq) {
   const picks = DEGEN.picks || [];
-  let s = (degenOn() ? '1' : '0') + ':' + Math.round(eq?.equity || 0) + ':' + Math.floor(Date.now() / 60000) + ':' + (DEGEN.updatedAt || '') + ':' + (DEGEN.error || '') + ':' + (DEGEN.note || '') + ':' + liveScanHits.length + ':' + (liveScanOn ? 1 : 0) + ':' + degenTradesToday() + ':' + degenCfg().tradeUsd + ':' + degenLockStatus();
+  let s = (degenOn() ? '1' : '0') + ':' + Math.round(eq?.equity || 0) + ':' + Math.floor(Date.now() / 60000) + ':' + (DEGEN.updatedAt || '') + ':' + (DEGEN.error || '') + ':' + (DEGEN.note || '') + ':' + liveScanHits.length + ':' + (liveScanOn ? 1 : 0) + ':' + degenTradesToday() + ':' + degenCfg().tradeUsd + ':' + degenLockStatus() + ':' + (eq?.book?.hm || '');
   for (const p of picks) {
     const px = (DEGEN.quotes && DEGEN.quotes[p.mint] && DEGEN.quotes[p.mint].price) || livePrices.get(p.mint)?.price;
     s += '|' + p.mint + degenStatus(p, px) + (p.confidence || '') + (hunterRemoved(p.mint) ? 'r' : '');
@@ -9663,6 +9757,7 @@ function renderDegen() {
       <div><span>Open</span><b>${esc(openTxt)}</b></div>
       <div><span>Free SOL</span><b>${esc(freeTxt)}</b></div>
     </div>
+    ${eq.book && eq.book.hm ? `<p class="mt-1 text-[12px] text-slate-500">Ledger synced ${esc(eq.book.hm)}</p>` : ''}
     <p class="mt-2 text-[12px] text-slate-300" data-degen-lock>${esc(degenLockStatus())}</p>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     ${removedTxt ? `<p class="block-note mt-2 text-[11px] font-semibold whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
@@ -9764,7 +9859,7 @@ function renderDegen() {
       <button type="button" data-degen-sell="${esc(p.mint)}" class="mt-2 rounded-xl border border-rose-400/40 px-3 text-[12px] font-semibold text-rose-200" style="min-height:44px">Sell</button>
     </article>`;
   }).join('');
-  const closed = degenRounds().slice().sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0)).slice(0, 5).map(c => {
+  const closed = degenFileHistoryHtml() + degenRounds().slice().sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0)).slice(0, 5).map(c => {
     const cls = isNum(c.pnlUsd) && c.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300';
     return `<article class="border-b border-white/10 py-2 text-[12px]">
       <div class="flex items-center justify-between gap-2"><b>${esc(c.symbol || short(c.mint))}</b><span class="${cls} font-mono">${isNum(c.pnlUsd) ? (c.pnlUsd >= 0 ? '+' : '') + usd(c.pnlUsd, 2) : '—'} · ${pct(c.pnlPct)}</span></div>
@@ -9823,8 +9918,16 @@ function renderDegen() {
   $('degenToggle')?.addEventListener('click', () => setExecBot('degen', !degenOn()));
   $('degenStop')?.addEventListener('click', () => { setExecBot('degen', false); toast('Degen stopped', 'err'); });
   $('degenReset')?.addEventListener('click', () => {
+    const book = degenLedger();
+    if (book.base && book.base.fileMs) {
+      if (!confirm('Clear local Degen trades since the shared ledger and restore $' + (+book.base.balanceUsd).toFixed(2) + '? The repo file is not changed.')) return;
+      resetDegenLedger();
+      toast('Degen ledger restored to the shared balance', 'ok');
+      renderDegen();
+      return;
+    }
     const start = +$('degenStart')?.value;
-    const n = Number.isFinite(start) && start > 0 ? start : eq.book.startUsd;
+    const n = Number.isFinite(start) && start > 0 ? start : book.startUsd;
     if (!confirm('Reset the Degen ledger to $' + n + '? This clears its cash balance and its trades. Main-book history stays.')) return;
     resetDegenLedger(n);
     toast('Degen ledger reset to $' + n, 'ok');
@@ -14457,7 +14560,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 08:45';
+    stamp.textContent = 'Panel build 2026-11-12 08:50';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -14508,6 +14611,7 @@ mountApp();
 fillSettings(); renderWallet(); renderBurner(); try { VAULT.render(); VAULT.pushServer(); } catch { /* vault card later */ } renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
 if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
 degenRemovedBook();
+refreshDegenLedger();
 setTimeout(degenWatch, 700);
 if (!window.__smsPolls) {
   window.__smsPolls = 1;
