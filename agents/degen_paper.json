@@ -1,11 +1,11 @@
 {
-  "updated_utc": "2026-11-12T05:06:13.840Z",
-  "updated_tehran": "2026-11-12T08:36:13.840+0330",
+  "updated_utc": "2026-11-12T05:27:21.802Z",
+  "updated_tehran": "2026-11-12T08:57:21.802+0330",
   "start_usd": 100.0,
-  "cash_usd": 53.2298,
-  "equity_usd": 65.9635,
+  "cash_usd": 42.5266,
+  "equity_usd": 68.8707,
   "realized_pnl_usd": -33.3836,
-  "unrealized_pnl_usd": -0.6529,
+  "unrealized_pnl_usd": 2.2543,
   "trades": 11,
   "win_rate": 0.1818,
   "open": [
@@ -13,10 +13,19 @@
       "mint": "7ErpHXW9Gu7rmAip8v5gtjqoadFHbfx9SjPgKVEHquja",
       "symbol": "MACE",
       "entry_price": 6.12816e-05,
-      "price": 6.008e-05,
-      "pnl_pct": -4.8773,
+      "price": 7.626e-05,
+      "pnl_pct": 20.7394,
       "size_usd": 13.32,
       "opened_tehran": "2026-11-12T08:36:13.644+0330"
+    },
+    {
+      "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
+      "symbol": "Max",
+      "entry_price": 0.00243066,
+      "price": 0.002383,
+      "pnl_pct": -4.877,
+      "size_usd": 10.65,
+      "opened_tehran": "2026-11-12T08:57:21.563+0330"
     }
   ],
   "closed": [
