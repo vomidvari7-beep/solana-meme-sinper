@@ -21,7 +21,8 @@ const EMPTY = () => ({
   decisions: [],
   seenPlans: {},
   seenBreaks: {},
-  degenTradeUsd: CAPS.degenTradeUsd
+  degenTradeUsd: CAPS.degenTradeUsd,
+  vaultSol: 0
 });
 
 export function openState(path) {
@@ -31,6 +32,8 @@ export function openState(path) {
     try {
       const raw = JSON.parse(readFileSync(path, 'utf8'));
       data = { ...EMPTY(), ...raw, toggles: { ...EMPTY().toggles, ...(raw.toggles || {}), scalp: false }, ledgers: { ...EMPTY().ledgers, ...(raw.ledgers || {}) } };
+      const vault = +raw.vaultSol;
+      data.vaultSol = Number.isFinite(vault) && vault > 0 ? vault : 0;
     } catch { data = EMPTY(); }
   }
   let timer = null;

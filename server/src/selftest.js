@@ -1,4 +1,4 @@
-import { ceilingBreakSignal, degenLossPct, degenPotLimits, degenReservedSol, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, settleBreakBuy, solRingChange, textHasRugFlag } from './rules.js';
+import { buyBlocked, ceilingBreakSignal, degenLossPct, degenPotLimits, degenReservedSol, degenRoomSol, fakeDataReason, h1BreakSignal, h1TrendHold, htfRetestSignal, keptForFees, lhBreakSignal, listWalletSize, mlStop, planTriggerHit, planUsable, quoteImpact, resolveSolM15, scalpDayBlock, scalpEntryFail, scalpExitReason, scalpSizeUsd, scalpSolBlockReason, scalpStopLevel, settleBreakBuy, solRingChange, textHasRugFlag } from './rules.js';
 import { evaluateSetup } from './setup.js';
 import { lineAt, tehranDayKey } from './util.js';
 
@@ -248,4 +248,12 @@ assert(bought.stop > 0 && bought.stop < bought.entry, 'HTF stop is under the ret
 const late = htf.h1.map(c => ({ ...c, t: c.t + 80 * 3600e3 }));
 const chased = htfRetestSignal(htf.cs, late, late[late.length - 1].t + 3600e3, 4 * 3600e3);
 assert(!chased.buy && chased.phase === 'expired', 'HTF does not chase after 72h');
+assert(Math.abs(listWalletSize(1.275, 0.02, 0, 0.25, 0.5).sol - 0.25) < 1e-9, 'vault comes out of the tradable half');
+assert(listWalletSize(1, 0.02, 0, 0.25, 0.8).label === 'Vault locked', 'vault lock blocks a my-list buy');
+assert(listWalletSize(1.275, 0.02, 0, 0.25, 0).sol === listWalletSize(1.275, 0.02, 0, 0.25).sol, 'zero vault keeps the old size');
+assert(buyBlocked(1, 0.8, 0.02, 0.25, 0.4, false) === 'Vault locked', 'guard blocks a buy through the vault');
+assert(buyBlocked(1, 0.2, 0.02, 0.25, 0.4, false) === '', 'guard allows a buy that leaves the locks');
+assert(buyBlocked(1, 0.6, 0.02, 0.25, 0.4, true) === 'Vault locked', 'degen cannot spend the vault');
+assert(Math.abs(degenRoomSol(1, 0.02, 0.25, 0.4) - 0.25) < 1e-9, 'degen room stays inside its lock when the vault is aside');
+assert(degenRoomSol(1, 0.02, 0.25, 0.8) < 0.25, 'a large vault shrinks the degen room');
 console.log('selftest ok');

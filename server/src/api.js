@@ -62,6 +62,16 @@ export function startApi(cfg, state, engine) {
         send(200, engine.status());
         return;
       }
+      if (req.method === 'POST' && url.pathname === '/api/vault') {
+        const body = await readBody(req);
+        const n = +body.sol;
+        if (!Number.isFinite(n) || n < 0 || n > 1e6) { send(400, { ok: false, error: 'vault sol' }); return; }
+        state.data.vaultSol = Math.round(n * 1e9) / 1e9;
+        state.save();
+        log('api', 'vault ' + state.data.vaultSol + ' SOL');
+        send(200, engine.status());
+        return;
+      }
       if (req.method === 'POST' && url.pathname === '/api/mode') {
         const body = await readBody(req);
         for (const key of MODES) if (typeof body[key] === 'boolean') state.data.toggles[key] = body[key];

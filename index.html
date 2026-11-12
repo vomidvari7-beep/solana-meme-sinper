@@ -244,6 +244,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   #myListBox .ml-pill.block { color: var(--down); background: var(--down-soft); }
   #myListBox .ml-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
   #myListBox .ml-chart-toggle { min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--accent); font-size: 13px; font-weight: 700; }
+  #myListBox .ml-chart-toggle:disabled { opacity: .4; }
   #myListBox label:has(input[data-ml-on]) { min-width: 44px; min-height: 44px; margin-left: auto; display: flex; align-items: center; justify-content: center; }
   #myListBox .ml-ring { position: relative; width: 36px; height: 36px; display: inline-grid; place-items: center; }
   #myListBox .ml-ring svg { width: 36px; height: 36px; transform: rotate(-90deg); }
@@ -419,6 +420,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 <div id="tabHome" class="tab-pane">
   <h1 class="large-title">Home</h1>
   <div id="homeHero"><div class="hero-card"><div class="text-[13px] text-slate-500">Portfolio</div><div class="hero-num num">—</div><div id="homePnl" class="chg-pill" style="margin-top:8px">Today —</div><div class="skel" style="margin-top:16px;height:72px"></div></div></div>
+  <div id="vaultBox" class="mt-3"></div>
   <button type="button" id="botStatus" class="status-row"><span class="status-dot"></span><span class="min-w-0"><b>Bot controls</b><span id="botStatusLabel">Off</span><span id="degenLockLine" class="block truncate font-mono text-[11px] text-slate-500">Degen locked $25 · free — SOL</span></span><span aria-hidden="true" style="margin-left:auto;color:#8E95A3">›</span></button>
   <div id="homePositions"></div>
   <div class="stat-strip">
@@ -646,7 +648,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 04:30</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 05:21</p>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -2696,7 +2698,7 @@ const AUTO_DEFAULTS = { maxSolPerTrade: 0.05, dailyCap: 0.2, balancePct: 20, min
 const LS = { settings: 'sms:settings', log: 'sms:tradelog', burner: 'sms:burner', auto: 'sms:autocfg', autolog: 'sms:autolog', alerts: 'sms:alerts', lastBal: 'sms:lastBurnerSol', whales: 'sms:whales', copy: 'sms:copycfg', whalelog: 'sms:whalelog' };
 
 let web3 = null;
-async function loadWeb3() { if (!web3) { try { web3 = await import(WEB3_URL); } catch (e) { throw new Error('Could not load @solana/web3.js from esm.sh (' + e.message + ')'); } } return web3; }
+async function loadWeb3() { if (globalThis.__SMS_WEB3) return globalThis.__SMS_WEB3; if (!web3) { try { web3 = await import(WEB3_URL); } catch (e) { throw new Error('Could not load @solana/web3.js from esm.sh (' + e.message + ')'); } } return web3; }
 
 /* ---------------- settings ---------------- */
 const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v ?? d; } catch { return d; } };
@@ -3330,6 +3332,7 @@ async function refreshBalances(which) {
     catch (e) { w.err = e.message; } }));
   if (!which || which === 'burner') recordEquity(false);
   renderWallet(); hydrate(); renderPortfolio(); renderBurner();
+  try { VAULT.render(); } catch { /* vault card later */ }
 }
 async function signAndSend(walletKey, tx) {
   const w = WALLETS[walletKey];
@@ -3368,7 +3371,7 @@ function tradeBuyTs(r) {
   return r?.ts || 0;
 }
 function blankPos(k, r) {
-  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: tradeBuyTs(r), tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, scalp: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null, buyTsSet: false };
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: tradeBuyTs(r), tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, manual: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, scalp: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null, buyTsSet: false };
 }
 function profileStopPct() {
   let pct = 20;
@@ -3412,6 +3415,7 @@ function positions() {
       p.costSol += r.solAmount || 0;
       if (r.plan) p.plan = r.plan;
       if (r.auto) p.auto = true;
+      if (r.manual) p.manual = true;
       if (r.sniper) p.sniper = true;
       if (r.degen || r.plan?.degen) p.degen = true;
       if (r.scalp || r.plan?.scalp) p.scalp = true;
@@ -3521,9 +3525,11 @@ function burnerTradeCap() {
 function clampAutoBuy(requested) {
   const bc = burnerTradeCap();
   if (!bc.ok) return { sol: 0, err: bc.err, clamped: false };
+  const room = mainTradableSol(bc.sol);
+  if (!room.ok) return { sol: 0, err: room.error || 'Vault locked', clamped: false };
   const autoCap = solCap(A.maxSolPerTrade), globalCap = solCap(S.maxSolPerTrade);
   if (autoCap == null || globalCap == null) return { sol: 0, err: 'SOL price unavailable — USD sizes can’t be converted', clamped: false };
-  const sol = Math.min(+requested || 0, autoCap, globalCap, bc.byPct);
+  const sol = Math.min(+requested || 0, autoCap, globalCap, bc.byPct, room.sol);
   return { sol, err: null, clamped: (+requested || 0) > sol + 1e-9, byPct: bc.byPct, stale: bc.stale, bal: bc.sol };
 }
 function isDegenFill(r) { return !!(r && (r.degen || r.plan?.degen)); }
@@ -3547,16 +3553,50 @@ function buyGuards(walletKey, mint, sol, { auto = false, skipMaxOpen = false, de
   }
   const open = openPositions().filter(p => !p.degen && !p.scalp); const held = openPositions().some(p => p.mint === mint) || (w.tokens?.get(mint)?.raw > 0n);
   if (!skipMaxOpen && !held && open.length >= maxPos()) errs.push(`Max open positions reached (${open.length}/${maxPos()})`);
-  if (degen || scalp) {
+  if (walletKey === 'burner') {
+    const floor = buyLeavesVault(w.sol, sol, !!degen);
+    if (floor) errs.push(floor);
+    if (degen) {
+      if (sol > degenSpendRoomSol() + 1e-9) errs.push('Degen lock');
+    } else {
+      const room = mainTradableSol(w.sol);
+      if (!room.ok) errs.push(room.error);
+      else if (sol > room.sol + 1e-9) errs.push(room.error || 'Vault locked');
+    }
+  } else if (degen || scalp) {
     const keep = solKeep();
-    if (isNum(w.sol) && sol + keep > w.sol + 1e-9) errs.push(`Insufficient SOL: balance ${w.sol.toFixed(4)}, need ${sol} + ${keep.toFixed(4)} reserve`);
-    if (degen && sol > degenSpendRoomSol() + 1e-9) errs.push('Degen lock');
+    if (isNum(w.sol) && sol + keep > w.sol + 1e-9) errs.push('Insufficient SOL: balance ' + w.sol.toFixed(4) + ', need ' + sol + ' + ' + keep.toFixed(4) + ' reserve');
   } else {
-    const room = mainTradableSol(w.sol);
+    const room = mainTradableSol(w.sol, { vault: false });
     if (!room.ok) errs.push(room.error);
-    else if (sol > room.sol + 1e-9) errs.push('Degen lock');
+    else if (sol > room.sol + 1e-9) errs.push(room.error || 'Degen lock');
   }
   return errs;
+}
+function vaultSol() {
+  let n = 0;
+  try { n = +JSON.parse(localStorage.getItem('sms:vaultSol') || '0'); } catch { n = 0; }
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return n;
+}
+function setVaultSol(n) {
+  const v = Math.max(0, Math.round((Number.isFinite(+n) ? +n : 0) * 1e9) / 1e9);
+  try { localStorage.setItem('sms:vaultSol', JSON.stringify(v)); } catch (e) { toast('Storage failed: ' + e.message, 'err'); }
+  return vaultSol();
+}
+function buyLeavesVault(balance, solAmount, degenBuy) {
+  const keep = solKeep();
+  const vault = vaultSol();
+  const spend = +solAmount || 0;
+  if (degenBuy) {
+    if (!(isNum(balance) && balance + 1e-9 >= spend + keep + vault)) return 'Vault locked';
+    return '';
+  }
+  const q = degenLockQuote();
+  if (!q) return 'SOL price unavailable — can’t reserve the Degen lock';
+  const floor = keep + vault + q.reserved;
+  if (!(isNum(balance) && balance + 1e-9 >= spend + floor)) return vault > 0 ? 'Vault locked' : 'Degen lock';
+  return '';
 }
 function solKeep() {
   const reserve = Math.max(0.02, isNum(S.reserveSol) ? +S.reserveSol : 0.02);
@@ -3576,27 +3616,32 @@ function degenLockQuote() {
   const deployed = degenDeployedSol();
   return { px, usd, lock, deployed, reserved: Math.max(0, lock - deployed) };
 }
-function mainTradableSol(balance) {
+function mainTradableSol(balance, opt) {
   const keep = solKeep();
   const q = degenLockQuote();
   if (!q) return { ok: false, sol: 0, keep, reserved: null, error: 'SOL price unavailable — can’t reserve the Degen lock', label: 'Degen lock' };
   if (!isNum(balance)) return { ok: false, sol: 0, keep, reserved: q.reserved, error: 'balance under reserve', label: 'balance under reserve' };
-  const tradable = balance - keep - q.reserved;
-  if (!(tradable >= 0.002)) return { ok: false, sol: 0, keep, reserved: q.reserved, error: 'Degen lock', label: 'Degen lock' };
-  return { ok: true, sol: tradable, keep, reserved: q.reserved, error: '', label: '' };
+  const vault = opt && opt.vault === false ? 0 : vaultSol();
+  const tradable = balance - keep - q.reserved - vault;
+  if (!(tradable >= 0.002)) {
+    const withoutVault = balance - keep - q.reserved;
+    const becauseVault = vault > 0 && withoutVault >= 0.002;
+    return { ok: false, sol: 0, keep, reserved: q.reserved, vault, error: becauseVault ? 'Vault locked' : 'Degen lock', label: becauseVault ? 'Vault locked' : 'Degen lock' };
+  }
+  return { ok: true, sol: tradable, keep, reserved: q.reserved, vault, error: '', label: '' };
 }
 function degenSpendRoomSol() {
   const q = degenLockQuote();
   const bal = WALLETS.burner?.sol;
   if (!q || !isNum(bal)) return 0;
-  return Math.max(0, Math.min(q.reserved, bal - solKeep()));
+  return Math.max(0, Math.min(q.reserved, bal - solKeep() - vaultSol()));
 }
 function degenLockStatus() {
   const q = degenLockQuote();
   const bal = WALLETS.burner?.sol;
   const usd = q ? q.usd : 25;
   const usdTxt = Math.abs(usd - Math.round(usd)) < 1e-9 ? String(Math.round(usd)) : usd.toFixed(2);
-  const free = q && isNum(bal) ? Math.max(0, bal - solKeep() - q.reserved) : null;
+  const free = q && isNum(bal) ? Math.max(0, bal - solKeep() - q.reserved - vaultSol()) : null;
   return 'Degen locked $' + usdTxt + ' · free ' + (free == null ? '—' : free.toFixed(3)) + ' SOL';
 }
 function paintDegenLock() {
@@ -3789,13 +3834,13 @@ async function executeSwap({ walletKey, side, mint, quoteObj, t, auto = false, e
   const solAmount = (isBuy ? +q.inAmount : +q.outAmount) / 1e9;
   if (isBuy && walletKey === 'burner') {
     const degenBuy = !!(extra?.degen || extra?.plan?.degen);
+    const blocked = buyLeavesVault(w.sol, solAmount, degenBuy);
+    if (blocked) throw new Error('Blocked: ' + blocked);
     if (degenBuy) {
-      const keep = solKeep();
-      if (!(isNum(w.sol) && solAmount + keep <= w.sol + 1e-9)) throw new Error('Blocked: keep at least ' + keep.toFixed(3) + ' SOL for fees');
       if (solAmount > degenSpendRoomSol() + 1e-9) throw new Error('Blocked: Degen lock');
     } else {
       const room = mainTradableSol(w.sol);
-      if (!room.ok || solAmount > room.sol + 1e-9) throw new Error('Blocked: ' + (room.error || 'Degen lock'));
+      if (!room.ok || solAmount > room.sol + 1e-9) throw new Error('Blocked: ' + (room.error || 'Vault locked'));
     }
   }
   const tokRaw = isBuy ? +q.outAmount : +q.inAmount;
@@ -4344,6 +4389,7 @@ try { const u = localStorage.getItem('sms:wealthunit'); if (u === 'sol' || u ===
 const posBarMem = {};
 function posSource(p) {
   if (p.degen) return { label: 'DEGEN', cls: 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100' };
+  if (p.manual) return { label: 'MANUAL', cls: 'border-white/15 bg-white/5 text-slate-300' };
   if (p.myList || p.plan?.myList) return { label: p.plan?.recovered ? 'MY LIST ⭐ · recovered' : 'MY LIST ⭐', cls: 'border-amber-300/40 bg-amber-400/15 text-amber-100' };
   if (p.sniper) return { label: 'SNIPE 🎯', cls: 'border-amber-400/40 bg-amber-500/15 text-amber-200' };
   if (p.copy) return { label: 'WHALE', cls: 'border-orange-400/40 bg-orange-500/15 text-orange-200' };
@@ -4647,6 +4693,9 @@ function tehranDayStartFromKey(key) {
   const [y, m, d] = key.split('-').map(Number);
   return Date.UTC(y, m - 1, d) - TEHRAN_MS;
 }
+function vaultPortfolioHtml() {
+  return VAULT.portfolioHtml();
+}
 function equityCardHtml() {
   const unit = wealthUnit === 'sol' ? 'sol' : 'usd';
   const cur = currentEquity(unit);
@@ -4669,6 +4718,7 @@ function equityCardHtml() {
         <div class="text-[13px] text-slate-500">Portfolio</div>
         <div id="equityValue" class="hero-num num" data-n="${isNum(cur) ? cur : ''}">${fmtEquity(cur, unit, false)}</div>
         <div class="mt-2"><span class="chg-pill ${up == null ? '' : up ? 'chg-up' : 'chg-down'}">${fmtEquity(change, unit, true)}${isNum(changePct) ? ' · ' + pct(changePct) : ''} ${rangeLabel}</span></div>
+        ${vaultPortfolioHtml()}
       </div>
       <div class="flex flex-col items-stretch gap-2">
         <div class="seg">${names.map(([k, lab]) => `<button type="button" data-eqrange="${k}" class="${seg(equityRange === k)}">${lab}</button>`).join('')}</div>
@@ -5743,6 +5793,210 @@ function renderBurner() {
   if (rec) renderQR(rec.pub);
   renderKillFab();
 }
+/* ---------------- vault (locked SOL). The keypair below is closed over by the transfer handler only. ---------------- */
+const VAULT = (() => {
+  let dir = 'toVault';
+  function fmtSol(n) { return isNum(n) ? n.toFixed(4) + ' SOL' : '—'; }
+  function usdOf(sol) {
+    const px = solPriceNow() || liveSolPx();
+    return isNum(sol) && px > 0 ? fmtEquity(sol * px, 'usd', false) : '—';
+  }
+  function tradableNow() {
+    const bal = isNum(WALLETS.burner?.sol) ? WALLETS.burner.sol : null;
+    if (!isNum(bal)) return { ok: false, sol: null };
+    return mainTradableSol(bal);
+  }
+  function lockMax() {
+    const bal = WALLETS.burner?.sol;
+    const q = degenLockQuote();
+    if (!q) return { ok: false, max: 0, error: 'SOL price unavailable — can’t reserve the Degen lock' };
+    if (!isNum(bal)) return { ok: false, max: 0, error: 'Balance unavailable' };
+    return { ok: true, max: Math.max(0, bal - solKeep() - q.reserved - vaultSol()), error: '' };
+  }
+  function preview(direction, amount) {
+    const cur = vaultSol();
+    if (!(amount > 0)) return { ok: false, error: 'Amount must be greater than 0' };
+    if (direction === 'toMain') {
+      if (amount > cur + 1e-9) return { ok: false, error: 'Vault only has ' + cur.toFixed(4) + ' SOL locked' };
+      return { ok: true, next: Math.max(0, cur - amount), error: '' };
+    }
+    const room = lockMax();
+    if (!room.ok) return room;
+    if (amount > room.max + 1e-9) return { ok: false, error: 'Can’t lock more than free SOL minus the fee reserve minus the Degen lock' };
+    return { ok: true, next: cur + amount, error: '' };
+  }
+  function apply(direction, amount) {
+    const got = preview(direction, amount);
+    if (!got.ok) return got;
+    const next = setVaultSol(got.next);
+    render();
+    try { renderPortfolio(); } catch { /* card later */ }
+    try { paintDegenLock(); } catch { /* status later */ }
+    pushServer();
+    return { ok: true, sol: next };
+  }
+  async function pushServer() {
+    if (typeof serverModeOn !== 'function' || typeof serverCfg !== 'function') return;
+    const c = serverCfg();
+    if (!c.url || !c.token) return;
+    try {
+      await fetch(c.url + '/api/vault', { method: 'POST', headers: { authorization: 'Bearer ' + c.token, 'content-type': 'application/json' }, body: JSON.stringify({ sol: vaultSol() }) });
+    } catch { /* the phone book is the source; the server catches up on the next push */ }
+  }
+  function portfolioHtml() {
+    const locked = vaultSol();
+    const room = tradableNow();
+    const badge = '<span class="rounded-full border border-emerald-500/30 px-2 py-0.5 text-emerald-300">locked from bots</span>';
+    const tradable = room.ok ? fmtSol(room.sol) : (room.error || '—');
+    return `<div class="mt-3 rounded-xl border border-white/10 px-3 py-2">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-[12px]"><span class="text-slate-400">Vault (locked)</span><b class="num">${fmtSol(locked)} (${usdOf(locked)})</b></div>
+      <div class="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px]"><span class="text-slate-500">Tradable ${esc(String(tradable))}</span>${badge}</div>
+    </div>`;
+  }
+  function patch() {
+    const locked = vaultSol();
+    const room = tradableNow();
+    const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+    set('vaultLockedSol', fmtSol(locked) + ' (' + usdOf(locked) + ')');
+    set('vaultTradable', room.ok ? fmtSol(room.sol) : '—');
+    const amt = +($('vaultAmt')?.value);
+    set('vaultUsdEq', amt > 0 ? usdOf(amt) : 'USD —');
+  }
+  function render() {
+    const box = $('vaultBox'); if (!box) return;
+    const key = dir;
+    const keep = $('vaultAmt')?.value;
+    if (box.dataset.mem !== key) {
+      box.dataset.mem = key;
+      const badge = '<span class="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">locked from bots</span>';
+      box.innerHTML = `<section class="hero-card text-xs"><div class="flex items-center justify-between gap-2"><b class="text-[15px]">Vault <span class="fa font-normal text-slate-400">قفل شده</span></b>${badge}</div>
+        <p class="mt-1 text-[11px] text-slate-500 whitespace-normal break-words">Bookkeeping inside the main burner. Locking SOL does not send a transaction. Bots cannot spend the locked amount.</p>
+        <div class="mt-2 text-[12px]">Vault (locked) <b id="vaultLockedSol" class="num">—</b></div>
+        <div class="mt-1 text-[11px] text-slate-400">Tradable <b id="vaultTradable" class="text-slate-200">—</b></div>
+        <div class="seg mt-3"><button type="button" data-vdir="toVault" class="${dir === 'toVault' ? 'on' : ''}">Main → Vault</button><button type="button" data-vdir="toMain" class="${dir === 'toMain' ? 'on' : ''}">Vault → Main</button></div>
+        <label class="mt-2 block text-slate-400">Amount (SOL)
+          <span class="mt-1 flex gap-2"><input id="vaultAmt" inputmode="decimal" autocomplete="off" class="w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5 font-mono" /></span>
+        </label>
+        <div class="mt-2 flex gap-2"><button type="button" id="vaultMaxLock" class="flex-1 rounded-lg py-1.5 bg-ink-700 border border-white/10">Max lock</button><button type="button" id="vaultMaxUnlock" class="flex-1 rounded-lg py-1.5 bg-ink-700 border border-white/10">Max unlock</button></div>
+        <div id="vaultUsdEq" class="mt-1 text-[11px] text-slate-500">USD —</div>
+        <button type="button" id="vaultGo" class="mt-2 w-full rounded-lg py-2 font-semibold bg-ink-700 border border-white/10">Review</button>
+        <div id="vaultMsg" class="mt-2 text-[11px] text-slate-500"></div>
+      </section>`;
+      if (keep != null && $('vaultAmt')) $('vaultAmt').value = keep;
+      wire(box);
+    }
+    patch();
+  }
+  function setMsg(text, cls) {
+    const el = $('vaultMsg');
+    if (!el) return;
+    el.className = 'mt-2 text-[11px] whitespace-normal break-words ' + (cls || 'text-slate-400');
+    el.textContent = text || '';
+  }
+  function fillMax(direction) {
+    dir = direction;
+    const box = $('vaultBox'); if (box) box.dataset.mem = '';
+    render();
+    const el = $('vaultAmt'); if (!el) return;
+    if (direction === 'toMain') el.value = vaultSol() > 0 ? vaultSol().toFixed(6).replace(/0+$/, '').replace(/\.$/, '') : '0';
+    else {
+      const room = lockMax();
+      el.value = room.ok && room.max > 0 ? room.max.toFixed(6).replace(/0+$/, '').replace(/\.$/, '') : '0';
+      if (!room.ok) setMsg(room.error, 'text-rose-300');
+    }
+    patch();
+  }
+  function wire(box) {
+    box.querySelector('#vaultAmt')?.addEventListener('input', patch);
+    box.querySelectorAll('[data-vdir]').forEach(b => b.addEventListener('click', () => { dir = b.dataset.vdir === 'toMain' ? 'toMain' : 'toVault'; box.dataset.mem = ''; render(); }));
+    box.querySelector('#vaultMaxLock')?.addEventListener('click', () => fillMax('toVault'));
+    box.querySelector('#vaultMaxUnlock')?.addEventListener('click', () => fillMax('toMain'));
+    box.querySelector('#vaultGo')?.addEventListener('click', review);
+  }
+  function review() {
+    const amount = +($('vaultAmt')?.value);
+    const got = preview(dir, amount);
+    if (!got.ok) { setMsg(got.error, 'text-rose-300'); return; }
+    const from = dir === 'toVault' ? 'Main' : 'Vault';
+    const to = dir === 'toVault' ? 'Vault' : 'Main';
+    const direction = dir;
+    resetModalButtons();
+    openModal({ title: 'Confirm vault lock', confirmLabel: direction === 'toVault' ? 'Lock SOL' : 'Unlock SOL',
+      html: `<p class="text-xs text-slate-300">This only changes the locked amount in this browser. No on-chain transfer is sent.</p>
+        <div class="mt-3 space-y-1 font-mono text-xs"><div>Amount <b>${esc(amount.toFixed(6))} SOL</b> <span class="text-slate-400">${esc(usdOf(amount))}</span></div><div>${esc(from)} → ${esc(to)}</div><div class="text-slate-400">Vault after this: ${esc(got.next.toFixed(6))} SOL</div></div>`,
+      onConfirm: async () => {
+        const done = apply(direction, amount);
+        if (!done.ok) throw new Error(done.error || 'Vault locked');
+        const el = $('vaultAmt'); if (el) el.value = '';
+        setMsg((direction === 'toVault' ? 'Locked ' : 'Unlocked ') + amount.toFixed(4) + ' SOL. Vault is ' + done.sol.toFixed(4) + ' SOL.', 'text-emerald-300');
+        modalStatus('✔ Vault (locked) ' + done.sol.toFixed(4) + ' SOL. No transaction was sent.', 'text-emerald-300');
+        return true;
+      } });
+  }
+  async function selfTest() {
+    const prev = localStorage.getItem('sms:vaultSol');
+    const prevSol = WALLETS.burner.sol;
+    const prevPx = window.__SMS_SOL;
+    try {
+      localStorage.setItem('sms:vaultSol', '0');
+      if (vaultSol() !== 0) throw new Error('default vault is not 0');
+      WALLETS.burner.sol = 1;
+      window.__SMS_SOL = { price: 100 };
+      const q = degenLockQuote();
+      const keep = solKeep();
+      const locked = apply('toVault', 0.4);
+      if (!locked.ok || Math.abs(vaultSol() - 0.4) > 1e-9) throw new Error('lock did not update the book: ' + (locked.error || vaultSol()));
+      const room = mainTradableSol(1);
+      const expect = 1 - keep - q.reserved - 0.4;
+      if (!room.ok || Math.abs(room.sol - expect) > 1e-9) throw new Error('sizing included vault or degen wrong: ' + room.sol + ' vs ' + expect);
+      if (!buyLeavesVault(1, 0.9, false)) throw new Error('guard allowed a buy through the vault');
+      if (!buyLeavesVault(1, 0.6, true)) throw new Error('degen guard allowed a buy through the vault');
+      if (buyLeavesVault(1, 0.1, true)) throw new Error('degen guard blocked a buy that leaves the vault');
+      const too = apply('toVault', 5);
+      if (too.ok) throw new Error('locked more than free SOL');
+      if (Math.abs(vaultSol() - 0.4) > 1e-9) throw new Error('rejected lock changed the book');
+      const back = apply('toMain', 0.1);
+      if (!back.ok || Math.abs(vaultSol() - 0.3) > 1e-9) throw new Error('unlock did not update the book');
+      dir = 'toVault';
+      const box = $('vaultBox');
+      if (box) box.dataset.mem = '';
+      render();
+      const shown = ($('vaultLockedSol')?.textContent || '') + ' ' + (box?.textContent || '');
+      if (!/0\.3000 SOL/.test(shown)) throw new Error('transfer box did not show the new vault amount: ' + shown);
+      if (!/locked from bots/.test(box?.textContent || '')) throw new Error('badge missing');
+      if (!/قفل شده/.test(box?.textContent || '')) throw new Error('persian label missing');
+      const card = vaultPortfolioHtml();
+      if (!/Vault \(locked\)/.test(card) || !/Tradable/.test(card) || !/locked from bots/.test(card)) throw new Error('portfolio line missing');
+      const sized = manualListSize();
+      const expectHalf = +((1 - solKeep() - q.reserved - vaultSol()) * 0.5).toFixed(6);
+      if (!sized.ok || Math.abs(sized.sol - expectHalf) > 1e-9) throw new Error('manual size is not half of tradable: ' + sized.sol + ' vs ' + expectHalf);
+      const mint = 'ManualMint111111111111111111111111111111111';
+      const row = { id: 'man1', mint, symbol: 'MAN', price: 1 };
+      if (listManualBlock(row)) throw new Error('priced row was blocked: ' + listManualBlock(row));
+      if (/disabled/.test(manualListButton(row))) throw new Error('buy button disabled with a price');
+      const nopx = manualListButton({ id: 'man2', mint: mint + 'x', symbol: 'NO' });
+      if (!/disabled/.test(nopx)) throw new Error('buy button enabled without a price');
+      rugBlackAdd(mint, 'test');
+      if (listManualBlock(row) !== 'blacklisted') throw new Error('blacklist did not disable the buy');
+      const book = rugBlackBook(); delete book[mint]; save('sms:rugblack', book);
+      tombstoneMints([mint]);
+      if (listManualBlock(row) !== 'dropped') throw new Error('dropped mint did not disable the buy');
+      clearListTombstone(mint);
+      const plan = manualListPlan(row);
+      if (!plan.myList || !plan.manual || !(plan.exit.tps[0].gainPct === 30)) throw new Error('manual plan missing my list exits');
+      if (!(plan.stop < 1)) throw new Error('manual stop missing');
+      const levels = manualListLevels({ id: 'bare', mint: 'BareMint111111111111111111111111111111111', price: 2 });
+      if (Math.abs(levels.stop - 1.7) > 1e-9 || Math.abs(levels.tp - 2.6) > 1e-9 || !levels.fallback) throw new Error('fallback stop/tp wrong');
+      return { ok: true, vault: vaultSol(), tradable: mainTradableSol(1).sol, manual: sized.sol };
+    } finally {
+      if (prev == null) localStorage.removeItem('sms:vaultSol'); else localStorage.setItem('sms:vaultSol', prev);
+      WALLETS.burner.sol = prevSol;
+      if (prevPx == null) delete window.__SMS_SOL; else window.__SMS_SOL = prevPx;
+      try { render(); } catch { /* jsdom teardown */ }
+    }
+  }
+  return Object.freeze({ portfolioHtml, render, pushServer, selfTest });
+})();
 function readAutoInputs() {
   const g = (id) => $(id) ? +$(id).value : undefined;
   if ($('gMaxTrade')) S.maxSolPerTrade = g('gMaxTrade');
@@ -7700,7 +7954,9 @@ async function sniperPoll() {
         if (spent + sol > sniperDaily + 1e-9) { sniperNote('sniper daily cap ' + spent.toFixed(3) + ' / ' + sniperDaily.toFixed(3) + ' SOL', 'warn'); break; }
         const bc = burnerTradeCap();
         if (!bc.ok) { sniperNote(bc.err, 'warn'); break; }
-        sol = Math.min(sol, globalMax, bc.byPct);
+        const room = mainTradableSol(bc.sol);
+        if (!room.ok) { sniperNote(room.error || 'Vault locked', 'warn'); break; }
+        sol = Math.min(sol, globalMax, bc.byPct, room.sol);
         sol = +sol.toFixed(6);
       }
       const test = liveTestTake(sol);
@@ -9827,7 +10083,10 @@ function maxBuyInput(solBal) {
   const cap = solCap(S.maxSolPerTrade);
   if (cap == null) return null;
   let sol = cap;
-  if (isNum(solBal) && solBal >= 0) sol = Math.min(sol, Math.max(0, solBal - solKeep()));
+  if (isNum(solBal) && solBal >= 0) {
+    const room = mainTradableSol(solBal, { vault: activeKey === 'burner' });
+    sol = Math.min(sol, room.ok ? room.sol : 0);
+  }
   const px = solPriceNow();
   if (sizeStore === 'usd') return px > 0 ? Math.floor(sol * px * 100) / 100 : null;
   return Math.floor(sol * 10000) / 10000;
@@ -10535,6 +10794,93 @@ function openScanChart(mint) {
   openModal({ title: (row.symbol || 'Token') + ' chart', confirmLabel: 'Close', html: '<div id="mlChartLive"></div>', onConfirm: async () => {} });
   drawListChart(row, '4h');
 }
+function listCardPx(row) {
+  const live = livePrices.get(row?.mint)?.price;
+  if (live > 0) return live;
+  if (+row?.price > 0) return +row.price;
+  const dex = +row?.dexPair?.priceUsd;
+  return dex > 0 ? dex : null;
+}
+function listManualBlock(row) {
+  if (!row?.mint) return 'no token';
+  if (listDropped(row.mint)) return 'dropped';
+  if (rugBlackHas(row.mint)) return 'blacklisted';
+  if (!(listCardPx(row) > 0)) return 'no price';
+  return '';
+}
+function manualListButton(row) {
+  const why = listManualBlock(row);
+  return `<button type="button" class="ml-chart-toggle" data-ml-buy="${esc(row.id)}" ${why ? 'disabled' : ''} title="${esc(why)}">Buy</button>`;
+}
+function manualListSize() {
+  const open = myListOpenCount();
+  const bal = isNum(WALLETS.burner?.sol) ? WALLETS.burner.sol : null;
+  const room = mainTradableSol(bal);
+  const warn = open >= 2 ? 'This buy ignores the max 2 open limit (' + open + ' already open).' : '';
+  if (!room.ok) return { ok: false, sol: 0, warn, error: room.error || 'Vault locked' };
+  const sol = open >= 1 ? +room.sol.toFixed(6) : +(room.sol * 0.5).toFixed(6);
+  return { ok: sol >= 0.001, sol, warn, error: sol >= 0.001 ? '' : 'size under 0.001' };
+}
+function manualListLevels(row) {
+  const px = listCardPx(row);
+  const live = (typeof mlLiveView === 'function' && mlLiveView(row.mint)) || {};
+  const sig = (typeof signalLevels === 'function' && signalLevels(row.mint)) || {};
+  const model = listChartMemo[row.id];
+  let stop = +live.stop > 0 ? +live.stop : (+sig.stop > 0 ? +sig.stop : (model && isNum(model.stop) && model.stop > 0 ? +model.stop : null));
+  let fallback = false;
+  if (!(stop > 0) || (px > 0 && !(stop < px))) { stop = px > 0 ? px * 0.85 : null; fallback = true; }
+  return { px, stop, tp: px > 0 ? px * 1.3 : null, trail: px > 0 ? px * 1.05 : null, fallback };
+}
+function manualListPlan(row) {
+  const lv = manualListLevels(row);
+  const px = lv.px;
+  const stopPct = px > 0 && lv.stop > 0 && lv.stop < px ? (1 - lv.stop / px) * 100 : 15;
+  return { myList: true, manual: true, stop: lv.stop, strat: 'My List manual', exit: { stopPct, stopPx: lv.stop, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } };
+}
+function openManualListBuy(row) {
+  const block = listManualBlock(row);
+  if (block) { toast(block === 'no price' ? 'No price yet' : block, 'warn'); return; }
+  const sized = manualListSize();
+  const lv = manualListLevels(row);
+  const locked = !burnerReady();
+  resetModalButtons();
+  openModal({ title: 'Buy ' + (row.symbol || short(row.mint)), confirmLabel: locked ? 'Unlock first' : 'Buy',
+    html: `<p class="text-xs text-slate-300 whitespace-normal break-words"><b>${esc(row.symbol || short(row.mint))}</b></p>
+      <p class="mt-1 font-mono text-[11px] text-slate-400 break-all">${esc(row.mint)}</p>
+      <p class="mt-2 text-xs">Price <b class="font-mono">${price(lv.px)}</b></p>
+      <label class="mt-3 block text-xs text-slate-400">SOL amount<input id="mlManSol" inputmode="decimal" autocomplete="off" value="${sized.ok ? sized.sol : ''}" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 font-mono text-sm" /></label>
+      <p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">Stop ${price(lv.stop)}${lv.fallback ? ' · My List −15%' : ''} · TP +30% ${price(lv.tp)} · +20% moves the stop to +5% ${price(lv.trail)}</p>
+      ${sized.warn ? `<p class="mt-2 text-[11px] text-amber-200 whitespace-normal break-words">${esc(sized.warn)}</p>` : ''}
+      ${locked ? '<p class="mt-2 text-[11px] text-rose-300">Unlock first</p>' : ''}
+      ${sized.error ? `<p class="mt-2 text-[11px] text-rose-300 whitespace-normal break-words">${esc(sized.error)}</p>` : ''}`,
+    validate: () => {
+      if (!burnerReady()) return false;
+      const sol = +($('mlManSol')?.value);
+      if (!(sol > 0)) return false;
+      if (buyLeavesVault(WALLETS.burner?.sol, sol, false)) return false;
+      const room = mainTradableSol(WALLETS.burner?.sol);
+      return !!(room.ok && sol <= room.sol + 1e-9 && quoteSpend(sol).ok);
+    },
+    onConfirm: async () => {
+      if (!burnerReady()) throw new Error('Unlock first');
+      const sol = +($('mlManSol')?.value);
+      const spend = quoteSpend(sol);
+      if (!spend.ok) throw new Error(spend.error);
+      const guard = buyLeavesVault(WALLETS.burner?.sol, sol, false);
+      if (guard) throw new Error(guard);
+      const errs = buyGuards('burner', row.mint, sol, { skipMaxOpen: true });
+      if (errs.length) throw new Error(errs[0]);
+      modalStatus('Quoting…<span class="prog is-busy" aria-hidden="true"><i></i></span>');
+      const qo = await getQuote({ inputMint: WSOL, outputMint: row.mint, amountRaw: BigInt(spend.lamports), slippageBps: Math.round(Math.min(15, S.slippagePct) * 100) });
+      const plan = manualListPlan(row);
+      await executeSwap({ walletKey: 'burner', side: 'buy', mint: row.mint, quoteObj: qo, t: { mint: row.mint, symbol: row.symbol || short(row.mint) }, auto: false, extra: { plan, myList: true, manual: true, entryReason: 'manual my list' } });
+      row.boughtOnce = true; row.dayKey = todayKey(); row.buysToday = (row.buysToday || 0) + 1;
+      saveMyList(); renderMyList();
+      toast('Bought ' + (row.symbol || short(row.mint)), 'ok', 8000);
+      modalStatus('✔ Bought. My List exits are on this position.', 'text-emerald-300');
+      return true;
+    } });
+}
 async function myListBuyNow(row, typed, onDone) {
   if (!burnerReady()) { toast('Unlock the burner first', 'warn'); botLog('mylist', row.mint, 'burner locked'); onDone?.(); return; }
   const spec = listStrategy(row);
@@ -10732,6 +11078,7 @@ function renderMyList(opts) {
         <span class="ml-pill rule">${esc(exitLine)}</span>
       </div>
       <div class="ml-actions">
+        ${manualListButton(row)}
         <button type="button" class="ml-chart-toggle" data-ml-chart-toggle="${esc(row.id)}">Chart</button>
         <label class="text-[11px] text-slate-400"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
       </div>
@@ -10833,9 +11180,12 @@ function renderMyList(opts) {
       });
     });
   });
-  box.querySelectorAll('td [data-ml-buy]').forEach(el => el.addEventListener('click', () => {
+  box.querySelectorAll('[data-ml-buy]').forEach(el => el.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (el.disabled) return;
     const row = MYLIST.rows.find(r => r.id === el.dataset.mlBuy);
-    if (row) myListBuyNow(row, null);
+    if (row) openManualListBuy(row);
   }));
   box.querySelectorAll('[data-ml-chart]').forEach(el => el.addEventListener('click', () => openListChart(el.dataset.mlChart)));
   box.querySelectorAll('[data-ml-chart-toggle]').forEach(el => el.addEventListener('click', () => {
@@ -13610,7 +13960,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 04:30';
+    stamp.textContent = 'Panel build 2026-11-12 05:21';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -13657,7 +14007,7 @@ function mountApp() {
 }
 window.showTab = showTab;
 mountApp();
-fillSettings(); renderWallet(); renderBurner(); renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
+fillSettings(); renderWallet(); renderBurner(); try { VAULT.render(); VAULT.pushServer(); } catch { /* vault card later */ } renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
 if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
 degenRemovedBook();
 setTimeout(degenWatch, 700);
@@ -13688,7 +14038,7 @@ setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 document.querySelectorAll('[data-theme-toggle]').forEach(b => b.addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') === 'day' ? 'night' : 'day', true)));
 paintThemeToggles();
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
-  encryptSecret, decryptSecret, get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
+  encryptSecret, decryptSecret, vaultSelfTest: () => VAULT.selfTest(), get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
   sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, splitEntryOn, splitDecision, splitLeg1Hit, splitLeg2Hit, splitStopOk, splitFallbackHit, degenCfg, degenLeft, degenExit, degenBuyBlock, degenPickBlock, degenPlan, hunterVeto, livePre, liveConfidence, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };

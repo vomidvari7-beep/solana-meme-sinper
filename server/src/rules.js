@@ -727,14 +727,47 @@ export function degenReservedSol(solPriceUsd, deployedSol, budgetUsd = 25) {
   return Math.max(0, lock - Math.max(0, +deployedSol || 0));
 }
 
-export function listWalletSize(balance, reserve, openCount, reservedSol = 0) {
+export function vaultSolOf(n) {
+  const v = +n;
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+/** SOL a degen buy may still spend. The vault stays locked; the $25 pot does not. */
+export function degenRoomSol(balance, reserve, degenReserved, vaultSol = 0) {
+  if (degenReserved == null) return 0;
+  const keep = keptForFees(reserve);
+  const vault = vaultSolOf(vaultSol);
+  return Math.max(0, Math.min(Math.max(0, +degenReserved || 0), (+balance || 0) - keep - vault));
+}
+
+/** Empty string when the buy leaves the fee reserve, the vault, and (for non-degen) the Degen lock. */
+export function buyBlocked(balance, solAmt, reserve, degenReserved, vaultSol = 0, degenMode = false) {
+  const keep = keptForFees(reserve);
+  const vault = vaultSolOf(vaultSol);
+  const spend = +solAmt || 0;
+  if (!degenMode && degenReserved == null) return 'Degen lock';
+  const extra = degenMode ? 0 : Math.max(0, +degenReserved || 0);
+  const floor = keep + vault + extra;
+  if (!((+balance || 0) + 1e-9 >= spend + floor)) {
+    return vault > 0 ? 'Vault locked' : (extra > 0 ? 'Degen lock' : 'balance under reserve');
+  }
+  if (degenMode && !(spend <= degenRoomSol(balance, reserve, degenReserved, vault) + 1e-9)) return 'Degen lock';
+  return '';
+}
+
+export function listWalletSize(balance, reserve, openCount, reservedSol = 0, vaultSol = 0) {
   const n = +openCount || 0;
   const keep = keptForFees(reserve);
   if (reservedSol == null) return { sol: 0, label: 'Degen lock' };
   const reserved = Math.max(0, +reservedSol || 0);
-  const tradable = (+balance || 0) - keep - reserved;
+  const vault = vaultSolOf(vaultSol);
+  const tradable = (+balance || 0) - keep - reserved - vault;
   if (n >= 2) return { sol: 0, label: 'max 2 open' };
-  if (!(tradable >= 0.002)) return { sol: 0, label: reserved > 0 ? 'Degen lock' : 'balance under reserve' };
+  if (!(tradable >= 0.002)) {
+    const withoutVault = (+balance || 0) - keep - reserved;
+    if (vault > 0 && withoutVault >= 0.002) return { sol: 0, label: 'Vault locked' };
+    return { sol: 0, label: reserved > 0 ? 'Degen lock' : 'balance under reserve' };
+  }
   if (n === 1) return { sol: +tradable.toFixed(6), label: 'remainder ' + tradable.toFixed(3) + ' SOL · max 2' };
   const half = tradable * 0.5;
   return { sol: +half.toFixed(6), label: '50% · ' + half.toFixed(3) + ' SOL of ' + tradable.toFixed(3) + ' · max 2' };
