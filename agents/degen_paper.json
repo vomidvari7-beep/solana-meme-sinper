@@ -1,34 +1,45 @@
 {
-  "updated_utc": "2026-11-12T04:54:11.818Z",
-  "updated_tehran": "2026-11-12T08:24:11.818+0330",
+  "updated_utc": "2026-11-12T05:06:13.840Z",
+  "updated_tehran": "2026-11-12T08:36:13.840+0330",
   "start_usd": 100.0,
-  "cash_usd": 46.4866,
-  "equity_usd": 72.0396,
-  "realized_pnl_usd": -25.886,
-  "unrealized_pnl_usd": -2.0744,
-  "trades": 9,
-  "win_rate": 0.2222,
+  "cash_usd": 53.2298,
+  "equity_usd": 65.9635,
+  "realized_pnl_usd": -33.3836,
+  "unrealized_pnl_usd": -0.6529,
+  "trades": 11,
+  "win_rate": 0.1818,
   "open": [
     {
-      "mint": "8uLNcrFKzBJYKg8ZU1E8drWnA5o2vV82m6BsgYw9pump",
-      "symbol": "FORKYU",
-      "entry_price": 0.000480522,
-      "price": 0.0004485,
-      "pnl_pct": -9.4405,
-      "size_usd": 15.85,
-      "opened_tehran": "2026-11-12T08:04:04.184+0330"
-    },
+      "mint": "7ErpHXW9Gu7rmAip8v5gtjqoadFHbfx9SjPgKVEHquja",
+      "symbol": "MACE",
+      "entry_price": 6.12816e-05,
+      "price": 6.008e-05,
+      "pnl_pct": -4.8773,
+      "size_usd": 13.32,
+      "opened_tehran": "2026-11-12T08:36:13.644+0330"
+    }
+  ],
+  "closed": [
     {
       "mint": "Dkp7yCs1CUbAUwWekUwQaqEhNiNsY15N76D1jdtEpump",
       "symbol": "GABOON",
       "entry_price": 0.000169524,
-      "price": 0.0001662,
-      "pnl_pct": -4.8777,
-      "size_usd": 11.64,
-      "opened_tehran": "2026-11-12T08:24:11.469+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 0.000132692,
+      "pnl_usd": -2.6327,
+      "pnl_pct": -22.5052,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T08:30:46.340+0330"
+    },
+    {
+      "mint": "8uLNcrFKzBJYKg8ZU1E8drWnA5o2vV82m6BsgYw9pump",
+      "symbol": "FORKYU",
+      "entry_price": 0.000480522,
+      "exit_price": 0.00033712,
+      "pnl_usd": -4.8649,
+      "pnl_pct": -30.5408,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T08:29:45.566+0330"
+    },
     {
       "mint": "HcwSMZjQVq9NeAkSEYZvo6jFVATS2Av1DXHSf7DmFXLL",
       "symbol": "mihao",
