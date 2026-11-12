@@ -1,25 +1,35 @@
 {
-  "updated_utc": "2026-11-12T04:18:00.186Z",
-  "updated_tehran": "2026-11-12T07:48:00.186+0330",
+  "updated_utc": "2026-11-12T04:34:04.351Z",
+  "updated_tehran": "2026-11-12T08:04:04.351+0330",
   "start_usd": 100.0,
-  "cash_usd": 59.9079,
-  "equity_usd": 74.2476,
-  "realized_pnl_usd": -25.0171,
-  "unrealized_pnl_usd": -0.7353,
-  "trades": 7,
-  "win_rate": 0.1429,
+  "cash_usd": 63.3126,
+  "equity_usd": 78.4649,
+  "realized_pnl_usd": -20.7582,
+  "unrealized_pnl_usd": -0.7769,
+  "trades": 8,
+  "win_rate": 0.25,
   "open": [
+    {
+      "mint": "8uLNcrFKzBJYKg8ZU1E8drWnA5o2vV82m6BsgYw9pump",
+      "symbol": "FORKYU",
+      "entry_price": 0.000480522,
+      "price": 0.0004711,
+      "pnl_pct": -4.8772,
+      "size_usd": 15.85,
+      "opened_tehran": "2026-11-12T08:04:04.184+0330"
+    }
+  ],
+  "closed": [
     {
       "mint": "6XE2QtpQjk9Ra9f3916uBve9X1vT6SB4DxKNGsX9pump",
       "symbol": "would",
       "entry_price": 0.000156978,
-      "price": 0.0001539,
-      "pnl_pct": -4.8776,
-      "size_usd": 15.0,
-      "opened_tehran": "2026-11-12T07:48:00.014+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 0.00020335,
+      "pnl_usd": 4.2589,
+      "pnl_pct": 28.2514,
+      "reason": "tp_30",
+      "closed_tehran": "2026-11-12T07:52:00.597+0330"
+    },
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
       "symbol": "AIB",
