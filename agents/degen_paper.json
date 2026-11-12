@@ -1,34 +1,35 @@
 {
-  "updated_utc": "2026-11-12T08:38:15.829Z",
-  "updated_tehran": "2026-11-12T12:08:15.829+0330",
+  "updated_utc": "2026-11-12T08:47:24.429Z",
+  "updated_tehran": "2026-11-12T12:17:24.429+0330",
   "start_usd": 100.0,
-  "cash_usd": 51.035,
-  "equity_usd": 82.1062,
-  "realized_pnl_usd": -20.0713,
-  "unrealized_pnl_usd": 2.1775,
-  "trades": 19,
-  "win_rate": 0.3684,
+  "cash_usd": 62.155,
+  "equity_usd": 80.9073,
+  "realized_pnl_usd": -21.7851,
+  "unrealized_pnl_usd": 2.6924,
+  "trades": 20,
+  "win_rate": 0.35,
   "open": [
     {
       "mint": "7yLCJpWQvE2bnX3JZGbmmKrCkCSrSGbqTmgA8tMdpump",
       "symbol": "FLC",
       "entry_price": 0.000446964,
-      "price": 0.0005369,
-      "pnl_pct": 16.548,
+      "price": 0.0005379,
+      "pnl_pct": 16.7647,
       "size_usd": 15.98,
       "opened_tehran": "2026-11-12T12:07:02.862+0330"
-    },
+    }
+  ],
+  "closed": [
     {
       "mint": "7tg8gm8LPw6N6CsRZGDxnykABpBqfqxdbTAvFemHpump",
       "symbol": "Ricehat",
       "entry_price": 4.44108e-05,
-      "price": 4.406e-05,
-      "pnl_pct": -3.7409,
-      "size_usd": 12.77,
-      "opened_tehran": "2026-11-12T12:07:09.981+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 3.88668e-05,
+      "pnl_usd": -1.7138,
+      "pnl_pct": -13.3538,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T12:12:04.270+0330"
+    },
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
       "symbol": "AIB",
