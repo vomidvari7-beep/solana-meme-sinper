@@ -1,7 +1,7 @@
 {
   "pause_auto_buy": true,
-  "ts": 1794457680000,
-  "updated_utc": "2026-11-12T04:28:00Z",
+  "ts": 1794457701822,
+  "updated_utc": "2026-11-12T04:28:21Z",
   "updated_tehran": "2026-11-12 07:58 Asia/Tehran",
   "wallet": "4u2MpTT4WXLTaJFhqaXRHu6dw5zKiJc5iuUH1cuamKYU",
   "wallet_usd": 187.46,
@@ -31,9 +31,9 @@
       "mint": "8Mi9E1V2bdPeAaRkR5yxUsAvpzP6UBUEEUrYmgKNpump",
       "symbol": "WEALTH",
       "action": "hold",
-      "new_stop": 0.000537,
-      "reason": "Hold; -3.3% vs entry; stop 0.000537 (~12% below). -20% 24h and sells>>buys 1h (144 vs 61); liq ~$69k. Watch; exit if 0.00058 area breaks with liquidity dropping.",
-      "timestamp": "2026-11-12T04:28:00Z",
+      "new_stop": null,
+      "reason": "Vahid's manual position; his manual stop is kept, agents don't change it.",
+      "timestamp": "2026-11-12T04:28:21Z",
       "price": 0.000611,
       "price_sol": 7.358e-06,
       "value_usd": 30.53,
@@ -42,15 +42,16 @@
       "entry_note": "from SOL balance change incl. fees (txs M8VTZE46Zp.. 2TtaJWriTi.., 07:15:36-07:16:31)",
       "qty": 49973.607222,
       "pnl_pct": -3.3,
-      "opened_tehran": "2026-11-12 07:15"
+      "opened_tehran": "2026-11-12 07:15",
+      "manual": true
     },
     {
       "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
       "symbol": "Max",
       "action": "hold",
-      "new_stop": 0.00164,
-      "reason": "Hold; -7.2% vs entry; stop 0.00164 (~8.4% below, 15% cap). +18% 1h but -81% 6h; buys/sells balanced (108 vs 101 5m); liq ~$170k.",
-      "timestamp": "2026-11-12T04:28:00Z",
+      "new_stop": null,
+      "reason": "Vahid's manual position; his manual stop is kept, agents don't change it.",
+      "timestamp": "2026-11-12T04:28:21Z",
       "price": 0.00179,
       "price_sol": 2.155e-05,
       "value_usd": 20.82,
@@ -59,7 +60,8 @@
       "entry_note": "re-entry: 3 buys 07:41:41-07:42:19, 0.27007 SOL incl. fees (txs 5KV6gJFp3W.. 7ervHPhLRj..)",
       "qty": 11632.626337,
       "pnl_pct": -7.2,
-      "opened_tehran": "2026-11-12 07:41"
+      "opened_tehran": "2026-11-12 07:41",
+      "manual": true
     }
   ],
   "closed_today": [
