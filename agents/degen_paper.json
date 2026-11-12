@@ -1,34 +1,35 @@
 {
-  "updated_utc": "2026-11-12T06:17:31.653Z",
-  "updated_tehran": "2026-11-12T09:47:31.653+0330",
+  "updated_utc": "2026-11-12T06:31:57.566Z",
+  "updated_tehran": "2026-11-12T10:01:57.566+0330",
   "start_usd": 100.0,
-  "cash_usd": 51.1708,
-  "equity_usd": 74.5936,
-  "realized_pnl_usd": -25.252,
-  "unrealized_pnl_usd": -0.1544,
-  "trades": 14,
-  "win_rate": 0.2857,
+  "cash_usd": 67.9258,
+  "equity_usd": 81.2472,
+  "realized_pnl_usd": -21.371,
+  "unrealized_pnl_usd": 2.6182,
+  "trades": 15,
+  "win_rate": 0.3333,
   "open": [
     {
       "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
       "symbol": "Max",
       "entry_price": 0.00243066,
-      "price": 0.002616,
-      "pnl_pct": 4.4239,
+      "price": 0.003118,
+      "pnl_pct": 24.4618,
       "size_usd": 10.65,
       "opened_tehran": "2026-11-12T08:57:21.563+0330"
-    },
+    }
+  ],
+  "closed": [
     {
       "mint": "9sRDQgAWDMjVLmtJfcF2dPC2YE3A3x597H8o4ketpump",
       "symbol": "fineshyt",
       "entry_price": 8.34972e-05,
-      "price": 8.186e-05,
-      "pnl_pct": -4.8773,
-      "size_usd": 12.81,
-      "opened_tehran": "2026-11-12T09:47:31.349+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 0.00010976,
+      "pnl_usd": 3.881,
+      "pnl_pct": 30.146,
+      "reason": "tp_30",
+      "closed_tehran": "2026-11-12T09:51:40.907+0330"
+    },
     {
       "mint": "Eh5zz6vrPK66MHzhBLrzEFHvATE7Z1SqoALzcNu4pump",
       "symbol": "BITCOINU",
