@@ -685,7 +685,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 12:30</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 13:35</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
@@ -3069,17 +3069,25 @@ async function rpcAt(url, method, params, timeout = 15000) {
   } catch (e) { if (e.name === 'AbortError') throw new Error('RPC timeout'); if (/fetch/i.test(String(e.message || e))) throw new Error('RPC blocked (CORS/network) — set your own RPC in Settings'); throw e; }
   finally { clearTimeout(tm); }
 }
-async function rpc(method, params, timeout = 15000) { return rpcAt(activeRpc(), method, params, timeout); }
-const RPC_FALLBACKS = ['https://public.rpc.solanavibestation.com', 'https://api.mainnet-beta.solana.com'];
-async function rpcToken(method, params) {
-  const urls = [...new Set([activeRpc(), ...RPC_FALLBACKS].filter(u => /^https?:\/\//.test(u || '')))];
+const RPC_FALLBACKS = ['https://solana-rpc.publicnode.com', 'https://public.rpc.solanavibestation.com'];
+let rpcGood = '';
+async function rpc(method, params, timeout = 15000) {
+  const urls = [...new Set([rpcGood, activeRpc(), ...RPC_FALLBACKS].filter(u => /^https?:\/\//i.test(String(u || ''))))];
   let last = 'RPC failed';
   for (const url of urls) {
-    try { return await rpcAt(url, method, params); }
-    catch (e) { last = e.message || String(e); }
+    try {
+      const result = await rpcAt(url, method, params, timeout);
+      rpcGood = url;
+      return result;
+    } catch (e) {
+      last = e.message || String(e);
+      if (rpcGood === url) rpcGood = '';
+      if (method === 'sendTransaction' && /timeout/i.test(last)) break;
+    }
   }
   throw new Error(last);
 }
+async function rpcToken(method, params) { return rpc(method, params); }
 const ATA_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
 const mintInfo = new Map(); // mint -> { decimals, program }
 const indexedBlocked = new Set();
@@ -5016,15 +5024,29 @@ function closePosEdit() {
   $('posEditSheet')?.classList.remove('open');
   $('posEditScrim')?.classList.remove('on');
 }
+function fieldNum(v) {
+  let s = String(v ?? '').trim().replace(/\s/g, '');
+  if (s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+  const n = +s;
+  return Number.isFinite(n) ? n : NaN;
+}
+function editRefPrice(p) {
+  const live = livePrices.get(p?.mint)?.price;
+  if (live > 0) return { px: live, live: true };
+  if (p?.avgUsd > 0) return { px: p.avgUsd, live: false };
+  return { px: null, live: false };
+}
+let posEditOpenedAt = 0;
 function paintPosEdit() {
   const p = posEditTarget();
   const sheet = $('posEditSheet');
   if (!p || !sheet || !sheet.classList.contains('open')) return;
-  const live = livePrices.get(p.mint)?.price;
+  const ref = editRefPrice(p);
+  const live = ref.px;
   const entry = p.avgUsd;
-  const stop = +$('peStop')?.value;
-  const tp = +$('peTp')?.value;
-  const sell = +$('peSell')?.value;
+  const stop = fieldNum($('peStop')?.value);
+  const tp = fieldNum($('peTp')?.value);
+  const sell = fieldNum($('peSell')?.value);
   const frac = isNum(sell) && sell > 0 ? Math.min(1, sell / 100) : 1;
   const ctx = { entry, qty: p.qty, tp1: tp, frac, sol: solUsd(), tp1Done: !!p.tp1Done, sold: Math.max(0, (p.bought || 0) - (p.qty || 0)) };
   const line = (kind, px) => {
@@ -5033,13 +5055,13 @@ function paintPosEdit() {
     if (!o || !isNum(o.ch)) return '—';
     return (o.ch > 0 ? '+' : '') + o.ch.toFixed(1) + '% from entry · ' + fmtPnlUsd(o.usd) + (isNum(o.sol) ? ' · ' + fmtPnlSol(o.sol) : '') + (kind === 'tp1' && isNum(sell) ? ' · sell ' + sell + '%' : '');
   };
-  if ($('peLive')) $('peLive').textContent = 'Live ' + price(live) + ' · entry ' + price(entry);
+  if ($('peLive')) $('peLive').textContent = (ref.live ? 'Live ' : 'Entry ') + price(live) + ' · entry ' + price(entry);
   if ($('peStopPrev')) $('peStopPrev').textContent = line('stop', stop);
   if ($('peTpPrev')) $('peTpPrev').textContent = line('tp1', tp);
   let err = '';
-  if (!(live > 0)) err = 'No live price yet';
-  else if (String($('peStop')?.value || '').trim() && !(stop > 0 && stop < live)) err = 'Stop must be below the live price';
-  else if (String($('peTp')?.value || '').trim() && !(tp > live)) err = 'Target must be above the live price';
+  if (!(live > 0)) err = 'No price yet';
+  else if (String($('peStop')?.value || '').trim() && !(stop > 0 && stop < live)) err = 'Stop must be below the ' + (ref.live ? 'live price' : 'entry');
+  else if (String($('peTp')?.value || '').trim() && !(tp > live)) err = 'Target must be above the ' + (ref.live ? 'live price' : 'entry');
   else if (String($('peSell')?.value || '').trim() && !(sell > 0 && sell <= 100)) err = 'TP sell % must be from 1 to 100';
   const warn = $('peWarn');
   if (warn) { warn.textContent = err; warn.hidden = !err; }
@@ -5072,6 +5094,7 @@ function openPosEdit(key) {
       <button type="button" id="peReset" class="ui-btn ui-btn-secondary">Reset to auto</button>
       <button type="button" id="peCancel" class="ui-btn ui-btn-secondary">Cancel</button>
     </div>`;
+  posEditOpenedAt = Date.now();
   sheet.classList.add('open');
   $('posEditScrim')?.classList.add('on');
   ['peStop', 'peTp', 'peSell'].forEach(id => $(id)?.addEventListener('input', paintPosEdit));
@@ -5088,10 +5111,10 @@ function openPosEdit(key) {
   $('peSave')?.addEventListener('click', () => {
     const row = posEditTarget();
     if (!row) return;
-    const live = livePrices.get(row.mint)?.price;
-    const stop = +$('peStop')?.value;
-    const tp = +$('peTp')?.value;
-    const sell = +$('peSell')?.value;
+    const live = editRefPrice(row).px;
+    const stop = fieldNum($('peStop')?.value);
+    const tp = fieldNum($('peTp')?.value);
+    const sell = fieldNum($('peSell')?.value);
     if (!(live > 0) || !(stop > 0) || !(tp > live) || !(stop < live) || !(sell > 0 && sell <= 100)) { paintPosEdit(); return; }
     const id = levelId(row);
     const prev = posLevels[id] ? { ...posLevels[id] } : {};
@@ -5275,62 +5298,76 @@ function paintBarLabel(bar, kind, px) {
     if (isNum(tp2) && tp2 > 0) paintBarLabel(bar, 'tp2', tp2);
   }
 }
-function bindPosBars(root) {
-  root.querySelectorAll('[data-drag]').forEach(handle => {
-    handle.addEventListener('pointerdown', (e) => {
-      if (e.button != null && e.button !== 0) return;
-      const bar = handle.closest('[data-posbar]');
-      if (!bar) return;
-      e.preventDefault();
-      e.stopPropagation();
-      posDragging = true;
-      try { handle.setPointerCapture(e.pointerId); } catch { /* older browsers still get the events on the handle */ }
-      const kind = handle.dataset.drag;
-      const startPx = +bar.dataset[kind];
-      const tip = bar.querySelector('.pos-tip');
-      const move = (ev) => {
-        if (ev.pointerId !== e.pointerId) return;
-        const track = bar.querySelector('.pos-track');
-        const rect = track.getBoundingClientRect();
-        if (!(rect.width > 0)) return;
-        let pct = ((ev.clientX - rect.left) / rect.width) * 100;
-        let lo = +bar.dataset.lo, hi = +bar.dataset.hi;
-        const span = Math.max(hi - lo, 1e-12);
-        if (kind === 'stop' && pct < 8) { lo -= span * 0.22; bar.dataset.lo = String(lo); pct = 12; }
-        if ((kind === 'tp1' || kind === 'tp2') && pct > 92) { hi += span * 0.28; bar.dataset.hi = String(hi); pct = 86; }
-        lo = +bar.dataset.lo; hi = +bar.dataset.hi;
-        let px = lo + (Math.max(0, Math.min(100, pct)) / 100) * (hi - lo);
-        px = clampBarPrice(kind, px, { entry: +bar.dataset.entry, live: +bar.dataset.live, tp1: +bar.dataset.tp1, tp2: +bar.dataset.tp2 });
-        if (!isNum(px)) return;
-        bar.dataset[kind] = String(px);
-        placePosBar(bar);
-        if (tip) {
-          const ctx = { entry: +bar.dataset.entry, qty: +bar.dataset.qty, tp1: +bar.dataset.tp1, frac: +bar.dataset.tp1frac, sol: +bar.dataset.sol, tp1Done: bar.dataset.tp1done === '1', sold: +bar.dataset.sold };
-          tip.textContent = dragTip(kind, px, ctx);
-          const shown = Math.max(8, Math.min(92, ((px - (+bar.dataset.lo)) / ((+bar.dataset.hi) - (+bar.dataset.lo))) * 100));
-          tip.style.left = shown + '%';
-          tip.style.transform = 'translateX(-50%)';
-          tip.classList.remove('hidden');
-          paintBarLabel(bar, kind, px);
-        }
-      };
-      const up = (ev) => {
-        if (ev.pointerId !== e.pointerId) return;
-        handle.removeEventListener('pointermove', move);
-        handle.removeEventListener('pointerup', up);
-        handle.removeEventListener('pointercancel', up);
-        posDragging = false;
-        if (tip) tip.classList.add('hidden');
-        const px = +bar.dataset[kind];
-        if (!isNum(px) || !isNum(startPx) || Math.abs(px - startPx) / Math.max(startPx, 1e-12) < 0.003) { renderPortfolio(); return; }
-        commitBarDrag(bar.dataset.key, kind, px);
-      };
-      handle.addEventListener('pointermove', move);
-      handle.addEventListener('pointerup', up);
-      handle.addEventListener('pointercancel', up);
-    });
+function bindPosGestures() {
+  if (bindPosGestures.done) return;
+  bindPosGestures.done = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest && e.target.closest('[data-edit-stop]');
+    if (!b) return;
+    e.preventDefault();
+    openPosEdit(b.getAttribute('data-edit-stop'));
+  });
+  document.addEventListener('pointerdown', (e) => {
+    const handle = e.target && e.target.closest && e.target.closest('[data-drag]');
+    if (!handle || (e.button != null && e.button !== 0)) return;
+    const bar = handle.closest('[data-posbar]');
+    if (!bar) return;
+    e.preventDefault();
+    e.stopPropagation();
+    posDragging = true;
+    try { handle.setPointerCapture(e.pointerId); } catch { /* the move events still arrive on the mark */ }
+    const kind = handle.dataset.drag;
+    const startPx = +bar.dataset[kind];
+    const tip = bar.querySelector('.pos-tip');
+    const move = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      const track = bar.querySelector('.pos-track');
+      const rect = track.getBoundingClientRect();
+      if (!(rect.width > 0)) return;
+      let pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      let lo = +bar.dataset.lo, hi = +bar.dataset.hi;
+      const span = Math.max(hi - lo, 1e-12);
+      if (kind === 'stop' && pct < 8) { lo -= span * 0.22; bar.dataset.lo = String(lo); pct = 12; }
+      if ((kind === 'tp1' || kind === 'tp2') && pct > 92) { hi += span * 0.28; bar.dataset.hi = String(hi); pct = 86; }
+      lo = +bar.dataset.lo; hi = +bar.dataset.hi;
+      let px = lo + (Math.max(0, Math.min(100, pct)) / 100) * (hi - lo);
+      px = clampBarPrice(kind, px, { entry: +bar.dataset.entry, live: +bar.dataset.live, tp1: +bar.dataset.tp1, tp2: +bar.dataset.tp2 });
+      if (!isNum(px)) return;
+      bar.dataset[kind] = String(px);
+      placePosBar(bar);
+      const cap = bar.querySelector(kind === 'stop' ? '.pos-caps span:first-child' : '.pos-caps .tp');
+      if (cap) {
+        const entry = +bar.dataset.entry;
+        const ch = entry > 0 ? (px / entry - 1) * 100 : 0;
+        cap.textContent = (kind === 'stop' ? 'Stop ' : 'TP ') + price(px) + ' · ' + (ch >= 0 ? '+' : '−') + Math.abs(ch).toFixed(1) + '%';
+      }
+      if (tip) {
+        const ctx = { entry: +bar.dataset.entry, qty: +bar.dataset.qty, tp1: +bar.dataset.tp1, frac: +bar.dataset.tp1frac, sol: +bar.dataset.sol, tp1Done: bar.dataset.tp1done === '1', sold: +bar.dataset.sold };
+        tip.textContent = dragTip(kind, px, ctx);
+        const shown = Math.max(8, Math.min(92, ((px - (+bar.dataset.lo)) / ((+bar.dataset.hi) - (+bar.dataset.lo))) * 100));
+        tip.style.left = shown + '%';
+        tip.style.transform = 'translateX(-50%)';
+        tip.classList.remove('hidden');
+        paintBarLabel(bar, kind, px);
+      }
+    };
+    const up = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      posDragging = false;
+      if (tip) tip.classList.add('hidden');
+      const px = +bar.dataset[kind];
+      if (!isNum(px) || !isNum(startPx) || Math.abs(px - startPx) / Math.max(startPx, 1e-12) < 0.003) { renderPortfolio(); return; }
+      commitBarDrag(bar.dataset.key, kind, px);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
   });
 }
+bindPosGestures();
 function readManualForm(form, p) {
   const raw = (name) => { const el = form.querySelector(`[data-ms="${name}"]`); const v = el ? el.value.trim() : ''; if (!v) return null; const n = +v; return Number.isFinite(n) ? n : NaN; };
   const entry = p.avgUsd;
@@ -5399,14 +5436,14 @@ function posCard(p) {
     };
     const liveCh = isNum(lp) && lp > 0 ? (lp / entry - 1) * 100 : null;
     const livePill = isNum(lp) ? `${arrow.startsWith('←') ? '← ' : ''}${price(lp)} · ${isNum(liveCh) ? (liveCh < 0 ? '−' : '+') + Math.abs(liveCh).toFixed(1) + '%' : '—'}${arrow.endsWith('→') ? ' →' : ''}` : '';
-    bar = `<div class="pos-slider">
+    bar = `<div class="pos-slider" data-posbar data-key="${esc(p.key)}" data-entry="${entry}" data-live="${isNum(lp) ? lp : ''}" data-qty="${p.qty || 0}" data-stop="${stop}" data-tp1="${tp1}" data-lo="${stop}" data-hi="${tp1}" data-sol="${solUsd() || ''}" data-tp1frac="1" data-sold="${Math.max(0, (p.bought || 0) - (p.qty || 0))}" data-tp1done="${p.tp1Done ? '1' : '0'}">
       <div class="pos-track">
         <div class="pos-rail"></div>
         <div class="pos-zone pos-zone-stop" style="left:0;width:${ePct}%"></div>
         <div class="pos-zone pos-zone-tp" style="left:${ePct}%;width:${100 - ePct}%"></div>
-        <i class="pos-mark stop" style="left:0"></i>
+        <i class="pos-mark stop" data-drag="stop" data-at="stop" style="left:0"></i>
         <i class="pos-mark entry" style="left:${ePct}%"></i>
-        <i class="pos-mark tp" style="left:100%"></i>
+        <i class="pos-mark tp" data-drag="tp1" data-at="tp1" style="left:100%"></i>
         ${livePill ? `<div class="pos-live" style="left:${livePct}%"><span class="pos-pill${pillEdge}">${esc(livePill)}</span><i class="pos-dot"></i></div>` : ''}
       </div>
       <div class="pos-caps">
@@ -5717,7 +5754,7 @@ function renderPortfolio() {
     </div>
     <div id="autoLogBox"></div>
   </section>`;
-  bindPosBars(el);
+  bindPosGestures();
   $('wealthUsd')?.addEventListener('click', () => { wealthUnit = 'usd'; try { localStorage.setItem('sms:wealthunit', 'usd'); } catch { /* ignore */ } renderPortfolio(); });
   $('wealthSol')?.addEventListener('click', () => { wealthUnit = 'sol'; try { localStorage.setItem('sms:wealthunit', 'sol'); } catch { /* ignore */ } renderPortfolio(); });
   el.querySelectorAll('[data-eqrange]').forEach(b => b.addEventListener('click', () => { equityRange = b.dataset.eqrange; try { localStorage.setItem('sms:equityrange', equityRange); } catch { /* ignore */ } renderPortfolio(); }));
@@ -5726,7 +5763,6 @@ function renderPortfolio() {
   el.querySelectorAll('[data-closed-range]').forEach(b => b.addEventListener('click', () => { closedRange = b.dataset.closedRange; saveClosedF(); renderPortfolio(); }));
   el.querySelectorAll('[data-closed-src]').forEach(b => b.addEventListener('click', () => { closedSrc = b.dataset.closedSrc; saveClosedF(); renderPortfolio(); }));
   el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.sell, { pct: +b.dataset.pct })));
-  el.querySelectorAll('[data-edit-stop]').forEach(b => b.addEventListener('click', () => openPosEdit(b.dataset.editStop)));
   el.querySelectorAll('[data-ms-cancel]').forEach(b => b.addEventListener('click', () => { posEditKey = null; renderPortfolio(); }));
   el.querySelectorAll('[data-ms-reset]').forEach(b => b.addEventListener('click', () => {
     const p = open.find(x => x.key === b.dataset.msReset); if (!p) return;
@@ -5741,7 +5777,7 @@ function renderPortfolio() {
     posLevels[levelId(p)] = { ...got, manual: true, by: 'user' }; savePosLevels(); posEditKey = null; renderPortfolio();
   }));
   $('pfSync')?.addEventListener('click', () => { syncWalletHoldings(); });
-  $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
+  $('pfRefresh')?.addEventListener('click', () => { refreshPrices(); refreshBalances(); });
   $('pfCsv').addEventListener('click', () => {
     const cols = ['ts', 'wallet', 'auto', 'side', 'symbol', 'mint', 'solAmount', 'tokenAmount', 'priceUsd', 'status', 'signature', 'impactPct', 'route'];
     const csv = [cols.join(','), ...LOG.filter(mainBookFill).map(r => cols.map(c => JSON.stringify(c === 'ts' ? new Date(r.ts).toISOString() : (r[c] ?? ''))).join(','))].join('\n');
@@ -14586,7 +14622,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 12:30';
+    stamp.textContent = 'Panel build 2026-11-12 13:35';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -14626,7 +14662,7 @@ function mountApp() {
   const main = document.querySelector('main'); if (main) main.hidden = true;
   $('tabBar')?.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
   $('sheetScrim')?.addEventListener('click', closeTokenSheet);
-  $('posEditScrim')?.addEventListener('click', closePosEdit);
+  $('posEditScrim')?.addEventListener('click', () => { if (Date.now() - posEditOpenedAt < 500) return; closePosEdit(); });
   let saved = 'home'; try { saved = localStorage.getItem('sms:tab') || 'home'; } catch { /* ignore */ }
   showTab(saved);
   try { showTokenSeg('degen'); } catch { /* tokens later */ }
@@ -15080,7 +15116,10 @@ window.__smsScanChart = T.openScanChart;
   .pos-mark { position: absolute; top: 8px; width: 10px; height: 14px; margin-left: -5px; border-radius: 99px; }
   .pos-mark.stop { background: #DC2626; }
   .pos-mark.entry { width: 2px; height: 16px; margin-left: -1px; top: 7px; border-radius: 1px; background: #64748B; }
-  .pos-mark.tp { background: #16A34A; left: auto !important; right: 0; margin-left: 0; margin-right: -5px; }
+  .pos-mark.stop, .pos-mark.tp { z-index: 2; touch-action: none; cursor: grab; }
+  .pos-mark.stop::after, .pos-mark.tp::after { content: ""; position: absolute; inset: -16px; }
+  .pos-mark.tp { background: #16A34A; }
+  [data-edit-stop] { min-height: 44px; align-items: center; }
   .pos-live { position: absolute; top: 0; width: 0; height: 28px; }
   .pos-dot { position: absolute; left: 0; top: 8px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #0F172A; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(15,23,42,.28); }
   .pos-pill { position: absolute; left: 0; bottom: 24px; transform: translateX(-50%); background: #0F172A; color: #fff !important; font-size: 11px; font-weight: 650; line-height: 1; padding: 5px 8px; border-radius: 999px; white-space: nowrap; }
