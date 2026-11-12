@@ -1,11 +1,11 @@
 {
-  "updated_utc": "2026-11-12T04:34:04.351Z",
-  "updated_tehran": "2026-11-12T08:04:04.351+0330",
+  "updated_utc": "2026-11-12T04:42:40.315Z",
+  "updated_tehran": "2026-11-12T08:12:40.315+0330",
   "start_usd": 100.0,
-  "cash_usd": 63.3126,
-  "equity_usd": 78.4649,
+  "cash_usd": 50.5893,
+  "equity_usd": 76.1268,
   "realized_pnl_usd": -20.7582,
-  "unrealized_pnl_usd": -0.7769,
+  "unrealized_pnl_usd": -3.115,
   "trades": 8,
   "win_rate": 0.25,
   "open": [
@@ -13,10 +13,19 @@
       "mint": "8uLNcrFKzBJYKg8ZU1E8drWnA5o2vV82m6BsgYw9pump",
       "symbol": "FORKYU",
       "entry_price": 0.000480522,
-      "price": 0.0004711,
-      "pnl_pct": -4.8772,
+      "price": 0.0004177,
+      "pnl_pct": -15.6593,
       "size_usd": 15.85,
       "opened_tehran": "2026-11-12T08:04:04.184+0330"
+    },
+    {
+      "mint": "HcwSMZjQVq9NeAkSEYZvo6jFVATS2Av1DXHSf7DmFXLL",
+      "symbol": "mihao",
+      "entry_price": 1.9227e-05,
+      "price": 1.885e-05,
+      "pnl_pct": -4.8777,
+      "size_usd": 12.66,
+      "opened_tehran": "2026-11-12T08:12:40.017+0330"
     }
   ],
   "closed": [
