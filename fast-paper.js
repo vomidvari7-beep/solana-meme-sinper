@@ -16,7 +16,7 @@
     "function snap() {",
     "  return { on: S.on, settings: S.settings, cash: S.cash, start: S.start, realized: S.realized,",
     "    scanned: S.scanned, dodged: S.dodged, bought: S.bought, wins: S.wins, exited: S.exited,",
-    "    open: S.open, closed: S.closed.slice(0, 24), equity: S.equity.slice(-800), last: S.last, ws: S.ws };",
+    "    open: S.open, closed: S.closed.slice(0, 24), equity: S.equity.slice(-800), last: S.last, ws: S.ws, rej: S.rej || {}, block: S.block || {} };",
     "}",
     "function markValue() {",
     "  var drag = (num(S.settings.slipPct) + num(S.settings.feePct)) / 100;",
@@ -49,14 +49,14 @@
     "  S.cash = start; S.start = start; S.realized = 0;",
     "  S.open = []; S.closed = []; S.equity = [{ t: Date.now(), v: start, dot: '' }];",
     "  S.scanned = 0; S.dodged = 0; S.bought = 0; S.wins = 0; S.exited = 0;",
-    "  S.seen = []; S.pending = []; S.watch = [];",
+    "  S.seen = []; S.pending = []; S.watch = []; S.rej = {}; S.block = {};",
     "  S.last = { scan: 'Idle', rug: 'Idle', mom: 'Idle', exit: 'Idle' };",
     "  rugQ = []; series = {};",
     "}",
     "function start() {",
     "  connect();",
     "  if (!dexTimer) dexTimer = setInterval(pollDex, 30000);",
-    "  if (!pxTimer) pxTimer = setInterval(pollPx, Math.max(3000, num(S.settings.pxMs) || 4000));",
+    "  if (!pxTimer) pxTimer = setInterval(pollPx, Math.max(2000, num(S.settings.pxMs) || 3000));",
     "  pollDex();",
     "  pumpRug();",
     "}",
@@ -74,6 +74,7 @@
     "    wsTry = 0; S.ws = 'live';",
     "    ws.send(JSON.stringify({ method: 'subscribeNewToken' }));",
     "    ws.send(JSON.stringify({ method: 'subscribeMigration' }));",
+    "    var oi; for (oi = 0; oi < S.open.length; oi++) watchMint(S.open[oi].mint);",
     "    S.last.scan = 'PumpPortal live';",
     "    post();",
     "  };",
@@ -90,10 +91,21 @@
     "  S.last.scan = 'Reconnecting ' + Math.round(wait / 1000) + 's';",
     "  post();",
     "}",
+    "function watchMint(mint) {",
+    "  if (!ws || ws.readyState !== 1 || !mint) return;",
+    "  try { ws.send(JSON.stringify({ method: 'subscribeTokenTrade', keys: [mint] })); } catch (e) {}",
+    "}",
     "function onPump(msg) {",
     "  if (!msg) return;",
     "  var mint = msg.mint || msg.tokenAddress;",
     "  if (!mint) return;",
+    "  var held = null, hi;",
+    "  for (hi = 0; hi < S.open.length; hi++) if (S.open[hi].mint === mint) held = S.open[hi];",
+    "  if (held && num(msg.solAmount) > 0 && num(msg.tokenAmount) > 0 && solPx > 0) {",
+    "    var live = (num(msg.solAmount) / num(msg.tokenAmount)) * solPx;",
+    "    if (live > 0 && held.lastPx > 0 && live < held.lastPx * 3 && live > held.lastPx / 3) { held.lastPx = live; markExit(held, live, Date.now()); post(); }",
+    "  }",
+    "  if (held) return;",
     "  noteMint(mint, msg.symbol || msg.name || mint.slice(0, 4), { src: msg.txType || 'pump', solMcap: num(msg.marketCapSol) });",
     "}",
     "var SKIP = { So11111111111111111111111111111111111111112: 1, EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: 1 };",
@@ -125,6 +137,10 @@
     "      });",
     "    }).catch(function () {});",
     "  });",
+    "  fetch('https://api.dexscreener.com/tokens/v1/solana/So11111111111111111111111111111111111111112').then(function (res) { return res.ok ? res.json() : []; }).then(function (arr) {",
+    "    var px = arr && arr[0] && num(arr[0].priceUsd);",
+    "    if (px > 0) solPx = px;",
+    "  }).catch(function () {});",
     "}",
     "function pumpRug() {",
     "  if (!S.on || rugBusy || !rugQ.length) return;",
@@ -159,6 +175,7 @@
     "  var name = row && row.symbol || mint.slice(0, 4);",
     "  if (!verdict.ok) {",
     "    S.dodged++;",
+    "    tally(mint, verdict.why);",
     "    S.last.rug = name + ' · ' + verdict.why;",
     "    say('Rug dodged ' + name + ' · ' + verdict.why);",
     "  } else {",
@@ -168,37 +185,53 @@
     "    S.last.rug = name + ' passed';",
     "  }",
     "}",
+    "function tally(mint, why) {",
+    "  if (!why) return;",
+    "  if (!S.rejOnce) S.rejOnce = {};",
+    "  var key = mint + '|' + why;",
+    "  if (S.rejOnce[key]) return;",
+    "  S.rejOnce[key] = 1;",
+    "  if (!S.rej) S.rej = {};",
+    "  S.rej[why] = (S.rej[why] || 0) + 1;",
+    "}",
+    "function poolAddrs(src) {",
+    "  var set = {}, i, m, markets = src.markets || [];",
+    "  for (i = 0; i < markets.length; i++) {",
+    "    m = markets[i];",
+    "    if (!m) continue;",
+    "    if (m.pubkey) set[m.pubkey] = 1;",
+    "    if (m.mintLP) set[m.mintLP] = 1;",
+    "    if (m.liquidityA) set[m.liquidityA] = 1;",
+    "    if (m.liquidityB) set[m.liquidityB] = 1;",
+    "  }",
+    "  return set;",
+    "}",
     "function judge(summary, report) {",
-    "  var cfg = S.settings;",
     "  var src = report || {};",
     "  if (!summary && !report) return { ok: false, why: 'no rug report', retry: true };",
     "  if (!report && !(summary && summary.topHolders)) return { ok: false, why: 'no rug report', retry: true };",
     "  var risks = (summary && summary.risks) || src.risks || [];",
-    "  var score = summary && summary.score != null ? num(summary.score) : num(src.score);",
-    "  if (src.rugged === true) return { ok: false, why: 'creator rugged' };",
+    "  var rugged = src.rugged === true;",
     "  var created = src.creatorTokens || [];",
-    "  if (created.some && created.some(function (c) { return c && (c.rugged === true || c.rugged === 1); })) return { ok: false, why: 'creator rug history' };",
-    "  if (score > num(cfg.maxRugScore)) return { ok: false, why: 'risk ' + score };",
-    "  var danger = null;",
-    "  (risks || []).forEach(function (r) { if (r && (r.level === 'danger' || r.level === 'critical') && !danger) danger = r; });",
-    "  if (danger) return { ok: false, why: danger.name || 'danger flag' };",
+    "  if (!rugged && created.some) rugged = created.some(function (c) { return c && (c.rugged === true || c.rugged === 1); });",
+    "  if (!rugged) rugged = (risks || []).some(function (r) { return r && /creator rugged/i.test((r.name || '') + ' ' + (r.description || '')); });",
+    "  if (rugged) return { ok: false, why: 'creator rugged before' };",
     "  var mintAuth = src.mintAuthority != null ? src.mintAuthority : (src.token && src.token.mintAuthority);",
     "  var frzAuth = src.freezeAuthority != null ? src.freezeAuthority : (src.token && src.token.freezeAuthority);",
     "  if (mintAuth) return { ok: false, why: 'mint authority' };",
     "  if (frzAuth) return { ok: false, why: 'freeze authority' };",
-    "  var holders = src.topHolders || [];",
-    "  var top10 = 0, i;",
-    "  for (i = 0; i < holders.length && i < 10; i++) top10 += num(holders[i].pct);",
-    "  if (holders.length && top10 > num(cfg.top10Pct)) return { ok: false, why: 'top 10 ' + top10.toFixed(0) + '%' };",
-    "  var creator = src.creator;",
-    "  if (creator) {",
-    "    for (i = 0; i < holders.length; i++) {",
-    "      var h = holders[i];",
-    "      if ((h.address === creator || h.owner === creator) && num(h.pct) > num(cfg.devPct)) return { ok: false, why: 'dev ' + num(h.pct).toFixed(1) + '%' };",
-    "    }",
+    "  var pools = poolAddrs(src), holders = src.topHolders || [], people = [], i, h, top = 0, cluster = 0;",
+    "  for (i = 0; i < holders.length; i++) {",
+    "    h = holders[i];",
+    "    if (!h || pools[h.address] || pools[h.owner]) continue;",
+    "    people.push(h);",
+    "    if (num(h.pct) > top) top = num(h.pct);",
+    "    if (num(h.pct) >= 2 && num(h.pct) <= 3) cluster++;",
     "  }",
-    "  var liq = num(src.totalMarketLiquidity);",
-    "  if (liq > 0 && liq < num(cfg.minLiq)) return { ok: false, why: 'liq $' + Math.round(liq) };",
+    "  if (!people.length) people = holders.slice(0, 10);",
+    "  if (!top) { for (i = 0; i < people.length; i++) if (num(people[i].pct) > top) top = num(people[i].pct); }",
+    "  if (top > num(S.settings.topHolderPct)) return { ok: false, why: 'top holder ' + top.toFixed(0) + '%' };",
+    "  if (cluster >= 3) return { ok: false, why: 'equal wallets' };",
     "  return { ok: true, why: '' };",
     "}",
     "function pollPx() {",
@@ -217,8 +250,11 @@
     "      if (!mint || !(num(pair.priceUsd) > 0)) return;",
     "      var liq = pair.liquidity && num(pair.liquidity.usd);",
     "      if (!best[mint] || liq > best[mint].liq) {",
-    "        var tx = pair.txns && (pair.txns.m5 || pair.txns.h1) || {};",
-    "        best[mint] = { px: num(pair.priceUsd), liq: liq, mcap: num(pair.marketCap || pair.fdv), buys: num(tx.buys), sells: num(tx.sells), created: num(pair.pairCreatedAt), symbol: pair.baseToken.symbol || '' };",
+    "        var m5 = pair.txns && pair.txns.m5 || {};",
+    "        var h1 = pair.txns && pair.txns.h1 || {};",
+    "        var vol = pair.volume || {};",
+    "        var chg = pair.priceChange || {};",
+    "        best[mint] = { px: num(pair.priceUsd), liq: liq, mcap: num(pair.marketCap || pair.fdv), buys: num(m5.buys), sells: num(m5.sells), h1Buys: num(h1.buys), volH1: num(vol.h1), chgM5: num(chg.m5), created: num(pair.pairCreatedAt), symbol: pair.baseToken.symbol || '', dex: pair.dexId || '' };",
     "      }",
     "      hit[mint] = 1;",
     "    });",
@@ -248,9 +284,10 @@
     "    var q = best[mint];",
     "    var row = series[mint] || { symbol: q.symbol || mint.slice(0, 4), bars: [], ready: true };",
     "    if (q.symbol) row.symbol = q.symbol;",
-    "    row.buys = q.buys; row.sells = q.sells; row.liq = q.liq || row.liq; row.mcap = q.mcap || row.mcap;",
+    "    row.buys = q.buys; row.sells = q.sells; row.h1Buys = q.h1Buys; row.volH1 = q.volH1; row.chgM5 = q.chgM5;",
+    "    row.liq = q.liq || row.liq; row.mcap = q.mcap || row.mcap; if (q.dex) row.dex = q.dex;",
     "    if (q.created) row.created = q.created;",
-    "    ingest(row, q.px, now);",
+    "    ingest(row, q.px, now, q.volH1);",
     "    series[mint] = row;",
     "    var open = null, i;",
     "    for (i = 0; i < S.open.length; i++) if (S.open[i].mint === mint) open = S.open[i];",
@@ -258,101 +295,132 @@
     "    else if (row.ready) maybeEnter(mint, row, q.px, now);",
     "  }",
     "}",
-    "function ingest(row, px, now) {",
+    "function ingest(row, px, now, vol) {",
     "  if (!(px > 0)) return;",
     "  var bucket = Math.floor(now / 60000) * 60000;",
     "  var bars = row.bars || (row.bars = []);",
     "  var last = bars[bars.length - 1];",
-    "  if (!last || last.t !== bucket) bars.push({ t: bucket, o: px, h: px, l: px, c: px });",
-    "  else { if (px > last.h) last.h = px; if (px < last.l) last.l = px; last.c = px; }",
+    "  var dv = (row.volSeen > 0 && vol > row.volSeen) ? vol - row.volSeen : 0;",
+    "  if (!last || last.t !== bucket) bars.push({ t: bucket, o: px, h: px, l: px, c: px, v: dv });",
+    "  else { if (px > last.h) last.h = px; if (px < last.l) last.l = px; last.c = px; last.v = (last.v || 0) + dv; }",
+    "  if (vol > 0) row.volSeen = vol;",
     "  if (bars.length > 40) bars.splice(0, bars.length - 40);",
     "}",
+    "function poolOk(dex) {",
+    "  var d = String(dex || '').toLowerCase();",
+    "  return d.indexOf('pump') >= 0 || d.indexOf('raydium') >= 0 || d.indexOf('meteora') >= 0;",
+    "}",
     "function flowOk(row) {",
-    "  var need = num(S.settings.buySell) || 1.5;",
-    "  if (row.sells > 0) return row.buys > need * row.sells;",
-    "  return row.buys >= need;",
+    "  var need = num(S.settings.buySell) || 1.3;",
+    "  if (!(row.buys > 0)) return false;",
+    "  if (row.sells > 0) return row.buys >= need * row.sells;",
+    "  return true;",
+    "}",
+    "function setupOf(row, px) {",
+    "  var bars = row.bars || [];",
+    "  if (bars.length < 5) return '';",
+    "  var closed = bars.slice(0, -1), i;",
+    "  var last = closed[closed.length - 1];",
+    "  if (!last) return '';",
+    "  var avg = 0, n = 0;",
+    "  for (i = 0; i < closed.length - 1; i++) { avg += closed[i].v || 0; n++; }",
+    "  avg = n ? avg / n : 0;",
+    "  var volOk = avg > 0 ? (last.v || 0) >= avg * 2 : row.buys >= 2;",
+    "  var base = closed.slice(-6, -1);",
+    "  if (base.length >= 3) {",
+    "    var hi = base[0].h, lo = base[0].l;",
+    "    for (i = 1; i < base.length; i++) { if (base[i].h > hi) hi = base[i].h; if (base[i].l < lo) lo = base[i].l; }",
+    "    var tight = lo > 0 && (hi - lo) / lo <= 0.12;",
+    "    if (tight && last.c > hi && px >= hi && volOk) return 'breakout';",
+    "    var broke = false;",
+    "    for (i = 0; i < closed.length; i++) if (closed[i].h > hi * 1.02) broke = true;",
+    "    if (tight && broke && px >= hi && px <= hi * 1.06) return 'retest';",
+    "  }",
+    "  var swing = closed[0].h, priorLow = closed[0].l;",
+    "  for (i = 1; i < closed.length - 1; i++) { if (closed[i].h > swing) swing = closed[i].h; if (closed[i].l < priorLow) priorLow = closed[i].l; }",
+    "  if (swing > 0) {",
+    "    var dd = (swing - last.l) / swing;",
+    "    if (dd >= 0.25 && dd <= 0.55 && last.l >= priorLow && last.c > last.o && px >= last.c) return 'pullback';",
+    "  }",
+    "  if (closed.length >= 4 && row.sells > 0 && row.buys >= row.sells) {",
+    "    var sup = closed[closed.length - 4].l;",
+    "    if (closed[closed.length - 2].c < sup && last.c > sup && last.c > last.o) return 'reclaim';",
+    "  }",
+    "  return '';",
     "}",
     "function maybeEnter(mint, row, px, now) {",
     "  var cfg = S.settings, i;",
+    "  if (row.dead) return;",
+    "  if (S.block && S.block[mint] && S.block[mint] > now) { tally(mint, 're-entry block'); return; }",
     "  if (S.open.length >= num(cfg.maxOpen)) return;",
     "  for (i = 0; i < S.open.length; i++) if (S.open[i].mint === mint) return;",
-    "  if (row.liq && row.liq < num(cfg.minLiq)) return;",
-    "  if (row.mcap && (row.mcap < num(cfg.minMcap) || row.mcap > num(cfg.maxMcap))) return;",
-    "  if (row.created) {",
-    "    var age = (now - row.created) / 60000;",
-    "    if (age < num(cfg.minAgeMin) || age > num(cfg.maxAgeMin)) return;",
-    "  }",
-    "  var bars = row.bars || [];",
-    "  var n = Math.max(2, num(cfg.higherCloses) || 3);",
-    "  if (bars.length < n + 1) return;",
-    "  var closed = bars.slice(0, -1);",
-    "  var tail = closed.slice(-n);",
-    "  var up = true;",
-    "  for (i = 1; i < tail.length; i++) if (!(tail[i].c > tail[i - 1].c)) up = false;",
-    "  var level = tail[0].o;",
-    "  var breakout = up && px >= level && flowOk(row);",
-    "  var reclaim = false;",
-    "  if (!breakout && closed.length >= 4 && flowOk(row)) {",
-    "    var prior = closed.slice(-4, -1);",
-    "    var high = prior[0].h;",
-    "    for (i = 1; i < prior.length; i++) if (prior[i].h > high) high = prior[i].h;",
-    "    var last = closed[closed.length - 1];",
-    "    reclaim = last.l < high * (1 - num(cfg.pullbackPct) / 100) && px > high;",
-    "  }",
-    "  if (!breakout && !reclaim) return;",
-    "  var eq = markValue();",
-    "  var usd = eq * num(cfg.sizePct) / 100;",
-    "  if (usd > S.cash) usd = S.cash;",
-    "  if (!(usd >= 2)) { S.last.mom = 'Not enough paper cash'; return; }",
+    "  if (!row.dex) return;",
+    "  if (!poolOk(row.dex)) { tally(mint, 'pool'); row.dead = true; return; }",
+    "  var sym = String(row.symbol || '').toUpperCase();",
+    "  if (!S.names) S.names = {};",
+    "  if (sym && String(row.dex || '').toLowerCase().indexOf('meteora') >= 0 && S.names[sym] && S.names[sym] !== mint) { tally(mint, 'meteora copycat'); row.dead = true; return; }",
+    "  if (!(row.liq >= num(cfg.minLiq))) { tally(mint, 'liquidity'); return; }",
+    "  if (!(row.mcap >= num(cfg.minMcap) && row.mcap <= num(cfg.maxMcap))) { tally(mint, 'mcap'); return; }",
+    "  if (row.liq > row.mcap) { tally(mint, 'liq above mcap'); return; }",
+    "  if (!row.created) { tally(mint, 'age'); return; }",
+    "  var age = (now - row.created) / 60000;",
+    "  if (age < num(cfg.minAgeMin) || age > num(cfg.maxAgeMin)) { tally(mint, 'age'); return; }",
+    "  if (row.volH1 > 0 && row.liq > 0 && row.volH1 / row.liq > 30 && row.h1Buys < 25) { tally(mint, 'wash'); return; }",
+    "  if (!flowOk(row)) return;",
+    "  var setup = setupOf(row, px);",
+    "  if (!setup) return;",
+    "  if (row.chgM5 > 60 && setup !== 'pullback') { tally(mint, 'chase'); return; }",
+    "  if (sym && !S.names[sym]) S.names[sym] = mint;",
+    "  var usd = S.cash * num(cfg.sizePct) / 100;",
+    "  if (!(usd >= 2) || usd > S.cash + 1e-9) { tally(mint, 'cash'); S.last.mom = 'Not enough paper cash'; return; }",
     "  var drag = (num(cfg.slipPct) + num(cfg.feePct)) / 100;",
     "  var fill = px * (1 + drag);",
     "  var qty = usd / fill;",
     "  S.cash = Math.round((S.cash - usd) * 100) / 100;",
     "  S.bought++;",
-    "  S.open.push({ mint: mint, symbol: row.symbol || mint.slice(0, 4), entryPx: fill, qty: qty, qtyLeft: qty, costLeft: usd, opened: now, lastPx: px, high: px, tp1: false, tp2: false, pnl: 0 });",
-    "  S.last.mom = 'Paper ' + (row.symbol || mint.slice(0, 4));",
-    "  say('Paper ' + (row.symbol || mint.slice(0, 4)) + ' $' + usd.toFixed(2));",
+    "  S.open.push({ mint: mint, symbol: row.symbol || mint.slice(0, 4), setup: setup, signalPx: px, entryPx: fill, qty: qty, qtyLeft: qty, costLeft: usd, opened: now, lastPx: px, high: px, pnl: 0 });",
+    "  S.last.mom = setup + ' ' + (row.symbol || mint.slice(0, 4));",
+    "  say('Paper ' + (row.symbol || mint.slice(0, 4)) + ' ' + setup + ' $' + usd.toFixed(2));",
+    "  watchMint(mint);",
     "  pushEq('buy');",
+    "}",
+    "function tehranStamp(ts) {",
+    "  var d = new Date(ts + 12600000);",
+    "  function p(n) { return (n < 10 ? '0' : '') + n; }",
+    "  return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());",
     "}",
     "function markExit(p, px, now) {",
     "  var cfg = S.settings;",
     "  if (px > p.high) p.high = px;",
-    "  var gain = p.entryPx > 0 ? px / p.entryPx - 1 : 0;",
-    "  if (gain <= -num(cfg.hardStopPct) / 100) { sellQty(p, p.qtyLeft, px, 'hard stop'); return; }",
-    "  if (!p.tp1 && gain >= num(cfg.tp1Pct) / 100) { p.tp1 = true; sellQty(p, p.qty * num(cfg.tp1Sell) / 100, px, 'tp +' + cfg.tp1Pct + '%'); }",
-    "  if (p.qtyLeft <= 0) return;",
-    "  if (!p.tp2 && gain >= num(cfg.tp2Pct) / 100) { p.tp2 = true; sellQty(p, p.qty * num(cfg.tp2Sell) / 100, px, 'tp +' + cfg.tp2Pct + '%'); }",
-    "  if (p.qtyLeft <= 0) return;",
-    "  if (p.tp1 && p.high > 0 && px <= p.high * (1 - num(cfg.trailPct) / 100)) { sellQty(p, p.qtyLeft, px, 'trail'); return; }",
-    "  if ((now - p.opened) / 60000 >= num(cfg.timeStopMin) && Math.abs(gain * 100) < num(cfg.flatPct)) sellQty(p, p.qtyLeft, px, 'time stop');",
+    "  var base = p.signalPx > 0 ? p.signalPx : p.entryPx;",
+    "  var gain = base > 0 ? px / base - 1 : 0;",
+    "  if (gain <= -num(cfg.hardStopPct) / 100) { closeAll(p, px, 'hard stop'); return; }",
+    "  if (gain >= num(cfg.tpPct) / 100) { closeAll(p, px, 'tp +' + cfg.tpPct + '%'); return; }",
+    "  if ((now - p.opened) / 60000 >= num(cfg.timeStopMin)) closeAll(p, px, 'time stop');",
     "}",
-    "function sellQty(p, qty, px, why) {",
-    "  if (!(p.qtyLeft > 0)) return;",
-    "  qty = Math.min(p.qtyLeft, Math.max(0, qty));",
-    "  if (!(qty > 0)) return;",
+    "function closeAll(p, px, why) {",
+    "  if (!(p.qtyLeft > 0) || p.closing) return;",
+    "  p.closing = true;",
     "  var cfg = S.settings;",
     "  var drag = (num(cfg.slipPct) + num(cfg.feePct)) / 100;",
     "  var fill = px * (1 - drag);",
-    "  var frac = qty / p.qtyLeft;",
-    "  var cost = p.costLeft * frac;",
-    "  var proceeds = qty * fill;",
-    "  var pnl = proceeds - cost;",
+    "  var proceeds = p.qtyLeft * fill;",
+    "  var pnl = proceeds - p.costLeft;",
+    "  var now = Date.now();",
     "  S.cash = Math.round((S.cash + proceeds) * 100) / 100;",
     "  S.realized = Math.round((S.realized + pnl) * 100) / 100;",
-    "  p.pnl = (p.pnl || 0) + pnl;",
-    "  p.qtyLeft -= qty;",
-    "  p.costLeft -= cost;",
+    "  S.open = S.open.filter(function (x) { return x !== p; });",
+    "  S.exited++;",
+    "  if (pnl >= 0) S.wins++;",
+    "  if (!S.block) S.block = {};",
+    "  S.block[p.mint] = now + 60 * 60000;",
+    "  var reason = (p.setup || 'setup') + ' · ' + why;",
     "  var signed = (pnl >= 0 ? '+' : '-') + '$' + Math.abs(pnl).toFixed(2);",
-    "  S.last.exit = p.symbol + ' ' + signed + ' · ' + why;",
+    "  S.last.exit = p.symbol + ' ' + signed + ' · ' + reason;",
+    "  S.closed.unshift({ t: now, tehran: tehranStamp(now), symbol: p.symbol, mint: p.mint, entry: p.entryPx, exit: fill, pnl: Math.round(pnl * 100) / 100, setup: p.setup || '', why: why, reason: reason });",
+    "  if (S.closed.length > 40) S.closed.pop();",
     "  say('Closed ' + p.symbol + ' ' + signed);",
-    "  if (p.qtyLeft <= p.qty * 0.001) {",
-    "    S.open = S.open.filter(function (x) { return x !== p; });",
-    "    S.exited++;",
-    "    if (p.pnl >= 0) S.wins++;",
-    "    S.closed.unshift({ t: Date.now(), symbol: p.symbol, mint: p.mint, pnl: Math.round(p.pnl * 100) / 100, why: why, entry: p.entryPx, exit: fill });",
-    "    if (S.closed.length > 40) S.closed.pop();",
-    "    pushEq(p.pnl >= 0 ? 'win' : 'loss');",
-    "  }",
+    "  pushEq(pnl >= 0 ? 'win' : 'loss');",
     "}",
     ""
   ].join('\n');
@@ -361,30 +429,21 @@
 
   var FIELDS = [
     ['startUsd', 'Starting bankroll $', '1', 100],
-    ['sizePct', 'Size, % of paper equity', '1', 15],
-    ['maxOpen', 'Max open paper trades', '1', 4],
-    ['slipPct', 'Slippage each side %', '0.1', 1],
-    ['feePct', 'Fee each side %', '0.1', 0.3],
-    ['pxMs', 'Price poll ms', '500', 4000],
-    ['higherCloses', 'Higher 1m closes', '1', 3],
-    ['buySell', 'Buys over sells', '0.1', 1.5],
-    ['pullbackPct', 'Pullback % before reclaim', '0.5', 4],
-    ['minLiq', 'Min liquidity $', '100', 8000],
-    ['minMcap', 'Min market cap $', '100', 6000],
+    ['sizePct', 'Size, % of paper cash', '1', 16],
+    ['maxOpen', 'Max open paper trades', '1', 2],
+    ['slipPct', 'Slippage each side %', '0.1', 2],
+    ['feePct', 'Fee each side %', '0.1', 0.5],
+    ['pxMs', 'Price poll ms', '500', 3000],
+    ['buySell', 'Buys over sells, 5 min', '0.1', 1.3],
+    ['minLiq', 'Min liquidity $', '100', 15000],
+    ['minMcap', 'Min market cap $', '100', 20000],
     ['maxMcap', 'Max market cap $', '1000', 2500000],
-    ['minAgeMin', 'Min age minutes', '1', 1],
-    ['maxAgeMin', 'Max age minutes', '1', 240],
-    ['top10Pct', 'Top 10 holders max %', '1', 15],
-    ['devPct', 'Dev wallet max %', '1', 10],
-    ['maxRugScore', 'Max RugCheck score', '1', 5000],
+    ['minAgeMin', 'Min age minutes', '1', 5],
+    ['maxAgeMin', 'Max age minutes', '1', 360],
+    ['topHolderPct', 'Top holder max %', '1', 15],
     ['hardStopPct', 'Hard stop %', '1', 18],
-    ['tp1Pct', 'First target %', '1', 30],
-    ['tp1Sell', 'Sell % at first target', '1', 50],
-    ['tp2Pct', 'Second target %', '1', 60],
-    ['tp2Sell', 'Sell % of original at second', '1', 25],
-    ['trailPct', 'Trail the rest %', '1', 15],
-    ['timeStopMin', 'Time stop minutes', '1', 10],
-    ['flatPct', 'Flat if move under %', '1', 5]
+    ['tpPct', 'Take profit %', '1', 30],
+    ['timeStopMin', 'Time stop minutes', '1', 60]
   ];
   function defaults() {
     var o = {};
@@ -403,13 +462,13 @@
       scanned: 0, dodged: 0, bought: 0, wins: 0, exited: 0,
       open: [], closed: [], equity: [{ t: Date.now(), v: 100, dot: '' }],
       last: { scan: 'Idle', rug: 'Idle', mom: 'Idle', exit: 'Idle' },
-      ws: 'off', seen: [], pending: [], watch: []
+      ws: 'off', seen: [], pending: [], watch: [], rej: {}, block: {}, rules: 'hunter'
     };
   }
   function load() {
     try {
       var raw = JSON.parse(localStorage.getItem(LS) || 'null');
-      if (!raw || typeof raw !== 'object') return fresh();
+      if (!raw || typeof raw !== 'object' || raw.rules !== 'hunter') return fresh();
       var base = fresh();
       base.on = false;
       base.settings = cleanSettings(raw.settings);
@@ -423,6 +482,8 @@
       if (Array.isArray(raw.seen)) base.seen = raw.seen;
       if (Array.isArray(raw.pending)) base.pending = raw.pending;
       if (Array.isArray(raw.watch)) base.watch = raw.watch;
+      if (raw.rej && typeof raw.rej === 'object') base.rej = raw.rej;
+      if (raw.block && typeof raw.block === 'object') base.block = raw.block;
       if (raw.on === true) base._resume = true;
       return base;
     } catch (e) { return fresh(); }
@@ -434,9 +495,10 @@
 
   function save() {
     var copy = {};
-    ['on', 'settings', 'cash', 'start', 'realized', 'scanned', 'dodged', 'bought', 'wins', 'exited', 'open', 'closed', 'equity', 'last', 'seen', 'pending', 'watch'].forEach(function (k) {
+    ['on', 'settings', 'cash', 'start', 'realized', 'scanned', 'dodged', 'bought', 'wins', 'exited', 'open', 'closed', 'equity', 'last', 'seen', 'pending', 'watch', 'rej', 'block'].forEach(function (k) {
       copy[k] = state[k];
     });
+    copy.rules = 'hunter';
     try { localStorage.setItem(LS, JSON.stringify(copy)); } catch (e) {}
   }
   function ensureWorker() {
@@ -498,8 +560,13 @@
     }).join('') : '<p class="empty-note">No open paper trades.</p>';
     var closed = state.closed || [];
     root.querySelector('[data-fp-closes]').innerHTML = closed.length ? closed.slice(0, 8).map(function (c) {
-      return '<div class="paper-row"><div class="min-w-0"><b>' + esc(c.symbol) + '</b><div class="bot-sub">' + esc(c.why || '') + '</div></div><div class="ui-pnl ' + (c.pnl < 0 ? 'pnl-down' : 'pnl-up') + '">' + money(c.pnl, true) + '</div></div>';
+      var why = c.reason || ((c.setup ? c.setup + ' · ' : '') + (c.why || ''));
+      return '<div class="paper-row"><div class="min-w-0"><b>' + esc(c.symbol) + '</b><div class="bot-sub">' + esc(c.tehran || '') + ' · ' + esc(why) + '</div><div class="bot-sub">' + esc(c.mint || '') + '</div></div><div class="ui-pnl ' + (c.pnl < 0 ? 'pnl-down' : 'pnl-up') + '">' + money(c.pnl, true) + '</div></div>';
     }).join('') : '<p class="empty-note">No paper closes yet.</p>';
+    var rej = state.rej || {};
+    var bits = Object.keys(rej).sort(function (a, b) { return rej[b] - rej[a]; }).slice(0, 6);
+    var rejEl = root.querySelector('[data-fp-rej]');
+    if (rejEl) rejEl.textContent = bits.length ? bits.map(function (k) { return k + ' ' + rej[k]; }).join(' · ') : 'No rejects yet.';
     root.querySelectorAll('[data-fp-range]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-fp-range') === range); });
     draw(root.querySelector('[data-fp-chart]'));
     if (!root.dataset.bound) {
@@ -508,7 +575,7 @@
     }
   }
   function equityOf(s) {
-    var drag = ((s.settings && +s.settings.slipPct || 1) + (s.settings && +s.settings.feePct || 0.3)) / 100;
+    var drag = ((s.settings && +s.settings.slipPct || 2) + (s.settings && +s.settings.feePct || 0.5)) / 100;
     var mtm = 0;
     (s.open || []).forEach(function (p) {
       var px = p.lastPx > 0 ? p.lastPx : p.entryPx;
@@ -530,6 +597,7 @@
       '<p class="bot-sub">Paper bankroll only. This switch cannot sign or spend the burner.</p>' +
       '<h3 class="tone tone-paper" style="margin-top:14px">Open</h3><div data-fp-open></div>' +
       '<h3 class="tone tone-paper" style="margin-top:12px">Recent closes</h3><div data-fp-closes></div>' +
+      '<h3 class="tone tone-paper" style="margin-top:12px">Rejects</h3><p class="bot-sub" data-fp-rej>No rejects yet.</p>' +
       '<div class="flex gap-2" style="margin-top:12px"><button type="button" data-fp-set class="ui-more">Thresholds</button><button type="button" data-fp-csv class="ui-more">CSV</button></div>' +
       '</section>' + sheet();
   }
@@ -576,12 +644,12 @@
     document.getElementById('fpSheet').classList.remove('open');
   }
   function csv() {
-    var lines = ['time,side,symbol,mint,pnl_usd,reason'];
+    var lines = ['tehran,symbol,mint,entry,exit,pnl_usd,reason'];
     (state.closed || []).forEach(function (c) {
-      lines.push([new Date(c.t).toISOString(), 'sell', q(c.symbol), c.mint, c.pnl, q(c.why)].join(','));
+      lines.push([q(c.tehran), q(c.symbol), c.mint, c.entry, c.exit, c.pnl, q(c.reason || c.why)].join(','));
     });
     (state.open || []).forEach(function (p) {
-      lines.push([new Date(p.opened).toISOString(), 'buy', q(p.symbol), p.mint, '', 'open'].join(','));
+      lines.push(['', q(p.symbol), p.mint, p.entryPx, '', '', q(p.setup || 'open')].join(','));
     });
     var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     var a = document.createElement('a');
