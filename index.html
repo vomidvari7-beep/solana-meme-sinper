@@ -427,9 +427,31 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   window.addEventListener('beforeunload', disarm);
   window.addEventListener('pagehide', function (ev) { if (!ev.persisted) disarm(); });
   window.addEventListener('pageshow', function (ev) { if (ev.persisted) arm(); });
+  window.__smsBootError = function (err) {
+    var msg = (err && (err.message || err)) || 'Something failed while starting';
+    msg = String(msg).slice(0, 280);
+    var el = document.getElementById('bootError');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'bootError';
+      el.setAttribute('role', 'alert');
+      el.style.cssText = 'display:block;position:sticky;top:0;z-index:80;background:#9f1239;color:#fff;font:600 12px/1.35 ui-sans-serif,system-ui,sans-serif;padding:8px 12px';
+      if (document.body) document.body.prepend(el);
+    }
+    el.style.display = 'block';
+    el.textContent = msg;
+  };
+  window.addEventListener('error', function (e) {
+    window.__smsBootError((e && (e.message || (e.error && e.error.message))) || 'Script error');
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var reason = e && e.reason;
+    window.__smsBootError((reason && (reason.message || reason)) || 'Unhandled error');
+  });
 })();
 </script>
 
+<div id="bootError" role="alert" style="display:none;position:sticky;top:0;z-index:80;background:#9f1239;color:#fff;font:600 12px/1.35 ui-sans-serif,system-ui,sans-serif;padding:8px 12px"></div>
 <div id="lockBanner" class="lock-banner" hidden>
   <div class="lock-copy">
     <b class="lock-title">Locked — bots are not trading</b>
@@ -687,7 +709,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 17:05</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 17:40</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <details>
     <summary class="ui-more">Notice</summary>
@@ -2798,11 +2820,13 @@ $('pasted').addEventListener('input', () => { updateHints(); saveInputsDraft(); 
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAnalysis(); } });
 
 (function init() {
-  const restored = loadLast(true);
-  try { const d = JSON.parse(localStorage.getItem('sms:inputs') || 'null'); if (d) applyInputs(d); } catch { }
-  updateHints(); updateLastIndicator();
-  if (restored) toast('Restored your last analysis (' + fmtTime(lastResult.ts) + ')', 'info', 3000);
-  fetchSolContext().then(c => { if (isNum(c.price)) renderTicker(c); else if (!restored) renderTicker(null); }).catch(() => {});
+  try {
+    const restored = loadLast(true);
+    try { const d = JSON.parse(localStorage.getItem('sms:inputs') || 'null'); if (d) applyInputs(d); } catch { }
+    updateHints(); updateLastIndicator();
+    if (restored) toast('Restored your last analysis (' + fmtTime(lastResult.ts) + ')', 'info', 3000);
+    fetchSolContext().then(c => { if (isNum(c.price)) renderTicker(c); else if (!restored) renderTicker(null); }).catch(() => {});
+  } catch (e) { console.error(e); try { window.__smsBootError(e); } catch { /* banner later */ } }
 })();
 window.__SMS = { parseInput, toMarkdown, buildPrompt, get last() { return lastResult; } };
 </script>
@@ -3137,10 +3161,17 @@ async function loadTokenAtas(owner, mints, tokens) {
   list.forEach((m, i) => { const inf = infos[i]; if (!inf) return;
     const [ata] = w.PublicKey.findProgramAddressSync([ownerPk.toBuffer(), new w.PublicKey(inf.program).toBuffer(), new w.PublicKey(m).toBuffer()], new w.PublicKey(ATA_PROGRAM));
     atas.push(ata.toBase58()); meta.push({ mint: m, ...inf }); });
+  if (!tokens.holdChecked) tokens.holdChecked = new Set();
   for (let i = 0; i < atas.length; i += 10) {
     const r = await rpc('getMultipleAccounts', [atas.slice(i, i + 10), { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-    (r.value || []).forEach((acc, j) => { const mm = meta[i + j]; const ta = acc?.data?.parsed?.info?.tokenAmount; if (!ta || !mm) return;
-      const raw = BigInt(ta.amount || '0'); tokens.set(mm.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: mm.program }); });
+    (r.value || []).forEach((acc, j) => {
+      const mm = meta[i + j]; if (!mm) return;
+      tokens.holdChecked.add(mm.mint);
+      const ta = acc?.data?.parsed?.info?.tokenAmount;
+      if (!ta) { tokens.set(mm.mint, { raw: 0n, decimals: mm.decimals || 0, ui: 0, program: mm.program, empty: true }); return; }
+      const raw = BigInt(ta.amount || '0');
+      tokens.set(mm.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: mm.program });
+    });
   }
   return tokens;
 }
@@ -3185,6 +3216,8 @@ function isStableMint(mint, symbol) {
 }
 async function listWalletTokens(owner) {
   const tokens = new Map();
+  tokens.holdFull = false;
+  tokens.holdChecked = new Set();
   let indexedErr = '';
   try {
     for (const prog of TOKEN_PROGRAMS) {
@@ -3197,15 +3230,17 @@ async function listWalletTokens(owner) {
         mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
       }
     }
-    if (tokens.size) return tokens;
+    if (tokens.size) { tokens.holdFull = true; return tokens; }
   } catch (e) {
     indexedErr = e.message || String(e);
     indexedBlocked.add(activeRpc());
     tokens.clear();
+    tokens.holdFull = false;
+    tokens.holdChecked = new Set();
   }
   try { await loadTokenAtas(owner, await discoverWalletMints(owner), tokens); }
   catch (e) { throw new Error(indexedErr || e.message || 'Wallet token read failed'); }
-  if (!tokens.size && indexedErr) throw new Error(indexedErr);
+  if (!tokens.size && !tokens.holdChecked.size && indexedErr) throw new Error(indexedErr);
   return tokens;
 }
 function txTokenDelta(tx, owner, mint) {
@@ -3248,6 +3283,75 @@ async function latestWalletBuys(owner, mints) {
 }
 let walletSyncBusy = false;
 let walletSyncNote = '';
+const emptyHoldReads = new Map();
+function holdUiOf(bag) {
+  if (!bag || !(bag.raw > 0n)) return 0;
+  if (bag.ui > 0) return bag.ui;
+  const dec = Number.isFinite(+bag.decimals) ? +bag.decimals : 0;
+  return Number(bag.raw) / 10 ** dec;
+}
+function holdConfirmed(tokens, mint) {
+  if (!tokens) return false;
+  if (tokens.holdFull) return true;
+  return !!(tokens.holdChecked && tokens.holdChecked.has(mint));
+}
+function bookExternalClose(p) {
+  const remain = Math.max(0, (p.bought || 0) - (p.sold || 0));
+  if (!(p.bought > 0) || remain <= p.bought * 0.001) return false;
+  const opened = p.firstTs || 0;
+  const sells = LOG.filter(r => r && r.status === 'confirmed' && r.side === 'sell' && r.wallet === p.wallet && r.mint === p.mint && (r.ts || 0) >= opened - 5000);
+  const known = [...sells].reverse().find(r => r.signature && !(r.tokenAmount > 0));
+  const live = livePrices.get(p.mint)?.price;
+  const px = (live > 0 ? live : null) || (known && known.priceUsd > 0 ? known.priceUsd : null) || (p.lastBuyPx > 0 ? p.lastBuyPx : null) || (p.avgUsd > 0 ? p.avgUsd : null);
+  const solPx = liveSolPx();
+  if (known) {
+    known.tokenAmount = (known.tokenAmount || 0) + remain;
+    if (!(known.priceUsd > 0) && px > 0) known.priceUsd = px;
+    if (!(known.solAmount > 0) && px > 0 && solPx > 0) known.solAmount = remain * px / solPx;
+    if (!known.solUsd && solPx) known.solUsd = solPx;
+    if (!known.exitTag) known.exitTag = 'closed externally';
+    if (!known.entryReason) known.entryReason = 'closed externally';
+    known.fill = known.fill || 'external';
+    ensureSolPx(known);
+    try { noteTradeForEquity(known); } catch { /* equity later */ }
+    return true;
+  }
+  const rec = {
+    id: 'ext' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    ts: Date.now(), wallet: p.wallet, side: 'sell', mint: p.mint,
+    symbol: p.symbol || '', tokenName: p.tokenName || '', status: 'confirmed',
+    tokenAmount: remain, priceUsd: px > 0 ? px : null, solUsd: solPx || null,
+    solAmount: px > 0 && solPx > 0 ? remain * px / solPx : 0,
+    signature: '', exitTag: 'closed externally', entryReason: 'closed externally',
+    fill: 'external', external: true,
+    myList: !!p.myList, degen: !!p.degen, sniper: !!p.sniper, scalp: !!p.scalp, auto: !!p.auto, copy: !!p.copy, recovered: !!p.recovered
+  };
+  ensureSolPx(rec);
+  LOG.push(rec);
+  try { noteTradeForEquity(rec); } catch { /* equity later */ }
+  return true;
+}
+function settleEmptyHolds(walletKey) {
+  const w = WALLETS[walletKey];
+  const tokens = w && w.tokens;
+  if (!w || !w.pubkey || !tokens) return false;
+  let changed = false;
+  for (const p of positions()) {
+    if (!p.open || p.wallet !== walletKey) continue;
+    const id = p.wallet + ':' + p.mint;
+    if (!holdConfirmed(tokens, p.mint)) continue;
+    const ui = holdUiOf(tokens.get(p.mint));
+    const dust = !(ui > 0) || (p.bought > 0 && ui <= p.bought * 0.001);
+    if (!dust) { emptyHoldReads.set(id, 0); continue; }
+    const n = (emptyHoldReads.get(id) || 0) + 1;
+    emptyHoldReads.set(id, n);
+    if (n < 2) continue;
+    if (bookExternalClose(p)) changed = true;
+    emptyHoldReads.set(id, 0);
+  }
+  if (changed) { saveLog(); try { renderPortfolio(); } catch { /* portfolio later */ } }
+  return changed;
+}
 function holdingIsDegen(mint) {
   try { if ((DEGEN.picks || []).some(p => p && p.mint === mint)) return true; } catch { /* picks not loaded */ }
   return LOG.some(r => r && r.mint === mint && r.status === 'confirmed' && (r.degen || r.plan?.degen));
@@ -3279,6 +3383,7 @@ async function syncWalletHoldings(opt) {
     rememberBurnerSol(WALLETS.burner.sol);
     const tokens = await listWalletTokens(owner);
     WALLETS.burner.tokens = tokens;
+    try { settleEmptyHolds('burner'); } catch (e) { console.error(e); }
     WALLETS.burner.err = null;
     const mints = [...tokens.keys()].filter(m => !isStableMint(m));
     const quotes = new Map();
@@ -3579,7 +3684,7 @@ function setActive(k) { if (!WALLETS[k]) return; activeKey = k; save('sms:active
 async function refreshBalances(which) {
   const keys = which ? [which] : Object.keys(WALLETS);
   await Promise.all(keys.map(async k => { const w = WALLETS[k]; if (!w.pubkey) return;
-    try { const b = await getBalances(w.pubkey); w.sol = b.sol; if (!b.tokenErr) w.tokens = b.tokens; w.err = b.tokenErr || null; if (k === 'burner') { rememberBurnerSol(b.sol); if (b.tokenErr) walletSyncNote = b.tokenErr; } }
+    try { const b = await getBalances(w.pubkey); w.sol = b.sol; if (!b.tokenErr) { w.tokens = b.tokens; try { settleEmptyHolds(k); } catch (err) { console.error(err); } } w.err = b.tokenErr || null; if (k === 'burner') { rememberBurnerSol(b.sol); if (b.tokenErr) walletSyncNote = b.tokenErr; } }
     catch (e) { w.err = e.message; } }));
   if (!which || which === 'burner') recordEquity(false);
   renderWallet(); hydrate(); renderPortfolio(); renderBurner();
@@ -5542,6 +5647,7 @@ function legTokenPx(r, livePx) {
 function exitReasonLabel(tag) {
   const t = String(tag || '').toLowerCase();
   if (!t) return 'manual';
+  if (t === 'closed externally' || t === 'external') return 'closed externally';
   if (t === 'tp1') return 'TP1';
   if (t === 'tp2') return 'TP2';
   if (/^tp\d+$/.test(t)) return t.toUpperCase();
@@ -9172,15 +9278,18 @@ function paperHost() {
 function paperPaint() {
   const host = paperHost();
   if (!host) return;
-  host.innerHTML = '<div id="fastPaperRoot"></div>';
+  if (!$('fastPaperRoot')) host.innerHTML = '<div id="fastPaperRoot"></div><div id="gradPaperRoot"></div>';
+  else if (!$('gradPaperRoot')) host.insertAdjacentHTML('beforeend', '<div id="gradPaperRoot"></div>');
   try {
     const doc = PAPER.doc || {};
     const mints = [].concat(doc.open || [], doc.closed || []).map(r => r && r.mint).filter(Boolean);
     wantLogos(mints, () => { if (tradeSeg === 'paper') paperPaint(); });
   } catch { /* logos later */ }
   try { if (window.SMSFastPaper) window.SMSFastPaper.paint(); } catch { /* fast paper later */ }
+  try { gradPaint(); } catch { /* grad card later */ }
 }
 async function paperRefresh() {
+  gradRefresh();
   if (PAPER.busy) return;
   PAPER.busy = true;
   PAPER.loading = !PAPER.doc;
@@ -9198,7 +9307,122 @@ async function paperRefresh() {
 }
 function paperEnsure() {
   if (!PAPER.at || Date.now() - PAPER.at > 60000) paperRefresh();
-  else paperPaint();
+  else {
+    paperPaint();
+    if (!GRAD.at || Date.now() - GRAD.at > 60000) gradRefresh();
+    else gradPaint();
+  }
+}
+const GRAD = { doc: null, err: '', at: 0, busy: false };
+function gradRulesText(rules) {
+  if (rules == null || rules === '') return '';
+  if (typeof rules === 'string') return rules;
+  if (typeof rules !== 'object') return String(rules);
+  const order = ['name', 'universe', 'entry', 'rejects', 'size', 'fills', 'exits'];
+  const lines = [];
+  for (const k of order) if (rules[k]) lines.push((k === 'name' ? '' : k.charAt(0).toUpperCase() + k.slice(1) + ': ') + rules[k]);
+  for (const k of Object.keys(rules)) {
+    if (order.includes(k) || k === 'mode') continue;
+    const v = rules[k];
+    if (v == null || typeof v === 'object') continue;
+    lines.push(k + ': ' + v);
+  }
+  return lines.join('\n');
+}
+function gradProgress(p) {
+  const bits = [];
+  const n = paperNum(p.progress);
+  if (n != null) bits.push((n <= 1.5 ? n * 100 : n).toFixed(0) + '%');
+  if (p.graduated === true) bits.push('graduated');
+  else if (p.graduated === false) bits.push('not graduated');
+  return bits.join(' · ') || '—';
+}
+function gradStop(p) {
+  if (paperNum(p.stop) > 0) return paperPx(p.stop);
+  if (paperNum(p.stop_price) > 0) return paperPx(p.stop_price);
+  const pct = paperNum(p.stop_pct);
+  if (pct != null) return '−' + Math.abs(pct).toFixed(0) + '%';
+  return '—';
+}
+function gradNow(p) {
+  return paperPx(p.price != null ? p.price : (p.current != null ? p.current : (p.mark != null ? p.mark : p.last_price)));
+}
+function gradSpark(points) {
+  if (!points || points.length < 2) return '';
+  const w = 320, h = 72, pad = 6;
+  let min = points[0].v, max = points[0].v;
+  points.forEach(p => { if (p.v < min) min = p.v; if (p.v > max) max = p.v; });
+  if (max - min < 0.4) { min -= 0.4; max += 0.4; }
+  const d = points.map((p, i) => {
+    const x = pad + (i / (points.length - 1)) * (w - pad * 2);
+    const y = pad + (1 - (p.v - min) / (max - min)) * (h - pad * 2);
+    return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" class="fp-chart" style="width:100%;height:72px;display:block" aria-hidden="true"><path d="${d}" fill="none" stroke="#94A3B8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+function gradPaint() {
+  const root = $('gradPaperRoot');
+  if (!root) return;
+  const doc = GRAD.doc;
+  const up = (n) => n == null ? '' : n >= 0 ? 'pnl-up' : 'pnl-down';
+  if (!doc) {
+    root.innerHTML = `<section class="hero-card"><div class="fp-head"><b class="tone tone-paper">Grad Hunter</b><span class="ui-pill tone-paper">read only</span></div><p class="bot-sub">${esc(GRAD.err || 'Reading Grad Hunter…')}</p></section>`;
+    return;
+  }
+  const start = paperNum(doc.start_usd);
+  const equity = paperNum(doc.equity_usd);
+  const delta = equity != null && start != null ? equity - start : null;
+  const deltaPct = delta != null && start ? delta / start * 100 : null;
+  const open = Array.isArray(doc.open) ? doc.open : [];
+  const closed = (Array.isArray(doc.closed) ? doc.closed : []).slice().sort((a, b) => (paperTehranMs(b.closed_tehran) || 0) - (paperTehranMs(a.closed_tehran) || 0));
+  let wins = 0, losses = 0;
+  closed.forEach(c => { const n = paperNum(c.pnl_usd); if (n == null) return; if (n >= 0) wins++; else losses++; });
+  const when = doc.updated_utc || doc.updated_tehran;
+  const points = [];
+  const startAt = paperTehranMs(closed[closed.length - 1]?.opened_tehran) || paperTehranMs(doc.updated_utc) || Date.now();
+  if (start != null) points.push({ t: startAt - 1000, v: start });
+  let walk = start != null ? start : 0;
+  closed.slice().reverse().forEach(c => {
+    const pnl = paperNum(c.pnl_usd) || 0;
+    walk += pnl;
+    const t = paperTehranMs(c.closed_tehran) || Date.now();
+    points.push({ t, v: walk });
+  });
+  if (equity != null && points.length) points[points.length - 1].v = equity;
+  const traded = (paperNum(doc.trades) || 0) > 0 || closed.length > 0 || open.length > 0;
+  const openRows = open.map(p => `<div class="paper-row"><div class="min-w-0"><b>${esc(p.symbol || '—')}</b><div class="bot-sub">${esc(gradProgress(p))}</div><div class="bot-sub">${paperPx(p.entry_price)} → ${gradNow(p)} · stop ${gradStop(p)}</div></div><div class="ui-pnl ${up(paperNum(p.pnl_usd) != null ? paperNum(p.pnl_usd) : paperNum(p.pnl_pct))}">${paperMoney(p.pnl_usd, true)}<div>${paperPct(p.pnl_pct)}</div></div></div>`).join('');
+  const closedRows = closed.map(c => {
+    const ts = paperTehranMs(c.closed_tehran);
+    const whenTxt = ts ? tehranWhen(ts) : (c.closed_tehran || '—');
+    const why = String(c.reason || '—').replace(/_/g, ' ');
+    return `<div class="paper-row"><div class="min-w-0"><b>${esc(c.symbol || '—')}</b><div class="bot-sub">${esc(whenTxt)} · ${esc(why)}</div></div><div class="ui-pnl ${up(paperNum(c.pnl_usd))}">${paperMoney(c.pnl_usd, true)}<div>${paperPct(c.pnl_pct)}</div></div></div>`;
+  }).join('');
+  const rules = gradRulesText(doc.rules);
+  root.innerHTML = `<section class="hero-card"><div class="fp-head"><b class="tone tone-paper">Grad Hunter</b><span class="ui-pill tone-paper">read only</span></div>
+    <p class="bot-sub" style="margin-top:4px">updated ${esc(when ? paperAge(when) + ' ago' : '—')}${GRAD.err ? ' · ' + esc(GRAD.err) : ''}</p>
+    <div class="fp-bal">${paperMoney(equity, false)}</div>
+    <div class="fp-chips"><span class="${up(delta)}">${paperMoney(delta, true)} · ${paperPct(deltaPct)}</span><span style="color:var(--muted)">Cash ${paperMoney(doc.cash_usd, false)}</span><span style="color:var(--muted)">Realized ${paperMoney(doc.realized_pnl_usd, true)}</span><span style="color:var(--muted)">Unrealized ${paperMoney(doc.unrealized_pnl_usd, true)}</span><span style="color:var(--muted)">W/L ${wins}/${losses}</span></div>
+    <p class="bot-sub">vs ${paperMoney(start != null ? start : 100, false)} start</p>
+    ${traded && points.length > 1 ? gradSpark(points) : ''}
+    <h3 class="tone tone-paper" style="margin-top:14px">Open</h3>
+    ${open.length ? openRows : '<p class="empty-note">No open paper positions.</p>'}
+    <h3 class="tone tone-paper" style="margin-top:12px">Closed</h3>
+    ${closed.length ? closedRows : '<p class="empty-note">No closed paper trades.</p>'}
+    ${rules ? `<details class="mt-3"><summary class="ui-more">Rules</summary><p class="bot-sub" style="white-space:pre-wrap;margin-top:8px">${esc(rules)}</p></details>` : ''}
+  </section>`;
+}
+async function gradRefresh() {
+  if (GRAD.busy) return;
+  GRAD.busy = true;
+  try {
+    const data = await fetchAgentDoc('grad_paper');
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('grad paper file is not an object');
+    GRAD.doc = data;
+    GRAD.err = '';
+  } catch (e) {
+    GRAD.err = paperMissing(e) ? 'No Grad Hunter data yet' : 'Couldn’t read Grad Hunter';
+  } finally { GRAD.busy = false; GRAD.at = Date.now(); }
+  try { gradPaint(); } catch { /* card later */ }
 }
 async function degenFetchFile() {
   const data = await fetchDegenDoc();
@@ -14661,7 +14885,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 17:05';
+    stamp.textContent = 'Panel build 2026-11-12 17:40';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -14706,11 +14930,26 @@ function mountApp() {
   try { paintRunDesk(); } catch { /* desk later */ }
 }
 window.showTab = showTab;
-mountApp();
-fillSettings(); renderWallet(); renderBurner(); try { VAULT.render(); VAULT.pushServer(); } catch { /* vault card later */ } renderWhale(); renderSniper(); renderDegen(); renderMyList(); startMyList(); renderPortfolio(); hydrate(); wireReadyNow();
-if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000);
-degenRemovedBook();
-refreshDegenLedger();
+function bootStep(fn) {
+  try { fn(); }
+  catch (e) { console.error(e); try { window.__smsBootError(e); } catch { /* banner later */ } }
+}
+bootStep(() => mountApp());
+bootStep(() => fillSettings());
+bootStep(() => renderWallet());
+bootStep(() => renderBurner());
+bootStep(() => { VAULT.render(); VAULT.pushServer(); });
+bootStep(() => renderWhale());
+bootStep(() => renderSniper());
+bootStep(() => renderDegen());
+bootStep(() => renderMyList());
+bootStep(() => startMyList());
+bootStep(() => renderPortfolio());
+bootStep(() => hydrate());
+bootStep(() => wireReadyNow());
+bootStep(() => { if (openPositions().some(p => p.degen) && !degenExitTimer) degenExitTimer = setInterval(degenExitTick, 15000); });
+bootStep(() => degenRemovedBook());
+bootStep(() => refreshDegenLedger());
 setTimeout(degenWatch, 700);
 if (!window.__smsPolls) {
   window.__smsPolls = 1;
@@ -14721,26 +14960,26 @@ if (!window.__smsPolls) {
   setInterval(() => { if (recordEquity(false)) renderPortfolio(); }, 5 * 60 * 1000);
   setInterval(() => { if (!document.hidden) paperRefresh(); }, 60 * 1000);
 }
-startLiveLoop();
-syncAgentPreview();
-maybeLockSizeUnit();
+bootStep(() => startLiveLoop());
+bootStep(() => syncAgentPreview());
+bootStep(() => maybeLockSizeUnit());
 setTimeout(() => { refreshHolderWatch(); }, 20000);
 setTimeout(() => { if (WALLETS.burner?.pubkey) syncWalletHoldings({ quiet: true }); }, 2500);
-if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
-try { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; } catch { /* no history yet */ }
-updateSolFilterBadge();
+bootStep(() => { if (openPositions().some(p => p.sniper) && !sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000); });
+bootStep(() => { window.__SMS_DEX_HIST = loadDexHist(); const lastDex = window.__SMS_DEX_HIST.at(-1); if (lastDex) window.__SMS_DEX = { value: lastDex.v, label: moodLabel(lastDex.v), ts: lastDex.ts }; });
+bootStep(() => updateSolFilterBadge());
 setTimeout(() => connectPhantom(true), 400); // silent reconnect if already trusted
-mountServerMode();
-renderLiveTest();
-if (WALLETS.burner.pubkey) refreshBalances('burner');
-if (openPositions().length) setTimeout(refreshPrices, 1500);
+bootStep(() => mountServerMode());
+bootStep(() => renderLiveTest());
+bootStep(() => { if (WALLETS.burner.pubkey) refreshBalances('burner'); });
+bootStep(() => { if (openPositions().length) setTimeout(refreshPrices, 1500); });
 setTimeout(() => { if (recordEquity(false)) renderPortfolio(); }, 12000);
 
 
 document.querySelectorAll('[data-theme-toggle]').forEach(b => b.addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') === 'day' ? 'night' : 'day', true)));
-paintThemeToggles();
+bootStep(() => paintThemeToggles());
 return { hydrate, connectPhantom, disconnectPhantom, openTrade, getQuote, buildSwap, deserializeTx, refreshBalances, positions, openPositions, killSwitch, autoTick, armedEntries, staticEligible, buyGuards, clampAutoBuy, positionTargets, renderPortfolio,
-  encryptSecret, decryptSecret, vaultSelfTest: () => VAULT.selfTest(), get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, livePrices, setActive, inZone, executeSwap,
+  encryptSecret, decryptSecret, vaultSelfTest: () => VAULT.selfTest(), get settings() { return S; }, get auto() { return A; }, get wallets() { return WALLETS; }, get log() { return LOG; }, get autolog() { return AUTOLOG; }, _setLog(l) { LOG = l; saveLog(); }, settleEmptyHolds, livePrices, setActive, inZone, executeSwap,
   classifyRug, parseWhaleFill, planTranches, whaleBounds, sizeDecision, mirrorSellPct, buyTrigger, handleWhaleEvent, pollCopyOnce, renderWhale, solFilterState, analyzeStructure, tfsForAge, effectiveStop, priceExit,
   sniperMomentum, decodeMintFlags, sniperExitDecision, geckoPool, sniperCheap, renderSniper, recordEquity, noteTradeForEquity, listEntryReady, listBuyBlocks, myListExit, renderMyList, listBreakRead, athRead, chartGeometry, strongRead, dontMissRead, quickEntryCheck, quickReentryBlock, applyQuickOverlay, splitEntryOn, splitDecision, splitLeg1Hit, splitLeg2Hit, splitStopOk, splitFallbackHit, degenCfg, degenLeft, degenExit, degenBuyBlock, degenPickBlock, degenPlan, hunterVeto, livePre, liveConfidence, agentPlanFor, refreshAgents, applyAgentRisk, openScanChart, tfFallbackChoice, quoteSpend, resolveListSpend, resolveTypedSpend, zoneWaitReason, get mylist() { return MYLIST; }, get agents() { return AG; },
   get whales() { return WHALES; }, get copy() { return COPY; }, get whalelog() { return WHALELOG; } };

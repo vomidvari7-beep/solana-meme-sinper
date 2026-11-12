@@ -1,0 +1,310 @@
+{
+  "updated_utc": "2026-11-12T14:06:11Z",
+  "updated_tehran": "2026-11-12T17:36:11+03:30",
+  "mode": "paper",
+  "engine": "grad_hunter",
+  "start_usd": 100.0,
+  "cash_usd": 98.2404,
+  "equity_usd": 98.2404,
+  "realized_pnl_usd": -1.7595,
+  "unrealized_pnl_usd": 0.0,
+  "trades": 2,
+  "win_rate": 0.0,
+  "open": [],
+  "closed": [
+    {
+      "mint": "9pvQmvGMXpZYxWgwLVKoQrA3yy22gbDLEmQDZgh9pump",
+      "symbol": "CAMERON",
+      "name": "The Crashout Kid",
+      "logo": "https://axiomtrading.sfo3.cdn.digitaloceanspaces.com/ABek8B7Fm72SLmrFm8g4bygMJV9rujgCSutC91A3pump.webp",
+      "entry_price": 2.3161946131576883e-05,
+      "exit_price": 2.1807217441441077e-05,
+      "size_usd": 14.8882,
+      "pnl_usd": -0.9032,
+      "pnl_pct": -6.067,
+      "reason": "whale_dump_pre_grad",
+      "graduated": false,
+      "opened_tehran": "2026-11-12T17:13:14+03:30",
+      "closed_tehran": "2026-11-12T17:13:18+03:30",
+      "hold_min": 0.1,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.3161946131576883e-05,
+          "usd": 14.8882,
+          "reason": "entry",
+          "tehran": "2026-11-12T17:13:14+03:30"
+        },
+        {
+          "venue": "curve",
+          "side": "sell",
+          "price_usd": 2.1807217441441077e-05,
+          "usd": 13.985,
+          "reason": "whale_dump_pre_grad",
+          "tehran": "2026-11-12T17:13:18+03:30"
+        }
+      ]
+    },
+    {
+      "mint": "Afzh4BDLNh8AynwDwM1o4PGnXD6eVZhBd9zN1Q5Lpump",
+      "symbol": "VAGINA",
+      "name": "vagina coin",
+      "logo": "https://edge.uxento.io/image/FJt4dN8ZCwRPwZZ8YzncH3rCgz5E1yw8WzAhaLaGYNmD",
+      "entry_price": 2.14663802710755e-05,
+      "exit_price": 2.028873340164662e-05,
+      "size_usd": 15.0167,
+      "pnl_usd": -0.8563,
+      "pnl_pct": -5.703,
+      "reason": "whale_dump_pre_grad",
+      "graduated": false,
+      "opened_tehran": "2026-11-12T17:02:33+03:30",
+      "closed_tehran": "2026-11-12T17:02:52+03:30",
+      "hold_min": 0.3,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.14663802710755e-05,
+          "usd": 15.0167,
+          "reason": "entry",
+          "tehran": "2026-11-12T17:02:33+03:30"
+        },
+        {
+          "venue": "curve",
+          "side": "sell",
+          "price_usd": 2.028873340164662e-05,
+          "usd": 14.1604,
+          "reason": "whale_dump_pre_grad",
+          "tehran": "2026-11-12T17:02:52+03:30"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "tokens_tracked": 1248,
+    "uptime_min": 15.9,
+    "counters": {
+      "trades": 47694,
+      "entered_band": 17,
+      "watch_accept": 15,
+      "creates": 663,
+      "pp_new_tokens": 143,
+      "pp_migrations": 10,
+      "complete_pumpportal_migrate": 10,
+      "complete_trade_reserves_zero": 140,
+      "complete_CompleteEvent": 10,
+      "complete_CompletePumpAmmMigrationEvent": 10,
+      "entry_reject": 24,
+      "watchdog_pump_logs": 1,
+      "pp_reconnects": 1
+    },
+    "feeds": {
+      "pump_logs": {
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-12T14:02:58Z",
+        "last_msg_utc": "2026-11-12T14:06:11Z"
+      },
+      "amm": {
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-12T14:04:04Z"
+      },
+      "pumpportal": {
+        "connected_utc": "2026-11-12T14:03:02Z",
+        "last_msg_utc": "2026-11-12T14:06:06Z"
+      }
+    },
+    "kill_switch": false,
+    "recent_decisions": [
+      {
+        "ts_tehran": "2026-11-12T17:30:33+03:30",
+        "symbol": "ANTPE",
+        "mint": "BrVJaraVPGnDpkmEzZ38KRciQpEFj4fjqwWPDtxepump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(68%)",
+          "too_young(91s)",
+          "creator_already_sold",
+          "early_buys_heavy(47.41%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:30:35+03:30",
+        "symbol": "KITTY",
+        "mint": "BrjUBC7zGWhkBDvATEP31CUsgBKKjv7gp5pHUANkpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(68%)",
+          "too_young(70s)",
+          "creator_already_sold",
+          "early_buys_heavy(40.05%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:30:35+03:30",
+        "symbol": "KITTY",
+        "mint": "BrjUBC7zGWhkBDvATEP31CUsgBKKjv7gp5pHUANkpump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:30:35+03:30",
+        "symbol": "ANTPE",
+        "mint": "BrVJaraVPGnDpkmEzZ38KRciQpEFj4fjqwWPDtxepump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:31:00+03:30",
+        "symbol": "KITTY",
+        "mint": "BrjUBC7zGWhkBDvATEP31CUsgBKKjv7gp5pHUANkpump",
+        "accepted": false,
+        "reasons": [
+          "too_young(95s)",
+          "creator_already_sold",
+          "early_buys_heavy(40.05%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:31:11+03:30",
+        "symbol": "3Lf89e",
+        "mint": "3Lf89evNJHVh6KRLRsxfKQpNEH9znumKCbHmdjV8XDjy",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(65%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:33:05+03:30",
+        "symbol": "BUCK",
+        "mint": "2ACojQQDAmZKiX4bVtCBybuMzEACF742GXRjr2f3pump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:34:42+03:30",
+        "symbol": "Aqo6yZ",
+        "mint": "Aqo6yZPSdypouBuDJXHtSzdKALWzT7cBeFUyXwXApump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:34:44+03:30",
+        "symbol": "BUCK",
+        "mint": "2ACojQQDAmZKiX4bVtCBybuMzEACF742GXRjr2f3pump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(90%)",
+          "creator_already_sold",
+          "early_buys_heavy(46.86%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T17:35:35+03:30",
+        "symbol": "GOAT",
+        "mint": "5qxvGcfyhrWQCif4fYsug8SS6priF8dcJ9zdqu9Ypump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(65%)",
+          "creator_already_sold",
+          "early_buys_heavy(42.73%)"
+        ]
+      }
+    ],
+    "sol_usd": 81.2580714847244,
+    "realized_today_usd": -1.7596,
+    "started_utc": "2026-11-12T13:28:48Z",
+    "best_trade_usd": -0.8563,
+    "worst_trade_usd": -0.9032
+  },
+  "watchlist": [
+    {
+      "mint": "GZ2pDdip9spqiZuqV2tGhR1EcvbZzU1XTWk4ZVTGpump",
+      "symbol": null,
+      "progress": 0.862,
+      "sol_in_curve": 73.3,
+      "buyers_seen": 0,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "2hwaRQs4WqThnp26XLpch5MBZhAHqses3vSv1Bkupump",
+      "symbol": "GTA 6.0",
+      "progress": 0.834,
+      "sol_in_curve": 70.9,
+      "buyers_seen": 26,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 2
+    },
+    {
+      "mint": "ATp3AuJK5kJKghJqv4yU1uneurM54zKfD455W8ffpump",
+      "symbol": null,
+      "progress": 0.789,
+      "sol_in_curve": 67.1,
+      "buyers_seen": 0,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "Hn3s5hJRhwAiYxaUv4k4cYiNviEnJAwBVLtBtg5tpump",
+      "symbol": null,
+      "progress": 0.776,
+      "sol_in_curve": 66.0,
+      "buyers_seen": 22,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "8xfcA3UvYCJBHUMGMd4A586KZb1hi6vewGYThMjSpump",
+      "symbol": null,
+      "progress": 0.724,
+      "sol_in_curve": 61.5,
+      "buyers_seen": 20,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "5qxvGcfyhrWQCif4fYsug8SS6priF8dcJ9zdqu9Ypump",
+      "symbol": "GOAT",
+      "progress": 0.664,
+      "sol_in_curve": 56.5,
+      "buyers_seen": 35,
+      "creator_sold": true,
+      "known_from_creation": true,
+      "whale_buys": 9
+    },
+    {
+      "mint": "J5xM4e1FXnZmvToFsPrZi47uyxKCaQu7k7KSreh8sXFd",
+      "symbol": null,
+      "progress": 0.647,
+      "sol_in_curve": 52.9,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    }
+  ],
+  "rules": {
+    "name": "Grad Hunter (pump.fun near-graduation + whale buy)",
+    "mode": "paper",
+    "universe": "pump.fun SOL-quoted bonding curves, discovered live from on-chain pump program logs + PumpPortal",
+    "entry": "curve 70%-90% of SOL needed to graduate, age >= 3m, non-creator buy >= 1.5 SOL",
+    "rejects": "creator sold; unique buyers < 25; top-10 ex-curve > 35.0%; first-10s buys > 20.0% supply; RugCheck danger",
+    "size": "15% of cash (cap $20.0), max 2 open, daily loss limit $15.0",
+    "fills": "exact curve/AMM price impact + 1.25% curve fee (0.3% AMM) + 2.0% slippage + 1200ms latency + 0.0002 SOL priority fee",
+    "exits": "pre-grad stop -15%, creator sells -> exit, no graduation in 45m -> exit; at graduation sell 50%, rest: breakeven stop, trail 25% from high, exit if no new high 30m or whale/creator dumps"
+  }
+}
