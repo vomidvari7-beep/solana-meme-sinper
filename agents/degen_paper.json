@@ -1,14 +1,24 @@
 {
-  "updated_utc": "2026-11-12T11:20:20.794Z",
-  "updated_tehran": "2026-11-12T14:50:20.794+0330",
+  "updated_utc": "2026-11-12T11:41:39.242Z",
+  "updated_tehran": "2026-11-12T15:11:39.242+0330",
   "start_usd": 100.0,
-  "cash_usd": 78.5382,
-  "equity_usd": 78.5382,
+  "cash_usd": 62.7597,
+  "equity_usd": 77.7686,
   "realized_pnl_usd": -21.4618,
-  "unrealized_pnl_usd": 0.0,
+  "unrealized_pnl_usd": -0.7696,
   "trades": 26,
   "win_rate": 0.3462,
-  "open": [],
+  "open": [
+    {
+      "mint": "7yLCJpWQvE2bnX3JZGbmmKrCkCSrSGbqTmgA8tMdpump",
+      "symbol": "FLC",
+      "entry_price": 0.000298044,
+      "price": 0.0002922,
+      "pnl_pct": -4.8775,
+      "size_usd": 15.7,
+      "opened_tehran": "2026-11-12T15:11:39.045+0330"
+    }
+  ],
   "closed": [
     {
       "mint": "2UMho4zUPqSKb2fbJbKNPf1dU1WKD6SfbNmVkvphpump",
