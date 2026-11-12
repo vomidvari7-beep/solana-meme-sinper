@@ -324,19 +324,18 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .row-px .chg-up, .row-px .pnl-up { background: var(--up-soft); }
   .row-px .chg-down, .row-px .pnl-down { background: var(--down-soft); }
   .sub { font-size: .72em; vertical-align: sub; }
-  .token-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; max-height: 92vh; overflow: auto; background: var(--card); color: var(--text); border-radius: var(--radius) var(--radius) 0 0; border: 1px solid var(--line); padding: 8px 16px calc(120px + env(safe-area-inset-bottom)); transform: translateY(105%); pointer-events: none; visibility: hidden; transition: transform .2s ease, visibility 0s linear .2s; }
-  .token-sheet.open { z-index: 80; transform: translateY(0); pointer-events: auto; visibility: visible; transition: transform .2s ease, visibility 0s linear 0s; }
-  #sheetScrim { display: none; position: fixed; inset: 0; z-index: 66; background: rgba(0,0,0,.55); pointer-events: none; visibility: hidden; }
-  body.sheet-on #sheetScrim { display: block; pointer-events: auto; visibility: visible; }
+  .token-sheet { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; max-height: 92vh; overflow: auto; background: var(--card); color: var(--text); border-radius: var(--radius) var(--radius) 0 0; border: 1px solid var(--line); padding: 8px 16px calc(120px + env(safe-area-inset-bottom)); }
+  .token-sheet.open { display: block; }
+  #sheetScrim { display: none; position: fixed; inset: 0; z-index: 66; background: rgba(0,0,0,.55); }
+  body.sheet-on #sheetScrim { display: block; }
   .sheet-grab { width: 36px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.18); margin: 4px auto 10px; }
-  #botScrim { display: none; position: fixed; inset: 0; z-index: 68; background: rgba(0,0,0,.5); pointer-events: none; visibility: hidden; }
-  #botScrim.on { display: block; pointer-events: auto; visibility: visible; }
-  #botSheet { z-index: 72; max-height: 78vh; }
-  #botSheet.open { z-index: 84; }
-  #tradeModal.hidden { pointer-events: none !important; visibility: hidden; }
-  #tradeModal:not(.hidden) { pointer-events: auto; visibility: visible; }
-  #pullHint { position: fixed; top: calc(58px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 50; text-align: center; font-size: 12px; color: var(--muted); opacity: 0; pointer-events: none; transition: opacity .2s; }
-  body.pulling #pullHint { opacity: 1; }
+  #botScrim { display: none; position: fixed; inset: 0; z-index: 68; background: rgba(0,0,0,.5); }
+  #botScrim.on { display: block; }
+  #botSheet { z-index: 84; max-height: 78vh; }
+  #tradeModal.hidden { display: none !important; }
+  #pullHint { display: none; position: fixed; top: calc(58px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 50; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
+  body.pulling #pullHint { display: block; }
+  #toasts:empty { display: none; }
   .skel { height: 12px; border-radius: 8px; background: var(--elev); }
   .text-slate-500, .text-slate-400 { color: var(--muted); }
   .text-slate-100, .text-slate-200 { color: var(--text); }
@@ -647,7 +646,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 03:25</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 03:36</p>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -668,13 +667,14 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </nav>
 <div id="sheetScrim"></div>
 <div id="botScrim"></div>
-<div id="botSheet" class="token-sheet" role="dialog" aria-label="Bot controls" inert>
+<div id="botSheet" class="token-sheet" role="dialog" aria-label="Bot controls">
   <div class="sheet-grab"></div>
+  <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">Bot controls</b><button type="button" id="botSheetClose" class="text-sm text-slate-400">Close</button></div>
   <div id="botBar"></div>
 </div>
 
 <!-- TRADE CONFIRMATION MODAL -->
-<div id="tradeModal" class="hidden fixed inset-0 z-[90] bg-black/70 overflow-y-auto" inert>
+<div id="tradeModal" class="hidden fixed inset-0 z-[90] bg-black/70 overflow-y-auto">
   <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="w-full sm:max-w-lg bg-ink-900 border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl">
       <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
@@ -3324,16 +3324,12 @@ function openModal({ title, html, confirmLabel = 'Confirm', onConfirm, validate,
   $('tmTitle').textContent = title; $('tmBody').innerHTML = html; $('tmConfirm').textContent = confirmLabel;
   $('tmConfirm').className = 'flex-[2] rounded-xl py-3 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed ' + (danger ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'btn-primary');
   Object.assign(M, { onConfirm, validate, onClose, busy: false });
-  const modal = $('tradeModal');
-  modal.classList.remove('hidden');
-  modal.removeAttribute('inert');
-  document.body.style.overflow = 'hidden';
-  revalidate();
+  $('tradeModal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; revalidate();
   $('tmBody').querySelectorAll('input,select').forEach(i => i.addEventListener('input', revalidate));
   $('tmBody').querySelectorAll('input[type=checkbox]').forEach(i => i.addEventListener('change', revalidate));
 }
 function revalidate() { $('tmConfirm').disabled = M.busy || (M.validate ? !M.validate() : false); }
-function closeModal() { if (M.busy) return; clearInterval(M.timer); const modal = $('tradeModal'); modal.classList.add('hidden'); modal.setAttribute('inert', ''); document.body.style.overflow = ''; const f = M.onClose; Object.assign(M, { onConfirm: null, validate: null, onClose: null }); f?.(); }
+function closeModal() { if (M.busy) return; clearInterval(M.timer); $('tradeModal').classList.add('hidden'); document.body.style.overflow = ''; const f = M.onClose; Object.assign(M, { onConfirm: null, validate: null, onClose: null }); f?.(); }
 function modalStatus(html, cls = 'text-slate-300') { let el = $('tmStatus'); if (!el) { el = document.createElement('div'); el.id = 'tmStatus'; el.className = 'mt-3 rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-xs'; $('tmBody').appendChild(el); } el.innerHTML = `<div class="${cls}">${html}</div>`; }
 $('tmClose').addEventListener('click', closeModal); $('tmCancel').addEventListener('click', closeModal);
 $('tradeModal').addEventListener('click', (e) => { if (e.target === $('tradeModal') || e.target === $('tradeModal').firstElementChild) closeModal(); });
@@ -10502,7 +10498,7 @@ function renderMyList(opts) {
         <button type="button" class="ml-chart-toggle" data-ml-chart-toggle="${esc(row.id)}">Chart</button>
         <label class="text-[11px] text-slate-400"><input type="checkbox" data-ml-on="${esc(row.id)}" ${row.enabled ? 'checked' : ''} class="accent-violet-500" /></label>
       </div>
-      <div class="token-sheet" inert>
+      <div class="token-sheet">
         <div class="sheet-grab"></div>
         <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">${esc(row.symbol || short(row.mint))}</b><button type="button" data-sheet-close class="text-sm text-slate-400">Close</button></div>
         <span class="rounded-full border px-1.5 py-0.5 text-[10px] ${listBadgeCls(v.badge)}">${esc(v.badge)}</span>
@@ -13145,7 +13141,6 @@ function closeTokenSheet() {
   const sheet = [...document.querySelectorAll('body > .token-sheet')].find(n => n.id !== 'botSheet');
   if (sheet) {
     sheet.classList.remove('open');
-    sheet.setAttribute('inert', '');
     releaseMedia(sheet);
     sheet.querySelectorAll('.sheet-chart canvas').forEach(c => { c.width = 0; c.height = 0; c.remove(); });
   }
@@ -13279,7 +13274,6 @@ function openTokenSheet(art) {
   document.body.appendChild(sheet);
   document.body.classList.add('sheet-on');
   requestAnimationFrame(() => {
-    sheet.removeAttribute('inert');
     sheet.classList.add('open');
     const model = typeof listChartMemo !== 'undefined' ? listChartMemo[art.dataset.row] : null;
     let frame = sheet.querySelector('.sheet-chart');
@@ -13371,12 +13365,12 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 03:25';
+    stamp.textContent = 'Panel build 2026-11-12 03:36';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
-  const openBots = () => { const sheet = $('botSheet'); if (sheet) { sheet.removeAttribute('inert'); sheet.classList.add('open'); } $('botScrim')?.classList.add('on'); };
-  const closeBots = () => { const sheet = $('botSheet'); if (sheet) { sheet.classList.remove('open'); sheet.setAttribute('inert', ''); } $('botScrim')?.classList.remove('on'); };
+  const openBots = () => { $('botSheet')?.classList.add('open'); $('botScrim')?.classList.add('on'); };
+  const closeBots = () => { $('botSheet')?.classList.remove('open'); $('botScrim')?.classList.remove('on'); };
   const banner = $('safeBanner');
   if (banner && window.__SMS_SAFE) {
     banner.hidden = false;
@@ -13391,6 +13385,7 @@ function mountApp() {
     liveTick();
   });
   $('botStatus')?.addEventListener('click', openBots);
+  $('botSheetClose')?.addEventListener('click', closeBots);
   $('botScrim')?.addEventListener('click', closeBots);
   window.addEventListener('scroll', () => { document.body.classList.toggle('scrolled', window.scrollY > 8); }, { passive: true });
   let pullY = 0;
