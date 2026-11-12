@@ -1,34 +1,35 @@
 {
-  "updated_utc": "2026-11-12T09:14:44.166Z",
-  "updated_tehran": "2026-11-12T12:44:44.166+0330",
+  "updated_utc": "2026-11-12T09:23:05.280Z",
+  "updated_tehran": "2026-11-12T12:53:05.280+0330",
   "start_usd": 100.0,
-  "cash_usd": 47.9156,
-  "equity_usd": 74.4856,
-  "realized_pnl_usd": -24.9495,
-  "unrealized_pnl_usd": -0.5649,
-  "trades": 21,
-  "win_rate": 0.3333,
+  "cash_usd": 58.3102,
+  "equity_usd": 73.9964,
+  "realized_pnl_usd": -26.6048,
+  "unrealized_pnl_usd": 0.6012,
+  "trades": 22,
+  "win_rate": 0.3182,
   "open": [
     {
       "mint": "HFcyhe28iLYRhac2W5FBdtDGFunWDJesCR7f6EZJpump",
       "symbol": "MRPENIS",
       "entry_price": 4.95924e-05,
-      "price": 5.119e-05,
-      "pnl_pct": 0.1511,
+      "price": 5.315e-05,
+      "pnl_pct": 3.9854,
       "size_usd": 15.01,
       "opened_tehran": "2026-11-12T12:37:12.114+0330"
-    },
+    }
+  ],
+  "closed": [
     {
       "mint": "2UMho4zUPqSKb2fbJbKNPf1dU1WKD6SfbNmVkvphpump",
       "symbol": "Shiqi",
       "entry_price": 6.03432e-05,
-      "price": 5.916e-05,
-      "pnl_pct": -4.8772,
-      "size_usd": 11.99,
-      "opened_tehran": "2026-11-12T12:44:43.944+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 5.2577e-05,
+      "pnl_usd": -1.6553,
+      "pnl_pct": -13.737,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T12:46:04.168+0330"
+    },
     {
       "mint": "7yLCJpWQvE2bnX3JZGbmmKrCkCSrSGbqTmgA8tMdpump",
       "symbol": "FLC",
@@ -218,16 +219,6 @@
       "pnl_pct": -30.2647,
       "reason": "hard_stop",
       "closed_tehran": "2026-11-12T05:57:08.276+0330"
-    },
-    {
-      "mint": "H57bUBka6sBfPQph6f58TsQvUvxugJQmqMANFV1mpump",
-      "symbol": "Rex",
-      "entry_price": 0.000988176,
-      "exit_price": 0.0011221,
-      "pnl_usd": 2.497,
-      "pnl_pct": 12.4229,
-      "reason": "manual: -33% from high, sells 2.3x buys, lock profit",
-      "closed_tehran": "2026-11-12T05:50:48.409+0330"
     }
   ]
 }
