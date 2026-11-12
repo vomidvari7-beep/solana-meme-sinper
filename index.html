@@ -646,7 +646,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 04:01</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 04:13</p>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -2972,8 +2972,8 @@ const mintInfo = new Map(); // mint -> { decimals, program }
 const indexedBlocked = new Set();
 async function getMintInfos(mints) {
   const need = mints.filter(m => !mintInfo.has(m) && m !== WSOL);
-  for (let i = 0; i < need.length; i += 100) {
-    const chunk = need.slice(i, i + 100);
+  for (let i = 0; i < need.length; i += 10) {
+    const chunk = need.slice(i, i + 10);
     const r = await rpc('getMultipleAccounts', [chunk, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
     (r.value || []).forEach((acc, j) => { const d = acc?.data?.parsed?.info?.decimals; if (acc && d != null) mintInfo.set(chunk[j], { decimals: d, program: acc.owner }); });
   }
@@ -2981,6 +2981,41 @@ async function getMintInfos(mints) {
 }
 function relevantMints() {
   return [...new Set([...(lastResult?.tokens || []).map(t => t.mint), ...LOG.map(r => r.mint)])].filter(m => m && m !== WSOL);
+}
+async function loadTokenAtas(owner, mints, tokens) {
+  const list = [...new Set((mints || []).filter(m => m && m !== WSOL))];
+  if (!list.length) return tokens;
+  const w = await loadWeb3(); const infos = await getMintInfos(list); const ownerPk = new w.PublicKey(owner);
+  const atas = [], meta = [];
+  list.forEach((m, i) => { const inf = infos[i]; if (!inf) return;
+    const [ata] = w.PublicKey.findProgramAddressSync([ownerPk.toBuffer(), new w.PublicKey(inf.program).toBuffer(), new w.PublicKey(m).toBuffer()], new w.PublicKey(ATA_PROGRAM));
+    atas.push(ata.toBase58()); meta.push({ mint: m, ...inf }); });
+  for (let i = 0; i < atas.length; i += 10) {
+    const r = await rpc('getMultipleAccounts', [atas.slice(i, i + 10), { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+    (r.value || []).forEach((acc, j) => { const mm = meta[i + j]; const ta = acc?.data?.parsed?.info?.tokenAmount; if (!ta || !mm) return;
+      const raw = BigInt(ta.amount || '0'); tokens.set(mm.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: mm.program }); });
+  }
+  return tokens;
+}
+async function discoverWalletMints(owner) {
+  const mints = new Set(relevantMints());
+  let sigs = [];
+  try { sigs = (await rpc('getSignaturesForAddress', [owner, { limit: 40 }])) || []; }
+  catch { return [...mints]; }
+  let looked = 0;
+  for (const s of sigs) {
+    if (looked >= 25) break;
+    if (!s || s.err || !s.signature) continue;
+    looked++;
+    try {
+      const tx = await rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]);
+      for (const b of [...(tx?.meta?.preTokenBalances || []), ...(tx?.meta?.postTokenBalances || [])]) {
+        if (!b || b.owner !== owner || !b.mint || b.mint === WSOL) continue;
+        mints.add(b.mint);
+      }
+    } catch { /* this signature stays unread */ }
+  }
+  return [...mints];
 }
 async function getBalances(owner) {
   const lamports = (await rpc('getBalance', [owner, { commitment: 'confirmed' }])).value;
@@ -2995,24 +3030,9 @@ async function getBalances(owner) {
         tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
         mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
       }
-    } catch (e) { indexedOk = false; indexedBlocked.add(activeRpc()); console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message); break; }
+    } catch (e) { indexedOk = false; indexedBlocked.add(activeRpc()); tokens.clear(); console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message); break; }
   }
-  if (!indexedOk) {
-    // Fallback for RPCs that block indexed calls (e.g. PublicNode free): derive the associated token accounts of the mints we care about
-    tokens.clear(); const mints = relevantMints();
-    if (mints.length) {
-      const w = await loadWeb3(); const infos = await getMintInfos(mints); const ownerPk = new w.PublicKey(owner);
-      const atas = [], meta = [];
-      mints.forEach((m, i) => { const inf = infos[i]; if (!inf) return;
-        const [ata] = w.PublicKey.findProgramAddressSync([ownerPk.toBuffer(), new w.PublicKey(inf.program).toBuffer(), new w.PublicKey(m).toBuffer()], new w.PublicKey(ATA_PROGRAM));
-        atas.push(ata.toBase58()); meta.push({ mint: m, ...inf }); });
-      for (let i = 0; i < atas.length; i += 100) {
-        const r = await rpc('getMultipleAccounts', [atas.slice(i, i + 100), { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-        (r.value || []).forEach((acc, j) => { const mm = meta[i + j]; const ta = acc?.data?.parsed?.info?.tokenAmount; if (!ta) return;
-          const raw = BigInt(ta.amount || '0'); tokens.set(mm.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: mm.program }); });
-      }
-    }
-  }
+  if (!indexedOk) await loadTokenAtas(owner, await discoverWalletMints(owner), tokens);
   return { sol: lamports / 1e9, lamports, tokens, mode: indexedOk ? 'indexed' : 'ata' };
 }
 const STABLE_MINTS = new Set([
@@ -3028,17 +3048,26 @@ function isStableMint(mint, symbol) {
 }
 async function listWalletTokens(owner) {
   const tokens = new Map();
-  for (const prog of TOKEN_PROGRAMS) {
-    const res = await rpc('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-    for (const acc of res.value || []) {
-      const info = acc.account?.data?.parsed?.info; if (!info) continue;
-      const ta = info.tokenAmount; const cur = tokens.get(info.mint);
-      const raw = BigInt(ta.amount || '0') + (cur ? cur.raw : 0n);
-      tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
-      mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
+  if (!indexedBlocked.has(activeRpc())) {
+    try {
+      for (const prog of TOKEN_PROGRAMS) {
+        const res = await rpc('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+        for (const acc of res.value || []) {
+          const info = acc.account?.data?.parsed?.info; if (!info) continue;
+          const ta = info.tokenAmount; const cur = tokens.get(info.mint);
+          const raw = BigInt(ta.amount || '0') + (cur ? cur.raw : 0n);
+          tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
+          mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
+        }
+      }
+      return tokens;
+    } catch (e) {
+      indexedBlocked.add(activeRpc());
+      tokens.clear();
+      console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message);
     }
   }
-  return tokens;
+  return loadTokenAtas(owner, await discoverWalletMints(owner), tokens);
 }
 function txTokenDelta(tx, owner, mint) {
   const sum = (arr) => (arr || []).filter(b => b && b.owner === owner && b.mint === mint).reduce((s, b) => s + (+b.uiTokenAmount?.uiAmountString || +b.uiTokenAmount?.uiAmount || 0), 0);
@@ -3118,6 +3147,7 @@ async function syncWalletHoldings(opt) {
     }
     const buys = missing.length ? await latestWalletBuys(owner, missing) : new Map();
     let added = 0;
+    const names = [];
     for (const mint of missing) {
       if (positions().some(p => p.wallet === 'burner' && p.mint === mint && p.open)) continue;
       const bag = tokens.get(mint);
@@ -3144,12 +3174,13 @@ async function syncWalletHoldings(opt) {
         plan: { myList: true, recovered: true, strat: 'recovered from wallet', stop: priceUsd * 0.85, exit: { stopPct: 15, stopPx: priceUsd * 0.85, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } }
       });
       added++;
+      names.push(symbol);
     }
     renderWallet();
     renderPortfolio();
     if (added && burnerReady() && typeof myListExits === 'function') await myListExits();
-    if (!quiet) toast(added ? 'Synced ' + added + ' wallet position' + (added === 1 ? '' : 's') : 'Wallet synced', 'ok');
-    else if (added) toast('Recovered ' + added + ' open position' + (added === 1 ? '' : 's') + ' from the wallet', 'ok', 6000);
+    const msg = added ? 'Recovered ' + added + ': ' + names.join(', ') : 'Wallet synced · nothing new to recover';
+    if (!quiet || added) toast(msg, 'ok', 8000);
   } catch (e) {
     if (!quiet) toast(e.message || 'Wallet sync failed', 'err', 7000);
   } finally { walletSyncBusy = false; }
@@ -13515,7 +13546,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 04:01';
+    stamp.textContent = 'Panel build 2026-11-12 04:13';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
