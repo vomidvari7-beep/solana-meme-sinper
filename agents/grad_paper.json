@@ -1,17 +1,135 @@
 {
-  "updated_utc": "2026-11-12T15:14:40Z",
-  "updated_tehran": "2026-11-12T18:44:40+03:30",
+  "updated_utc": "2026-11-12T16:25:08Z",
+  "updated_tehran": "2026-11-12T19:55:08+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
-  "cash_usd": 88.2477,
-  "equity_usd": 88.2477,
-  "realized_pnl_usd": -11.7523,
+  "cash_usd": 88.0781,
+  "equity_usd": 88.0781,
+  "realized_pnl_usd": -11.9219,
   "unrealized_pnl_usd": 0.0,
-  "trades": 5,
-  "win_rate": 0.0,
+  "trades": 8,
+  "win_rate": 0.125,
   "open": [],
   "closed": [
+    {
+      "mint": "tinnKfUbWBQsiJw3f9mypgZw4K18JaygxRxNAW1NPxK",
+      "symbol": "TRENCHEDIN",
+      "name": "TrenchedIn",
+      "logo": "https://metadata.j7tracker.io/images/38921ee939f34a64",
+      "entry_price": 2.9370723335033663e-05,
+      "exit_price": 2.5265747228348024e-05,
+      "size_usd": 13.5191,
+      "pnl_usd": -1.9374,
+      "pnl_pct": -14.331,
+      "reason": "breakeven_stop",
+      "graduated": true,
+      "opened_tehran": "2026-11-12T19:47:07+03:30",
+      "closed_tehran": "2026-11-12T19:47:14+03:30",
+      "hold_min": 0.1,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.9370723335033663e-05,
+          "usd": 13.5191,
+          "reason": "entry",
+          "tehran": "2026-11-12T19:47:07+03:30"
+        },
+        {
+          "venue": "amm",
+          "side": "sell",
+          "price_usd": 2.5265747228348024e-05,
+          "usd": 5.7908,
+          "reason": "graduation_sell_50",
+          "tehran": "2026-11-12T19:47:14+03:30"
+        },
+        {
+          "venue": "amm",
+          "side": "sell",
+          "price_usd": 2.5265747228348024e-05,
+          "usd": 5.7908,
+          "reason": "breakeven_stop",
+          "tehran": "2026-11-12T19:47:14+03:30"
+        }
+      ]
+    },
+    {
+      "mint": "EPPBbiS1uqDVGgB4xdZ4SpxuVUWuSapT4T68wFGcpump",
+      "symbol": "JENSEN",
+      "name": "Jensen Huang Coin",
+      "logo": "https://axiom-sol-v2.sfo3.cdn.digitaloceanspaces.com/A1D74fA9RqeQcxdJNC67pzanVaiySyJPwcTUoyPBpump.webp",
+      "entry_price": 2.1789296273458692e-05,
+      "exit_price": 3.549323106610845e-05,
+      "size_usd": 12.7868,
+      "pnl_usd": 4.8809,
+      "pnl_pct": 38.171,
+      "reason": "trail_25",
+      "graduated": true,
+      "opened_tehran": "2026-11-12T18:57:25+03:30",
+      "closed_tehran": "2026-11-12T18:58:41+03:30",
+      "hold_min": 1.3,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.1789296273458692e-05,
+          "usd": 12.7868,
+          "reason": "entry",
+          "tehran": "2026-11-12T18:57:25+03:30"
+        },
+        {
+          "venue": "amm",
+          "side": "sell",
+          "price_usd": 2.4911373029920103e-05,
+          "usd": 7.2834,
+          "reason": "graduation_sell_50",
+          "tehran": "2026-11-12T18:58:08+03:30"
+        },
+        {
+          "venue": "amm",
+          "side": "sell",
+          "price_usd": 3.549323106610845e-05,
+          "usd": 10.3843,
+          "reason": "trail_25",
+          "tehran": "2026-11-12T18:58:41+03:30"
+        }
+      ]
+    },
+    {
+      "mint": "5v5zdVrnB15fCzpHmi5Zmp1a3t2BnMgDfCV6sehppump",
+      "symbol": "HUANG",
+      "name": "Jensen Huang",
+      "logo": null,
+      "entry_price": 2.299982199647531e-05,
+      "exit_price": 1.7648219207462306e-05,
+      "size_usd": 13.2537,
+      "pnl_usd": -3.1131,
+      "pnl_pct": -23.488,
+      "reason": "stop_loss",
+      "graduated": false,
+      "opened_tehran": "2026-11-12T18:45:39+03:30",
+      "closed_tehran": "2026-11-12T18:45:59+03:30",
+      "hold_min": 0.3,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.299982199647531e-05,
+          "usd": 13.2537,
+          "reason": "entry",
+          "tehran": "2026-11-12T18:45:39+03:30"
+        },
+        {
+          "venue": "curve",
+          "side": "sell",
+          "price_usd": 1.7648219207462306e-05,
+          "usd": 10.1406,
+          "reason": "stop_loss",
+          "tehran": "2026-11-12T18:45:59+03:30"
+        }
+      ]
+    },
     {
       "mint": "CAL1iAmqSsxJmLMvWw5GyG5PT3AqUJg5bie71CiYLSYg",
       "symbol": "mihao",
@@ -184,200 +302,239 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 1261,
-    "uptime_min": 84.4,
+    "tokens_tracked": 820,
+    "uptime_min": 11.5,
     "counters": {
-      "trades": 216413,
-      "entered_band": 54,
-      "watch_accept": 48,
-      "creates": 3177,
-      "pp_new_tokens": 767,
-      "pp_migrations": 49,
-      "complete_pumpportal_migrate": 49,
-      "complete_trade_reserves_zero": 524,
-      "complete_CompleteEvent": 47,
-      "complete_CompletePumpAmmMigrationEvent": 47,
-      "entry_reject": 111,
-      "watchdog_pump_logs": 2,
-      "pp_reconnects": 3,
-      "pump_logs_reconnects": 11,
-      "entry_accept": 3
+      "trades": 25358,
+      "pp_new_tokens": 98,
+      "creates": 280,
+      "entered_band": 8,
+      "watch_accept": 8,
+      "entry_reject": 16,
+      "entry_accept": 1,
+      "pp_migrations": 6,
+      "complete_pumpportal_migrate": 6,
+      "complete_trade_reserves_zero": 82,
+      "complete_CompleteEvent": 5,
+      "complete_CompletePumpAmmMigrationEvent": 5,
+      "pump_logs_reconnects": 2,
+      "watchdog_pump_logs": 1,
+      "pp_reconnects": 1
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-12T15:14:38Z",
-        "last_msg_utc": "2026-11-12T15:14:40Z"
+        "connected_utc": "2026-11-12T16:24:09Z",
+        "last_msg_utc": "2026-11-12T16:25:08Z"
       },
       "amm": {
-        "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-12T15:02:03Z"
+        "url": "wss://solana-rpc.publicnode.com",
+        "connected_utc": "2026-11-12T16:24:12Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-12T15:01:00Z",
-        "last_msg_utc": "2026-11-12T15:14:06Z"
+        "connected_utc": "2026-11-12T16:24:13Z",
+        "last_msg_utc": "2026-11-12T16:25:07Z"
       }
     },
     "kill_switch": false,
     "recent_decisions": [
       {
-        "ts_tehran": "2026-11-12T18:34:54+03:30",
-        "symbol": "MACE",
-        "mint": "6ccUBEfVUNamBRQWmRoBXDnoe6mxJNgoqM5FvewKpump",
+        "ts_tehran": "2026-11-12T19:47:49+03:30",
+        "symbol": "65n2vw",
+        "mint": "65n2vwCEXwhNLcUn5McSYDxxE7Nwk5dnqS9L6wBpump",
         "accepted": false,
         "reasons": [
-          "early_buys_heavy(65.8%)"
+          "progress_out_of_band(67%)"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T18:36:51+03:30",
+        "ts_tehran": "2026-11-12T19:48:11+03:30",
+        "symbol": "ukWSz1",
+        "mint": "ukWSz1Bx9ZPeQCU5UcFmP1nuVuDw1YRXNkxEphRmHj4",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T19:48:36+03:30",
+        "symbol": "Spacesen",
+        "mint": "3kuCcqdsHxwm9ykGbiar8mhADtint5xfLzsUixEApump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T19:49:19+03:30",
+        "symbol": "7pbiwG",
+        "mint": "7pbiwGS11PCsb7NAAk3DRiEhrtWDAdCLcYgiBy1hpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(65%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T19:51:11+03:30",
+        "symbol": "41CdKx",
+        "mint": "41CdKxSF74DAJ7RGUSQhiA1Y9H15nWZN7DRQggEtpump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T19:51:42+03:30",
+        "symbol": "EgFF96",
+        "mint": "EgFF963cjPYWXcT9behiZDUQGAFC1pre2jFjNR5vpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(68%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T19:51:52+03:30",
+        "symbol": "EgFF96",
+        "mint": "EgFF963cjPYWXcT9behiZDUQGAFC1pre2jFjNR5vpump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T19:51:53+03:30",
+        "symbol": "Kousuke",
+        "mint": "EgFF963cjPYWXcT9behiZDUQGAFC1pre2jFjNR5vpump",
+        "accepted": false,
+        "reasons": [
+          "insiders_unknown_history(9)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-12T19:52:01+03:30",
         "symbol": "GTA 6.0",
         "mint": "2hwaRQs4WqThnp26XLpch5MBZhAHqses3vSv1Bkupump",
         "accepted": false,
         "reasons": [
-          "progress_out_of_band(90%)"
+          "insiders_unknown_history(12)"
         ]
       },
       {
-        "ts_tehran": "2026-11-12T18:37:11+03:30",
-        "symbol": "JENFAB",
-        "mint": "6MZZGJutbeEny8KB7Lexu3qxSTe7dHe1kQL3RVwCpump",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T18:37:11+03:30",
-        "symbol": "JENFAB",
-        "mint": "6MZZGJutbeEny8KB7Lexu3qxSTe7dHe1kQL3RVwCpump",
+        "ts_tehran": "2026-11-12T19:52:12+03:30",
+        "symbol": "Kousuke",
+        "mint": "EgFF963cjPYWXcT9behiZDUQGAFC1pre2jFjNR5vpump",
         "accepted": false,
         "reasons": [
-          "too_young(3s)",
-          "early_buys_heavy(72.64%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T18:40:24+03:30",
-        "symbol": "FatJ48",
-        "mint": "FatJ48MS6PyLHTy4RG3W46ATRVKiXLrphGj213yVpump",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T18:41:02+03:30",
-        "symbol": "GTA 6.0",
-        "mint": "2hwaRQs4WqThnp26XLpch5MBZhAHqses3vSv1Bkupump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(91%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T18:41:44+03:30",
-        "symbol": "SJ",
-        "mint": "GzQH2JLfVzUV7XMX9gj49H9MBHrU7PBuH3876C3Cpump",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T18:43:05+03:30",
-        "symbol": "CAL1iA",
-        "mint": "CAL1iAmqSsxJmLMvWw5GyG5PT3AqUJg5bie71CiYLSYg",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T18:43:06+03:30",
-        "symbol": "mihao",
-        "mint": "CAL1iAmqSsxJmLMvWw5GyG5PT3AqUJg5bie71CiYLSYg",
-        "accepted": true,
-        "reasons": [
-          "all_checks_passed"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-12T18:44:38+03:30",
-        "symbol": "Dhod8N",
-        "mint": "Dhod8NBLcYy3abs2Rn3RZM7cZ5WoPFQLfbPaL9n7pump",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
+          "progress_out_of_band(66%)"
         ]
       }
     ],
-    "sol_usd": 80.68545665753449,
-    "realized_today_usd": -11.7523,
+    "sol_usd": 81.78463488357268,
+    "realized_today_usd": -11.9219,
     "started_utc": "2026-11-12T13:28:48Z",
-    "best_trade_usd": -0.8563,
+    "best_trade_usd": 4.8809,
     "worst_trade_usd": -3.6564
   },
   "watchlist": [
     {
       "mint": "2hwaRQs4WqThnp26XLpch5MBZhAHqses3vSv1Bkupump",
       "symbol": "GTA 6.0",
-      "progress": 0.917,
-      "sol_in_curve": 78.0,
-      "buyers_seen": 104,
+      "progress": 0.877,
+      "sol_in_curve": 74.6,
+      "buyers_seen": 5,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 10
+      "whale_buys": 1
     },
     {
-      "mint": "Dhod8NBLcYy3abs2Rn3RZM7cZ5WoPFQLfbPaL9n7pump",
+      "mint": "41CdKxSF74DAJ7RGUSQhiA1Y9H15nWZN7DRQggEtpump",
       "symbol": null,
-      "progress": 0.729,
-      "sol_in_curve": 61.9,
-      "buyers_seen": 30,
+      "progress": 0.8,
+      "sol_in_curve": 68.0,
+      "buyers_seen": 10,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 0
     },
     {
-      "mint": "8xfcA3UvYCJBHUMGMd4A586KZb1hi6vewGYThMjSpump",
+      "mint": "ukWSz1Bx9ZPeQCU5UcFmP1nuVuDw1YRXNkxEphRmHj4",
       "symbol": null,
-      "progress": 0.674,
-      "sol_in_curve": 57.3,
-      "buyers_seen": 43,
+      "progress": 0.708,
+      "sol_in_curve": 57.9,
+      "buyers_seen": 1,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 4
+      "whale_buys": 0
     },
     {
-      "mint": "6ccUBEfVUNamBRQWmRoBXDnoe6mxJNgoqM5FvewKpump",
-      "symbol": "MACE",
-      "progress": 0.647,
-      "sol_in_curve": 55.0,
-      "buyers_seen": 171,
+      "mint": "7CP6zNjHtVumbZJmDGchs95EHSNuS4ArwXpeUZQCpump",
+      "symbol": null,
+      "progress": 0.67,
+      "sol_in_curve": 56.9,
+      "buyers_seen": 3,
       "creator_sold": false,
-      "known_from_creation": true,
-      "whale_buys": 5
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "J5xM4e1FXnZmvToFsPrZi47uyxKCaQu7k7KSreh8sXFd",
+      "symbol": null,
+      "progress": 0.649,
+      "sol_in_curve": 53.1,
+      "buyers_seen": 1,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "EgFF963cjPYWXcT9behiZDUQGAFC1pre2jFjNR5vpump",
+      "symbol": "Kousuke",
+      "progress": 0.646,
+      "sol_in_curve": 54.9,
+      "buyers_seen": 75,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 8
+    },
+    {
+      "mint": "GdPu5KPUeka8RJje6wjZ3o45wNDpHaSivoe6ydYhpump",
+      "symbol": null,
+      "progress": 0.637,
+      "sol_in_curve": 54.1,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "9ueEeBuYUc9X1GrNCyWHbKGnHJq1kaD2nvDapDsMpump",
+      "symbol": null,
+      "progress": 0.634,
+      "sol_in_curve": 53.9,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
     },
     {
       "mint": "7cPKubouxwsSy4aAKHtDKUETZ6uxVZDntRuy7Cappump",
-      "symbol": "GOAT",
-      "progress": 0.638,
-      "sol_in_curve": 54.2,
-      "buyers_seen": 103,
-      "creator_sold": true,
-      "known_from_creation": true,
-      "whale_buys": 21
+      "symbol": null,
+      "progress": 0.604,
+      "sol_in_curve": 51.3,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 2
     }
   ],
   "rules": {
     "name": "Grad Hunter (pump.fun near-graduation + whale buy)",
     "mode": "paper",
     "universe": "pump.fun SOL-quoted bonding curves, discovered live from on-chain pump program logs + PumpPortal",
-    "entry": "curve 70%-90% of SOL needed to graduate, age >= 3m, non-creator buy >= 1.5 SOL",
+    "entry": "curve 70%-90% of SOL needed to graduate, age >= 3m, non-creator buy >= 1.5 SOL, then wait 10s and require no dump (mark dd <= 3.0%, net flow >= 0.0 SOL, trigger wallet sold < 0.3 SOL)",
     "rejects": "creator sold; unique buyers < 25; top-10 ex-curve > 35.0%; first-10s buys > 20.0% supply; RugCheck danger",
     "size": "15% of cash (cap $20.0), max 2 open, daily loss limit $15.0",
     "fills": "exact curve/AMM price impact + 1.25% curve fee (0.3% AMM) + 2.0% slippage + 1200ms latency + 0.0002 SOL priority fee",
-    "exits": "pre-grad stop -15%, creator sells -> exit, no graduation in 45m -> exit; at graduation sell 50%, rest: breakeven stop, trail 25% from high, exit if no new high 30m or whale/creator dumps"
+    "exits": "pre-grad: take-profit +20% (all), fast-sell-pressure (net >= 2.0 SOL sold in 8s and mark -4%), stop -8%, creator sells -> exit, no graduation in 45m -> exit; at graduation sell 50%, rest: +20% take-profit, breakeven stop, trail 25% from high, exit if no new high 30m or whale/creator dumps"
   }
 }
