@@ -138,6 +138,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .toast-card[data-kind="warn"]::before { background: var(--muted); }
   section[id^="sec-"], #results { scroll-margin-top: 12px; } @media (min-width:640px){ section[id^="sec-"], #results { scroll-margin-top: 84px; } }
   details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+  details:not([open]) > :not(summary) { display: none !important; }
   details[open] > :not(summary) { animation: detailIn .2s ease; }
   @keyframes detailIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   .ios-sw { width: 44px; height: 26px; border-radius: 13px; background: var(--tab-btn); position: relative; flex: 0 0 auto; transition: background-color 200ms ease; }
@@ -686,7 +687,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 16:45</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 17:05</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <details>
     <summary class="ui-more">Notice</summary>
@@ -2086,6 +2087,7 @@ async function runAnalysis({ boosted = false } = {}) {
     $('btnBoosted').classList.add('ring-2', 'ring-violet-400'); setTimeout(() => $('btnBoosted').classList.remove('ring-2', 'ring-violet-400'), 2500); return;
   }
   setBusy(true, boosted ? 'Scanning sources…' : 'Analyzing…');
+  showScanBoard(boosted ? 'Scanning sources…' : 'Analyzing…', boosted ? 'Fetching DexScreener. Results will show here.' : 'Fetching live pairs. Results will show here.');
   const warnings = [];
   let sourceByMint = null;
   let discoverySources = [];
@@ -2209,7 +2211,9 @@ async function runAnalysis({ boosted = false } = {}) {
     if (warnings.length) setTimeout(() => toast(warnings[0], 'warn', 7000), 400);
     if (window.innerWidth < 1024) $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    console.error(e); toast('Analysis failed: ' + e.message, 'err', 7000);
+    console.error(e);
+    showScanBoard('Scan failed', e.message || 'The fetch failed.', true);
+    toast('Analysis failed: ' + e.message, 'err', 7000);
   } finally {
     setBusy(false);
     if (queuedAutoScan) {
@@ -2465,8 +2469,21 @@ function stat(label, value, cls = '') { return `<div class="rounded-lg bg-ink-90
 function statWrap(label, valueHtml, cls = '') { return `<div class="rounded-lg bg-ink-900/60 px-2.5 py-1.5 min-w-0"><div class="text-[10px] uppercase tracking-wide text-slate-500">${label}</div><div class="font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-sm ${cls}">${valueHtml}</div></div>`; }
 function zoneRangeHtml(lo, hi) { return `<span class="block">from ${price(lo)}</span><span class="block">to ${price(hi)}</span>`; }
 
+function showScanBoard(title, detail, isErr) {
+  const empty = $('emptyState');
+  const el = $('results');
+  if (!el) return;
+  if (empty) empty.classList.add('hidden');
+  el.classList.remove('hidden');
+  el.innerHTML = `<section class="glass rounded-2xl p-4 sm:p-5"><h2 class="sec-title">${esc(title)}</h2>${detail ? `<p class="mt-2 text-sm ${isErr ? 'text-rose-300' : 'text-slate-400'}">${esc(detail)}</p>` : ''}${isErr ? '' : '<span class="prog is-busy mt-3" aria-hidden="true"><i></i></span>'}</section>`;
+  try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch { /* older webviews */ }
+}
 function render(R) {
-  $('emptyState').classList.add('hidden'); const el = $('results'); el.classList.remove('hidden');
+  const empty = $('emptyState');
+  const el = $('results');
+  if (!el) { toast('Scan results are not on this page.', 'err'); return; }
+  if (empty) empty.classList.add('hidden');
+  el.classList.remove('hidden');
   const prof = effectiveProfile(R.inputs.risk, R.inputs); const { sol, regime } = R; const toks = R.tokens;
   const acct = parseFloat(R.inputs.account); const hasAcct = isNum(acct) && acct > 0;
   const cands = toks.filter(t => t.verdict === 'Candidate'), watch = toks.filter(t => t.verdict === 'Watchlist'), rej = toks.filter(t => t.verdict === 'Rejected');
@@ -2525,7 +2542,7 @@ function render(R) {
       ${t.ta?.line ? `<div class="mt-2 text-[11px] leading-snug ${t.ta.ok ? 'text-slate-300' : 'text-slate-500'}">${esc(t.ta.line)}</div>` : ''}
       ${taCacheLabel(t.ta) ? `<div class="mt-1 text-[11px] text-amber-200">${esc(taCacheLabel(t.ta))}</div>` : ''}
       ${typeof agentPlanChip === 'function' ? agentPlanChip(t.mint) : ''}
-      ${entryZoneHtml(t)}
+      ${typeof entryZoneHtml === 'function' ? entryZoneHtml(t) : ''}
       ${zoneAnchorLabel(t.entry) ? `<div class="mt-1 text-[11px] whitespace-normal break-words ${t.entry.noAnchor ? 'text-amber-300' : 'text-emerald-300'}">${esc(zoneAnchorLabel(t.entry))}</div>` : ''}
       ${t.flags.length ? `<div class="flex flex-wrap gap-1 mt-3">${t.flags.slice(0, 4).map(f => `<span class="text-[10px] px-1.5 py-0.5 rounded border ${sevStyle[f.sev]}" title="${esc(f.text)}">${esc(f.text.split(' — ')[0])}</span>`).join('')}${t.flags.length > 4 ? `<span class="text-[10px] text-slate-500 self-center">+${t.flags.length - 4} more</span>` : ''}</div>` : '<div class="text-[11px] text-emerald-300 mt-3">✔ No red flags detected</div>'}
       ${t.fails.length ? `<div class="text-[10px] text-rose-300/80 mt-2">Filter fail: ${esc(t.fails.join(' · '))}</div>` : ''}
@@ -2755,13 +2772,17 @@ $('btnBoosted').addEventListener('click', () => { window.showTab?.('scan'); runA
 loadSourceBoxes();
 ['srcBoost', 'srcTrend', 'srcVolume', 'srcNew'].forEach(id => document.getElementById(id)?.addEventListener('change', persistSourceBoxes));
 $('btnDemo').addEventListener('click', () => {
+  window.showTab?.('scan');
   $('pasted').value = `# DEMO DATA — sample Solana mints from an earlier scan (live data is fetched on Analyze)\n${DEMO_MINTS.join('\n')}`;
   if (!$('notes').value) $('notes').value = 'Demo run — sample tokens';
-  updateHints(); saveInputsDraft(); toast('Demo tokens loaded — press Analyze', 'info');
+  updateHints(); saveInputsDraft();
+  runAnalysis();
 });
-$('btnClear').addEventListener('click', () => {
+$('btnClear').addEventListener('click', (e) => {
+  const box = e.currentTarget.closest('details');
+  if (box && !box.open) return;
   $('pasted').value = ''; $('notes').value = ''; $('results').innerHTML = ''; $('results').classList.add('hidden'); $('emptyState').classList.remove('hidden');
-  lastResult = null; updateHints(); saveInputsDraft(); toast('Cleared. Saved last analysis is kept — use "Load last".', 'info');
+  lastResult = null; updateHints(); saveInputsDraft();
 });
 $('btnCopy').addEventListener('click', async () => {
   if (!lastResult) return toast('Run an analysis first', 'warn');
@@ -4262,7 +4283,7 @@ function hydrate() {
 }
 
 /* ---------------- portfolio: positions + trade log ---------------- */
-const livePrices = new Map(); let alerted = load(LS.alerts, {});
+const livePrices = new Map(); globalThis.livePrices = livePrices; let alerted = load(LS.alerts, {});
 let priceBusy = false;
 async function refreshPrices() {
   if (priceBusy || liveBusy) return;
@@ -6698,6 +6719,7 @@ function zoneLost(t, px) {
   if (!probes.length) return false;
   return probes.every(p => p < e.zoneLo * (1 - ZONE_PAD));
 }
+globalThis.zoneLost = zoneLost;
 function inZone(t, px) {
   const e = t?.entry;
   if (!e || e.noAnchor || zoneLost(t, px)) return false;
@@ -12651,6 +12673,10 @@ function entryZoneHtml(t) {
   const e = t.entry;
   return `<div class="mt-2 font-mono whitespace-normal break-words text-[11px] leading-snug sm:text-xs text-slate-300"><span class="text-slate-500">${e.strat && String(e.strat).startsWith('Break') ? 'Trigger zone' : 'Entry zone'}</span><span class="block">from ${price(e.zoneLo)}</span><span class="block">to ${price(e.zoneHi)}</span><span class="block text-rose-300">stop ${price(e.stop)}</span></div>`;
 }
+globalThis.entryZoneHtml = entryZoneHtml;
+globalThis.agentPlanFor = agentPlanFor;
+globalThis.agentPlanUsable = agentPlanUsable;
+globalThis.planDisplay = planDisplay;
 const SPLIT_LS = 'sms:splitlegs';
 function splitEntryOn() { return botPrefs().split !== false; }
 function isSplitPlan(p) { return String(p?.entry_mode || '').toLowerCase() === 'split'; }
@@ -14635,7 +14661,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 16:45';
+    stamp.textContent = 'Panel build 2026-11-12 17:05';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
