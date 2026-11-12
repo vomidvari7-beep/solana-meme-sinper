@@ -1,6 +1,6 @@
 {
- "updated_utc": "2026-11-12T04:12:34Z",
- "updated_tehran": "2026-11-12 07:42 IRST",
+ "updated_utc": "2026-11-12T04:22:27Z",
+ "updated_tehran": "2026-11-12 07:52 IRST",
  "pot": {
   "budget_usd": 25,
   "per_trade_usd": 12.5,
@@ -13,34 +13,51 @@
    "symbol": "FORKYU",
    "pair": "H7XnTo8MejE7QG1Uf2Sm2YPfZ8kck64S49eXJxGxV6Dq",
    "dex": "pumpswap",
-   "age_h": 2.02,
-   "liq_usd": 39632,
-   "mcap_usd": 263776,
-   "reason": "WATCH 55: D breakout confirmed - 07:41 1m close 0.0002986 above 0.000264 swing high on ~2x vol, m5 buys 89>67, liq 36k->39.6k; would arm D retest 0.000264 (max 0.00028). BLOCKED by fake-holder rule: top 4 wallets near-equal 2.38-2.51% (possible bundle), and it's a later leg (+696% h6). RC 1, mint/freeze revoked, 0 insiders",
+   "age_h": 2.19,
+   "liq_usd": 41870,
+   "mcap_usd": 292972,
+   "reason": "WATCH 50: ran from the 0.000264 breakout to 0.000384, then a -20% flush at 07:50 (m5 -14%); now extended 3rd leg and top-4 near-equal 2.4% wallets (possible bundle) still block entry. Safety: RC 1, mint/freeze revoked, 0 insiders",
    "entry_now": false,
    "max_entry_price": null,
    "stop_pct": 25,
    "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
    "time_stop_min": 45,
-   "confidence": 55,
-   "expires": 1794458554358
+   "confidence": 50,
+   "expires": 1794459147451
+  },
+  {
+   "mint": "6XE2QtpQjk9Ra9f3916uBve9X1vT6SB4DxKNGsX9pump",
+   "symbol": "would",
+   "pair": "6a58gBtHuE86iCMrTawznFitgbeKSdyTT8F5mRQBjApK",
+   "dex": "pumpswap",
+   "age_h": 0.25,
+   "liq_usd": 32491,
+   "mcap_usd": 182963,
+   "reason": "AVOID: vertical chase (h1 +420%, m5 +27% at 15 min old), RugCheck copycat warning, 9 insiders, top holders a flat 0.70-0.78% ladder (sybil pattern)",
+   "entry_now": false,
+   "max_entry_price": null,
+   "stop_pct": 25,
+   "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
+   "time_stop_min": 45,
+   "confidence": 0,
+   "expires": 1794459147451
   },
   {
    "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
    "symbol": "AIB",
    "pair": "5jN7YxKhncGwi3njP5Z8M6YYBKkuhL7p2axLLG2DaGK3",
    "dex": "pumpswap",
-   "age_h": 2.88,
-   "liq_usd": 52307,
-   "mcap_usd": 444923,
-   "reason": "WATCH 30: late (mcap ~445k), sliding h1 -24%, liq 54k->52k; no reclaim",
+   "age_h": 3.05,
+   "liq_usd": 53752,
+   "mcap_usd": 468778,
+   "reason": "WATCH 30: late (mcap ~470k), h1 -27%, flat near 0.00047; no reclaim",
    "entry_now": false,
    "max_entry_price": null,
    "stop_pct": 25,
    "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
    "time_stop_min": 45,
    "confidence": 30,
-   "expires": 1794458554358
+   "expires": 1794459147451
   },
   {
    "mint": "7TmeeJxBF3PFsbgzuy23XpWJzQsqVXjvgLTb8S2zpump",
@@ -57,24 +74,24 @@
    "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
    "time_stop_min": 45,
    "confidence": 0,
-   "expires": 1794458554358
+   "expires": 1794459147451
   },
   {
    "mint": "AitksCRn29wLXgf6AGJbcszX9maZtVg62D1bV4expump",
    "symbol": "MAX",
    "pair": "8JrY8TSh5bkaR87ytYgNJxipV4Mh5yzABEvJvuNPz6o7",
    "dex": "pumpswap",
-   "age_h": 2.13,
-   "liq_usd": 32153,
-   "mcap_usd": 179151,
-   "reason": "AVOID: copycat of Max; sybil equal ~0.25% holders; m5 sells 245 vs buys 20",
+   "age_h": 2.3,
+   "liq_usd": 34249,
+   "mcap_usd": 202297,
+   "reason": "AVOID: copycat of Max; sybil equal ~0.25% holders; h1 sells 1165 > buys 787",
    "entry_now": false,
    "max_entry_price": null,
    "stop_pct": 25,
    "tp_plan": "sell 50% at 2x, trail rest 20%; tiered: at +50% move stop to breakeven; at +80% trail stop 20% below high; if profit >60% and (m5 sells > buys or price -15% from high) sell 50%; liquidity pull or sharp dump = sell all",
    "time_stop_min": 45,
    "confidence": 0,
-   "expires": 1794458554358
+   "expires": 1794459147451
   }
  ]
 }
