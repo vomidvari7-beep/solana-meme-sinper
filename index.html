@@ -686,7 +686,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 16:40</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 16:45</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <details>
     <summary class="ui-more">Notice</summary>
@@ -7290,7 +7290,7 @@ function renderBotBar() {
     ['auto', 'Auto'], ['mylist', 'My List'], ['copy', 'Copy'], ['sniper', 'Sniper'],
     ['momentum', 'Momentum'], ['plans', 'Agent plans'], ['exits', 'Agent exits'], ['quick', 'Quick 15%', '1:1'],
     ['degen', 'Degen'], ['scalp', 'Scalp'], ['scan', 'Live scan'], ['split', 'Split entry']
-  ];
+  ].filter(([key]) => SNIPER_ENABLED || key !== 'sniper');
   const active = items.filter(([key]) => prefs[key]).length;
   const armed = items.some(([key]) => liveKeys.includes(key) && prefs[key] && locked);
   const status = armed ? 'Armed, unlock to run' : active + '/' + items.length + ' active';
@@ -7428,6 +7428,7 @@ function mountServerMode() {
 }
 function setExecBot(key, on) {
   if (key === 'scalp') on = false;
+  if (key === 'sniper' && !SNIPER_ENABLED) on = false;
   if (on && serverModeOn()) { toast('Server mode is on. This browser will not trade.', 'warn', 6000); return; }
   const locked = !burnerReady();
   if (key === 'auto') {
@@ -7441,8 +7442,8 @@ function setExecBot(key, on) {
     if (!on) { COPY.on = false; COPY.armBaseline = false; clearInterval(copyTimer); copyTimer = null; }
     else if (!locked) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 500); }
   } else if (key === 'sniper' && typeof SNIPER !== 'undefined') {
-    if (!on) { SNIPER.on = false; clearInterval(sniperTimer); sniperTimer = null; saveSniper(); }
-    else if (!locked) { SNIPER.on = true; startSniper(); }
+    SNIPER.on = false; clearInterval(sniperTimer); sniperTimer = null; saveSniper();
+    if (SNIPER_ENABLED && on && !locked) { SNIPER.on = true; startSniper(); }
   } else if (key === 'degen') {
     const d = degenCfg();
     d.on = !!on;
@@ -7492,7 +7493,7 @@ function allBotsGo() {
   setExecBot('mylist', true);
   setExecBot('degen', true);
   setExecBot('copy', true);
-  setExecBot('sniper', true);
+  if (SNIPER_ENABLED) setExecBot('sniper', true);
   saveAgentCfg({ usePlans: true });
   rememberBot('plans', true);
   saveQuick({ quickOn: true });
@@ -7551,7 +7552,7 @@ function resumeArmedBots() {
   if (p.auto && !A.on) { A.on = true; startTimers(); setTimeout(autoTick, 400); }
   if (p.mylist && typeof MYLIST !== 'undefined' && !MYLIST.on) { MYLIST.on = true; startMyList(); setTimeout(myListTick, 500); }
   if (p.copy && typeof COPY !== 'undefined' && !COPY.on) { COPY.on = true; COPY.armBaseline = true; startCopyTimer(); setTimeout(pollCopyOnce, 600); }
-  if (p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
+  if (SNIPER_ENABLED && p.sniper && typeof SNIPER !== 'undefined' && !SNIPER.on) { SNIPER.on = true; startSniper(); }
   if (p.degen || degenCfg().on) { const d = degenCfg(); d.on = true; saveDegen(d); startDegen(); }
   if (p.scalp) startScalp();
   else if (typeof degenPoll === 'function') degenPoll();
@@ -7561,7 +7562,7 @@ function resumeArmedBots() {
   renderKillFab();
   if (typeof myListTick === 'function' && (p.mylist || (typeof MYLIST !== 'undefined' && MYLIST.on))) myListTick();
   if (typeof pollCopyOnce === 'function' && (p.copy || (typeof COPY !== 'undefined' && COPY.on))) pollCopyOnce();
-  if (typeof sniperPoll === 'function' && (p.sniper || (typeof SNIPER !== 'undefined' && SNIPER.on))) sniperPoll();
+  if (SNIPER_ENABLED && typeof sniperPoll === 'function' && (p.sniper || (typeof SNIPER !== 'undefined' && SNIPER.on))) sniperPoll();
   if ((p.auto || A.on) && typeof autoTick === 'function') autoTick();
   if ((p.scan || liveScanOn) && typeof liveScanOnce === 'function' && !window.__SMS_SAFE) liveScanOnce();
   if (typeof refreshAgents === 'function') refreshAgents();
@@ -7600,10 +7601,9 @@ function killSwitch(reason = 'manual') {
 function renderKillFab() {
   let f = $('killFab');
   const copyOn = typeof COPY !== 'undefined' && COPY.on;
-  const sniperOn = typeof SNIPER !== 'undefined' && SNIPER.on;
   const listOn = typeof MYLIST !== 'undefined' && MYLIST.on;
   const scalpLive = typeof scalpOn === 'function' && scalpOn();
-  const armed = A.on || copyOn || sniperOn || listOn || scalpLive;
+  const armed = A.on || copyOn || listOn || scalpLive;
   if (!f) {
     const host = document.querySelector('.appbar-actions');
     if (!host) return;
@@ -7617,7 +7617,7 @@ function renderKillFab() {
     f.addEventListener('click', () => killSwitch('fab'));
   }
   f.hidden = !armed;
-  if (armed) f.textContent = (A.on ? 'AUTO' : copyOn ? 'COPY' : sniperOn ? 'SNIPE' : listOn ? 'LIST' : 'SCALP') + ' · KILL';
+  if (armed) f.textContent = (A.on ? 'AUTO' : copyOn ? 'COPY' : listOn ? 'LIST' : 'SCALP') + ' · KILL';
   if (typeof paintRunDesk === 'function') paintRunDesk();
 }
 window.addEventListener('beforeunload', (e) => { if (A.on || (typeof COPY !== 'undefined' && COPY.on) || (typeof SNIPER !== 'undefined' && SNIPER.on) || (typeof MYLIST !== 'undefined' && MYLIST.on) || degenOn() || (typeof scalpOn === 'function' && scalpOn())) { e.preventDefault(); e.returnValue = 'Auto-trading or copy mode is ON — closing the tab stops it.'; } });
@@ -8070,7 +8070,8 @@ function stopCopy(reason, opts) {
 }
 loadCopyBooks();
 
-/* ---------------- launch sniper (separate from scanner / whales / momentum) ---------------- */
+/* ---------------- launch sniper (dormant until SNIPER_ENABLED is turned back on) ---------------- */
+const SNIPER_ENABLED = false;
 const SNIPER_DEFAULTS = { on: false, pollSec: 20, minAgeMin: 2, maxAgeMin: 30, minLiq: 5000, maxMcap: 500000, sizeSol: 0.05, dailySol: 0.5, maxOpen: 2 };
 let SNIPER = { ...SNIPER_DEFAULTS, ...load('sms:sniper', {}) };
 function sanitizeSniper() {
@@ -8085,6 +8086,10 @@ function sanitizeSniper() {
   SNIPER.dailySol = n(SNIPER.dailySol, 0.5, 0.001, 1000);
   SNIPER.maxOpen = Math.round(n(SNIPER.maxOpen, 2, 1, 10));
   SNIPER.on = false;
+  if (!SNIPER_ENABLED && typeof botPrefs === 'function') {
+    const prefs = botPrefs();
+    if (prefs.sniper) { prefs.sniper = false; saveBotPrefs(prefs); }
+  }
 }
 sanitizeSniper();
 let sniperRows = [];
@@ -8095,6 +8100,7 @@ let sniperTimer = null, sniperExitTimer = null, sniperBusy = false;
 const sniperHigh = load('sms:sniperhigh', {});
 sniperHighRef = sniperHigh;
 function saveSniper() { const { on, ...rest } = SNIPER; save('sms:sniper', { ...rest, on: false }); }
+if (!SNIPER_ENABLED) saveSniper();
 const sniperSaid = {};
 function sniperNote(msg, level = 'info') {
   if (sniperSaid[msg] && Date.now() - sniperSaid[msg] < 90000) return;
@@ -8254,6 +8260,7 @@ function rememberSniper(p, checks) {
   sniperRows = [row, ...sniperRows.filter(r => r.mint !== p.mint)].slice(0, 100);
 }
 async function sniperPoll() {
+  if (!SNIPER_ENABLED) { SNIPER.on = false; return; }
   if (!SNIPER.on || sniperBusy) return;
   if (!burnerReady()) { sniperNote('burner locked — sniper idle', 'warn'); botLog('sniper', 'panel', 'burner locked'); return; }
   sniperBusy = true;
@@ -8366,6 +8373,7 @@ async function sniperExitTick(skipRefresh) {
   if (changed) save('sms:sniperhigh', sniperHigh);
 }
 function startSniper() {
+  if (!SNIPER_ENABLED) { SNIPER.on = false; clearInterval(sniperTimer); sniperTimer = null; return; }
   clearInterval(sniperTimer);
   sniperTimer = setInterval(sniperPoll, SNIPER.pollSec * 1000);
   if (!sniperExitTimer) sniperExitTimer = setInterval(sniperExitTick, 10000);
@@ -10014,10 +10022,11 @@ function readSniperForm() {
   });
   const keep = SNIPER.on;
   sanitizeSniper();
-  SNIPER.on = keep;
+  SNIPER.on = SNIPER_ENABLED && keep;
 }
 function renderSniper() {
   const box = $('sniperBox'); if (!box) return;
+  if (!SNIPER_ENABLED) { box.innerHTML = ''; return; }
   const open = $('sniperDetails')?.open || SNIPER.on;
   const num = (id, v, step, label, extra = '') => `<label class="block"><span class="text-slate-400">${label}</span><input id="${id}" type="number" step="${step}" value="${v}" ${extra} class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>`;
   const rows = sniperRows.slice(0, 8).map(r => `<li class="border-t border-white/5 py-1"><b class="text-slate-200">${esc(r.symbol)}</b> <span class="text-slate-500">${esc(r.source)}</span><div class="text-[10px]">${r.checks.map(c => `<span class="${c.ok ? 'text-emerald-300' : 'text-rose-300'}">${esc(c.name)}: ${esc(c.detail)}</span>`).join(' · ')}</div>${botSkipHtml('sniper', r.mint)}</li>`).join('');
@@ -14626,7 +14635,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 16:40';
+    stamp.textContent = 'Panel build 2026-11-12 16:45';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
