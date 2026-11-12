@@ -557,13 +557,14 @@
   var WILD_DEF = {
     startUsd: 100, sizePct: 20, maxOpen: 4, slipPct: 2, feePct: 0.5, pxMs: 3000, buySell: 1.3,
     minLiq: 10000, minMcap: 0, maxMcap: 100000000000, minAgeMin: 0, maxAgeMin: 720,
-    topHolderPct: 20, hardStopPct: 6, tpPct: 30, timeStopMin: 60
+    topHolderPct: 20, hardStopPct: 10, tpPct: 30, timeStopMin: 60
   };
   function defs(id) { return id === 'wild' ? WILD_DEF : HUNTER_DEF; }
   function clean(raw, id) {
     var base = Object.assign({}, defs(id));
     FIELD_LIST.forEach(function (f) { if (raw && isFinite(+raw[f[0]])) base[f[0]] = +raw[f[0]]; });
     if (id === 'hunter' && base.hardStopPct === 18) base.hardStopPct = 6;
+    if (id === 'wild' && base.hardStopPct === 6) base.hardStopPct = 10;
     return base;
   }
   function blank(id) {
@@ -716,10 +717,11 @@
       updated: doc.updated_tehran || ''
     };
   }
-  function cmpCell(id, label, eq, start, wins, losses, openN) {
+  function cmpCell(id, label, eq, start, wins, losses, openN, stopPct) {
     var pnl = isFinite(eq) && start > 0 ? (eq - start) / start * 100 : NaN;
     var on = view === id ? ' on' : '';
-    return '<button type="button" data-fp-view="' + id + '" class="' + on.trim() + '"><span>' + label + '</span><b>' + money(eq, false) + '</b><em class="' + (pnl < 0 ? 'pnl-down' : 'pnl-up') + '">' + pctText(pnl) + '</em><em>W/L ' + wins + '/' + losses + ' · ' + openN + ' open</em></button>';
+    var stop = isFinite(+stopPct) ? '<em>Stop −' + (+stopPct) + '%</em>' : '';
+    return '<button type="button" data-fp-view="' + id + '" class="' + on.trim() + '"><span>' + label + '</span><b>' + money(eq, false) + '</b><em class="' + (pnl < 0 ? 'pnl-down' : 'pnl-up') + '">' + pctText(pnl) + '</em><em>W/L ' + wins + '/' + losses + ' · ' + openN + ' open</em>' + stop + '</button>';
   }
   function paint() {
     var root = document.getElementById('fastPaperRoot');
@@ -733,8 +735,8 @@
     var agent = agentModel();
     var cmp = root.querySelector('[data-fp-cmp]');
     if (cmp) {
-      cmp.innerHTML = cmpCell('hunter', 'Hunter Fast', equityOf(hunter), (hunter && hunter.start) || 100, (hunter && hunter.wins) || 0, hunter && hunter.exited ? hunter.exited - hunter.wins : 0, hunter && hunter.open ? hunter.open.length : 0)
-        + cmpCell('wild', 'Wild Fast', equityOf(wild), (wild && wild.start) || 100, (wild && wild.wins) || 0, wild && wild.exited ? wild.exited - wild.wins : 0, wild && wild.open ? wild.open.length : 0)
+      cmp.innerHTML = cmpCell('hunter', 'Hunter Fast', equityOf(hunter), (hunter && hunter.start) || 100, (hunter && hunter.wins) || 0, hunter && hunter.exited ? hunter.exited - hunter.wins : 0, hunter && hunter.open ? hunter.open.length : 0, hunter && hunter.settings && hunter.settings.hardStopPct)
+        + cmpCell('wild', 'Wild Fast', equityOf(wild), (wild && wild.start) || 100, (wild && wild.wins) || 0, wild && wild.exited ? wild.exited - wild.wins : 0, wild && wild.open ? wild.open.length : 0, wild && wild.settings && wild.settings.hardStopPct)
         + cmpCell('agent', 'Wild (agent)', agent ? agent.equity : NaN, agent ? agent.start : 100, agent ? agent.wins : 0, agent ? agent.losses : 0, agent ? agent.open.length : 0);
     }
     root.querySelectorAll('[data-fp-src]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-fp-src') === view); });
@@ -847,7 +849,7 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function shell() {
     var note = view === 'wild'
-      ? 'Wild Fast: age under 12h, liq at least $10k, accelerating buys, verticals allowed. Size 20% of this book (min $5), max 4. Stop −6%, take profit +30%, 60 min, exit if liquidity is cut in half. 2% slip and 0.5% fee each side.'
+      ? 'Wild Fast: age under 12h, liq at least $10k, accelerating buys, verticals allowed. Size 20% of this book (min $5), max 4. Stop −10% of entry, take profit +30%, 60 min, exit if liquidity is cut in half. 2% slip and 0.5% fee each side.'
       : view === 'agent'
         ? 'Wild (agent) is the box paper file. Read only. It refreshes about once a minute. It cannot buy, sell, or reset.'
         : 'Hunter Fast keeps its filters. Size is a percent of this book’s cash, never marked equity. Stop −6% of entry, take profit +30%, time stop 60 min.';
