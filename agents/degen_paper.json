@@ -1,25 +1,44 @@
 {
-  "updated_utc": "2026-11-12T02:20:48.631Z",
-  "updated_tehran": "2026-11-12T05:50:48.631+0330",
+  "updated_utc": "2026-11-12T02:31:58.087Z",
+  "updated_tehran": "2026-11-12T06:01:58.087+0330",
   "start_usd": 100.0,
-  "cash_usd": 81.0639,
-  "equity_usd": 94.7414,
-  "realized_pnl_usd": -4.2229,
-  "unrealized_pnl_usd": -1.0357,
-  "trades": 2,
-  "win_rate": 0.5,
+  "cash_usd": 58.31,
+  "equity_usd": 87.9116,
+  "realized_pnl_usd": -8.6758,
+  "unrealized_pnl_usd": -3.4126,
+  "trades": 3,
+  "win_rate": 0.3333,
   "open": [
+    {
+      "mint": "HngZXdHcBiDEX8uhqexnFqUzHsf4y9Y8a4n1F6q8pump",
+      "symbol": "SCAMSON",
+      "entry_price": 0.000144228,
+      "price": 0.0001268,
+      "pnl_pct": -14.6992,
+      "size_usd": 18.26,
+      "opened_tehran": "2026-11-12T06:01:52.582+0330"
+    },
+    {
+      "mint": "3dqeBW7EJYAPnv9tGJeQAwBoxZsC2vomFk7ah7GrFoss",
+      "symbol": "X",
+      "entry_price": 0.000207876,
+      "price": 0.0002038,
+      "pnl_pct": -4.8769,
+      "size_usd": 14.59,
+      "opened_tehran": "2026-11-12T06:01:57.746+0330"
+    }
+  ],
+  "closed": [
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
       "symbol": "AIB",
       "entry_price": 0.000489192,
-      "price": 0.0004687,
-      "pnl_pct": -7.0393,
-      "size_usd": 14.64,
-      "opened_tehran": "2026-11-12T05:44:53.633+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 0.000344568,
+      "pnl_usd": -4.4529,
+      "pnl_pct": -30.2647,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T05:57:08.276+0330"
+    },
     {
       "mint": "H57bUBka6sBfPQph6f58TsQvUvxugJQmqMANFV1mpump",
       "symbol": "Rex",
