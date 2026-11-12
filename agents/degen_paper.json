@@ -1,14 +1,24 @@
 {
-  "updated_utc": "2026-11-12T10:31:39.666Z",
-  "updated_tehran": "2026-11-12T14:01:39.666+0330",
+  "updated_utc": "2026-11-12T10:37:29.972Z",
+  "updated_tehran": "2026-11-12T14:07:29.972+0330",
   "start_usd": 100.0,
-  "cash_usd": 73.9997,
-  "equity_usd": 73.9997,
+  "cash_usd": 59.1257,
+  "equity_usd": 73.2742,
   "realized_pnl_usd": -26.0003,
-  "unrealized_pnl_usd": 0.0,
+  "unrealized_pnl_usd": -0.7255,
   "trades": 25,
   "win_rate": 0.32,
-  "open": [],
+  "open": [
+    {
+      "mint": "2UMho4zUPqSKb2fbJbKNPf1dU1WKD6SfbNmVkvphpump",
+      "symbol": "Shiqi",
+      "entry_price": 0.000121176,
+      "price": 0.0001188,
+      "pnl_pct": -4.8776,
+      "size_usd": 14.8,
+      "opened_tehran": "2026-11-12T14:07:29.768+0330"
+    }
+  ],
   "closed": [
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
