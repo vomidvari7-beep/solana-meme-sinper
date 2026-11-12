@@ -14,6 +14,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SolanaMemeSniper — Panel</title>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = { darkMode: 'class', theme: { extend: {
@@ -190,6 +193,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   body.scrolled .appbar { border-bottom-color: var(--line); }
   .large-title { font-size: 34px; line-height: 1.05; font-weight: 700; letter-spacing: -0.04em; margin: 0; color: var(--text); transition: font-size .22s cubic-bezier(.2,.8,.2,1), opacity .22s; }
   body.scrolled .large-title { font-size: 17px; }
+  .app-mark { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; flex: 0 0 auto; }
   #liveStat { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
   #liveStat::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
   .bal-pill { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--elev); border: 1px solid rgba(255,255,255,.08); color: var(--text); font-size: 14px; font-weight: 700; letter-spacing: -.02em; }
@@ -410,7 +414,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   <button type="button" id="lockUnlock">Unlock</button>
 </div>
 <header class="appbar">
-  <div class="min-w-0"><div id="liveStat" class="text-[12px] text-slate-500 num">Live</div></div>
+  <div class="min-w-0 flex items-center gap-2"><img src="icons/icon-192.png" alt="" class="app-mark" width="32" height="32" /><div id="liveStat" class="text-[12px] text-slate-500 num">Live</div></div>
   <div class="appbar-actions">
     <button type="button" id="killFab" class="kill-head" hidden>KILL</button>
     <button type="button" id="themeToggle" class="theme-toggle" data-theme-toggle aria-label="Switch day or night"></button>
@@ -651,7 +655,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 05:27</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 06:58</p>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -14102,7 +14106,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 05:27';
+    stamp.textContent = 'Panel build 2026-11-12 06:58';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
