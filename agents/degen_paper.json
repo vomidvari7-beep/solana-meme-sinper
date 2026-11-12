@@ -1,25 +1,25 @@
 {
-  "updated_utc": "2026-11-12T02:46:37.959Z",
-  "updated_tehran": "2026-11-12T06:16:37.959+0330",
+  "updated_utc": "2026-11-12T02:55:45.804Z",
+  "updated_tehran": "2026-11-12T06:25:45.804+0330",
   "start_usd": 100.0,
-  "cash_usd": 65.9989,
-  "equity_usd": 81.7917,
-  "realized_pnl_usd": -17.3985,
-  "unrealized_pnl_usd": -0.8098,
-  "trades": 5,
-  "win_rate": 0.2,
-  "open": [
+  "cash_usd": 78.5746,
+  "equity_usd": 78.5746,
+  "realized_pnl_usd": -21.4254,
+  "unrealized_pnl_usd": 0.0,
+  "trades": 6,
+  "win_rate": 0.1667,
+  "open": [],
+  "closed": [
     {
       "mint": "5LPUWuxVTfkEhGob1kyWgijbFse4icqqH7VTgY79pump",
       "symbol": "blackjesus",
       "entry_price": 4.02084e-05,
-      "price": 3.942e-05,
-      "pnl_pct": -4.8775,
-      "size_usd": 16.52,
-      "opened_tehran": "2026-11-12T06:16:37.780+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 3.07622e-05,
+      "pnl_usd": -4.0269,
+      "pnl_pct": -24.2546,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T06:19:39.342+0330"
+    },
     {
       "mint": "3dqeBW7EJYAPnv9tGJeQAwBoxZsC2vomFk7ah7GrFoss",
       "symbol": "X",
