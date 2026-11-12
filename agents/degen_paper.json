@@ -1,34 +1,35 @@
 {
-  "updated_utc": "2026-11-12T10:08:47.202Z",
-  "updated_tehran": "2026-11-12T13:38:47.202+0330",
+  "updated_utc": "2026-11-12T10:31:39.666Z",
+  "updated_tehran": "2026-11-12T14:01:39.666+0330",
   "start_usd": 100.0,
-  "cash_usd": 45.5596,
-  "equity_usd": 70.3744,
-  "realized_pnl_usd": -28.6421,
-  "unrealized_pnl_usd": -0.9835,
-  "trades": 23,
-  "win_rate": 0.3043,
-  "open": [
+  "cash_usd": 73.9997,
+  "equity_usd": 73.9997,
+  "realized_pnl_usd": -26.0003,
+  "unrealized_pnl_usd": 0.0,
+  "trades": 25,
+  "win_rate": 0.32,
+  "open": [],
+  "closed": [
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
       "symbol": "AIB",
       "entry_price": 0.00044574,
-      "price": 0.0004458,
-      "pnl_pct": -2.9614,
-      "size_usd": 14.27,
-      "opened_tehran": "2026-11-12T13:14:50.588+0330"
+      "exit_price": 0.000590548,
+      "pnl_usd": 4.4701,
+      "pnl_pct": 31.1694,
+      "reason": "tp_30",
+      "closed_tehran": "2026-11-12T13:59:36.701+0330"
     },
     {
       "mint": "7yLCJpWQvE2bnX3JZGbmmKrCkCSrSGbqTmgA8tMdpump",
       "symbol": "FLC",
       "entry_price": 0.000320484,
-      "price": 0.0003142,
-      "pnl_pct": -4.8774,
-      "size_usd": 11.4,
-      "opened_tehran": "2026-11-12T13:38:46.896+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 0.000272048,
+      "pnl_usd": -1.8283,
+      "pnl_pct": -15.9579,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T13:53:51.241+0330"
+    },
     {
       "mint": "HFcyhe28iLYRhac2W5FBdtDGFunWDJesCR7f6EZJpump",
       "symbol": "MRPENIS",
@@ -208,26 +209,6 @@
       "pnl_pct": -24.2546,
       "reason": "hard_stop",
       "closed_tehran": "2026-11-12T06:19:39.342+0330"
-    },
-    {
-      "mint": "3dqeBW7EJYAPnv9tGJeQAwBoxZsC2vomFk7ah7GrFoss",
-      "symbol": "X",
-      "entry_price": 0.000207876,
-      "exit_price": 0.000164346,
-      "pnl_usd": -3.1858,
-      "pnl_pct": -21.7269,
-      "reason": "hard_stop",
-      "closed_tehran": "2026-11-12T06:05:33.001+0330"
-    },
-    {
-      "mint": "HngZXdHcBiDEX8uhqexnFqUzHsf4y9Y8a4n1F6q8pump",
-      "symbol": "SCAMSON",
-      "entry_price": 0.000144228,
-      "exit_price": 0.000101724,
-      "pnl_usd": -5.5369,
-      "pnl_pct": -30.1717,
-      "reason": "hard_stop",
-      "closed_tehran": "2026-11-12T06:03:11.335+0330"
     }
   ]
 }
