@@ -1,34 +1,55 @@
 {
-  "updated_utc": "2026-11-12T05:27:21.802Z",
-  "updated_tehran": "2026-11-12T08:57:21.802+0330",
+  "updated_utc": "2026-11-12T06:01:27.606Z",
+  "updated_tehran": "2026-11-12T09:31:27.606+0330",
   "start_usd": 100.0,
-  "cash_usd": 42.5266,
-  "equity_usd": 68.8707,
-  "realized_pnl_usd": -33.3836,
-  "unrealized_pnl_usd": 2.2543,
-  "trades": 11,
-  "win_rate": 0.1818,
+  "cash_usd": 64.0448,
+  "equity_usd": 75.6017,
+  "realized_pnl_usd": -25.252,
+  "unrealized_pnl_usd": 0.8537,
+  "trades": 14,
+  "win_rate": 0.2857,
   "open": [
-    {
-      "mint": "7ErpHXW9Gu7rmAip8v5gtjqoadFHbfx9SjPgKVEHquja",
-      "symbol": "MACE",
-      "entry_price": 6.12816e-05,
-      "price": 7.626e-05,
-      "pnl_pct": 20.7394,
-      "size_usd": 13.32,
-      "opened_tehran": "2026-11-12T08:36:13.644+0330"
-    },
     {
       "mint": "5qaP7oKUqKffwwo5DaEqDoTtsBLMpdbQTxEkCDaTpump",
       "symbol": "Max",
       "entry_price": 0.00243066,
-      "price": 0.002383,
-      "pnl_pct": -4.877,
+      "price": 0.002705,
+      "pnl_pct": 7.9761,
       "size_usd": 10.65,
       "opened_tehran": "2026-11-12T08:57:21.563+0330"
     }
   ],
   "closed": [
+    {
+      "mint": "Eh5zz6vrPK66MHzhBLrzEFHvATE7Z1SqoALzcNu4pump",
+      "symbol": "BITCOINU",
+      "entry_price": 0.000453798,
+      "exit_price": 0.00074676,
+      "pnl_usd": 7.1899,
+      "pnl_pct": 62.9214,
+      "reason": "tp_30",
+      "closed_tehran": "2026-11-12T09:30:59.905+0330"
+    },
+    {
+      "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
+      "symbol": "AIB",
+      "entry_price": 0.000536826,
+      "exit_price": 0.000424634,
+      "pnl_usd": -2.5913,
+      "pnl_pct": -21.6856,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T09:13:11.868+0330"
+    },
+    {
+      "mint": "7ErpHXW9Gu7rmAip8v5gtjqoadFHbfx9SjPgKVEHquja",
+      "symbol": "MACE",
+      "entry_price": 6.12816e-05,
+      "exit_price": 7.82334e-05,
+      "pnl_usd": 3.533,
+      "pnl_pct": 26.3921,
+      "reason": "tp_30",
+      "closed_tehran": "2026-11-12T09:02:42.808+0330"
+    },
     {
       "mint": "Dkp7yCs1CUbAUwWekUwQaqEhNiNsY15N76D1jdtEpump",
       "symbol": "GABOON",
