@@ -678,7 +678,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 07:58</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 08:10</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
@@ -5005,9 +5005,9 @@ function commitBarDrag(key, kind, px) {
   const id = levelId(p);
   const prev = posLevels[id] ? { ...posLevels[id] } : null;
   const next = { ...(prev || {}), keepRaise: prev ? prev.keepRaise !== false : true };
-  if (kind === 'stop') { next.stop = px; next.stopPct = null; }
-  if (kind === 'tp1') { next.tp1 = px; next.tp1Pct = null; }
-  if (kind === 'tp2') { next.tp2 = px; next.tp2Pct = null; }
+  if (kind === 'stop') { next.stop = px; next.stopPct = null; next.manual = true; next.by = 'user'; }
+  if (kind === 'tp1') { next.tp1 = px; next.tp1Pct = null; next.manual = true; next.by = 'user'; }
+  if (kind === 'tp2') { next.tp2 = px; next.tp2Pct = null; next.manual = true; next.by = 'user'; }
   posLevels[id] = next;
   savePosLevels();
   renderPortfolio();
@@ -5523,7 +5523,7 @@ function renderPortfolio() {
     const got = readManualForm(form, p);
     const warn = form.querySelector('[data-ms-warn]');
     if (got.error) { if (warn) { warn.textContent = got.error; warn.classList.remove('hidden'); } return; }
-    posLevels[levelId(p)] = got; savePosLevels(); posEditKey = null; renderPortfolio();
+    posLevels[levelId(p)] = { ...got, manual: true, by: 'user' }; savePosLevels(); posEditKey = null; renderPortfolio();
   }));
   $('pfSync')?.addEventListener('click', () => { syncWalletHoldings(); });
   $('pfRefresh').addEventListener('click', () => { refreshPrices(); refreshBalances(); });
@@ -12409,8 +12409,8 @@ function agentScaleOn(p, fallback) {
 }
 function agentSpec(spec, row, plan, px) {
   const next = { ...spec };
-  const manualStop = !!(row && ((isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0)));
-  const manualTp = !!(row && Array.isArray(row.tps) && row.tps.length);
+  const manualStop = !!(row && ((isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0) || (row.manualStop != null && row.manualStop !== '')));
+  const manualTp = !!(row && ((Array.isArray(row.tps) && row.tps.length) || (row.manualTp != null && row.manualTp !== '')));
   if (!manualStop && agentNum(plan.stop) > 0) next.stopPx = +plan.stop;
   if (!manualTp && px > 0) {
     const tps = [];
@@ -12423,10 +12423,11 @@ function agentSpec(spec, row, plan, px) {
 }
 function agentOrderPlan(plan, agent, row) {
   const next = { ...(plan || {}) };
-  const manualStop = !!(row && ((isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0)));
+  const manualStop = !!(row && ((isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0) || (row.manualStop != null && row.manualStop !== '')));
+  const manualTp = !!(row && ((Array.isArray(row.tps) && row.tps.length) || (row.manualTp != null && row.manualTp !== '')));
   if (!manualStop && agentNum(agent.stop) > 0) next.stop = +agent.stop;
-  if (agentNum(agent.tp1) > 0) next.tp1 = +agent.tp1;
-  if (agentNum(agent.tp2) > 0) next.tp2 = +agent.tp2;
+  if (!manualTp && agentNum(agent.tp1) > 0) next.tp1 = +agent.tp1;
+  if (!manualTp && agentNum(agent.tp2) > 0) next.tp2 = +agent.tp2;
   next.agent = true;
   next.strat = (next.strat || 'Agent') + ' · ' + (agent.setup || 'agent');
   return next;
@@ -12447,10 +12448,34 @@ function agentPlanChip(mint) {
   }
   return `<div class="mt-1.5 rounded-lg border ${cls} bg-white/5 px-2 py-1 text-[10px] leading-snug whitespace-normal break-words"><b>Agent plan</b> · ${bits.map(esc).join(' · ')}</div>`;
 }
+function userManualStop(p) {
+  if (!p) return false;
+  const m = typeof manualOf === 'function' ? manualOf(p) : null;
+  if (m && m.by !== 'agent' && (m.manual === true || m.keepRaise === false || (isNum(m.stopPct) && m.stopPct > 0) || 'tp1' in m || 'beAtPct' in m || 'trailOff' in m) && ((isNum(m.stop) && m.stop > 0) || (isNum(m.stopPct) && m.stopPct > 0))) return true;
+  let row = null;
+  try { row = (MYLIST.rows || []).find(r => r && r.mint === p.mint); } catch { row = null; }
+  return !!(row && ((row.manualStop != null && row.manualStop !== '') || (isNum(row.stopPx) && row.stopPx > 0) || (isNum(row.stopPct) && row.stopPct > 0)));
+}
+function userManualTp(p) {
+  if (!p) return false;
+  const m = typeof manualOf === 'function' ? manualOf(p) : null;
+  if (m && m.by !== 'agent' && (m.manual === true || m.keepRaise === false) && ((isNum(m.tp1) && m.tp1 > 0) || (isNum(m.tp1Pct) && m.tp1Pct > 0) || (isNum(m.tp2) && m.tp2 > 0) || (isNum(m.tp2Pct) && m.tp2Pct > 0))) return true;
+  let row = null;
+  try { row = (MYLIST.rows || []).find(r => r && r.mint === p.mint); } catch { row = null; }
+  return !!(row && ((row.manualTp != null && row.manualTp !== '') || (Array.isArray(row.tps) && row.tps.length)));
+}
 function agentRiskHtml(mint) {
+  const bits = [];
+  const pos = typeof openPositions === 'function' ? openPositions().find(p => p.mint === mint && p.open && !p.degen) : null;
+  const riskManual = (AG.risk.positions || []).some(r => r && r.mint === mint && (r.manual === true || r.manual === 'true'));
+  if (pos && (userManualStop(pos) || riskManual)) {
+    const raise = (AG.risk.positions || []).some(r => r && r.mint === mint && riskFresh(r.ts) && (r.action === 'raise_stop' || agentNum(r.new_stop) > 0 || r.manual === true || r.manual === 'true'));
+    const plan = typeof agentPlanFor === 'function' ? agentPlanFor(mint) : null;
+    if (raise || (plan && agentNum(plan.stop) > 0)) bits.push('<div class="mt-2 text-[12px] font-semibold" style="color:var(--muted)">agent stop ignored (manual)</div>');
+  }
   const rows = (AG.risk.positions || []).filter(r => r && r.mint === mint && riskFresh(r.ts) && (r.action === 'take_partial' || r.action === 'exit_now') && !agentExitsOn());
-  if (!rows.length) return '';
-  return rows.map(r => `<div class="mt-2 rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[11px] font-semibold text-rose-100 whitespace-normal break-words">Agent: ${esc(r.action === 'exit_now' ? 'exit now' : 'take partial ' + (agentNum(r.partial_pct) || 50) + '%')} · ${esc(r.reason || 'review this position')}</div>`).join('');
+  bits.push(...rows.map(r => `<div class="mt-2 rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[11px] font-semibold text-rose-100 whitespace-normal break-words">Agent: ${esc(r.action === 'exit_now' ? 'exit now' : 'take partial ' + (agentNum(r.partial_pct) || 50) + '%')} · ${esc(r.reason || 'review this position')}</div>`));
+  return bits.join('');
 }
 function agentPauseBuys() { return !!(AG.risk.pause_auto_buy && riskFresh(AG.risk.ts)); }
 function playAgentAlert() {
@@ -12482,6 +12507,7 @@ function applyAgentRisk() {
     if (pos?.degen) { AG.seenRisk[key] = now; continue; }
     if (row.action === 'raise_stop') {
       if (!pos) continue;
+      if (userManualStop(pos) || row.manual === true || row.manual === 'true') { AG.seenRisk[key] = now; continue; }
       const lp = livePrices.get(pos.mint)?.price;
       const cur = effectiveStop(pos, lp)?.stop;
       const next = agentNum(row.new_stop);
@@ -12489,7 +12515,7 @@ function applyAgentRisk() {
       const id = levelId(pos);
       const manual = posLevels[id] || {};
       if (isNum(manual.stop) && manual.stop >= next) { AG.seenRisk[key] = now; continue; }
-      posLevels[id] = { ...manual, stop: next, keepRaise: true };
+      posLevels[id] = { ...manual, stop: next, keepRaise: true, by: 'agent' };
       savePosLevels();
       AG.seenRisk[key] = now;
       autoLog((pos.symbol || row.mint) + ': agent raised stop to ' + price(next) + (row.reason ? ' — ' + row.reason : ''), 'info');
@@ -14183,7 +14209,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 07:58';
+    stamp.textContent = 'Panel build 2026-11-12 08:10';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
