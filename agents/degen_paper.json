@@ -1,11 +1,11 @@
 {
-  "updated_utc": "2026-11-12T07:50:17.861Z",
-  "updated_tehran": "2026-11-12T11:20:17.861+0330",
+  "updated_utc": "2026-11-12T08:00:47.074Z",
+  "updated_tehran": "2026-11-12T11:30:47.074+0330",
   "start_usd": 100.0,
-  "cash_usd": 61.468,
-  "equity_usd": 76.1805,
+  "cash_usd": 49.1166,
+  "equity_usd": 80.231,
   "realized_pnl_usd": -23.0651,
-  "unrealized_pnl_usd": -0.7544,
+  "unrealized_pnl_usd": 3.2961,
   "trades": 17,
   "win_rate": 0.3529,
   "open": [
@@ -13,10 +13,19 @@
       "mint": "7BWrHRyQcsKYMwq7W3XCsbnZMdXohboMoasrUWRZpump",
       "symbol": "Rockstar",
       "entry_price": 0.00139332,
-      "price": 0.001366,
-      "pnl_pct": -4.8775,
+      "price": 0.001798,
+      "pnl_pct": 25.2054,
       "size_usd": 15.39,
       "opened_tehran": "2026-11-12T11:20:17.605+0330"
+    },
+    {
+      "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
+      "symbol": "AIB",
+      "entry_price": 0.000503166,
+      "price": 0.0004933,
+      "pnl_pct": -4.8772,
+      "size_usd": 12.29,
+      "opened_tehran": "2026-11-12T11:30:46.755+0330"
     }
   ],
   "closed": [
