@@ -709,7 +709,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 17:40</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 17:50</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <details>
     <summary class="ui-more">Notice</summary>
@@ -2973,6 +2973,8 @@ const solUsd = () => (lastResult?.sol?.price) || T_state.solPrice || null;
 let sizeUnit = 'usd';
 let sizeStore = 'sol';
 let solPxMem = { price: 0, at: 0 };
+const SOL_RING = [];
+const scalpSolLogged = new Set();
 function rememberSol(px) {
   const n = +px;
   if (n > 0) { solPxMem = { price: n, at: Date.now() }; if (!(T_state.solPrice > 0)) T_state.solPrice = n; noteSolSample(n); }
@@ -6115,6 +6117,10 @@ async function renderQR(pub) { try { const QR = (await import(QR_URL)).default; 
 const LOCK_ALERT_LS = 'sms:lockalert';
 const LOCK_BOT_KEYS = ['auto', 'mylist', 'copy', 'sniper', 'degen', 'scan', 'momentum'];
 let lockBannerShown = false;
+const READY_LS = 'sms:readyalert';
+let readyAudio = null;
+let readyPrimed = false;
+let readyShown = new Set();
 function lockedBotCount() {
   const p = botPrefs();
   return LOCK_BOT_KEYS.filter(k => p[k]).length;
@@ -13707,8 +13713,6 @@ const scalpWhy = { symbol: '', reason: 'Scalp is off', at: 0 };
 let SCALP_SCAN = [];
 let SCALP_SCAN_AT = 0;
 let SCALP_SOL = { m15: null, m15Source: '', m5: null, h1: null, at: 0 };
-const SOL_RING = [];
-const scalpSolLogged = new Set();
 function noteSolSample(px) {
   const n = +px;
   if (!(n > 0)) return;
@@ -14469,10 +14473,6 @@ function renderScalp() {
 setTimeout(() => { try { renderScalp(); } catch { /* first paint */ } }, 900);
 
 /* ---------------- init ---------------- */
-const READY_LS = 'sms:readyalert';
-let readyAudio = null;
-let readyPrimed = false;
-let readyShown = new Set();
 function readyAlertsOn() {
   try { const v = JSON.parse(localStorage.getItem(READY_LS) || 'null'); if (v && typeof v.on === 'boolean') return v.on; } catch { /* default on */ }
   return true;
@@ -14885,7 +14885,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 17:40';
+    stamp.textContent = 'Panel build 2026-11-12 17:50';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
