@@ -1,34 +1,45 @@
 {
-  "updated_utc": "2026-11-12T02:31:58.087Z",
-  "updated_tehran": "2026-11-12T06:01:58.087+0330",
+  "updated_utc": "2026-11-12T02:46:37.959Z",
+  "updated_tehran": "2026-11-12T06:16:37.959+0330",
   "start_usd": 100.0,
-  "cash_usd": 58.31,
-  "equity_usd": 87.9116,
-  "realized_pnl_usd": -8.6758,
-  "unrealized_pnl_usd": -3.4126,
-  "trades": 3,
-  "win_rate": 0.3333,
+  "cash_usd": 65.9989,
+  "equity_usd": 81.7917,
+  "realized_pnl_usd": -17.3985,
+  "unrealized_pnl_usd": -0.8098,
+  "trades": 5,
+  "win_rate": 0.2,
   "open": [
     {
-      "mint": "HngZXdHcBiDEX8uhqexnFqUzHsf4y9Y8a4n1F6q8pump",
-      "symbol": "SCAMSON",
-      "entry_price": 0.000144228,
-      "price": 0.0001268,
-      "pnl_pct": -14.6992,
-      "size_usd": 18.26,
-      "opened_tehran": "2026-11-12T06:01:52.582+0330"
-    },
+      "mint": "5LPUWuxVTfkEhGob1kyWgijbFse4icqqH7VTgY79pump",
+      "symbol": "blackjesus",
+      "entry_price": 4.02084e-05,
+      "price": 3.942e-05,
+      "pnl_pct": -4.8775,
+      "size_usd": 16.52,
+      "opened_tehran": "2026-11-12T06:16:37.780+0330"
+    }
+  ],
+  "closed": [
     {
       "mint": "3dqeBW7EJYAPnv9tGJeQAwBoxZsC2vomFk7ah7GrFoss",
       "symbol": "X",
       "entry_price": 0.000207876,
-      "price": 0.0002038,
-      "pnl_pct": -4.8769,
-      "size_usd": 14.59,
-      "opened_tehran": "2026-11-12T06:01:57.746+0330"
-    }
-  ],
-  "closed": [
+      "exit_price": 0.000164346,
+      "pnl_usd": -3.1858,
+      "pnl_pct": -21.7269,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T06:05:33.001+0330"
+    },
+    {
+      "mint": "HngZXdHcBiDEX8uhqexnFqUzHsf4y9Y8a4n1F6q8pump",
+      "symbol": "SCAMSON",
+      "entry_price": 0.000144228,
+      "exit_price": 0.000101724,
+      "pnl_usd": -5.5369,
+      "pnl_pct": -30.1717,
+      "reason": "hard_stop",
+      "closed_tehran": "2026-11-12T06:03:11.335+0330"
+    },
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
       "symbol": "AIB",
