@@ -204,9 +204,9 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .tab-pane { max-width: 720px; margin: 0 auto; padding: calc(68px + env(safe-area-inset-top)) 16px calc(196px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
   .tab-pane[hidden] { display: none !important; }
   #tabBar { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 74; display: flex; align-items: center; justify-content: space-evenly; height: 72px; padding: 8px; border-radius: 32px; background: var(--tab-solid); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 12px 32px rgba(0,0,0,.38); }
-  #tabBar button { position: relative; z-index: 1; width: 52px; height: 52px; min-height: 52px; padding: 0; border: 0; border-radius: 50%; background: var(--tab-btn); color: #8B98A9; font-size: 0; line-height: 0; display: grid; place-items: center; }
-  #tabBar button svg { width: 25px; height: 25px; display: block; }
-  #tabBar button.on { width: 56px; height: 56px; min-height: 56px; background: var(--accent); color: var(--on-accent); transform: translateY(-2px); box-shadow: 0 8px 18px var(--accent-soft); }
+  #tabBar button { position: relative; z-index: 1; width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--tab-btn); color: #8B98A9; font-size: 0; line-height: 0; display: grid; place-items: center; }
+  #tabBar button svg { width: 22px; height: 22px; display: block; }
+  #tabBar button.on { width: 48px; height: 48px; min-height: 48px; background: var(--accent); color: var(--on-accent); transform: translateY(-2px); box-shadow: 0 8px 18px var(--accent-soft); }
   .hero-card { background: var(--elev); border: 1px solid rgba(255,255,255,.06); border-radius: 22px; padding: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.32); }
   .hero-num { font-size: 44px; line-height: 1.02; font-weight: 700; letter-spacing: -.04em; color: var(--text); }
   .hero-num .dec, .dec { color: var(--muted); font-weight: 600; }
@@ -460,6 +460,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   <div id="vaultBox" class="mt-3"></div>
   <button type="button" id="botStatus" class="status-row"><span class="status-dot"></span><span class="min-w-0"><b>Bot controls</b><span id="botStatusLabel">Off</span><span id="degenLockLine" class="block truncate font-mono text-[11px] text-slate-500">Degen locked $25 · free — SOL</span></span><span aria-hidden="true" style="margin-left:auto;color:#8E95A3">›</span></button>
   <div id="homePositions"></div>
+  <details>
+    <summary class="ui-more">Market</summary>
   <div class="stat-strip">
       <div id="solTicker" class="stat-pill flex items-center gap-1.5 text-sm glass rounded-xl px-2 py-1.5">
         <div class="leading-tight min-w-0 flex-1">
@@ -495,6 +497,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
         <svg id="dexSpark" viewBox="0 0 64 28" class="w-10 h-6 shrink-0 hidden sm:block" role="img" aria-label="DEX mood last 24h, Tehran time"><path id="dexSparkPath" d="" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>
       </div>
     </div>
+  </details>
   <div id="degenCard"></div>
   <div id="scalpCard"></div>
 
@@ -502,10 +505,12 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   <div class="glass rounded-2xl p-4 sm:p-5">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
       <h2 class="sec-title"><span class="ico">●</span>Ready now</h2>
-      <div class="flex flex-wrap items-center gap-2 text-xs">
-        <label class="flex items-center gap-1.5 text-slate-300"><input id="readyAlertOn" type="checkbox" class="accent-emerald-500" checked /> Sound and alerts</label>
-        <button id="readyNotify" type="button" class="rounded-lg px-2 py-1 bg-ink-700 hover:bg-ink-600 border border-white/10">Enable notifications</button>
-      </div>
+      <details><summary class="ui-more">Alerts</summary>
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <label class="flex items-center gap-1.5 text-slate-300"><input id="readyAlertOn" type="checkbox" class="accent-emerald-500" checked /> Sound and alerts</label>
+          <button id="readyNotify" type="button" class="rounded-lg px-2 py-1 bg-ink-700 hover:bg-ink-600 border border-white/10">Enable notifications</button>
+        </div>
+      </details>
     </div>
     <div id="readyRows" class="empty-note">No token in entry zone right now</div>
   </div>
@@ -555,7 +560,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       <label class="block mt-3">
         <span class="text-xs text-slate-400 flex justify-between"><span>Pasted screener data / token list</span><span id="parseCount" class="text-emerald-400/80"></span></span>
         <textarea id="pasted" rows="8" spellcheck="false" placeholder="Paste mint addresses, DexScreener / Birdeye / GeckoTerminal URLs, or copied screener rows. Anything that looks like a Solana address is detected automatically." class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500 scroll-thin"></textarea>
-        <span class="block text-[11px] text-slate-500 mt-1">Paste mints, then Save as My List. The list is separate from the scan.</span>
+        <span class="block text-[11px] text-slate-500 mt-1">Paste mints, then Save as My List.</span>
         <button id="btnSaveList" type="button" class="mt-2 rounded-lg px-3 py-1.5 text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white">Save as My List</button>
       </label>
       <label class="block mt-3">
@@ -576,14 +581,18 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
       </label>
       <div class="mt-4 grid grid-cols-2 gap-2">
         <button id="btnAnalyze" class="col-span-2 btn-primary rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 transition disabled:opacity-60"><span id="analyzeLabel">⚡ Analyze</span></button>
-        <button id="btnBoosted" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition disabled:opacity-50">🚀 Scan sources</button>
-        <button id="btnDemo" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">🧪 Demo data</button>
-        <button id="btnCopy" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">📋 Copy Results</button>
-        <button id="btnPrompt" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">🤖 Copy as AI prompt</button>
-        <button id="btnLoadLast" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">↺ Load last</button>
-        <button id="btnClear" class="rounded-xl py-2 text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 transition">✕ Clear</button>
+        <button id="btnBoosted" class="col-span-2 rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition disabled:opacity-50">Scan sources</button>
       </div>
-      <p class="text-[10px] text-slate-600 mt-2">Tip: Ctrl/⌘ + Enter = Analyze</p>
+      <details class="mt-2">
+        <summary class="ui-more">More</summary>
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <button id="btnDemo" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">Demo data</button>
+          <button id="btnCopy" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">Copy Results</button>
+          <button id="btnPrompt" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">Copy as AI prompt</button>
+          <button id="btnLoadLast" class="rounded-xl py-2 text-xs font-semibold bg-ink-700 hover:bg-ink-600 border border-white/10 transition">Load last</button>
+          <button id="btnClear" class="rounded-xl py-2 text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 transition">Clear</button>
+        </div>
+      </details>
       <div id="progress" class="hidden mt-3 text-xs text-slate-400"><div id="progressText">Working…</div><span class="prog is-busy" id="progressBar" aria-hidden="true"><i></i></span></div>
     </div>
 
@@ -612,7 +621,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
               <option value="https://api.mainnet-beta.solana.com">Solana mainnet-beta (often 403 from browsers)</option>
               <option value="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY">Helius (paste your key)</option>
             </select>
-            <span class="block text-[10px] text-slate-500 mt-1">Public RPCs rate-limit and some block browsers (CORS/403). For reliability use your own free Helius / QuickNode URL.</span>
+            <span class="block text-[10px] text-slate-500 mt-1">A browser 403 fails over to the next public RPC.</span>
           </label>
           <div class="grid grid-cols-2 gap-2">
             <label class="block"><span class="text-slate-400">Slippage % <span class="text-slate-600">(max 15)</span></span><input id="setSlip" type="number" min="0.1" max="15" step="0.1" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 py-1.5" /></label>
@@ -635,7 +644,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           <details class="rounded-lg bg-ink-800 px-2.5 py-2"><summary class="cursor-pointer text-slate-300">Auto-buy log</summary><div id="buyWhyBox" class="mt-2 space-y-1 text-[11px] text-slate-400">No decisions yet.</div></details>
         </div>
       </details>
-      <details id="agentSettings" open class="mt-3 rounded-xl border border-violet-400/40 bg-ink-850">
+      <details id="agentSettings" class="mt-3 rounded-xl border border-violet-400/40 bg-ink-850">
         <summary class="cursor-pointer px-3 py-3 text-sm font-bold text-white">Agents / ایجنت‌ها</summary>
         <div class="px-3 pb-3 space-y-2.5 text-xs">
           <label class="flex items-center gap-2"><input id="agentQuick" type="checkbox" class="accent-violet-500" checked /> Quick 15% · 1:1 <span class="text-slate-500">(one scalp, no scale-in)</span></label>
@@ -646,7 +655,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           <label class="flex items-center gap-2"><input id="agentUse" type="checkbox" class="accent-violet-500" checked /> Use agent plans</label>
           <label class="flex items-center gap-2"><input id="agentExits" type="checkbox" class="accent-violet-500" /> Agent exits <span class="text-slate-500">(off: alert only)</span></label>
           <label class="block"><span class="text-slate-300">GitHub sync token</span>
-            <span class="block text-[10px] text-slate-500">Fine-grained PAT with Contents read and write on this repo only. Saved in this browser. Never shown again.</span>
+            <span class="block text-[10px] text-slate-500">Saved only in this browser.</span>
             <input id="agentGhToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" class="mt-1 w-full rounded-lg bg-ink-800 border border-white/10 px-2.5 text-slate-100" style="font-size:16px;min-height:44px" />
           </label>
           <div class="flex flex-wrap gap-2">
@@ -661,44 +670,40 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
           </div>
         </div>
       </details>
-      <p class="mt-3 text-[11px] leading-relaxed text-slate-400">Burner hot wallet · auto-trading within your caps · keep small amounts.
-        </p>
+      <p class="mt-3 text-[11px] leading-relaxed text-slate-400">Burner wallet. Keep a small balance.</p>
     </div>
   </section>
 
   <section class="lg:col-span-8 space-y-5" id="output">
     <div id="agentPicks"></div>
     <div id="portfolio" class="hidden"></div>
-    <div id="emptyState" class="glass rounded-2xl p-8 text-center">
-      <div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-white/5 text-2xl">◎</div>
-      <h3 class="font-bold text-lg">No analysis yet</h3>
-      <p class="text-sm text-slate-400 mt-1">Paste tokens and hit <b>Analyze</b>, load <b>Demo data</b>, or <b>Scan sources</b> (boosted, trending, top volume, and new pools).</p>
-      <p class="text-xs text-slate-500 mt-2">Start with Demo data or Scan latest boosted.</p>
-      <div class="mt-5 grid sm:grid-cols-3 gap-3 text-left text-xs">
-        <div class="rounded-xl bg-ink-800 p-3 border border-white/5"><div class="text-emerald-300 font-semibold">1 · Filter</div><div class="text-slate-400 mt-1">Risk-based filters + red-flag scan kill rugs first.</div></div>
-        <div class="rounded-xl bg-ink-800 p-3 border border-white/5"><div class="text-violet-300 font-semibold">2 · Verify</div><div class="text-slate-400 mt-1">LP lock, mint/freeze, top-10, volume quality, socials.</div></div>
-        <div class="rounded-xl bg-ink-800 p-3 border border-white/5"><div class="text-amber-300 font-semibold">3 · Plan</div><div class="text-slate-400 mt-1">Conviction 0–100, entry method, sizing, exits.</div></div>
-      </div>
+    <div id="emptyState" class="glass rounded-2xl p-5 text-center">
+      <h3 class="font-bold text-lg">No scan yet</h3>
+      <p class="text-sm text-slate-400 mt-1">Analyze a paste, or scan sources.</p>
     </div>
     <div id="results" class="hidden space-y-5"></div>
   </section>
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 13:35</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 16:40</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
-  <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
-    ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
-    <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
-  </div>
+  <details>
+    <summary class="ui-more">Notice</summary>
+    <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
+      Analysis only, not financial advice. Meme coins can go to zero. Buys and sells are real swaps you sign. Stops and targets on this page do not send a trade by themselves.
+    </div>
+  </details>
 </footer>
 
+<div id="tabScan" class="tab-pane" hidden></div>
 <div id="tabTokens" class="tab-pane" hidden></div>
 <div id="tabAgents" class="tab-pane" hidden></div>
 <div id="tabTrades" class="tab-pane" hidden></div>
 <div id="tabSettings" class="tab-pane" hidden></div>
 <nav id="tabBar" aria-label="Sections">
   <button type="button" data-tab="home" class="on" aria-current="page" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Home</button>
+  <button type="button" data-tab="scan" aria-label="Scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Scan</button>
   <button type="button" data-tab="tokens" aria-label="Tokens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>Tokens</button>
   <button type="button" data-tab="agents" aria-label="Agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Agents</button>
   <button type="button" data-tab="trades" aria-label="Trades"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>Trades</button>
@@ -2745,8 +2750,8 @@ function updateHints() {
 }
 function saveInputsDraft() { try { localStorage.setItem('sms:inputs', JSON.stringify(collectInputs())); } catch { } }
 
-$('btnAnalyze').addEventListener('click', () => { window.showTab?.('tokens'); runAnalysis(); });
-$('btnBoosted').addEventListener('click', () => { window.showTab?.('tokens'); runAnalysis({ boosted: true }); });
+$('btnAnalyze').addEventListener('click', () => { window.showTab?.('scan'); runAnalysis(); });
+$('btnBoosted').addEventListener('click', () => { window.showTab?.('scan'); runAnalysis({ boosted: true }); });
 loadSourceBoxes();
 ['srcBoost', 'srcTrend', 'srcVolume', 'srcNew'].forEach(id => document.getElementById(id)?.addEventListener('change', persistSourceBoxes));
 $('btnDemo').addEventListener('click', () => {
@@ -2766,7 +2771,7 @@ $('btnPrompt').addEventListener('click', async () => {
   const ok = await copyText(buildPrompt(collectInputs(), lastResult));
   toast(ok ? 'AI prompt copied — paste it into your chatbot' : 'Copy failed — browser blocked clipboard', ok ? 'ok' : 'err');
 });
-$('btnLoadLast').addEventListener('click', () => { window.showTab?.('tokens'); loadLast(false); });
+$('btnLoadLast').addEventListener('click', () => { window.showTab?.('scan'); loadLast(false); });
 ['risk', 'focus', 'source', 'notes', 'account', 'useRug', 'minAgeH', 'maxAgeD'].forEach(id => $(id).addEventListener('change', () => { updateHints(); saveInputsDraft(); }));
 $('pasted').addEventListener('input', () => { updateHints(); saveInputsDraft(); });
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAnalysis(); } });
@@ -4863,7 +4868,7 @@ function tehranAxis(ts, series) {
 function equityChart(series, unit, up) {
   const VB_W = 320, VB_H = 112, padT = 10, padB = 8;
   const vals = series.map(p => equityValue(p, unit));
-  if (!vals.length) return '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No snapshots yet. Burner equity (SOL balance + open positions) is saved every 5 minutes while this page is open, and when a trade closes.</p>';
+  if (!vals.length) return '<p class="text-[11px] text-slate-500 whitespace-normal break-words">No equity snapshots yet.</p>';
   let min = Math.min(...vals), max = Math.max(...vals);
   const pad = (max - min) * 0.12 || Math.abs(max) * 0.02 || 1;
   min -= pad; max += pad;
@@ -5741,7 +5746,7 @@ function renderPortfolio() {
   releaseMedia(el);
   el.innerHTML = `<section id="sec-portfolio">
     ${tradeSegBar()}
-    <div class="trade-tools flex flex-wrap gap-3 text-[12px] text-slate-500 mb-2"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfSync" class="text-slate-300">Sync wallet</button><button id="pfRefresh" class="text-slate-300">Refresh</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div>
+    <div class="trade-tools flex flex-wrap items-center gap-3 text-[12px] text-slate-500 mb-2"><button id="pfSync" class="text-slate-300">Sync wallet</button><button id="pfRefresh" class="text-slate-300">Refresh</button><details><summary class="ui-more">More</summary><div class="mt-2 flex flex-wrap gap-3"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div></details></div>
     ${equityCardHtml()}
     <div class="trade-open">
     ${syncNoteHtml()}
@@ -14532,7 +14537,7 @@ function openTokenSheet(art) {
   });
 }
 function showTab(name) {
-  const names = ['home', 'tokens', 'agents', 'trades', 'settings'];
+  const names = ['home', 'scan', 'tokens', 'agents', 'trades', 'settings'];
   if (!names.includes(name)) name = 'home';
   names.forEach(n => {
     const pane = document.getElementById('tab' + n.charAt(0).toUpperCase() + n.slice(1));
@@ -14566,7 +14571,7 @@ function syncAgentPreview() {
   slot.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.go)));
 }
 function mountApp() {
-  const home = $('tabHome'), tokens = $('tabTokens'), agents = $('tabAgents'), trades = $('tabTrades'), settings = $('tabSettings');
+  const home = $('tabHome'), scan = $('tabScan'), tokens = $('tabTokens'), agents = $('tabAgents'), trades = $('tabTrades'), settings = $('tabSettings');
   if (!home || home.dataset.mounted) return;
   home.dataset.mounted = '1';
   const preview = document.createElement('div');
@@ -14583,7 +14588,7 @@ function mountApp() {
     tokens.appendChild(seg); tokens.appendChild(scalpDesk); tokens.appendChild(desk);
     seg.addEventListener('click', (e) => { const b = e.target.closest('[data-seg]'); if (b) showTokenSeg(b.dataset.seg); });
   }
-  ['emptyState', 'results'].forEach(id => { const n = $(id); if (n && tokens) tokens.appendChild(n); });
+  ['emptyState', 'results'].forEach(id => { const n = $(id); if (n && scan) scan.appendChild(n); });
   if (agents && !$('runDesk')) {
     const desk = document.createElement('section');
     desk.id = 'runDesk';
@@ -14600,10 +14605,9 @@ function mountApp() {
     const search = document.createElement('section');
     search.id = 'mlSearchCard';
     search.className = 'ui-card';
-    search.innerHTML = '<h2 class="ui-h">Search</h2><p class="ui-meta">Paste a mint, DexScreener link, or screener row. Save adds it to My List. Nothing buys until you confirm.</p>';
-    const paste = $('pasted')?.closest('label');
+    search.innerHTML = '<button type="button" data-go="scan" class="ui-more">Open scanner</button>';
     listBox.parentElement.insertBefore(search, listBox);
-    if (paste) search.appendChild(paste);
+    search.querySelector('[data-go]')?.addEventListener('click', () => showTab('scan'));
     const again = document.createElement('section');
     again.id = 'mlAgainCard';
     again.className = 'ui-card ui-list';
@@ -14614,7 +14618,7 @@ function mountApp() {
   const port = $('portfolio'); if (port && trades) trades.appendChild(port);
   if (trades && !$('tradeDegenHost')) { const host = document.createElement('div'); host.id = 'tradeDegenHost'; trades.appendChild(host); }
   if (trades && !$('paperHost')) { const host = document.createElement('div'); host.id = 'paperHost'; trades.appendChild(host); }
-  [['tabTokens', 'Tokens'], ['tabAgents', 'Agents'], ['tabTrades', 'Trades'], ['tabSettings', 'Settings']].forEach(([id, label]) => {
+  [['tabScan', 'Scan'], ['tabTokens', 'Tokens'], ['tabAgents', 'Agents'], ['tabTrades', 'Trades'], ['tabSettings', 'Settings']].forEach(([id, label]) => {
     const pane = $(id); if (!pane || pane.querySelector(':scope > .large-title')) return;
     const h = document.createElement('h1'); h.className = 'large-title'; h.textContent = label; pane.prepend(h);
   });
@@ -14622,7 +14626,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 13:35';
+    stamp.textContent = 'Panel build 2026-11-12 16:40';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -14651,12 +14655,10 @@ function mountApp() {
   document.addEventListener('touchend', () => { if (document.body.classList.contains('pulling')) { try { refreshPrices(); } catch { /* prices later */ } } document.body.classList.remove('pulling'); pullY = 0; });
   const trade = $('tradeCard'); if (trade && settings) settings.appendChild(trade);
   const inputs = $('inputsCard');
-  if (inputs && settings) {
-    const adv = document.createElement('details');
-    adv.id = 'advancedInputs'; adv.className = 'adv';
-    adv.innerHTML = '<summary>Advanced</summary>';
-    settings.appendChild(adv);
-    adv.appendChild(inputs);
+  if (inputs && scan) {
+    const empty = $('emptyState');
+    if (empty && empty.parentElement === scan) scan.insertBefore(inputs, empty);
+    else scan.appendChild(inputs);
   }
   const foot = document.querySelector('footer'); if (foot && settings) settings.appendChild(foot);
   const main = document.querySelector('main'); if (main) main.hidden = true;
@@ -14788,7 +14790,7 @@ window.__smsScanChart = T.openScanChart;
     box-shadow: 0 8px 24px rgba(16,24,40,.08);
   }
   html[data-theme="day"] #tabBar button { background: transparent; color: #6B7280; box-shadow: none; transform: none; }
-  html[data-theme="day"] #tabBar button.on { background: transparent; color: #4F46E5; box-shadow: none; transform: none; width: 52px; height: 52px; min-height: 52px; }
+  html[data-theme="day"] #tabBar button.on { background: transparent; color: #4F46E5; box-shadow: none; transform: none; width: 48px; height: 48px; min-height: 48px; }
   html[data-theme="day"] .large-title,
   html[data-theme="day"] #myListBox .ml-top b,
   html[data-theme="day"] .watch-row b { color: #0B0D12; font-weight: 650; }
