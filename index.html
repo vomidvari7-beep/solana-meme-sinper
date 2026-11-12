@@ -62,34 +62,35 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   }
   html[data-theme="day"] {
     color-scheme: light;
-    --bg: #E6EDF5;
-    --bg-2: #F4F7FB;
-    --card: #F7F9FC;
+    --bg: #F6F7F9;
+    --bg-2: #F6F7F9;
+    --card: #FFFFFF;
     --elev: #FFFFFF;
-    --line: rgba(24,42,72,.12);
-    --accent: #6E94C8;
-    --accent-soft: rgba(110,148,200,.18);
-    --accent-line: rgba(70,104,150,.4);
-    --on-accent: #102033;
-    --up: #2F8A60;
-    --up-soft: rgba(47,138,96,.14);
-    --down: #C4545E;
-    --down-soft: rgba(196,84,94,.14);
-    --text: #1C2A42;
-    --muted: #5C6B82;
-    --amber: #8F7040;
-    --amber-soft: rgba(143,112,64,.16);
-    --gold: #8F7040;
-    --violet: #6E94C8;
-    --emerald: #2F8A60;
-    --rose: #C4545E;
-    --alarm: #A84852;
-    --block: #A85A64;
-    --tab: rgba(255,255,255,.92);
-    --tab-solid: #F7F9FC;
-    --tab-btn: #E3EAF3;
-    --tab-icon: #5C6B82;
-    --shadow: 0 10px 28px rgba(28,42,66,.08);
+    --tile: #F9FAFB;
+    --line: #E6E8EC;
+    --accent: #4F46E5;
+    --accent-soft: rgba(79,70,229,.10);
+    --accent-line: rgba(79,70,229,.28);
+    --on-accent: #FFFFFF;
+    --up: #16A34A;
+    --up-soft: rgba(22,163,74,.12);
+    --down: #DC2626;
+    --down-soft: rgba(220,38,38,.10);
+    --text: #0B0D12;
+    --muted: #6B7280;
+    --amber: #B45309;
+    --amber-soft: rgba(180,83,9,.12);
+    --gold: #B45309;
+    --violet: #4F46E5;
+    --emerald: #16A34A;
+    --rose: #DC2626;
+    --alarm: #DC2626;
+    --block: #DC2626;
+    --tab: #FFFFFF;
+    --tab-solid: #FFFFFF;
+    --tab-btn: transparent;
+    --tab-icon: #6B7280;
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.06);
     --knob: #FFFFFF;
   }
   html[data-theme="day"] .bg-ink-950,
@@ -421,6 +422,14 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     <button id="btnWallet" type="button" class="bal-pill"><span id="appDot" class="dot"></span><span id="btnWalletLabel">Connect</span></button>
   </div>
 </header>
+<div id="updateBanner" hidden>
+  <div class="min-w-0">
+    <b>New version available · Update</b>
+    <span>نسخه جدید · آپدیت</span>
+    <span class="update-note">Reload asks you to confirm. Unlock the wallet again after it opens.</span>
+  </div>
+  <button type="button" id="updateGo">Update</button>
+</div>
 <div id="pullHint">Release to refresh</div>
 <div id="safeBanner" class="safe-banner" hidden>Safe mode is on because the last open did not finish starting. Live scan and 1-second candles are paused. Prices refresh every 3 seconds. Stops on open positions still run. <button type="button" id="safeLeave">Full speed</button></div>
 
@@ -655,7 +664,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 06:58</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 07:31</p>
+  <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -2964,17 +2974,28 @@ initSizeUnit();
 const T_state = { solPrice: null };
 
 /* ---------------- RPC ---------------- */
-async function rpc(method, params, timeout = 15000) {
+async function rpcAt(url, method, params, timeout = 15000) {
   const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), timeout);
   try {
-    const r = await fetch(activeRpc(), { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }) });
+    const r = await fetch(url, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }) });
     const j = await r.json().catch(() => null);
     if (r.status === 429) throw new Error('RPC 429 rate limit');
     if (!r.ok || !j) throw new Error(`RPC HTTP ${r.status}${j?.error?.message ? ': ' + j.error.message : ''}`);
     if (j.error) throw new Error('RPC: ' + (j.error.message || JSON.stringify(j.error)));
     return j.result;
-  } catch (e) { if (e.name === 'AbortError') throw new Error('RPC timeout'); if (/fetch/i.test(e.message)) throw new Error('RPC blocked (CORS/network) — set your own RPC in Settings'); throw e; }
+  } catch (e) { if (e.name === 'AbortError') throw new Error('RPC timeout'); if (/fetch/i.test(String(e.message || e))) throw new Error('RPC blocked (CORS/network) — set your own RPC in Settings'); throw e; }
   finally { clearTimeout(tm); }
+}
+async function rpc(method, params, timeout = 15000) { return rpcAt(activeRpc(), method, params, timeout); }
+const RPC_FALLBACKS = ['https://public.rpc.solanavibestation.com', 'https://api.mainnet-beta.solana.com'];
+async function rpcToken(method, params) {
+  const urls = [...new Set([activeRpc(), ...RPC_FALLBACKS].filter(u => /^https?:\/\//.test(u || '')))];
+  let last = 'RPC failed';
+  for (const url of urls) {
+    try { return await rpcAt(url, method, params); }
+    catch (e) { last = e.message || String(e); }
+  }
+  throw new Error(last);
 }
 const ATA_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
 const mintInfo = new Map(); // mint -> { decimals, program }
@@ -3028,21 +3049,11 @@ async function discoverWalletMints(owner) {
 }
 async function getBalances(owner) {
   const lamports = (await rpc('getBalance', [owner, { commitment: 'confirmed' }])).value;
-  const tokens = new Map(); let indexedOk = !indexedBlocked.has(activeRpc());
-  if (indexedOk) for (const prog of TOKEN_PROGRAMS) {
-    try {
-      const res = await rpc('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-      for (const acc of res.value || []) {
-        const info = acc.account?.data?.parsed?.info; if (!info) continue;
-        const ta = info.tokenAmount; const cur = tokens.get(info.mint);
-        const raw = BigInt(ta.amount || '0') + (cur ? cur.raw : 0n);
-        tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
-        mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
-      }
-    } catch (e) { indexedOk = false; indexedBlocked.add(activeRpc()); tokens.clear(); console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message); break; }
-  }
-  if (!indexedOk) await loadTokenAtas(owner, await discoverWalletMints(owner), tokens);
-  return { sol: lamports / 1e9, lamports, tokens, mode: indexedOk ? 'indexed' : 'ata' };
+  let tokens = null;
+  let tokenErr = '';
+  try { tokens = await listWalletTokens(owner); }
+  catch (e) { tokenErr = e.message || 'Wallet token read failed'; }
+  return { sol: lamports / 1e9, lamports, tokens: tokens || new Map(), tokenErr, mode: tokenErr ? 'error' : 'tokens' };
 }
 const STABLE_MINTS = new Set([
   'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
@@ -3057,26 +3068,28 @@ function isStableMint(mint, symbol) {
 }
 async function listWalletTokens(owner) {
   const tokens = new Map();
-  if (!indexedBlocked.has(activeRpc())) {
-    try {
-      for (const prog of TOKEN_PROGRAMS) {
-        const res = await rpc('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
-        for (const acc of res.value || []) {
-          const info = acc.account?.data?.parsed?.info; if (!info) continue;
-          const ta = info.tokenAmount; const cur = tokens.get(info.mint);
-          const raw = BigInt(ta.amount || '0') + (cur ? cur.raw : 0n);
-          tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
-          mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
-        }
+  let indexedErr = '';
+  try {
+    for (const prog of TOKEN_PROGRAMS) {
+      const res = await rpcToken('getTokenAccountsByOwner', [owner, { programId: prog }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+      for (const acc of res.value || []) {
+        const info = acc.account?.data?.parsed?.info; if (!info) continue;
+        const ta = info.tokenAmount; const cur = tokens.get(info.mint);
+        const raw = BigInt(ta.amount || '0') + (cur ? cur.raw : 0n);
+        tokens.set(info.mint, { raw, decimals: ta.decimals, ui: Number(raw) / 10 ** ta.decimals, program: prog });
+        mintInfo.set(info.mint, { decimals: ta.decimals, program: prog });
       }
-      return tokens;
-    } catch (e) {
-      indexedBlocked.add(activeRpc());
-      tokens.clear();
-      console.info('Indexed token query unavailable on this RPC, using ATA lookups:', e.message);
     }
+    if (tokens.size) return tokens;
+  } catch (e) {
+    indexedErr = e.message || String(e);
+    indexedBlocked.add(activeRpc());
+    tokens.clear();
   }
-  return loadTokenAtas(owner, await discoverWalletMints(owner), tokens);
+  try { await loadTokenAtas(owner, await discoverWalletMints(owner), tokens); }
+  catch (e) { throw new Error(indexedErr || e.message || 'Wallet token read failed'); }
+  if (!tokens.size && indexedErr) throw new Error(indexedErr);
+  return tokens;
 }
 function txTokenDelta(tx, owner, mint) {
   const sum = (arr) => (arr || []).filter(b => b && b.owner === owner && b.mint === mint).reduce((s, b) => s + (+b.uiTokenAmount?.uiAmountString || +b.uiTokenAmount?.uiAmount || 0), 0);
@@ -3117,6 +3130,26 @@ async function latestWalletBuys(owner, mints) {
   return found;
 }
 let walletSyncBusy = false;
+let walletSyncNote = '';
+function holdingIsDegen(mint) {
+  try { if ((DEGEN.picks || []).some(p => p && p.mint === mint)) return true; } catch { /* picks not loaded */ }
+  return LOG.some(r => r && r.mint === mint && r.status === 'confirmed' && (r.degen || r.plan?.degen));
+}
+function alignRecoveredBooks() {
+  let changed = false;
+  for (const r of LOG) {
+    if (!r || r.side !== 'buy' || !(r.recovered || r.plan?.recovered)) continue;
+    if (!holdingIsDegen(r.mint) || r.degen) continue;
+    r.degen = true;
+    r.myList = false;
+    r.plan = Object.assign(degenPlan(null, r.priceUsd), { recovered: true, strat: 'recovered from wallet' });
+    changed = true;
+  }
+  if (changed) saveLog();
+}
+function syncNoteHtml() {
+  return walletSyncNote ? `<p class="empty-note" style="color:var(--down)">${esc(walletSyncNote)}</p>` : '';
+}
 async function syncWalletHoldings(opt) {
   const quiet = !!(opt && opt.quiet);
   const owner = WALLETS.burner?.pubkey;
@@ -3170,28 +3203,36 @@ async function syncWalletHoldings(opt) {
       if (recoveredOnly) priceUsd = mark;
       if (!(priceUsd > 0)) continue;
       const solAmount = buy && buy.tokens > 0 ? (buy.sol / buy.tokens) * bag.ui : (solPx > 0 ? priceUsd * bag.ui / solPx : 0);
+      const asDegen = holdingIsDegen(mint);
+      const plan = asDegen
+        ? Object.assign(degenPlan(null, priceUsd), { recovered: true, strat: 'recovered from wallet' })
+        : { myList: true, recovered: true, strat: 'recovered from wallet', stop: priceUsd * 0.85, exit: { stopPct: 15, stopPx: priceUsd * 0.85, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } };
       logTrade({
         id: 'rec' + mint.slice(0, 8) + (buy?.ts || Date.now()),
         ts: buy?.ts || Date.now(),
         blockTime: buy?.ts ? Math.round(buy.ts / 1000) : 0,
-        wallet: 'burner', auto: true, side: 'buy', mint, symbol,
+        wallet: 'burner', auto: false, side: 'buy', mint, symbol,
         solAmount, tokenAmount: bag.ui, priceUsd, solUsd: solPx || null,
         status: 'confirmed', fill: recoveredOnly ? 'recovered' : 'chain',
         signature: buy?.sig || '',
-        entryReason: recoveredOnly ? 'recovered from wallet · recovered' : 'recovered from wallet',
-        myList: true, recovered: true,
-        plan: { myList: true, recovered: true, strat: 'recovered from wallet', stop: priceUsd * 0.85, exit: { stopPct: 15, stopPx: priceUsd * 0.85, tps: [{ gainPct: 30, sellPct: 100 }], beAtPct: null, trailAtPct: null, trailPct: null } }
+        entryReason: 'recovered from wallet',
+        myList: !asDegen, degen: asDegen, recovered: true,
+        plan
       });
       added++;
       names.push(symbol);
     }
+    alignRecoveredBooks();
+    walletSyncNote = '';
     renderWallet();
     renderPortfolio();
     if (added && burnerReady() && typeof myListExits === 'function') await myListExits();
     const msg = added ? 'Recovered ' + added + ': ' + names.join(', ') : 'Wallet synced · nothing new to recover';
     if (!quiet || added) toast(msg, 'ok', 8000);
   } catch (e) {
-    if (!quiet) toast(e.message || 'Wallet sync failed', 'err', 7000);
+    walletSyncNote = e.message || 'Wallet sync failed';
+    renderPortfolio();
+    if (!quiet) toast(walletSyncNote, 'err', 7000);
   } finally { walletSyncBusy = false; }
 }
 const decCache = { get: (m) => m === WSOL ? 9 : mintInfo.get(m)?.decimals };
@@ -3335,7 +3376,7 @@ function setActive(k) { if (!WALLETS[k]) return; activeKey = k; save('sms:active
 async function refreshBalances(which) {
   const keys = which ? [which] : Object.keys(WALLETS);
   await Promise.all(keys.map(async k => { const w = WALLETS[k]; if (!w.pubkey) return;
-    try { const b = await getBalances(w.pubkey); w.sol = b.sol; w.tokens = b.tokens; w.err = null; if (k === 'burner') rememberBurnerSol(b.sol); }
+    try { const b = await getBalances(w.pubkey); w.sol = b.sol; if (!b.tokenErr) w.tokens = b.tokens; w.err = b.tokenErr || null; if (k === 'burner') { rememberBurnerSol(b.sol); if (b.tokenErr) walletSyncNote = b.tokenErr; } }
     catch (e) { w.err = e.message; } }));
   if (!which || which === 'burner') recordEquity(false);
   renderWallet(); hydrate(); renderPortfolio(); renderBurner();
@@ -3378,7 +3419,7 @@ function tradeBuyTs(r) {
   return r?.ts || 0;
 }
 function blankPos(k, r) {
-  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: tradeBuyTs(r), tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, manual: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, scalp: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null, buyTsSet: false };
+  return { key: k, wallet: r.wallet, mint: r.mint, symbol: r.symbol, bought: 0, sold: 0, costUsd: 0, costSol: 0, plan: null, firstTs: tradeBuyTs(r), tp1Done: false, tp2Done: false, tpDone: {}, high: null, auto: false, manual: false, copy: false, copyState: null, sniper: false, myList: false, degen: false, recovered: false, scalp: false, closed: false, scaleI: 0, scaleOf: 0, lastBuyPx: null, buyTsSet: false };
 }
 function profileStopPct() {
   let pct = 20;
@@ -3425,6 +3466,7 @@ function positions() {
       if (r.manual) p.manual = true;
       if (r.sniper) p.sniper = true;
       if (r.degen || r.plan?.degen) p.degen = true;
+      if (r.recovered || r.plan?.recovered) p.recovered = true;
       if (r.scalp || r.plan?.scalp) p.scalp = true;
       if (r.myList || r.plan?.myList) p.myList = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
@@ -3438,6 +3480,7 @@ function positions() {
       if (r.myList || r.plan?.myList) p.myList = true;
       if (r.sniper) p.sniper = true;
       if (r.degen || r.plan?.degen) p.degen = true;
+      if (r.recovered || r.plan?.recovered) p.recovered = true;
       if (r.scalp || r.plan?.scalp) p.scalp = true;
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
     }
@@ -5387,8 +5430,8 @@ function renderPortfolio() {
   const ae = document.activeElement;
   if (posDragging) return;
   if (ae && ae.closest && ae.closest('[data-pos-edit]') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
-  const pos = positions(); const open = pos.filter(p => p.open && !p.degen && !p.scalp); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
-  const portSig = [tradeSeg, posTableView ? 1 : 0, equityRange, wealthUnit, closedRange, closedSrc, posEditKey || '', LOG.length, open.map(p => {
+  const pos = positions(); const open = pos.filter(p => p.open && !p.scalp && (!p.degen || p.recovered)); const anyW = WALLETS.phantom.pubkey || WALLETS.burner.pubkey;
+  const portSig = [tradeSeg, posTableView ? 1 : 0, equityRange, wealthUnit, closedRange, closedSrc, posEditKey || '', anyW ? 1 : 0, walletSyncNote, LOG.length, open.map(p => {
     const lp = livePrices.get(p.mint)?.price;
     const s = levelState(p);
     const bucket = lp > 0 ? Math.round(Math.log(lp) * 50) : 0;
@@ -5400,7 +5443,8 @@ function renderPortfolio() {
     el.dataset.view = tradeSeg;
     el.dataset.mem = portSig;
     releaseMedia(el);
-    el.innerHTML = `<section id="sec-portfolio">${tradeSegBar()}${equityCardHtml()}<div class="trade-open"><p class="empty-note">No open positions. Buys you confirm show up here with entry, stop, and P&amp;L.</p></div><div class="trade-closed"><p class="empty-note">No closed trades yet.</p></div></section>`;
+    el.innerHTML = `<section id="sec-portfolio">${tradeSegBar()}<div class="trade-tools mb-2"><button type="button" id="pfSync" class="text-[13px] font-semibold">Sync wallet</button></div>${syncNoteHtml()}${equityCardHtml()}<div class="trade-open"><p class="empty-note">No open positions. Buys you confirm show up here with entry, stop, and P&amp;L.</p></div><div class="trade-closed"><p class="empty-note">No closed trades yet.</p></div></section>`;
+    $('pfSync')?.addEventListener('click', () => { syncWalletHoldings(); });
     el.querySelectorAll('[data-tradeseg]').forEach(b => b.addEventListener('click', () => applyTradeSeg(b.dataset.tradeseg)));
     el.querySelectorAll('[data-eqrange]').forEach(b => b.addEventListener('click', () => { equityRange = b.dataset.eqrange; try { localStorage.setItem('sms:equityrange', equityRange); } catch { /* ignore */ } renderPortfolio(); }));
     $('wealthUsd')?.addEventListener('click', () => { wealthUnit = 'usd'; try { localStorage.setItem('sms:wealthunit', 'usd'); } catch { /* ignore */ } renderPortfolio(); });
@@ -5434,6 +5478,7 @@ function renderPortfolio() {
     <div class="trade-tools flex flex-wrap gap-3 text-[12px] text-slate-500 mb-2"><button id="pfView" class="text-slate-300">${posTableView ? 'Cards' : 'Table'}</button><button id="pfSync" class="text-slate-300">Sync wallet</button><button id="pfRefresh" class="text-slate-300">Refresh</button><button id="pfCsv" class="text-slate-300">CSV</button><button id="pfClear" class="text-rose-300">Clear log</button></div>
     ${equityCardHtml()}
     <div class="trade-open">
+    ${syncNoteHtml()}
     <div class="text-[12px] text-slate-500 mb-2 num">Open ${open.length}/${maxPos()} · today ${solWithUsd(spentToday(mainBookFill))}</div>
     ${open.length ? (posTableView ? (open.filter(p => p.key === posEditKey).map(posEditHtml).join('') + table) : `<div class="space-y-3">${cards}</div>`) : '<p class="empty-note">No open positions. Buys you confirm show up here with entry, stop, and P&amp;L.</p>'}
     </div>
@@ -8522,6 +8567,7 @@ function applyDegenDoc(data) {
   DEGEN.error = '';
   absorbHunterVetoes(body.picks);
   absorbHunterRemoved(body.picks);
+  try { alignRecoveredBooks(); } catch { /* recovery book later */ }
   return body.picks;
 }
 let agentTip = { sha: '', at: 0 };
@@ -14106,7 +14152,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 06:58';
+    stamp.textContent = 'Panel build 2026-11-12 07:31';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -14244,5 +14290,213 @@ window.__smsScanChart = T.openScanChart;
   }
   .block-note { color: var(--block) !important; }
 </style>
+<style id="day-polish">
+  html[data-theme="day"] body { background: #F6F7F9; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  html[data-theme="day"] .glass,
+  html[data-theme="day"] .hero-card,
+  html[data-theme="day"] .status-row,
+  html[data-theme="day"] #myListBox .ml-cards > article,
+  html[data-theme="day"] #degenDesk .deg-picks > article,
+  html[data-theme="day"] .hunt-status,
+  html[data-theme="day"] .safe-banner,
+  html[data-theme="day"] .toast-card {
+    background: #fff;
+    border: 1px solid #E6E8EC;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.05);
+  }
+  html[data-theme="day"] .appbar {
+    background: rgba(255,255,255,.94);
+    border-bottom-color: #E6E8EC;
+  }
+  html[data-theme="day"] .app-mark { border-radius: 8px; box-shadow: 0 0 0 1px #E6E8EC; }
+  html[data-theme="day"] .bal-pill { background: #fff; border: 1px solid #E6E8EC; color: #0B0D12; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+  html[data-theme="day"] #tabBar {
+    background: #fff;
+    border: 1px solid #E6E8EC;
+    box-shadow: 0 8px 24px rgba(16,24,40,.08);
+  }
+  html[data-theme="day"] #tabBar button { background: transparent; color: #6B7280; box-shadow: none; transform: none; }
+  html[data-theme="day"] #tabBar button.on { background: transparent; color: #4F46E5; box-shadow: none; transform: none; width: 52px; height: 52px; min-height: 52px; }
+  html[data-theme="day"] .large-title,
+  html[data-theme="day"] #myListBox .ml-top b,
+  html[data-theme="day"] .watch-row b { color: #0B0D12; font-weight: 650; }
+  html[data-theme="day"] #myListBox .ml-top b { font-size: 17px; }
+  html[data-theme="day"] #myListBox .ml-name,
+  html[data-theme="day"] #myListBox .ml-rule,
+  html[data-theme="day"] .sec-title { color: #6B7280; }
+  html[data-theme="day"] #myListBox .ml-px .num,
+  html[data-theme="day"] .watch-row .row-px .num,
+  html[data-theme="day"] .hero-num { color: #0B0D12; font-variant-numeric: tabular-nums; }
+  html[data-theme="day"] #myListBox .ml-px .num { font-size: 17px; font-weight: 650; }
+  html[data-theme="day"] .chg-pill { min-height: 22px; padding: 2px 8px; font-size: 12px; font-weight: 650; }
+  html[data-theme="day"] .ml-grid { gap: 12px; }
+  html[data-theme="day"] .ml-lv,
+  html[data-theme="day"] .hunt-tile,
+  html[data-theme="day"] .hunt-cell,
+  html[data-theme="day"] .hunt-plan {
+    background: #F9FAFB;
+    border: 1px solid #E6E8EC;
+    border-radius: 12px;
+    min-height: 64px;
+    box-shadow: none;
+  }
+  html[data-theme="day"] .ml-lv span,
+  html[data-theme="day"] .hunt-tile span,
+  html[data-theme="day"] .hunt-cell span { font-size: 11px; letter-spacing: .04em; color: #6B7280; }
+  html[data-theme="day"] .ml-lv b {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 650;
+    color: #0B0D12;
+  }
+  html[data-theme="day"] .ml-grid .ml-lv:nth-child(2) b { color: #DC2626; }
+  html[data-theme="day"] .ml-grid .ml-lv:nth-child(3) b { color: #16A34A; }
+  html[data-theme="day"] #myListBox .ml-ring .bg,
+  html[data-theme="day"] #degenDesk .ml-ring .bg { stroke: #E6E8EC; }
+  html[data-theme="day"] .ml-pill,
+  html[data-theme="day"] .start-check b,
+  html[data-theme="day"] .deg-chip,
+  html[data-theme="day"] .hunt-score,
+  html[data-theme="day"] .hunt-chip,
+  html[data-theme="day"] .setup-chip {
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+  }
+  html[data-theme="day"] .seg {
+    background: #EEF0F3;
+    border: 0;
+    box-shadow: none;
+    padding: 4px;
+  }
+  html[data-theme="day"] .seg button { color: #6B7280; background: transparent; min-height: 44px; border-radius: 999px; }
+  html[data-theme="day"] .seg button.on {
+    background: #fff;
+    color: #0B0D12;
+    box-shadow: 0 1px 2px rgba(16,24,40,.08), 0 4px 12px rgba(16,24,40,.06);
+  }
+  html[data-theme="day"] button.bg-violet-600,
+  html[data-theme="day"] button.bg-violet-500,
+  html[data-theme="day"] button.bg-emerald-500,
+  html[data-theme="day"] button.bg-emerald-600,
+  html[data-theme="day"] .btn-primary,
+  html[data-theme="day"] [data-mb-buy],
+  html[data-theme="day"] [data-ml-buy],
+  html[data-theme="day"] #mlAdd {
+    background: #4F46E5 !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    min-height: 44px;
+  }
+  html[data-theme="day"] #myListBox [data-ml-chart-toggle]:not([data-ml-buy]) {
+    background: #fff;
+    color: #0B0D12;
+    border: 1px solid #E6E8EC;
+  }
+  html[data-theme="day"] .kill-head,
+  html[data-theme="day"] #aKill,
+  html[data-theme="day"] #pfClear,
+  html[data-theme="day"] #btnClear,
+  html[data-theme="day"] #bDelete {
+    color: #DC2626 !important;
+  }
+  html[data-theme="day"] .kill-head,
+  html[data-theme="day"] #aKill {
+    background: #DC2626 !important;
+    color: #fff !important;
+    border-color: #DC2626 !important;
+  }
+  html[data-theme="day"] input:not([type=checkbox]):not([type=radio]),
+  html[data-theme="day"] select,
+  html[data-theme="day"] textarea { background: #fff; border-color: #E6E8EC; color: #0B0D12; }
+  html[data-theme="day"] .empty-note { border-color: #E6E8EC; background: #fff; color: #6B7280; }
+  html[data-theme="day"] .watch-row,
+  html[data-theme="day"] .bot-row { border-bottom-color: #E6E8EC; }
+  html[data-theme="day"] .sheet-grab { background: #E6E8EC; }
+  html[data-theme="day"] #checkUpdate { background: #fff; color: #0B0D12; border-color: #E6E8EC; }
+</style>
+<style id="update-notice">
+  #updateBanner { position: fixed; z-index: 58; left: 16px; right: 16px; top: calc(60px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--elev); color: var(--text); box-shadow: var(--shadow); }
+  #updateBanner[hidden] { display: none !important; }
+  #updateBanner b { display: block; font-size: 13px; font-weight: 700; }
+  #updateBanner span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+  #updateBanner .update-note { font-size: 11px; }
+  #updateBanner button { flex: 0 0 auto; min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 700; }
+  body.lock-warn #updateBanner { top: calc(60px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
+</style>
+<script>
+(function () {
+  var running = '';
+  var remote = '';
+  var busy = false;
+  function stampOf(text) {
+    var m = String(text || '').match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+    return m ? m[1] + ' ' + m[2] : '';
+  }
+  function keyOf(stamp) { return stamp ? stamp.replace(/\D/g, '') : ''; }
+  function newer(next, cur) {
+    var a = keyOf(next), b = keyOf(cur);
+    return !!(a && b && a > b);
+  }
+  function standalone() {
+    try {
+      if (window.navigator.standalone) return true;
+      return window.matchMedia('(display-mode: standalone)').matches;
+    } catch (e) { return false; }
+  }
+  function banner(show) {
+    var el = document.getElementById('updateBanner');
+    if (!el) return;
+    el.hidden = !show;
+  }
+  function reloadTo(stamp) {
+    var note = 'This reloads the panel. Unlock the wallet again after it opens.';
+    if (!window.confirm(note)) return;
+    var url = new URL(location.href);
+    url.searchParams.set('v', String(stamp || Date.now()).replace(/\s+/g, 'T'));
+    location.replace(url.toString());
+  }
+  function readRemote() {
+    var url = new URL('index.html', location.href);
+    url.searchParams.set('t', String(Date.now()));
+    return fetch(url.toString(), { cache: 'no-store' }).then(function (res) {
+      if (!res.ok) throw new Error('update check ' + res.status);
+      return res.text();
+    }).then(function (html) { return stampOf(html); });
+  }
+  function check() {
+    if (busy) return Promise.resolve('');
+    busy = true;
+    return readRemote().then(function (found) {
+      remote = found || '';
+      banner(newer(remote, running));
+      return remote;
+    }).catch(function () { return ''; }).then(function (found) { busy = false; return found; });
+  }
+  function boot() {
+    running = stampOf((document.getElementById('panelBuild') || {}).textContent || '');
+    var go = document.getElementById('updateGo');
+    if (go) go.addEventListener('click', function () { if (remote) reloadTo(remote); });
+    var manual = document.getElementById('checkUpdate');
+    if (manual) manual.addEventListener('click', function () {
+      check().then(function (found) {
+        if (found && newer(found, running)) { reloadTo(found); return; }
+        reloadTo(found || running || 'refresh');
+      });
+    });
+    if (!standalone()) return;
+    check();
+    setInterval(function () { if (!document.hidden) check(); }, 60000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) check();
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
 </body>
 </html>
