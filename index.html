@@ -278,6 +278,20 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   #degenDesk .deg-exit summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; list-style: none; font-size: 12px; font-weight: 700; color: var(--muted); }
   #degenDesk .deg-exit summary::-webkit-details-marker { display: none; }
   #degenDesk .deg-note { margin: 8px 0 0; font-size: 12px; font-weight: 650; line-height: 1.35; color: var(--down); }
+  #degenDesk .deg-fresh { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+  #degenDesk .deg-age { display: inline-flex; align-items: center; margin-left: 6px; min-height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  #degenDesk .deg-age-ok { color: var(--up); background: var(--up-soft); }
+  #degenDesk .deg-age-amber { color: #B45309; background: rgba(180,83,9,.14); }
+  #degenDesk .deg-age-red { color: var(--down); background: var(--down-soft); }
+  #degenDesk .deg-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  #degenDesk .deg-metrics span, #degenCard .deg-metrics span { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  #degenDesk .deg-metrics b, #degenCard .deg-metrics b { display: block; margin-top: 2px; font-size: 20px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+  #degenCard .deg-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  #degenDesk .deg-row { padding: 10px 0; border-top: 1px solid var(--line); }
+  #degenDesk .deg-reason { margin: 6px 0 0; font-size: 13px; line-height: 1.4; color: var(--text); }
+  #degenDesk .deg-kicker { margin: 16px 0 8px; font-size: 13px; font-weight: 650; color: var(--text); }
+  #degenDesk .deg-tp { margin: 8px 0 0; font-size: 13px; line-height: 1.4; color: var(--text); }
+  #degenDesk .deg-count { margin: 8px 0 0; font-size: 13px; font-weight: 650; color: var(--text); }
   .bot-skip { margin: 2px 0 0; max-width: 100%; font-size: 11px; font-weight: 500; line-height: 1.25; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bot-skip-ok { color: var(--up); }
   .row-px { flex: 0 0 auto; min-width: 92px; text-align: right; }
@@ -664,7 +678,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 07:31</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 07:58</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
@@ -9003,6 +9017,16 @@ function degenCountdown(exp) {
   if (h < 48) return h + 'h ' + (m % 60) + 'm';
   return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
 }
+function degenFileAge() {
+  const when = DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—');
+  const ms = DEGEN.updatedAt || 0;
+  if (!(ms > 0)) return { when, label: '—', cls: 'deg-age' };
+  const age = Math.max(0, Date.now() - ms);
+  const min = Math.round(age / 60000);
+  const label = min < 60 ? min + 'm' : Math.floor(min / 60) + 'h ' + (min % 60) + 'm';
+  const cls = 'deg-age ' + (age >= 30 * 60e3 ? 'deg-age-red' : age >= 15 * 60e3 ? 'deg-age-amber' : 'deg-age-ok');
+  return { when, label, cls };
+}
 function degenStatus(pick, px) {
   const exp = degenExpiry(pick?.expires);
   if (exp && exp < Date.now()) return 'EXPIRED';
@@ -9402,32 +9426,38 @@ function renderDegen() {
   const pnlCls = eq.pnl > 0 ? 'text-emerald-300' : eq.pnl < 0 ? 'text-rose-300' : 'text-slate-300';
   const pnlTxt = signedUsd(eq.pnl, false) + ' · ' + pct(eq.pct);
   const open = openPositions().filter(p => p.degen);
-  const rounds = degenRounds().filter(c => isNum(c.pnlUsd));
-  const wins = rounds.filter(c => c.pnlUsd > 0).length;
-  const wr = rounds.length ? Math.round(wins / rounds.length * 100) + '%' : '—';
   const halted = false;
   const openTxt = open.length + '/' + cfg.maxOpen;
-  const potLine = 'Pot ' + usd(cfg.budgetUsd, 2) + ' · size ' + usd(cfg.tradeUsd, 2) + ' · open ' + openTxt + ' · trades today ' + degenTradesToday();
   const fundsShort = degenLedgerShort();
-  const readS = DEGEN.fetched ? Math.max(0, Math.round((Date.now() - DEGEN.fetched) / 1000)) : null;
-  const stamp = (DEGEN.updatedTehran || (DEGEN.updatedAt ? tehranClock(DEGEN.updatedAt) + ' Tehran' : '—')) + (readS == null ? '' : ' · read ' + readS + 's ago');
   const removedTxt = Object.values(degenRemovedBook().removed).map(r => r && r.symbol).filter(Boolean).slice(0, 8).join(', ');
-  const stats = `<button type="button" data-open-degen class="hero-card w-full text-left">
-    <div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
-    <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Balance</div><div class="font-mono text-lg">${usd(eq.equity, 2)}</div><div class="text-[10px] text-slate-500">open positions valued live</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Start</div><div class="font-mono text-lg">${usd(eq.book.startUsd, 2)}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L vs start</div><div class="font-mono ${pnlCls}">${pnlTxt}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div><div class="text-[10px] text-slate-500">win ${wr}</div></div>
+  const lockQ = typeof degenLockQuote === 'function' ? degenLockQuote() : null;
+  const freeSol = lockQ && isNum(WALLETS.burner?.sol) ? Math.max(0, WALLETS.burner.sol - solKeep() - lockQ.reserved - vaultSol()) : null;
+  const freeTxt = freeSol == null ? '—' : freeSol.toFixed(3);
+  const age = degenFileAge();
+  const potHead = `<div class="flex items-center justify-between gap-2"><div class="text-[13px] font-semibold">Degen pot <span class="fa text-[12px] text-slate-400">شکارچی وحشی</span></div><span class="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100">${cfg.on ? (halted ? 'loss stop' : 'ON') : 'OFF'}</span></div>
+    <p class="deg-fresh">${esc(age.when)} <span class="${age.cls}">${esc(age.label)}</span></p>
+    <div class="deg-metrics">
+      <div><span>Balance</span><b>${usd(eq.equity, 2)}</b></div>
+      <div><span>P&amp;L vs start</span><b class="${pnlCls}">${pnlTxt}</b></div>
+      <div><span>Open</span><b>${esc(openTxt)}</b></div>
+      <div><span>Free SOL</span><b>${esc(freeTxt)}</b></div>
     </div>
-    <p class="mt-2 text-[12px] text-slate-300">${esc(potLine)}</p>
-    <p class="mt-1 font-mono text-[12px] text-slate-300" data-degen-lock>${esc(degenLockStatus())}</p>
+    <p class="mt-2 text-[12px] text-slate-300" data-degen-lock>${esc(degenLockStatus())}</p>
     ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
     ${removedTxt ? `<p class="block-note mt-2 text-[11px] font-semibold whitespace-normal break-words">Blocked: removed by Hunter — ${esc(removedTxt)}</p>` : ''}
-    ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}
-  </button>`;
+    ${DEGEN.note || DEGEN.error ? `<p class="mt-2 text-[11px] text-slate-400 whitespace-normal break-words">${esc(DEGEN.error || DEGEN.note)}</p>` : ''}`;
+  const stats = `<button type="button" data-open-degen class="hero-card w-full text-left">${potHead}</button>`;
   const statusCls = { READY: 'ready', WATCH: 'wait', EXPIRED: 'block', 'ABOVE MAX': 'block' };
-  const picks = (DEGEN.picks || []).map(pick => {
+  const confRing = (confN) => {
+    if (confN == null) return '<span class="ml-ring"><b>—</b></span>';
+    const p = Math.max(0, Math.min(100, confN));
+    const c = 87.96;
+    const d = (p / 100) * c;
+    return `<span class="ml-ring" aria-label="Confidence ${confN}"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="bg" cx="18" cy="18" r="14"/><circle class="fg" cx="18" cy="18" r="14" style="stroke-dasharray:${d.toFixed(2)} ${c.toFixed(2)}"/></svg><b>${confN}</b></span>`;
+  };
+  const signalCards = [];
+  const watchRows = [];
+  for (const pick of (DEGEN.picks || [])) {
     const q = (DEGEN.quotes || {})[pick.mint] || {};
     const px = isNum(q.price) ? q.price : livePrices.get(pick.mint)?.price;
     const st = degenStatus(pick, px);
@@ -9439,39 +9469,49 @@ function renderDegen() {
     const stopRef = hasOrder ? maxPx : (isNum(px) && px > 0 ? px : null);
     const stopPx = +pick.stop > 0 ? +pick.stop : (stopRef ? degenStopPx(stopRef, pick.stop_pct) : null);
     const exp = degenExpiry(pick.expires);
-    const expTxt = exp ? tehranClock(exp) + ' · ' + degenCountdown(exp) : '—';
+    const left = degenCountdown(exp);
     const confN = isNum(+pick.confidence) ? Math.round(+pick.confidence) : null;
-    const ring = confN == null ? '<span class="ml-ring"><b>—</b></span>' : (() => { const p = Math.max(0, Math.min(100, confN)); const c = 87.96; const d = (p / 100) * c; return `<span class="ml-ring" aria-label="Confidence ${confN}"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="bg" cx="18" cy="18" r="14"/><circle class="fg" cx="18" cy="18" r="14" style="stroke-dasharray:${d.toFixed(2)} ${c.toFixed(2)}"/></svg><b>${confN}</b></span>`; })();
-    const source = pick.dex ? String(pick.dex) : 'Hunter';
-    const row = degenLastBlock(pick.mint);
+    const ring = confRing(confN);
+    const block = degenLastBlock(pick.mint);
     const liveSt = hunterRemoved(pick.mint) ? { state: 'blocked', reason: 'removed by Hunter', at: Date.now() } : (DEGEN.pickState && DEGEN.pickState[pick.mint]);
-    const noteAt = row && row.at ? row.at : (liveSt && liveSt.at) || 0;
-    const noteWhy = row && row.reason ? row.reason : (liveSt && liveSt.reason) || '';
+    const noteAt = block && block.at ? block.at : (liveSt && liveSt.at) || 0;
+    const noteWhy = block && block.reason ? block.reason : (liveSt && liveSt.reason) || '';
     const noteFresh = noteWhy && noteAt && Date.now() - noteAt < 60000 && !/buy pass still running|unlocked ok/i.test(noteWhy);
     const note = noteFresh ? (noteWhy === 'bought' ? 'Bought' : noteWhy) : '';
-    const order = hasOrder ? `<div class="ml-grid">
+    const signal = pick.entry_now === true || pick.entry_now === 'true';
+    if (!signal) {
+      watchRows.push(`<article class="deg-row">
+        <div class="flex items-center gap-2">
+          ${logoHtml(pick.mint, pick.symbol, 2)}
+          <span class="min-w-0 flex-1"><b class="block truncate text-[16px]">${esc(pick.symbol || short(pick.mint))}</b><span class="block truncate text-[12px] text-slate-500">mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
+          ${ring}
+        </div>
+        <p class="deg-reason">${esc(pick.reason || '—')}</p>
+        ${note ? `<p class="deg-note">${esc(note)}</p>` : ''}
+      </article>`);
+      continue;
+    }
+    const order = hasOrder ? `<div class="deg-order"><h4>Entry order</h4><div class="ml-grid">
         <div class="ml-lv"><span>Max entry</span><b>${priceHtml(maxPx)}</b></div>
         <div class="ml-lv"><span>Now</span><b data-live-mint="${esc(pick.mint)}">${isNum(px) ? priceHtml(px) : '—'}</b></div>
         <div class="ml-lv"><span>To entry</span><b>${esc(distTxt)}</b></div>
         <div class="ml-lv"><span>Stop</span><b>${stopPx ? priceHtml(stopPx) : '—'}</b></div>
-        <div class="ml-lv" style="grid-column:1 / -1"><span>Expires · Tehran</span><b>${esc(expTxt)}</b></div>
-      </div>` : '<p class="text-[13px] font-semibold text-slate-300">No entry order</p>';
-    return `<article>
+      </div></div>` : '';
+    signalCards.push(`<article>
       <div class="flex items-center gap-2">
         ${logoHtml(pick.mint, pick.symbol, 2)}
-        <span class="min-w-0 flex-1"><b class="block truncate text-[16px]">${esc(pick.symbol || short(pick.mint))}</b><span class="block truncate text-[12px] text-slate-500">${esc(degenAgeLabel(pick.age_h))} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
+        <span class="min-w-0 flex-1"><b class="block truncate text-[17px]">${esc(pick.symbol || short(pick.mint))}</b><span class="block truncate text-[12px] text-slate-500">${esc(degenAgeLabel(pick.age_h))} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
         ${ring}
       </div>
-      <div class="deg-order"><h4>Entry order</h4>${order}</div>
-      <div class="ml-pills">
-        <span class="ml-pill ${statusCls[st] || 'wait'}">${esc(st)}</span>
-        <span class="ml-pill rule">${esc(source)}</span>
-      </div>
-      ${pick.tp_plan ? `<details class="deg-exit"><summary>Exit rules</summary><p class="text-[12px] text-slate-400 whitespace-normal break-words">${esc(pick.tp_plan)}</p></details>` : ''}
+      ${order}
+      ${pick.tp_plan ? `<p class="deg-tp">${esc(pick.tp_plan)}</p>` : ''}
+      <p class="deg-count">Expires ${left ? esc(left) : '—'}${exp ? ' · ' + esc(tehranClock(exp)) + ' Tehran' : ''}</p>
+      <div class="ml-pills"><span class="ml-pill ${statusCls[st] || 'wait'}">${esc(st)}</span></div>
       ${note ? `<p class="deg-note">${esc(note)}</p>` : ''}
-      ${pick.reason ? `<details class="deg-exit"><summary>Why this pick</summary><p class="text-[12px] text-slate-400 whitespace-normal break-words">${esc(pick.reason)}</p></details>` : ''}
-    </article>`;
-  }).join('');
+    </article>`);
+  }
+  const picks = signalCards.join('');
+  const watchHtml = watchRows.join('');
   const posHtml = open.map(p => {
     const lp = livePrices.get(p.mint)?.price;
     const money = posMoney(p, lp);
@@ -9502,7 +9542,7 @@ function renderDegen() {
       <button type="button" data-degen-sell="${esc(p.mint)}" class="mt-2 rounded-xl border border-rose-400/40 px-3 text-[12px] font-semibold text-rose-200" style="min-height:44px">Sell</button>
     </article>`;
   }).join('');
-  const closed = degenRounds().slice().sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0)).slice(0, 20).map(c => {
+  const closed = degenRounds().slice().sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0)).slice(0, 5).map(c => {
     const cls = isNum(c.pnlUsd) && c.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300';
     return `<article class="border-b border-white/10 py-2 text-[12px]">
       <div class="flex items-center justify-between gap-2"><b>${esc(c.symbol || short(c.mint))}</b><span class="${cls} font-mono">${isNum(c.pnlUsd) ? (c.pnlUsd >= 0 ? '+' : '') + usd(c.pnlUsd, 2) : '—'} · ${pct(c.pnlPct)}</span></div>
@@ -9510,28 +9550,19 @@ function renderDegen() {
     </article>`;
   }).join('');
   const desk = $('degenDesk');
-  if (desk) { desk.dataset.mem = degSig; releaseMedia(desk); desk.innerHTML = `<section class="hero-card">
-    <div class="flex items-center justify-between gap-2"><h2 class="sec-title text-sm"><span class="ico">◎</span>Degen</h2><span class="text-[10px] text-slate-500">${esc(stamp)}</span></div>
-    <div class="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Balance</div><div class="font-mono">${usd(eq.equity, 2)}</div><div class="text-[10px] text-slate-500">open positions valued live</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Start</div><div class="font-mono">${usd(eq.book.startUsd, 2)}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">P&L vs start</div><div class="font-mono ${pnlCls}">${pnlTxt}</div></div>
-      <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Open</div><div class="font-mono">${esc(openTxt)}</div></div>
-    </div>
-    <p class="mt-2 text-[12px] text-slate-300">${esc(potLine)}</p>
-    <p class="mt-1 font-mono text-[12px] text-slate-300" data-degen-lock>${esc(degenLockStatus())}</p>
-    ${fundsShort ? '<p class="mt-2 text-[12px] font-semibold text-rose-300">Degen out of funds</p>' : ''}
-    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Hunter picks</h3>
-    ${picks ? `<div class="deg-picks">${picks}</div>` : '<p class="empty-note mt-2">No hunter picks yet.</p>'}
-    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Live scanner ${liveScanOn ? '· on' : '· off'}</h3>
-    ${scanHitsHtml() || '<p class="empty-note mt-2">No live-scan hits yet.</p>'}
-    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Open positions</h3>
-    ${posHtml || '<p class="empty-note mt-2">No open degen positions.</p>'}
-    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Closed</h3>
-    ${closed || '<p class="empty-note mt-2">No closed degen trades.</p>'}
-    <h3 class="mt-3 text-[11px] uppercase tracking-wide text-slate-500">Trade log</h3>
-    ${degenLogHtml() || '<p class="empty-note mt-2">No degen fills yet.</p>'}
-  </section>`; }
+  if (desk) { desk.dataset.mem = degSig; releaseMedia(desk); desk.innerHTML = `<section class="hero-card">${potHead}</section>
+    <h3 class="deg-kicker">Signals</h3>
+    ${picks ? `<div class="deg-picks">${picks}</div>` : '<p class="empty-note">No entry-now signals.</p>'}
+    <h3 class="deg-kicker">Watch</h3>
+    ${watchHtml ? `<div class="deg-watch">${watchHtml}</div>` : '<p class="empty-note">No watch or avoid picks.</p>'}
+    <h3 class="deg-kicker">Open positions</h3>
+    ${posHtml || '<p class="empty-note">No open degen positions.</p>'}
+    <h3 class="deg-kicker">Degen history</h3>
+    ${closed || '<p class="empty-note">No closed degen trades.</p>'}
+    <h3 class="deg-kicker">Live scanner ${liveScanOn ? '· on' : '· off'}</h3>
+    ${scanHitsHtml() || '<p class="empty-note">No live-scan hits yet.</p>'}
+    <h3 class="deg-kicker">Trade log</h3>
+    ${degenLogHtml() || '<p class="empty-note">No degen fills yet.</p>'}`; }
   desk?.querySelectorAll('[data-degen-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.degenSell, { pct: 100 })));
   placeDegenDesk();
   wantLogos((DEGEN.picks || []).map(p => p.mint).concat(open.map(p => p.mint)), () => renderDegen());
@@ -14152,7 +14183,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 07:31';
+    stamp.textContent = 'Panel build 2026-11-12 07:58';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
