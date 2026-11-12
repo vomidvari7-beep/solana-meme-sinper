@@ -646,7 +646,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 04:13</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 04:30</p>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
     <b>Trading:</b> buys/sells are real on-chain swaps via Jupiter, signed by you in Phantom. They are irreversible; slippage, failed transactions, honeypots, freezes and rugs can lose some or all of the funds. Stop/target levels are alerts only and never execute automatically.
@@ -8305,7 +8305,27 @@ async function agentHeadSha() {
   })();
   return agentTipPromise;
 }
+async function fetchJsonUrl(url, signal) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  const onExt = () => ctl.abort();
+  if (signal) signal.addEventListener('abort', onExt, { once: true });
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal, headers: { Accept: 'application/json' } });
+    if (signal?.aborted) { const x = new Error('aborted'); x.name = 'AbortError'; throw x; }
+    if (!res.ok) throw new Error(String(res.status));
+    return await res.json();
+  } finally { clearTimeout(timer); if (signal) signal.removeEventListener('abort', onExt); }
+}
 async function fetchAgentDoc(name, signal) {
+  if (signal?.aborted) { const x = new Error('aborted'); x.name = 'AbortError'; throw x; }
+  const bust = Date.now();
+  const pages = 'agents/' + name + '.json?t=' + bust;
+  try { return await fetchJsonUrl(pages, signal); }
+  catch (e) { if (e && e.name === 'AbortError') throw e; }
+  const rawBase = typeof AGENT_RAW === 'string' ? AGENT_RAW : 'https://raw.githubusercontent.com/vomidvari7-beep/solana-meme-sinper/main/agents/';
+  try { return await fetchJsonUrl(rawBase + name + '.json?t=' + bust, signal); }
+  catch (e) { if (e && e.name === 'AbortError') throw e; }
   const sha = await agentHeadSha();
   if (signal?.aborted) { const x = new Error('aborted'); x.name = 'AbortError'; throw x; }
   if (!sha) throw new Error(name + ' no commit sha');
@@ -9582,6 +9602,42 @@ function clearListTombstone(mint) {
   if (!mint || !book[mint]) return;
   delete book[mint];
   save(LIST_DROP_LS, book);
+}
+let myListFileHydrated = false;
+function listFileStop(v) {
+  if (typeof v === 'string' && /%$/.test(v.trim())) { const n = parseFloat(v); return n > 0 ? { stopPct: n } : {}; }
+  if (isNum(+v) && +v > 0) return { stopPx: +v };
+  return {};
+}
+function listFileTps(v) {
+  if (v == null || v === '') return [];
+  return String(v).split(',').map(part => {
+    const bits = part.trim().split(':');
+    const gain = +bits[0];
+    const sell = bits.length > 1 ? +bits[1] : 100;
+    return gain > 0 ? { gainPct: gain, sellPct: sell > 0 ? sell : 100 } : null;
+  }).filter(Boolean);
+}
+function hydrateMyListFromFile() {
+  if (myListFileHydrated) return;
+  if (!AG.pulled?.mylist || AG.errors?.mylist) return;
+  if (!AG.pulled?.blacklist || AG.errors?.blacklist) return;
+  if ((MYLIST.rows || []).some(r => r && isAddr(r.mint))) { myListFileHydrated = true; return; }
+  const rows = [];
+  for (const t of AG.listFile || []) {
+    if (!t || !isAddr(t.mint) || listDropped(t.mint) || rugBlackHas(t.mint)) continue;
+    const row = sanitizeListRow(Object.assign({ id: 'ml' + String(t.mint).slice(0, 8), mint: t.mint, symbol: t.symbol || '', enabled: true, addedAt: typeof t.addedAt === 'string' ? t.addedAt : '', note: t.note || '' }, listFileStop(t.manualStop), { tps: listFileTps(t.manualTp) }));
+    if (!row) continue;
+    if (t.manualStop != null) row.manualStop = t.manualStop;
+    if (t.manualTp != null) row.manualTp = t.manualTp;
+    if (t.name) row.name = String(t.name).slice(0, 80);
+    rows.push(row);
+  }
+  myListFileHydrated = true;
+  if (!rows.length || (MYLIST.rows || []).some(r => r && isAddr(r.mint))) return;
+  MYLIST.rows = rows;
+  saveMyList();
+  try { renderMyList(); } catch { /* list view later */ }
 }
 function saveMyList() {
   const rows = MYLIST.rows.map(r => { const { dexPair, ...rest } = r; return rest; });
@@ -12026,7 +12082,14 @@ function renderAgentPicks() {
     (rows || []).forEach(r => { const t = agentTime(r?.ts) || agentTime(r?.updatedAt) || agentTime(r?.addedTs); if (t > max) max = t; });
     return tehranClock(max);
   };
-  const ageOf = (name) => { const t = AG.pulled?.[name]; if (!t) return '—'; const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 90 ? s + 's' : Math.round(s / 60) + 'm'; };
+  const ageOf = (name) => {
+    const err = AG.errors && AG.errors[name];
+    if (err) return String(err).slice(0, 80);
+    const t = AG.pulled?.[name];
+    if (!t) return '—';
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    return s < 90 ? s + 's' : Math.round(s / 60) + 'm';
+  };
   const status = `candidates ${stamp('candidates', AG.candidates)} (${ageOf('candidates')}) · plans ${stamp('plans', [...AG.plans.values()])} (${ageOf('plans')}) · risk ${stamp('risk', AG.risk.positions)} (${ageOf('risk')}) · list file ${stamp('mylist', AG.listFile || [])} (${ageOf('mylist')}) · setup scores ${tehranClock(AG.fetched.mylist_scores)} (${ageOf('mylist_scores')}) · config ${tehranClock(AG.fetched.config)} (${ageOf('config')})`;
   const banner = agentPauseBuys() ? `<div class="rounded-lg border border-rose-400/50 bg-rose-500/15 px-2 py-1.5 text-[12px] font-semibold text-rose-100">Agent risk paused scanner auto-buy</div>` : '';
   const ranked = AG.candidates.filter(c => c && isAddr(c.mint)).map((c, i) => {
@@ -12112,6 +12175,7 @@ async function refreshAgents() {
     } catch (e) { if (!(e && e.name === 'AbortError')) AG.errors[name] = e.message || String(e); }
   }));
   applyAgentRisk();
+  try { hydrateMyListFromFile(); } catch { /* list not ready */ }
   renderAgentPicks();
   try { if (paneShown('tabTokens')) renderMyList(); } catch { /* list not ready */ }
   try { if (lastResult && paneShown('tabTokens')) render(lastResult); } catch { /* scan not on screen */ }
@@ -13546,7 +13610,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 04:13';
+    stamp.textContent = 'Panel build 2026-11-12 04:30';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
