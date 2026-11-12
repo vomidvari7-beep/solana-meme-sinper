@@ -1,14 +1,24 @@
 {
-  "updated_utc": "2026-11-12T09:33:04.909Z",
-  "updated_tehran": "2026-11-12T13:03:04.909+0330",
+  "updated_utc": "2026-11-12T09:44:50.767Z",
+  "updated_tehran": "2026-11-12T13:14:50.767+0330",
   "start_usd": 100.0,
-  "cash_usd": 71.3579,
-  "equity_usd": 71.3579,
+  "cash_usd": 57.0166,
+  "equity_usd": 70.6584,
   "realized_pnl_usd": -28.6421,
-  "unrealized_pnl_usd": 0.0,
+  "unrealized_pnl_usd": -0.6995,
   "trades": 23,
   "win_rate": 0.3043,
-  "open": [],
+  "open": [
+    {
+      "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
+      "symbol": "AIB",
+      "entry_price": 0.00044574,
+      "price": 0.000437,
+      "pnl_pct": -4.8775,
+      "size_usd": 14.27,
+      "opened_tehran": "2026-11-12T13:14:50.588+0330"
+    }
+  ],
   "closed": [
     {
       "mint": "HFcyhe28iLYRhac2W5FBdtDGFunWDJesCR7f6EZJpump",
