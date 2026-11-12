@@ -62,20 +62,20 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   }
   html[data-theme="day"] {
     color-scheme: light;
-    --bg: #F6F7F9;
-    --bg-2: #F6F7F9;
+    --bg: #F5F6F8;
+    --bg-2: #F5F6F8;
     --card: #FFFFFF;
     --elev: #FFFFFF;
-    --tile: #F9FAFB;
-    --line: #E6E8EC;
+    --tile: #FFFFFF;
+    --line: #E5E7EB;
     --accent: #4F46E5;
-    --accent-soft: rgba(79,70,229,.10);
-    --accent-line: rgba(79,70,229,.28);
+    --accent-soft: transparent;
+    --accent-line: #E5E7EB;
     --on-accent: #FFFFFF;
-    --up: #16A34A;
-    --up-soft: rgba(22,163,74,.12);
-    --down: #DC2626;
-    --down-soft: rgba(220,38,38,.10);
+    --up: #15803D;
+    --up-soft: transparent;
+    --down: #B91C1C;
+    --down-soft: transparent;
     --text: #0B0D12;
     --muted: #6B7280;
     --amber: #B45309;
@@ -678,7 +678,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 08:10</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 08:15</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
@@ -705,6 +705,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">Bot controls</b><button type="button" id="botSheetClose" class="text-sm text-slate-400">Close</button></div>
   <div id="botBar"></div>
 </div>
+<div id="posEditScrim"></div>
+<div id="posEditSheet" class="token-sheet" role="dialog" aria-label="Edit stop and target" data-pos-edit></div>
 
 <!-- TRADE CONFIRMATION MODAL -->
 <div id="tradeModal" class="hidden fixed inset-0 z-[90] bg-black/70 overflow-y-auto">
@@ -826,6 +828,19 @@ function pct(n, d = 1) { if (!isNum(n)) return '—'; return (n > 0 ? '+' : '') 
 function pctCls(n) { if (!isNum(n)) return 'text-slate-500'; return n >= 0 ? 'text-emerald-400' : 'text-rose-400'; }
 function age(h) { if (!isNum(h)) return '—'; if (h < 1) return Math.round(h*60) + 'm'; if (h < 48) return h.toFixed(1) + 'h'; return (h/24).toFixed(1) + 'd'; }
 function short(a) { return a ? a.slice(0,4) + '…' + a.slice(-4) : ''; }
+function symbolMissing(symbol, mint) {
+  const s = String(symbol || '').trim();
+  if (!s || !mint) return true;
+  if (s === short(mint) || s === mint) return true;
+  const compact = s.replace(/\s+/g, '');
+  if ((compact.includes('…') || compact.includes('...')) && compact.startsWith(mint.slice(0, 4)) && compact.endsWith(mint.slice(-4))) return true;
+  return false;
+}
+function posLabel(p) {
+  const sym = String(p?.symbol || '').trim();
+  if (sym && !symbolMissing(sym, p?.mint)) return sym;
+  return sym || short(p?.mint || '');
+}
 function scoreCls(s) { return s >= 65 ? 'emerald' : s >= 45 ? 'amber' : 'rose'; }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function fmtTime(ts) { try { return new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' }); } catch { return new Date(ts).toString(); } }
@@ -3208,7 +3223,9 @@ async function syncWalletHoldings(opt) {
       if (positions().some(p => p.wallet === 'burner' && p.mint === mint && p.open)) continue;
       const bag = tokens.get(mint);
       const quote = quotes.get(mint);
-      const symbol = quote?.baseToken?.symbol || short(mint);
+      const rawSym = quote?.baseToken?.symbol || '';
+      const symbol = rawSym && !symbolMissing(rawSym, mint) ? rawSym : short(mint);
+      const tokenName = String(quote?.baseToken?.name || '').trim();
       const buy = buys.get(mint);
       const mark = livePrices.get(mint)?.price;
       let priceUsd = null;
@@ -3225,7 +3242,7 @@ async function syncWalletHoldings(opt) {
         id: 'rec' + mint.slice(0, 8) + (buy?.ts || Date.now()),
         ts: buy?.ts || Date.now(),
         blockTime: buy?.ts ? Math.round(buy.ts / 1000) : 0,
-        wallet: 'burner', auto: false, side: 'buy', mint, symbol,
+        wallet: 'burner', auto: false, side: 'buy', mint, symbol, tokenName,
         solAmount, tokenAmount: bag.ui, priceUsd, solUsd: solPx || null,
         status: 'confirmed', fill: recoveredOnly ? 'recovered' : 'chain',
         signature: buy?.sig || '',
@@ -3248,6 +3265,90 @@ async function syncWalletHoldings(opt) {
     renderPortfolio();
     if (!quiet) toast(walletSyncNote, 'err', 7000);
   } finally { walletSyncBusy = false; }
+}
+const symbolMiss = new Map();
+let symbolBusy = false;
+async function ensureOpenSymbols() {
+  if (symbolBusy) return;
+  const need = [];
+  for (const p of positions()) {
+    if (!p.open || !p.mint) continue;
+    if (!symbolMissing(p.symbol, p.mint) && p.tokenName) continue;
+    const at = symbolMiss.get(p.mint) || 0;
+    if (at && Date.now() - at < 10 * 60 * 1000) continue;
+    need.push(p.mint);
+  }
+  if (!need.length) return;
+  symbolBusy = true;
+  try {
+    const found = new Map();
+    for (let i = 0; i < need.length; i += 30) {
+      const chunk = need.slice(i, i + 30);
+      let arr = [];
+      try { arr = await fetchJSON('https://api.dexscreener.com/tokens/v1/solana/' + chunk.join(','), { timeout: 8000 }); }
+      catch { arr = []; }
+      for (const row of arr || []) {
+        const mint = row?.baseToken?.address;
+        const sym = String(row?.baseToken?.symbol || '').trim();
+        const name = String(row?.baseToken?.name || '').trim();
+        if (!mint || !sym || symbolMissing(sym, mint)) continue;
+        const prev = found.get(mint);
+        if (!prev || (row.liquidity?.usd || 0) > (prev.liq || 0)) found.set(mint, { symbol: sym.slice(0, 24), name: name.slice(0, 48), image: row?.info?.imageUrl || '', liq: row.liquidity?.usd || 0 });
+      }
+    }
+    for (const mint of need) {
+      if (found.has(mint)) continue;
+      try {
+        const j = await fetchJSONOnce('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(mint), { timeout: 6000 });
+        const rows = Array.isArray(j) ? j : [];
+        const row = rows.find(x => x && (x.id === mint || x.address === mint));
+        const sym = String(row?.symbol || '').trim();
+        if (sym && !symbolMissing(sym, mint)) found.set(mint, { symbol: sym.slice(0, 24), name: String(row?.name || '').trim().slice(0, 48), image: row?.icon || row?.logoURI || '' });
+      } catch { /* keep the mint stub */ }
+    }
+    let changed = false;
+    for (const mint of need) {
+      const hit = found.get(mint);
+      if (!hit) { symbolMiss.set(mint, Date.now()); continue; }
+      if (hit.image) { try { rememberLogo(mint, hit.image, { src: hit.image.includes('jup') ? 'jup' : 'dex' }); } catch { /* logo later */ } }
+      for (const r of LOG) {
+        if (!r || r.mint !== mint) continue;
+        if (symbolMissing(r.symbol, mint)) { r.symbol = hit.symbol; changed = true; }
+        if (hit.name && r.tokenName !== hit.name) { r.tokenName = hit.name; changed = true; }
+      }
+    }
+    if (changed) {
+      saveLog();
+      const el = $('portfolio');
+      if (el) delete el.dataset.mem;
+      renderPortfolio();
+    }
+  } finally { symbolBusy = false; }
+}
+function paintBuyAgain() {
+  const host = $('mlAgainCard');
+  if (!host || typeof closedRounds !== 'function') return;
+  const openMints = new Set(positions().filter(p => p.open).map(p => p.mint));
+  const seen = new Set();
+  const rows = [];
+  const rounds = closedRounds(typeof liveSolPx === 'function' ? liveSolPx() : 0).filter(c => c && !c.degen).sort((a, b) => (b.closeTs || 0) - (a.closeTs || 0));
+  for (const c of rounds) {
+    if (!c.mint || openMints.has(c.mint) || seen.has(c.mint) || !(c.solIn > 0)) continue;
+    seen.add(c.mint);
+    rows.push(c);
+    if (rows.length >= 5) break;
+  }
+  const ae = document.activeElement;
+  if (ae && host.contains(ae)) return;
+  host.innerHTML = '<h2 class="ui-h">Buy again</h2>' + (rows.length ? rows.map(c => {
+    const sym = symbolMissing(c.symbol, c.mint) ? short(c.mint) : c.symbol;
+    return `<div class="ui-row"><span class="min-w-0"><b class="ui-sym">${esc(sym)}</b><span class="ui-meta">${esc(c.exit || 'closed')} · ${(+c.solIn).toFixed(3)} SOL last time</span></span><button type="button" class="ui-btn" data-buy-again="${esc(c.mint)}" data-sol="${c.solIn}">Buy again</button></div>`;
+  }).join('') : '<p class="empty-note">No closed trades to buy again.</p>');
+  host.querySelectorAll('[data-buy-again]').forEach(b => b.addEventListener('click', () => {
+    const sol = +b.dataset.sol;
+    if (!(sol > 0)) return;
+    openTrade('buy', b.dataset.buyAgain, { sol });
+  }));
 }
 const decCache = { get: (m) => m === WSOL ? 9 : mintInfo.get(m)?.decimals };
 async function getDecimals(mint) {
@@ -3499,6 +3600,7 @@ function positions() {
       if (r.copy) { p.copy = true; if (r.copyState) p.copyState = r.copyState; }
     }
     p.symbol = r.symbol || p.symbol;
+    if (r.tokenName) p.tokenName = r.tokenName;
     const remain = p.bought - p.sold;
     p.closed = p.bought > 0 && remain <= p.bought * 0.001;
   }
@@ -4821,47 +4923,131 @@ function manualTp(m, entry, which) {
 }
 function applyManualLevels(p, eff) {
   const m = manualOf(p);
-  if (!m) return eff;
+  if (!m || !eff) return eff;
   const entry = p?.avgUsd;
   let tp1 = eff.tp1, tp2 = eff.tp2;
+  let tps = Array.isArray(eff.tps) ? eff.tps.map(t => ({ ...t })) : eff.tps;
   const custom1 = manualTp(m, entry, 'tp1');
   const custom2 = manualTp(m, entry, 'tp2');
-  if (isNum(custom1)) tp1 = custom1;
+  if (isNum(custom1)) {
+    tp1 = custom1;
+    const sell = isNum(+m.tpSellPct) && +m.tpSellPct > 0 && +m.tpSellPct <= 100 ? +m.tpSellPct : (tps && tps[0] && isNum(+tps[0].sellPct) ? +tps[0].sellPct : 100);
+    const gain = isNum(entry) && entry > 0 ? (custom1 / entry - 1) * 100 : (tps && tps[0] ? +tps[0].gainPct : 0);
+    const row = { gainPct: gain, sellPct: sell };
+    tps = Array.isArray(tps) && tps.length ? tps.map((t, i) => i === 0 ? row : t) : [row];
+  }
   if (isNum(custom2)) tp2 = custom2;
   const stopPx = manualStopPrice(m, entry);
-  if (!isNum(stopPx)) return { ...eff, tp1, tp2 };
-  if (m.keepRaise === false) return { ...eff, stop: stopPx, reason: 'manual', tp1, tp2 };
-  if (!isNum(eff.stop) || stopPx > eff.stop + 1e-12) return { ...eff, stop: stopPx, reason: 'manual', tp1, tp2 };
-  return { ...eff, tp1, tp2 };
+  const next = { ...eff, tp1, tp2, tps };
+  if (!isNum(stopPx)) return next;
+  if (m.by === 'agent' && m.manual !== true && m.keepRaise !== false) {
+    if (!isNum(eff.stop) || stopPx > eff.stop + 1e-12) return { ...next, stop: stopPx, reason: eff.reason || 'agent' };
+    return next;
+  }
+  if (m.keepRaise === false || m.manual === true || !isNum(eff.stop) || stopPx > eff.stop + 1e-12) return { ...next, stop: stopPx, reason: 'manual' };
+  return next;
 }
-function posEditHtml(p) {
-  if (posEditKey !== p.key) return '';
-  const m = manualOf(p) || {};
+function posEditHtml() { return ''; }
+function pxField(n) {
+  if (!isNum(n) || !(n > 0)) return '';
+  if (n >= 1) return String(+n.toFixed(8));
+  const dec = Math.min(12, Math.max(6, -Math.floor(Math.log10(n)) + 6));
+  return n.toFixed(dec).replace(/0+$/, '').replace(/\.$/, '');
+}
+function posEditTarget() {
+  if (!posEditKey) return null;
+  return positions().find(p => p.open && p.key === posEditKey) || null;
+}
+function closePosEdit() {
+  posEditKey = null;
+  $('posEditSheet')?.classList.remove('open');
+  $('posEditScrim')?.classList.remove('on');
+}
+function paintPosEdit() {
+  const p = posEditTarget();
+  const sheet = $('posEditSheet');
+  if (!p || !sheet || !sheet.classList.contains('open')) return;
+  const live = livePrices.get(p.mint)?.price;
+  const entry = p.avgUsd;
+  const stop = +$('peStop')?.value;
+  const tp = +$('peTp')?.value;
+  const sell = +$('peSell')?.value;
+  const frac = isNum(sell) && sell > 0 ? Math.min(1, sell / 100) : 1;
+  const ctx = { entry, qty: p.qty, tp1: tp, frac, sol: solUsd(), tp1Done: !!p.tp1Done, sold: Math.max(0, (p.bought || 0) - (p.qty || 0)) };
+  const line = (kind, px) => {
+    if (!(px > 0) || !(entry > 0)) return 'Enter a price';
+    const o = levelOutcome(kind, px, ctx);
+    if (!o || !isNum(o.ch)) return '—';
+    return (o.ch > 0 ? '+' : '') + o.ch.toFixed(1) + '% from entry · ' + fmtPnlUsd(o.usd) + (isNum(o.sol) ? ' · ' + fmtPnlSol(o.sol) : '') + (kind === 'tp1' && isNum(sell) ? ' · sell ' + sell + '%' : '');
+  };
+  if ($('peLive')) $('peLive').textContent = 'Live ' + price(live) + ' · entry ' + price(entry);
+  if ($('peStopPrev')) $('peStopPrev').textContent = line('stop', stop);
+  if ($('peTpPrev')) $('peTpPrev').textContent = line('tp1', tp);
+  let err = '';
+  if (!(live > 0)) err = 'No live price yet';
+  else if (String($('peStop')?.value || '').trim() && !(stop > 0 && stop < live)) err = 'Stop must be below the live price';
+  else if (String($('peTp')?.value || '').trim() && !(tp > live)) err = 'Target must be above the live price';
+  else if (String($('peSell')?.value || '').trim() && !(sell > 0 && sell <= 100)) err = 'TP sell % must be from 1 to 100';
+  const warn = $('peWarn');
+  if (warn) { warn.textContent = err; warn.hidden = !err; }
+  const btn = $('peSave');
+  if (btn) btn.disabled = !!err || !String($('peStop')?.value || '').trim() || !String($('peTp')?.value || '').trim();
+}
+function openPosEdit(key) {
+  const p = positions().find(x => x.open && x.key === key);
+  const sheet = $('posEditSheet');
+  if (!p || !sheet) return;
+  posEditKey = key;
   const lp = livePrices.get(p.mint)?.price;
-  return `<div data-pos-edit class="mt-2 rounded-xl border border-white/10 bg-ink-900/70 p-2.5 space-y-2">
-    <div class="text-[11px] text-slate-400 whitespace-normal break-words">Live ${price(lp)} · entry ${price(p.avgUsd)}. Stop must be below the live price.</div>
-    <div class="grid grid-cols-2 gap-2 text-[11px]">
-      <label class="min-w-0">Stop price<input data-ms="stop" value="${isNum(m.stop) ? m.stop : ''}" placeholder="${price(p.initialStop)}" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="min-w-0">or % below entry<input data-ms="stopPct" value="${isNum(m.stopPct) ? m.stopPct : ''}" placeholder="20" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="min-w-0">TP1 price<input data-ms="tp1" value="${isNum(m.tp1) ? m.tp1 : ''}" placeholder="auto +50%" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="min-w-0">or TP1 % above<input data-ms="tp1Pct" value="${isNum(m.tp1Pct) ? m.tp1Pct : ''}" placeholder="50" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="min-w-0">TP2 price<input data-ms="tp2" value="${isNum(m.tp2) ? m.tp2 : ''}" placeholder="auto +100%" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="min-w-0">or TP2 % above<input data-ms="tp2Pct" value="${isNum(m.tp2Pct) ? m.tp2Pct : ''}" placeholder="100" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-    </div>
-    ${p.plan?.myList ? `<div class="grid grid-cols-2 gap-2 text-[11px]">
-      <label class="min-w-0">Breakeven +%<input data-ms="beAt" value="${isNum(m.beAtPct) ? m.beAtPct : ''}" placeholder="off" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="min-w-0">Trail starts +%<input data-ms="trailAt" value="${isNum(m.trailAtPct) ? m.trailAtPct : ''}" placeholder="off" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="min-w-0">Trail % below high<input data-ms="trailPct" value="${isNum(m.trailPct) ? m.trailPct : ''}" placeholder="off" class="mt-0.5 w-full rounded-lg bg-ink-800 border border-white/10 px-2 py-1 font-mono" /></label>
-      <label class="flex items-center gap-2 mt-4"><input data-ms="trailOff" type="checkbox" class="accent-violet-500" ${m.trailOff ? 'checked' : ''} /> Trailing off</label>
-    </div>` : ''}
-    <label class="flex items-center gap-2 text-[11px] text-slate-300"><input data-ms="raise" type="checkbox" class="accent-violet-500" ${m.keepRaise === false ? '' : 'checked'} /> Keep auto-raise</label>
-    <p data-ms-warn class="text-[11px] text-rose-300 whitespace-normal break-words hidden"></p>
-    <div class="flex flex-wrap gap-2">
-      <button type="button" data-ms-save="${esc(p.key)}" class="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-violet-600 text-white">Save</button>
-      <button type="button" data-ms-reset="${esc(p.key)}" class="rounded-lg px-2.5 py-1.5 text-[11px] border border-white/10 text-slate-300">Reset to auto</button>
-      <button type="button" data-ms-cancel class="rounded-lg px-2.5 py-1.5 text-[11px] text-slate-400">Cancel</button>
-    </div>
-  </div>`;
+  const eff = effectiveStop(p, lp);
+  const m = manualOf(p) || {};
+  const stop0 = isNum(m.stop) && m.stop > 0 ? m.stop : eff.stop;
+  const tp0 = isNum(m.tp1) && m.tp1 > 0 ? m.tp1 : eff.tp1;
+  const sell0 = isNum(+m.tpSellPct) && +m.tpSellPct > 0 ? +m.tpSellPct : (eff.tps && eff.tps[0] && isNum(+eff.tps[0].sellPct) ? +eff.tps[0].sellPct : 100);
+  sheet.innerHTML = `<div class="sheet-grab"></div>
+    <div class="mb-2 flex items-center justify-between gap-2"><b class="text-base">Edit stop &amp; target</b><button type="button" id="peClose" class="ui-more">Close</button></div>
+    <p class="ui-meta">${esc(posLabel(p))}${p.tokenName ? ' · ' + esc(p.tokenName) : ''}</p>
+    <p id="peLive" class="mt-1 text-[13px] font-semibold"></p>
+    <label class="pe-label mt-3">Stop price<input id="peStop" inputmode="decimal" autocomplete="off" value="${esc(pxField(stop0))}" /></label>
+    <p id="peStopPrev" class="pe-prev"></p>
+    <label class="pe-label mt-3">TP price<input id="peTp" inputmode="decimal" autocomplete="off" value="${esc(pxField(tp0))}" /></label>
+    <p id="peTpPrev" class="pe-prev"></p>
+    <label class="pe-label mt-3">TP sell %<input id="peSell" inputmode="decimal" autocomplete="off" value="${esc(String(sell0))}" /></label>
+    <p id="peWarn" class="mt-2 text-[13px] font-semibold" style="color:var(--down)" hidden></p>
+    <button type="button" id="peSave" class="ui-btn pe-save">Save</button>
+    <div class="mt-2 flex gap-2">
+      <button type="button" id="peReset" class="ui-btn ui-btn-secondary">Reset to auto</button>
+      <button type="button" id="peCancel" class="ui-btn ui-btn-secondary">Cancel</button>
+    </div>`;
+  sheet.classList.add('open');
+  $('posEditScrim')?.classList.add('on');
+  ['peStop', 'peTp', 'peSell'].forEach(id => $(id)?.addEventListener('input', paintPosEdit));
+  $('peClose')?.addEventListener('click', closePosEdit);
+  $('peCancel')?.addEventListener('click', closePosEdit);
+  $('peReset')?.addEventListener('click', () => {
+    const row = posEditTarget();
+    if (!row) return;
+    delete posLevels[levelId(row)];
+    savePosLevels();
+    closePosEdit();
+    renderPortfolio();
+  });
+  $('peSave')?.addEventListener('click', () => {
+    const row = posEditTarget();
+    if (!row) return;
+    const live = livePrices.get(row.mint)?.price;
+    const stop = +$('peStop')?.value;
+    const tp = +$('peTp')?.value;
+    const sell = +$('peSell')?.value;
+    if (!(live > 0) || !(stop > 0) || !(tp > live) || !(stop < live) || !(sell > 0 && sell <= 100)) { paintPosEdit(); return; }
+    const id = levelId(row);
+    const prev = posLevels[id] ? { ...posLevels[id] } : {};
+    posLevels[id] = { ...prev, stop, stopPct: null, tp1: tp, tp1Pct: null, tpSellPct: sell, keepRaise: false, manual: true, by: 'user' };
+    savePosLevels();
+    closePosEdit();
+    renderPortfolio();
+  });
+  paintPosEdit();
 }
 function clampBarPrice(kind, px, ctx) {
   const entry = ctx.entry;
@@ -5203,8 +5389,8 @@ function posCard(p) {
     <div class="flex items-start gap-3">
       ${logoHtml(p.mint, p.symbol, 3, 'sq')}
       <div class="min-w-0 flex-1">
-        <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(p.symbol)}</b><span class="rounded-full border px-2 py-0.5 text-[10px] ${src.cls}">${src.label}</span>${pl.quick ? `<span class="rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-100">Quick 15% · 1:1</span>` : ''}</div>
-        <div class="text-[11px] text-slate-500 break-words">${esc(p.wallet)} · held <span data-held="${p.firstTs || 0}" data-held-mint="${esc(p.mint)}">${heldFor(p.firstTs)}</span></div>
+        <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(posLabel(p))}</b><span class="ui-pill">${src.label}</span>${pl.quick ? `<span class="ui-pill">Quick 15% · 1:1</span>` : ''}</div>
+        <div class="text-[12px] break-words" style="color:var(--muted)">${p.tokenName && p.tokenName.toLowerCase() !== String(posLabel(p)).toLowerCase() ? esc(p.tokenName) + ' · ' : ''}${esc(p.wallet)} · held <span data-held="${p.firstTs || 0}" data-held-mint="${esc(p.mint)}">${heldFor(p.firstTs)}</span></div>
       </div>
       <div class="text-right min-w-0">
         <div class="font-mono text-xl leading-none whitespace-normal break-words ${!isNum(m.pnl) ? 'text-slate-400' : upClass(m.pnl)}">${pct(m.pnl)}</div>
@@ -5220,7 +5406,7 @@ function posCard(p) {
     ${bar}
     ${typeof agentRiskHtml === 'function' ? agentRiskHtml(p.mint) : ''}
     <div class="mt-2 flex flex-wrap gap-1.5">${isNum(stop) ? moneyChip('stop', stop, false) : ''}${isNum(tp1) ? moneyChip('tp1', tp1, tp1Hit) : ''}${isNum(tp2) ? moneyChip('tp2', tp2, tp2Hit) : ''}</div>
-    <button type="button" data-edit-stop="${esc(p.key)}" class="mt-2 text-[11px] text-violet-300 hover:underline">✏️ Edit stop</button>
+    <button type="button" data-edit-stop="${esc(p.key)}" class="ui-more">Edit stop &amp; target</button>
     ${typeof myListPlanHtml === 'function' ? myListPlanHtml(p, pl) : ''}
     ${posEditHtml(p)}
     <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -5449,9 +5635,9 @@ function renderPortfolio() {
     const lp = livePrices.get(p.mint)?.price;
     const s = levelState(p);
     const bucket = lp > 0 ? Math.round(Math.log(lp) * 50) : 0;
-    return p.key + ':' + p.qty + ':' + (s.lvl || '') + ':' + bucket;
+    return p.key + ':' + (p.symbol || '') + ':' + (p.tokenName || '') + ':' + p.qty + ':' + (s.lvl || '') + ':' + bucket;
   }).join(',')].join('|');
-  if (el.dataset.mem === portSig && el.childElementCount) { patchLiveText(); paintHomePositions(open); return; }
+  if (el.dataset.mem === portSig && el.childElementCount) { patchLiveText(); paintHomePositions(open); paintPosEdit(); try { paintBuyAgain(); ensureOpenSymbols(); } catch { /* names later */ } return; }
   if (!LOG.length && !anyW && !AUTOLOG.length && !loadEquity().length) {
     el.classList.remove('hidden');
     el.dataset.view = tradeSeg;
@@ -5471,12 +5657,12 @@ function renderPortfolio() {
   const posRows = open.map(p => { const lp = livePrices.get(p.mint)?.price; const m = posMoney(p, lp); const s = levelState(p); const pl = s.eff || effectiveStop(p, lp);
     const canSell = (p.wallet === activeKey) && WALLETS[p.wallet].tokens?.get(p.mint)?.raw > 0n;
     return `<tr class="border-t border-white/5 align-top ${s.lvl === 'stop' ? 'bg-rose-500/10' : s.lvl ? 'bg-emerald-500/10' : ''}">
-      <td class="py-1.5 pr-2"><b>${esc(p.symbol)}</b><div class="text-[10px] text-slate-500">${p.wallet}${p.auto ? ' · auto' : ''}${p.copy ? ' · copy' : ''}${p.sniper ? ' · SNIPE 🎯' : ''}</div></td>
+      <td class="py-1.5 pr-2"><b>${esc(posLabel(p))}</b><div class="text-[12px]" style="color:var(--muted)">${p.tokenName ? esc(p.tokenName) + ' · ' : ''}${p.wallet}${p.auto ? ' · auto' : ''}${p.copy ? ' · copy' : ''}${p.sniper ? ' · SNIPE' : ''}</div></td>
       <td class="pr-2 font-mono">${fmtTok(p.qty)}</td><td class="pr-2 font-mono whitespace-normal break-words">${price(p.avgUsd)}</td><td class="pr-2 font-mono whitespace-normal break-words">${price(lp)}</td>
       <td class="pr-2 font-mono whitespace-normal break-words ${pctCls(m.pnl)}">${pct(m.pnl)}<div class="text-[10px]">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</div></td>
       <td class="pr-2 font-mono whitespace-normal break-words text-rose-300">${price(pl.stop)}<div class="text-[10px] text-slate-400">${esc(pl.reason || 'initial')}</div></td><td class="pr-2 font-mono whitespace-normal break-words text-emerald-300">${price(pl.tp1)}<div class="text-[10px]">${price(pl.tp2)}</div></td>
       <td class="pr-2 ${s.cls}">${s.label}</td>
-      <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}<button type="button" data-edit-stop="${esc(p.key)}" class="block mt-1 text-[10px] text-violet-300">Edit stop</button></td></tr>`; }).join('');
+      <td>${canSell ? [25, 50, 100].map(x => `<button data-sell="${p.mint}" data-pct="${x}" class="rounded px-1.5 py-0.5 mr-0.5 mb-0.5 bg-rose-500/15 text-rose-300 border border-rose-500/20 text-[10px]">${x}%</button>`).join('') : `<span class="text-[10px] text-slate-500">${p.wallet === activeKey ? '' : 'switch wallet'}</span>`}<button type="button" data-edit-stop="${esc(p.key)}" class="ui-more">Edit stop &amp; target</button></td></tr>`; }).join('');
   const logRows = [...LOG].reverse().filter(mainBookFill).slice(0, 200).map(r => `<tr class="border-t border-white/5"><td class="py-1 pr-2 whitespace-nowrap text-slate-400">${esc(new Date(r.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</td>
       <td class="pr-2 ${r.side === 'buy' ? 'text-emerald-300' : 'text-rose-300'}">${r.side.toUpperCase()}${r.auto ? ' 🤖' : ''}${r.copy ? ' 🐋' : ''}${r.sniper ? ' 🎯' : ''}</td><td class="pr-2">${esc(r.symbol)}<div class="text-[10px] text-slate-500">${r.wallet}${r.entryReason ? ' · ' + esc(r.entryReason) : ''}</div></td>
       <td class="pr-2 font-mono whitespace-normal break-words">${solWithUsd(r.solAmount, r.solUsd)}</td><td class="pr-2 font-mono">${fmtTok(r.tokenAmount)}</td><td class="pr-2 font-mono">${price(r.priceUsd)}<div class="text-[10px] text-slate-500">${r.fill === 'chain' ? 'on-chain fill' : 'quote est.'}</div></td>
@@ -5511,7 +5697,7 @@ function renderPortfolio() {
   el.querySelectorAll('[data-closed-range]').forEach(b => b.addEventListener('click', () => { closedRange = b.dataset.closedRange; saveClosedF(); renderPortfolio(); }));
   el.querySelectorAll('[data-closed-src]').forEach(b => b.addEventListener('click', () => { closedSrc = b.dataset.closedSrc; saveClosedF(); renderPortfolio(); }));
   el.querySelectorAll('[data-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.sell, { pct: +b.dataset.pct })));
-  el.querySelectorAll('[data-edit-stop]').forEach(b => b.addEventListener('click', () => { posEditKey = b.dataset.editStop; renderPortfolio(); }));
+  el.querySelectorAll('[data-edit-stop]').forEach(b => b.addEventListener('click', () => openPosEdit(b.dataset.editStop)));
   el.querySelectorAll('[data-ms-cancel]').forEach(b => b.addEventListener('click', () => { posEditKey = null; renderPortfolio(); }));
   el.querySelectorAll('[data-ms-reset]').forEach(b => b.addEventListener('click', () => {
     const p = open.find(x => x.key === b.dataset.msReset); if (!p) return;
@@ -5534,6 +5720,7 @@ function renderPortfolio() {
   $('pfClear').addEventListener('click', () => { if (confirm('Clear the local trade log? (On-chain history is not affected.)')) { LOG = []; saveLog(); alerted = {}; save(LS.alerts, alerted); renderPortfolio(); } });
   renderAutoLog();
   paintHomePositions(open);
+  try { paintBuyAgain(); ensureOpenSymbols(); } catch { /* names later */ }
   const ev = $('equityValue');
   if (ev) {
     if (window.__eqLast && window.__eqLast !== ev.textContent) ev.classList.add('count-in');
@@ -5558,7 +5745,7 @@ function paintHomePositions(open) {
     const up = isNum(m.pnl) && m.pnl >= 0;
     const ticks = typeof tickBars === 'function' ? tickBars(p.mint, '1m') : [];
     const spark = ticks.length >= 2 && typeof listChartSvg === 'function' ? listChartSvg({ candles: ticks }, { w: 72, h: 28 }) : { empty: true, svg: '' };
-    return `<button type="button" class="watch-row" data-go-trades="1">${logoHtml(p.mint, p.symbol, 2)}<span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(p.symbol)}</b><span class="block text-[12px] text-slate-500 num">${fmtSol(m.costSolLeft)}</span></span>${spark.empty ? '' : `<span class="shrink-0">${spark.svg}</span>`}<span class="shrink-0 text-right num"><span class="block ${up ? 'pnl-up' : 'pnl-down'}" data-live-mint="${esc(p.mint)}">${price(lp)}</span><span class="block text-[12px] ${up ? 'pnl-up' : 'pnl-down'}" data-live-pnl="${esc(p.mint)}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</span></span></button>`;
+    return `<button type="button" class="watch-row" data-go-trades="1">${logoHtml(p.mint, p.symbol, 2)}<span class="min-w-0 flex-1"><b class="block truncate text-[15px]">${esc(p.symbol)}</b><span class="block text-[12px] text-slate-500 num">${fmtSol(m.costSolLeft)}</span></span>${spark.empty ? '' : `<span class="shrink-0">${spark.svg}</span>`}<span class="shrink-0 text-right num"><span class="ui-px" data-live-mint="${esc(p.mint)}">${price(lp)}</span><span class="ui-pnl ${up ? 'is-up' : 'is-down'}" data-live-pnl="${esc(p.mint)}">${isNum(m.pnlUsd) ? (m.pnlUsd >= 0 ? '+' : '') + usd(m.pnlUsd, 2) : ''}</span></span></button>`;
   }).join('');
   box.querySelectorAll('[data-go-trades]').forEach(b => b.addEventListener('click', () => showTab('trades')));
 }
@@ -6332,7 +6519,22 @@ function degenExit(p, lp) {
   const eff = degenEffective(p, lp);
   const rug = degenRugReason(p, lp, eff.entryLiq);
   if (rug) return { pctSell: 100, tag: 'rug', reason: 'rug exit' };
-  if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'TP1 trail' || eff.reason === 'trail@+80' ? 'trail' : 'stop', reason: eff.reason };
+  const shown = applyManualLevels(p, eff);
+  const manStop = typeof userManualStop === 'function' && userManualStop(p);
+  const manTp = typeof userManualTp === 'function' && userManualTp(p);
+  if (manStop && isNum(shown.stop) && lp <= shown.stop) return { pctSell: 100, tag: 'stop', reason: 'manual' };
+  if (manTp && !p.tp1Done && isNum(shown.tp1) && lp >= shown.tp1) {
+    const sell = isNum(+manualOf(p)?.tpSellPct) && +manualOf(p).tpSellPct > 0 ? Math.min(100, +manualOf(p).tpSellPct) : 100;
+    return { pctSell: sell, tag: 'tp1', reason: 'manual' };
+  }
+  if (manStop && manTp) return null;
+  if (!manStop && isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: eff.reason === 'TP1 trail' || eff.reason === 'trail@+80' ? 'trail' : 'stop', reason: eff.reason };
+  if (manTp) {
+    const entryOnly = eff.chainEntry > 0 ? eff.chainEntry : p.avgUsd;
+    const ageOnly = (Date.now() - p.firstTs) / 60000;
+    if (!p.tp1Done && ageOnly >= eff.timeStopMin && lp <= entryOnly) return { pctSell: 100, tag: 'time', reason: 'time' };
+    return null;
+  }
   const entry = eff.chainEntry > 0 ? eff.chainEntry : p.avgUsd;
   const gain = entry > 0 ? lp / entry - 1 : -1;
   if (!p.tp1Done && gain > 0.6 && entry > 0) {
@@ -6352,7 +6554,7 @@ function degenExit(p, lp) {
 }
 function effectiveStop(p, lp) {
   if (p?.scalp) return scalpEffective(p, lp);
-  if (p?.degen) return degenEffective(p, lp);
+  if (p?.degen) return applyManualLevels(p, degenEffective(p, lp));
   if (p?.plan?.myList) return applyManualLevels(p, myListEffectiveStop(p, lp));
   let eff;
   if (p?.sniper && isNum(p.avgUsd) && p.avgUsd > 0) {
@@ -6640,7 +6842,11 @@ function priceExit(p, lp) {
   if (isNum(eff.stop) && lp <= eff.stop) return { pctSell: 100, tag: (eff.reason === 'trail' || eff.reason === 'early trail') ? 'trail' : 'stop' };
   if (eff.quick && isNum(eff.tp1) && lp >= eff.tp1) return { pctSell: 100, tag: 'tp' };
   if (!p.tp2Done && p.tp1Done && isNum(pl.tp2) && lp >= pl.tp2) return { pctSell: 50, tag: 'tp2' };
-  if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) return { pctSell: 50, tag: 'tp1' };
+  if (!p.tp1Done && isNum(pl.tp1) && lp >= pl.tp1) {
+    const man = manualOf(p);
+    const sell = man && isNum(+man.tpSellPct) && +man.tpSellPct > 0 ? Math.min(100, +man.tpSellPct) : (pl.tps && pl.tps[0] && isNum(+pl.tps[0].sellPct) ? Math.min(100, +pl.tps[0].sellPct) : 50);
+    return { pctSell: sell, tag: 'tp1' };
+  }
   if (isNum(pl.timeStopH) && ageH > pl.timeStopH && isNum(pnl) && pnl < 30 && !p.tp1Done) return { pctSell: 100, tag: 'time' };
   return null;
 }
@@ -9480,13 +9686,14 @@ function renderDegen() {
     const note = noteFresh ? (noteWhy === 'bought' ? 'Bought' : noteWhy) : '';
     const signal = pick.entry_now === true || pick.entry_now === 'true';
     if (!signal) {
-      watchRows.push(`<article class="deg-row">
+      watchRows.push(`<article class="ui-row">
         <div class="flex items-center gap-2">
           ${logoHtml(pick.mint, pick.symbol, 2)}
-          <span class="min-w-0 flex-1"><b class="block truncate text-[16px]">${esc(pick.symbol || short(pick.mint))}</b><span class="block truncate text-[12px] text-slate-500">mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
+          <span class="min-w-0 flex-1"><b class="ui-sym">${esc(pick.symbol || short(pick.mint))}</b><span class="ui-meta">mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
           ${ring}
         </div>
-        <p class="deg-reason">${esc(pick.reason || '—')}</p>
+        <p class="ui-clamp">${esc(pick.reason || '—')}</p>
+        <button type="button" class="ui-more" data-deg-more hidden>more</button>
         ${note ? `<p class="deg-note">${esc(note)}</p>` : ''}
       </article>`);
       continue;
@@ -9554,7 +9761,7 @@ function renderDegen() {
     <h3 class="deg-kicker">Signals</h3>
     ${picks ? `<div class="deg-picks">${picks}</div>` : '<p class="empty-note">No entry-now signals.</p>'}
     <h3 class="deg-kicker">Watch</h3>
-    ${watchHtml ? `<div class="deg-watch">${watchHtml}</div>` : '<p class="empty-note">No watch or avoid picks.</p>'}
+    ${watchHtml ? `<div class="ui-card ui-list">${watchHtml}</div>` : '<p class="empty-note">No watch or avoid picks.</p>'}
     <h3 class="deg-kicker">Open positions</h3>
     ${posHtml || '<p class="empty-note">No open degen positions.</p>'}
     <h3 class="deg-kicker">Degen history</h3>
@@ -9564,6 +9771,17 @@ function renderDegen() {
     <h3 class="deg-kicker">Trade log</h3>
     ${degenLogHtml() || '<p class="empty-note">No degen fills yet.</p>'}`; }
   desk?.querySelectorAll('[data-degen-sell]').forEach(b => b.addEventListener('click', () => openTrade('sell', b.dataset.degenSell, { pct: 100 })));
+  desk?.querySelectorAll('.ui-clamp').forEach(p => {
+    const more = p.nextElementSibling;
+    if (!more || !more.matches('[data-deg-more]')) return;
+    if (p.scrollHeight > p.clientHeight + 1) more.hidden = false;
+  });
+  desk?.querySelectorAll('[data-deg-more]').forEach(b => b.addEventListener('click', () => {
+    const p = b.previousElementSibling;
+    if (!p) return;
+    const open = p.classList.toggle('is-open');
+    b.textContent = open ? 'less' : 'more';
+  }));
   placeDegenDesk();
   wantLogos((DEGEN.picks || []).map(p => p.mint).concat(open.map(p => p.mint)), () => renderDegen());
   const home = $('degenCard'); if (home) { releaseMedia(home); home.innerHTML = stats; }
@@ -14197,6 +14415,20 @@ function mountApp() {
   const listBox = $('myListBox');
   const runList = $('runList');
   if (listBox && runList) runList.appendChild(listBox);
+  if (listBox && !document.getElementById('mlSearchCard')) {
+    const search = document.createElement('section');
+    search.id = 'mlSearchCard';
+    search.className = 'ui-card';
+    search.innerHTML = '<h2 class="ui-h">Search</h2><p class="ui-meta">Paste a mint, DexScreener link, or screener row. Save adds it to My List. Nothing buys until you confirm.</p>';
+    const paste = $('pasted')?.closest('label');
+    listBox.parentElement.insertBefore(search, listBox);
+    if (paste) search.appendChild(paste);
+    const again = document.createElement('section');
+    again.id = 'mlAgainCard';
+    again.className = 'ui-card ui-list';
+    again.innerHTML = '<h2 class="ui-h">Buy again</h2>';
+    listBox.parentElement.insertBefore(again, listBox);
+  }
   ['agentPicks', 'agentSettings', 'whaleBox', 'sniperBox'].forEach(id => { const n = $(id); if (n && agents) agents.appendChild(n); });
   const port = $('portfolio'); if (port && trades) trades.appendChild(port);
   if (trades && !$('tradeDegenHost')) { const host = document.createElement('div'); host.id = 'tradeDegenHost'; trades.appendChild(host); }
@@ -14209,7 +14441,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 08:10';
+    stamp.textContent = 'Panel build 2026-11-12 08:15';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -14249,6 +14481,7 @@ function mountApp() {
   const main = document.querySelector('main'); if (main) main.hidden = true;
   $('tabBar')?.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
   $('sheetScrim')?.addEventListener('click', closeTokenSheet);
+  $('posEditScrim')?.addEventListener('click', closePosEdit);
   let saved = 'home'; try { saved = localStorage.getItem('sms:tab') || 'home'; } catch { /* ignore */ }
   showTab(saved);
   try { showTokenSeg('degen'); } catch { /* tokens later */ }
@@ -14483,6 +14716,71 @@ window.__smsScanChart = T.openScanChart;
   #updateBanner .update-note { font-size: 11px; }
   #updateBanner button { flex: 0 0 auto; min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 700; }
   body.lock-warn #updateBanner { top: calc(60px + env(safe-area-inset-top) + var(--lock-h, 0px)); }
+</style>
+<style id="design-system">
+  :root {
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+    --radius-card: 16px; --radius-input: 10px; --radius-pill: 999px;
+    --type-12: 12px; --type-14: 14px; --type-16: 16px; --type-20: 20px; --type-28: 28px;
+  }
+  html[data-theme="night"] {
+    --bg: #0B0D12; --bg-2: #0B0D12; --card: #16181D; --elev: #16181D; --line: #2A2E37;
+    --text: #F5F6F8; --muted: #9CA3AF; --accent: #818CF8; --on-accent: #FFFFFF;
+    --up: #4ADE80; --down: #F87171; --amber: #FBBF24;
+    --accent-soft: transparent; --up-soft: transparent; --down-soft: transparent; --amber-soft: transparent;
+  }
+  body { background: var(--bg); font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: var(--text); }
+  .tab-pane { padding-left: var(--space-4); padding-right: var(--space-4); gap: var(--space-4); }
+  .large-title { font-size: var(--type-28); font-weight: 700; color: var(--text); letter-spacing: -0.03em; }
+  .ui-h, .sec-title, .home-kicker, .deg-kicker, .ml-tool-title {
+    font-size: var(--type-14); font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text) !important;
+  }
+  .status-row b, #degenCard .text-\[13px\], #degenDesk .text-\[13px\] { color: var(--text) !important; font-size: var(--type-16); font-weight: 600; }
+  .ui-card, .glass, .hero-card, .status-row, .ml-tool-card, #myListBox .ml-cards > article, #degenDesk .deg-picks > article, #portfolio .trade-open > article, #homePositions {
+    background: var(--card) !important; color: var(--text); border: 1px solid var(--line) !important; border-radius: var(--radius-card) !important; box-shadow: none !important;
+  }
+  .ui-list { padding: 4px 16px; }
+  .ui-row { background: transparent; color: var(--text); padding: 12px 0; }
+  .ui-list .ui-row + .ui-row { border-top: 1px solid var(--line); }
+  .ui-sym { display: block; font-size: var(--type-16); font-weight: 600; color: var(--text) !important; }
+  .ui-meta { display: block; margin-top: 2px; font-size: var(--type-12); color: var(--muted); }
+  .ui-clamp { margin: 8px 0 0; font-size: var(--type-14); line-height: 1.4; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ui-clamp.is-open { display: block; -webkit-line-clamp: unset; }
+  .ui-more { display: inline-flex; margin-top: 4px; padding: 0; border: 0; background: transparent; color: var(--accent); font-size: var(--type-12); font-weight: 600; min-height: 24px; }
+  .ui-more[hidden] { display: none; }
+  .ui-px, [data-live-mint] { display: block; color: var(--text) !important; background: transparent !important; font-size: var(--type-16); font-weight: 600; }
+  .ui-pnl, [data-live-pnl], .pnl-up, .pnl-down, .chg-up, .chg-down, .chg-pill { background: transparent !important; }
+  .ui-pnl { display: block; margin-top: 2px; font-size: var(--type-12); font-weight: 600; }
+  .ui-pnl.is-up, [data-live-pnl].pnl-up, .pnl-up, .chg-up { color: var(--up) !important; }
+  .ui-pnl.is-down, [data-live-pnl].pnl-down, .pnl-down, .chg-down { color: var(--down) !important; }
+  .ui-pill, .ml-pill, .deg-chip, .hunt-chip, .hunt-score, .chg-pill, article span.rounded-full {
+    background: transparent !important; border: 1px solid var(--line) !important; border-radius: var(--radius-pill) !important; color: var(--muted) !important; box-shadow: none !important;
+  }
+  .ml-pill.ready, .deg-ready { color: var(--up) !important; border-color: var(--up) !important; }
+  .ml-pill.block, .deg-above, .deg-expired { color: var(--down) !important; border-color: var(--down) !important; }
+  .ml-pill.wait, .deg-watch { color: var(--amber) !important; border-color: var(--amber) !important; background: transparent !important; }
+  .ui-btn, .btn-primary, button.bg-violet-600, button.bg-violet-500, button.bg-emerald-500, .start-all, #mlAdd {
+    background: var(--accent) !important; color: #fff !important; border: 0 !important; border-radius: var(--radius-input) !important; font-weight: 600;
+  }
+  button.bg-ink-700, .hunt-ghost, #tmCancel, .ui-btn-secondary {
+    background: transparent !important; color: var(--text) !important; border: 1px solid var(--line) !important; border-radius: var(--radius-input) !important;
+  }
+  button[data-sell], button[data-degen-sell], .stop-all, #degenStop {
+    background: transparent !important; color: var(--down) !important; border: 1px solid var(--down) !important; border-radius: var(--radius-input) !important;
+  }
+  input:not([type=checkbox]):not([type=radio]), select, textarea { border-radius: var(--radius-input); background: var(--card); color: var(--text); border-color: var(--line); }
+  .deg-order, .ml-lv, .hunt-tile, .hunt-cell, .hunt-plan { background: var(--card) !important; border-color: var(--line) !important; }
+  .empty-note { background: transparent; border-color: var(--line); color: var(--muted); }
+  #tabBar button { font-size: 0; }
+  #tabBar button svg { width: 24px; height: 24px; }
+  #posEditScrim { display: none; position: fixed; inset: 0; z-index: 85; background: rgba(11,13,18,.45); }
+  #posEditScrim.on { display: block; }
+  #posEditSheet { z-index: 86; }
+  #posEditSheet .pe-label { display: block; margin-top: 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  #posEditSheet input { width: 100%; min-height: 44px; margin-top: 6px; }
+  #posEditSheet .pe-prev { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--text); }
+  #posEditSheet .pe-save { width: 100%; min-height: 44px; margin-top: 16px; }
+  #posEditSheet .ui-btn-secondary { flex: 1; }
 </style>
 <script>
 (function () {
