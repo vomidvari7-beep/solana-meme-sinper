@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-11T21:50:00Z",
-  "updated_tehran": "2026-11-12 01:20 IRST",
+  "updated_utc": "2026-11-12T05:25:00Z",
+  "updated_tehran": "2026-11-12 08:55 IRST",
   "mints": [
     {
       "mint": "J7udkHVALc6MMjgQcFAHq2E81ohq1ZGb1APcDpv7pump",
@@ -126,6 +126,11 @@
       "mint": "57GLjEQGAsLa22z6xCJyFGRpyL32vxdijDzxxFr9pump",
       "symbol": "konnichiwa",
       "why": "rugged, liquidity $2.3k"
+    },
+    {
+      "mint": "8uLNcrFKzBJYKg8ZU1E8drWnA5o2vV82m6BsgYw9pump",
+      "symbol": "FORKYU",
+      "why": "-85% from high, top-4 near-equal wallets dumped (not confirmed rug)"
     }
   ]
 }
