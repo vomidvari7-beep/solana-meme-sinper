@@ -1,14 +1,24 @@
 {
-  "updated_utc": "2026-11-12T03:55:04.549Z",
-  "updated_tehran": "2026-11-12T07:25:04.549+0330",
+  "updated_utc": "2026-11-12T04:18:00.186Z",
+  "updated_tehran": "2026-11-12T07:48:00.186+0330",
   "start_usd": 100.0,
-  "cash_usd": 74.9829,
-  "equity_usd": 74.9829,
+  "cash_usd": 59.9079,
+  "equity_usd": 74.2476,
   "realized_pnl_usd": -25.0171,
-  "unrealized_pnl_usd": 0.0,
+  "unrealized_pnl_usd": -0.7353,
   "trades": 7,
   "win_rate": 0.1429,
-  "open": [],
+  "open": [
+    {
+      "mint": "6XE2QtpQjk9Ra9f3916uBve9X1vT6SB4DxKNGsX9pump",
+      "symbol": "would",
+      "entry_price": 0.000156978,
+      "price": 0.0001539,
+      "pnl_pct": -4.8776,
+      "size_usd": 15.0,
+      "opened_tehran": "2026-11-12T07:48:00.014+0330"
+    }
+  ],
   "closed": [
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
