@@ -76,8 +76,8 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
     --up-soft: transparent;
     --down: #B91C1C;
     --down-soft: transparent;
-    --text: #0B0D12;
-    --muted: #6B7280;
+    --text: #0F172A;
+    --muted: #64748B;
     --amber: #B45309;
     --amber-soft: rgba(180,83,9,.12);
     --gold: #B45309;
@@ -235,7 +235,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .ml-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; direction: ltr; }
   .ml-lv { min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
   .ml-lv span { display: block; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
-  .ml-lv b { display: block; margin-top: 2px; direction: ltr; unicode-bidi: isolate; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; color: var(--text); word-break: break-all; }
+  .ml-lv b { display: block; margin-top: 2px; direction: ltr; unicode-bidi: isolate; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 650; color: var(--text); word-break: normal; overflow-wrap: normal; white-space: nowrap; line-height: 1.35; }
   #myListBox .ml-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
   #myListBox .ml-pill { display: inline-flex; align-items: center; max-width: 100%; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.2; }
   #myListBox .ml-pill.ceil { color: var(--amber); background: var(--amber-soft); }
@@ -678,7 +678,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 08:15</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 08:45</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
@@ -810,8 +810,19 @@ const fmtMax = (v, f) => v >= INF ? '∞' : f(v);
 function usd(n, d) { if (!isNum(n)) return '—'; const a = Math.abs(n);
   if (a >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B'; if (a >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
   if (a >= 1e3) return '$' + (n/1e3).toFixed(1) + 'k'; return '$' + n.toFixed(d ?? 0); }
-function price(p) { if (!isNum(p)) return '—'; if (p >= 1) return '$' + p.toFixed(4); if (p >= 0.01) return '$' + p.toFixed(5);
-  const dec = Math.min(14, -Math.floor(Math.log10(p)) + 2); return '$' + p.toFixed(dec); }
+function price(p) {
+  if (!isNum(p)) return '—';
+  if (p >= 1) return '$' + p.toFixed(4);
+  if (p >= 0.01) return '$' + p.toFixed(5);
+  if (!(p > 0)) return p === 0 ? '$0' : '—';
+  const zeros = -Math.floor(Math.log10(p)) - 1;
+  if (zeros < 2) return '$' + p.toFixed(6);
+  const exp = Math.floor(Math.log10(p));
+  const digits = (p / Math.pow(10, exp)).toFixed(2).replace('.', '').replace(/^0+/, '').slice(0, 3);
+  const sub = '₀₁₂₃₄₅₆₇₈₉';
+  const mark = String(zeros).split('').map(ch => sub[ch] || ch).join('');
+  return '$0.0' + mark + digits;
+}
 function priceHtml(p) {
   if (!isNum(p)) return '—';
   const a = Math.abs(p);
@@ -5576,7 +5587,7 @@ function closedTradeCard(c) {
   if (img) rememberLogo(c.mint, img, { src: 'dex' });
   const up = isNum(c.pnlUsd) ? c.pnlUsd >= 0 : (isNum(c.pnlPct) ? c.pnlPct >= 0 : true);
   const col = !isNum(c.pnlUsd) && !isNum(c.pnlPct) ? 'text-slate-300' : up ? 'text-emerald-300' : 'text-rose-300';
-  return `<article class="rounded-xl border border-white/10 bg-ink-850/70 p-3">
+  return `<article class="ui-card closed-card">
     <div class="flex items-start gap-2">
       ${logoHtml(c.mint, c.symbol, 3, 'sm')}
       <div class="min-w-0 flex-1">
@@ -5602,25 +5613,25 @@ function closedTradesHtml() {
   const last = all[0];
   const list = all.filter(c => inClosedRange(c.closeTs, closedRange) && (closedSrc === 'all' || c.src.id === closedSrc));
   const s = closedSummary(list);
-  const chip = (kind, id, label) => `<button type="button" data-closed-${kind}="${id}" class="rounded-full border px-2.5 py-1 text-[11px] ${(kind === 'range' ? closedRange : closedSrc) === id ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-slate-400'}">${label}</button>`;
+  const chip = (kind, id, label) => `<button type="button" data-closed-${kind}="${id}" class="${(kind === 'range' ? closedRange : closedSrc) === id ? 'on' : ''}">${label}</button>`;
   const stat = (k, v, cls) => `<div class="min-w-0"><div class="text-[10px] text-slate-500">${k}</div><div class="font-mono text-[12px] whitespace-normal break-words ${cls || 'text-slate-100'}">${v}</div></div>`;
   const lastHtml = last ? `<div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] whitespace-normal break-words">Last trade: <b>${esc(last.symbol || short(last.mint))}</b> <span class="${isNum(last.pnlUsd) && last.pnlUsd < 0 ? 'text-rose-300' : 'text-emerald-300'}">${signedUsd(last.pnlUsd, last.approx)} (${pct(last.pnlPct, 0)})</span></div>` : '';
   const pf = s.pf == null ? '—' : s.pf === Infinity ? '∞' : s.pf.toFixed(2);
   return `<div class="mt-4">
     <h3 class="sec-title text-sm mb-2"><span class="ico">✓</span>Closed trades</h3>
     ${lastHtml}
-    <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-xl border border-white/10 bg-ink-900/40 p-3">
+    <div class="ui-card closed-stats">
       ${stat('Realized', signedUsd(s.usd, s.approx) + '<span class="block text-[10px] text-slate-400">' + signedSol(s.sol) + '</span>', isNum(s.usd) && s.usd < 0 ? 'text-rose-300' : 'text-emerald-300')}
       ${stat('Trades', String(s.n))}
       ${stat('Win rate', (s.winRate == null ? '—' : s.winRate.toFixed(1) + '%') + '<span class="block text-[10px] text-slate-400">' + s.wins + 'W / ' + s.losses + 'L</span>')}
       ${stat('Avg win', signedUsd(s.avgWin, false), 'text-emerald-300')}
       ${stat('Avg loss', signedUsd(s.avgLoss, false), 'text-rose-300')}
       ${stat('Best', s.best ? esc(s.best.symbol) + ' ' + signedUsd(s.best.pnlUsd, s.best.approx) : '—', 'text-emerald-300')}
-      ${stat('Worst', s.worst ? esc(s.worst.symbol) + ' ' + signedUsd(s.worst.pnlUsd, s.worst.approx) : '—', 'text-rose-300')}
+      ${stat('Worst', s.worst ? esc(s.worst.symbol) + ' ' + signedUsd(s.worst.pnlUsd, s.worst.approx) : '—', s.worst && isNum(s.worst.pnlUsd) && s.worst.pnlUsd < 0 ? 'text-rose-300' : (s.worst ? 'text-emerald-300' : ''))}
       ${stat('Profit factor', pf)}
     </div>
-    <div class="mt-2 flex flex-wrap gap-1.5">${chip('range', 'today', 'Today')}${chip('range', 'week', 'Week')}${chip('range', 'month', 'Month')}${chip('range', 'all', 'All')}</div>
-    <div class="mt-1.5 flex flex-wrap gap-1.5">${chip('src', 'all', 'All sources')}${chip('src', 'auto', 'AUTO')}${chip('src', 'manual', 'MANUAL')}${chip('src', 'copy', 'COPY')}${chip('src', 'snipe', 'SNIPE')}${chip('src', 'mylist', 'MY LIST')}</div>
+    <div class="seg">${chip('range', 'today', 'Today')}${chip('range', 'week', 'Week')}${chip('range', 'month', 'Month')}${chip('range', 'all', 'All')}</div>
+    <div class="seg">${chip('src', 'all', 'All sources')}${chip('src', 'auto', 'AUTO')}${chip('src', 'manual', 'MANUAL')}${chip('src', 'copy', 'COPY')}${chip('src', 'snipe', 'SNIPE')}${chip('src', 'mylist', 'MY LIST')}</div>
     <p class="mt-1 text-[10px] text-slate-600 whitespace-normal break-words">USD uses the SOL price saved on each fill. A missing price uses the live SOL price and is marked ≈.</p>
     <div class="mt-2 space-y-2">${list.length ? list.slice(0, 200).map(closedTradeCard).join('') : '<p class="empty-note">No closed trades for this filter.</p>'}${list.length > 200 ? '<p class="empty-note">Showing the latest 200 closed trades.</p>' : ''}</div>
   </div>`;
@@ -6099,7 +6110,7 @@ const VAULT = (() => {
   function portfolioHtml() {
     const locked = vaultSol();
     const room = tradableNow();
-    const badge = '<span class="rounded-full border border-emerald-500/30 px-2 py-0.5 text-emerald-300">locked from bots</span>';
+    const badge = '<span class="rounded-full border border-white/10 px-2 py-0.5 text-slate-500">locked from bots</span>';
     const tradable = room.ok ? fmtSol(room.sol) : (room.error || '—');
     return `<div class="mt-3 rounded-xl border border-white/10 px-3 py-2">
       <div class="flex flex-wrap items-center justify-between gap-2 text-[12px]"><span class="text-slate-400">Vault (locked)</span><b class="num">${fmtSol(locked)} (${usdOf(locked)})</b></div>
@@ -6121,7 +6132,7 @@ const VAULT = (() => {
     const keep = $('vaultAmt')?.value;
     if (box.dataset.mem !== key) {
       box.dataset.mem = key;
-      const badge = '<span class="rounded-full border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">locked from bots</span>';
+      const badge = '<span class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-500">locked from bots</span>';
       box.innerHTML = `<section class="hero-card text-xs"><div class="flex items-center justify-between gap-2"><b class="text-[15px]">Vault <span class="fa font-normal text-slate-400">قفل شده</span></b>${badge}</div>
         <p class="mt-1 text-[11px] text-slate-500 whitespace-normal break-words">Bookkeeping inside the main burner. Locking SOL does not send a transaction. Bots cannot spend the locked amount.</p>
         <div class="mt-2 text-[12px]">Vault (locked) <b id="vaultLockedSol" class="num">—</b></div>
@@ -7232,21 +7243,26 @@ function renderBotBar() {
     if (liveKeys.includes(key)) return 'Running';
     return 'On';
   };
+  const names = { auto: 'Auto', mylist: 'My List', copy: 'Copy', sniper: 'Sniper', momentum: 'Momentum', plans: 'Agent plans', exits: 'Agent exits', quick: 'Quick 15%', degen: 'Degen', scalp: 'Scalp', scan: 'Live scan', split: 'Split entry' };
   const row = ([key, label, sub]) => {
     const on = !!prefs[key];
+    const title = names[key] || label || key;
     const lastSkip = typeof botLast === 'function' ? botLast(key, 'panel') : null;
     const staleCap = lastSkip && /above daily cap|daily cap hit|Daily max spend|Auto daily cap|degen daily loss stop/i.test(lastSkip.reason || '');
+    const paused = on && ((key === 'auto' && typeof agentPauseBuys === 'function' && agentPauseBuys()) || (liveKeys.includes(key) && locked));
+    const dot = !on ? 'off' : paused ? 'pause' : 'run';
     const note = rowStatus(key, on) + (sub ? ' · ' + sub : '') + (lastSkip && !staleCap ? ' · ' + tehranHM(lastSkip.at) + ' ' + lastSkip.reason : '');
     return `<button type="button" data-bot="${key}" aria-pressed="${on}" class="bot-row">
-      <span class="bot-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/></svg></span>
-      <span class="min-w-0 flex-1"><span class="block truncate text-[15px] font-semibold text-slate-100">${label}</span><span class="block truncate text-[12px] text-slate-500">${note}</span></span>
+      <span class="bot-dot ${dot}" aria-hidden="true"></span>
+      <span class="min-w-0 flex-1"><span class="bot-name">${esc(title)}</span><span class="bot-sub">${esc(note)}</span></span>
       <span class="ios-sw${on ? ' on' : ''}" aria-hidden="true"><i></i></span>
     </button>`;
   };
   box.innerHTML = `<section>
-      <div class="flex items-center justify-between gap-3 px-1 pb-3">
-        <div class="min-w-0"><div class="text-[17px] font-semibold">Bot controls</div><div class="text-[12px] text-slate-500">${status}</div><div class="font-mono text-[12px] text-slate-400" data-degen-lock>${esc(degenLockStatus())}</div></div>
-        <div class="seg" style="min-width:148px"><button type="button" id="botAllOn">All ON</button><button type="button" id="botAllOff">All OFF</button></div>
+      <div class="px-1 pb-3">
+        <div class="bot-sub">${status}</div>
+        <div class="font-mono text-[13px] text-slate-400" data-degen-lock>${esc(degenLockStatus())}</div>
+        <div class="seg mt-2" style="max-width:220px"><button type="button" id="botAllOn">All ON</button><button type="button" id="botAllOff">All OFF</button></div>
       </div>
       <div class="hero-card" style="padding:0;overflow:hidden">${items.map(row).join('')}</div>
     </section>`;
@@ -8893,10 +8909,9 @@ function paperPx(v) {
   if (n == null || n < 0) return '—';
   if (n === 0) return '$0';
   if (n >= 1) return '$' + n.toFixed(4);
-  if (n >= 0.01) return '$' + n.toFixed(5);
-  const exp = Math.floor(Math.log10(n));
-  const decimals = Math.min(12, Math.max(2, -exp + 2));
-  return '$' + n.toFixed(decimals);
+  if (n >= 0.01) return '$' + n.toFixed(4);
+  if (n >= 0.000001) return '$' + n.toFixed(6);
+  return '$' + n.toPrecision(3);
 }
 function paperWin(v) {
   const n = paperNum(v);
@@ -8951,14 +8966,14 @@ function paperHtml(doc, err) {
   const trades = paperNum(doc.trades);
   const count = trades != null ? String(Math.round(trades)) : String((Array.isArray(doc.closed) ? doc.closed.length : 0) + open.length);
   const cell = (k, v, cls) => `<div class="min-w-0"><div class="text-[10px] uppercase tracking-wide text-slate-500">${k}</div><div class="num text-[13px] ${cls || ''}">${v}</div></div>`;
-  const openRows = open.map(p => `<tr class="border-t border-white/5"><td class="py-1.5 pr-2"><b>${esc(p.symbol || '—')}</b></td><td class="pr-2 font-mono">${paperPx(p.entry_price)}</td><td class="pr-2 font-mono">${paperPx(p.price)}</td><td class="pr-2 font-mono ${up(paperNum(p.pnl_pct))}">${paperPct(p.pnl_pct)}</td><td class="pr-2 font-mono">${paperMoney(p.size_usd, false)}</td><td class="font-mono text-slate-400">${esc(paperAge(p.opened_tehran))}</td></tr>`).join('');
-  const closedRows = closed.map(p => `<tr class="border-t border-white/5"><td class="py-1.5 pr-2"><b>${esc(p.symbol || '—')}</b></td><td class="pr-2 font-mono">${paperPx(p.entry_price)}</td><td class="pr-2 font-mono">${paperPx(p.exit_price)}</td><td class="pr-2 font-mono ${up(paperNum(p.pnl_usd))}">${paperMoney(p.pnl_usd, true)}<div class="${up(paperNum(p.pnl_pct))}">${paperPct(p.pnl_pct)}</div></td><td class="pr-2">${esc(p.reason || '—')}</td><td class="font-mono text-slate-400">${esc(p.closed_tehran || '—')}</td></tr>`).join('');
+  const openRows = open.map(p => `<div class="paper-row"><div class="min-w-0"><b>${esc(p.symbol || '—')}</b><div class="bot-sub">${paperPx(p.entry_price)} → ${paperPx(p.price)} · ${paperMoney(p.size_usd, false)} · ${esc(paperAge(p.opened_tehran))}</div></div><div class="ui-pnl ${up(paperNum(p.pnl_pct))}">${paperPct(p.pnl_pct)}</div></div>`).join('');
+  const closedRows = closed.map(p => `<div class="paper-row"><div class="min-w-0"><b>${esc(p.symbol || '—')}</b><div class="bot-sub">${paperPx(p.entry_price)} → ${paperPx(p.exit_price)} · ${esc(p.reason || '—')}</div><div class="bot-sub">${esc(p.closed_tehran || '')}</div></div><div class="ui-pnl ${up(paperNum(p.pnl_usd))}">${paperMoney(p.pnl_usd, true)}<div>${paperPct(p.pnl_pct)}</div></div></div>`).join('');
   return `<section class="hero-card"><div class="flex flex-wrap items-center justify-between gap-2"><b>Paper وحشی</b><span class="rounded-full border border-amber-300/40 px-2 py-0.5 text-[10px] text-amber-200">PAPER — no real money</span></div>
     <p class="mt-1 text-[11px] text-slate-500">Updated ${esc(String(when))} Tehran${age ? ' · ' + esc(age) : ''}${stale ? ' · stale' : ''}</p>
     <div class="mt-3 grid grid-cols-2 gap-2">${cell('Equity', paperMoney(equity, false) + (delta == null ? '' : ' <span class="' + up(delta) + '">' + paperMoney(delta, true) + ' · ' + paperPct(deltaPct) + '</span>'))}${cell('Cash', paperMoney(doc.cash_usd, false))}${cell('Realized', '<span class="' + up(paperNum(doc.realized_pnl_usd)) + '">' + paperMoney(doc.realized_pnl_usd, true) + '</span>')}${cell('Unrealized', '<span class="' + up(paperNum(doc.unrealized_pnl_usd)) + '">' + paperMoney(doc.unrealized_pnl_usd, true) + '</span>')}${cell('Trades', esc(count))}${cell('Win rate', esc(paperWin(doc.win_rate)))}</div>
     <p class="mt-1 text-[10px] text-slate-600">Start ${paperMoney(start, false)}. Display only.</p>
-    <details class="mt-3" open><summary class="cursor-pointer text-[12px] text-slate-300">Open (${open.length})</summary><div class="mt-2 overflow-x-auto scroll-thin">${open.length ? `<table class="w-full text-[12px] min-w-[520px]"><thead class="text-left text-slate-500"><tr><th class="py-1">Symbol</th><th>Entry</th><th>Current</th><th>P&amp;L</th><th>Size</th><th>Age</th></tr></thead><tbody>${openRows}</tbody></table>` : '<p class="empty-note">No open paper positions.</p>'}</div></details>
-    <details class="mt-2" open><summary class="cursor-pointer text-[12px] text-slate-300">Closed (${closed.length})</summary><div class="mt-2 overflow-x-auto scroll-thin">${closed.length ? `<table class="w-full text-[12px] min-w-[560px]"><thead class="text-left text-slate-500"><tr><th class="py-1">Symbol</th><th>Entry</th><th>Exit</th><th>P&amp;L</th><th>Reason</th><th>Tehran</th></tr></thead><tbody>${closedRows}</tbody></table>` : '<p class="empty-note">No closed paper trades.</p>'}</div></details>
+    <details class="mt-3" open><summary class="cursor-pointer text-[12px] text-slate-300">Open (${open.length})</summary><div class="mt-2">${open.length ? openRows : '<p class="empty-note">No open paper positions.</p>'}</div></details>
+    <details class="mt-2" open><summary class="cursor-pointer text-[12px] text-slate-300">Closed (${closed.length})</summary><div class="mt-2">${closed.length ? closedRows : '<p class="empty-note">No closed paper trades.</p>'}</div></details>
     <button type="button" data-paper-refresh class="mt-3 rounded-lg border border-white/10 px-3 py-2 text-[12px]">Refresh</button></section>`;
 }
 function paperHost() {
@@ -10744,7 +10759,8 @@ function myListExit(p, lp) {
 }
 function myListPlanHtml(p, pl) {
   if (!p?.plan?.myList || !pl) return '';
-  const tps = (pl.tps || []).map(t => '+' + t.gainPct + '% sell ' + t.sellPct + '%').join(', ') || '—';
+  const one = (n) => { const x = Math.round(+n * 10) / 10; return Number.isInteger(x) ? String(x) : x.toFixed(1); };
+  const tps = (pl.tps || []).map(t => '+' + one(t.gainPct) + '% sell ' + one(t.sellPct) + '%').join(', ') || '—';
   const be = isNum(pl.beAtPct) && pl.beAtPct > 0 ? 'breakeven +' + pl.beAtPct + '%' : 'breakeven off';
   const trail = isNum(pl.trailPct) && pl.trailPct > 0 && isNum(pl.trailAtPct) ? (pl.trailAtPct > 0 ? 'trail ' + pl.trailPct + '% after +' + pl.trailAtPct + '%' : 'trail ' + pl.trailPct + '% from the high') : 'trail off';
   return `<div class="mt-2 text-[11px] leading-snug text-slate-300 whitespace-normal break-words"><b class="text-slate-400">Exit plan</b> · stop ${price(pl.stop)} (${esc(pl.reason || 'initial')}) · ${esc(be)} · ${esc(trail)} · ${esc(tps)}</div>`;
@@ -11480,7 +11496,7 @@ function renderMyList(opts) {
     const sigLv = signalLevels(row.mint) || {};
     const zoneLo = +sigLv.zoneLo > 0 ? +sigLv.zoneLo : (live && +live.ceilingLo > 0 ? +live.ceilingLo : null);
     const zoneHi = +sigLv.zoneHi > 0 ? +sigLv.zoneHi : (live && +live.ceilingHi > 0 ? +live.ceilingHi : null);
-    const entryTxt = zoneLo ? (zoneHi && Math.abs(zoneHi - zoneLo) > zoneLo * 1e-8 ? price(Math.min(zoneLo, zoneHi)) + '–' + price(Math.max(zoneLo, zoneHi)) : price(zoneLo)) : (isNum(v.model.trigger) ? price(v.model.trigger) : '');
+    const entryTxt = zoneLo ? (zoneHi && Math.abs(zoneHi - zoneLo) > zoneLo * 1e-8 ? price(Math.min(zoneLo, zoneHi)) + '<br>' + price(Math.max(zoneLo, zoneHi)) : price(zoneLo)) : (isNum(v.model.trigger) ? price(v.model.trigger) : '');
     const stopLv = (live && +live.stop > 0) ? +live.stop : (+sigLv.stop > 0 ? +sigLv.stop : (isNum(v.model.stop) ? v.model.stop : null));
     const tgtLv = +sigLv.target > 0 ? +sigLv.target : (isNum(v.model.tp1) ? v.model.tp1 : null);
     const lv = (label, value) => `<div class="ml-lv"><span>${label}</span><b>${value || '—'}</b></div>`;
@@ -11569,7 +11585,7 @@ function renderMyList(opts) {
   releaseMedia(box);
   box.innerHTML = `<div class="ml-head">
       <div class="min-w-0"><h3 class="sec-title text-sm"><span class="ico">★</span>My List</h3><p class="ml-rule">${esc(myListWalletSize().label)} · TP +30% · +20%→+5%</p></div>
-      <div class="ml-head-actions"><button type="button" id="mlView" class="text-violet-300">${listTable ? 'Cards' : 'Table'}</button><button type="button" id="mlClear" class="text-rose-300">Clear</button></div>
+      <div class="ml-head-actions"><button type="button" id="mlView">${listTable ? 'Cards' : 'Table'}</button><button type="button" id="mlClear">Clear</button></div>
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
       <button type="button" id="mlEditDefault" class="rounded-xl px-3 text-[12px] font-semibold border border-white/10 text-violet-200">Edit default strategy</button>
@@ -14441,7 +14457,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 08:15';
+    stamp.textContent = 'Panel build 2026-11-12 08:45';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
@@ -14781,6 +14797,122 @@ window.__smsScanChart = T.openScanChart;
   #posEditSheet .pe-prev { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--text); }
   #posEditSheet .pe-save { width: 100%; min-height: 44px; margin-top: 16px; }
   #posEditSheet .ui-btn-secondary { flex: 1; }
+  html[data-theme="day"] {
+    --bg: #EEF1F5; --bg-2: #E6EAF0; --text: #0F172A; --muted: #64748B;
+    --accent: #6366F1; --up: #15803D; --down: #B91C1C; --card: rgba(255,255,255,.7); --line: rgba(255,255,255,.7);
+  }
+  html[data-theme="day"] body {
+    background: linear-gradient(180deg, #EEF1F5 0%, #E6EAF0 100%) !important;
+    color: #0F172A; line-height: 1.45;
+  }
+  html[data-theme="day"] .appbar {
+    background: rgba(255,255,255,.72) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-color: rgba(255,255,255,.7) !important; box-shadow: 0 8px 24px rgba(15,23,42,.06) !important;
+  }
+  html[data-theme="day"] #tabBar {
+    background: rgba(255,255,255,.94) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+    border-color: rgba(255,255,255,.7) !important; box-shadow: 0 8px 24px rgba(15,23,42,.06) !important;
+  }
+  html[data-theme="day"] .ui-card, html[data-theme="day"] .glass, html[data-theme="day"] .hero-card,
+  html[data-theme="day"] .status-row, html[data-theme="day"] .ml-tool-card, html[data-theme="day"] .closed-card,
+  html[data-theme="day"] .closed-stats, html[data-theme="day"] [class*="bg-ink"],
+  html[data-theme="day"] #myListBox .ml-cards > article, html[data-theme="day"] #degenDesk .deg-picks > article,
+  html[data-theme="day"] #portfolio .trade-open > article, html[data-theme="day"] #homePositions {
+    background: rgba(255,255,255,.7) !important; color: #0F172A !important;
+    border: 1px solid rgba(255,255,255,.7) !important; border-radius: 20px !important;
+    box-shadow: 0 8px 24px rgba(15,23,42,.06) !important;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  }
+  html[data-theme="day"] .ml-lv, html[data-theme="day"] .hunt-tile, html[data-theme="day"] .hunt-cell,
+  html[data-theme="day"] .hunt-plan, html[data-theme="day"] .deg-order, html[data-theme="day"] .closed-card .grid > div {
+    background: rgba(255,255,255,.92) !important; border-radius: 14px !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.85); color: #0F172A;
+  }
+  html[data-theme="day"] .sec-title, html[data-theme="day"] .ui-h, html[data-theme="day"] .home-kicker,
+  html[data-theme="day"] .deg-kicker, html[data-theme="day"] .status-row b { color: #0F172A !important; }
+  html[data-theme="day"] .text-slate-100, html[data-theme="day"] .text-slate-200, html[data-theme="day"] .text-slate-300 { color: #0F172A !important; }
+  html[data-theme="day"] .seg { background: rgba(15,23,42,.06) !important; border: 0 !important; border-radius: 999px !important; padding: 4px !important; gap: 4px; }
+  html[data-theme="day"] .seg button { background: transparent !important; color: #64748B !important; border: 0 !important; border-radius: 999px !important; box-shadow: none !important; min-height: 36px; }
+  html[data-theme="day"] .seg button.on { background: #fff !important; color: #0F172A !important; box-shadow: 0 2px 8px rgba(15,23,42,.08) !important; }
+  html[data-theme="day"] #pfClear, html[data-theme="day"] #btnClear, html[data-theme="day"] #bDelete,
+  html[data-theme="day"] #degenReset {
+    background: transparent !important; color: #64748B !important; border: 0 !important; box-shadow: none !important; font-weight: 600;
+  }
+  html[data-theme="day"] #tradeModal #tmConfirm.bg-rose-600 { background: #B91C1C !important; color: #fff !important; border: 0 !important; }
+  html[data-theme="night"] body { background: linear-gradient(180deg, #0B0D12 0%, #151922 100%); }
+  html[data-theme="night"] .ui-card, html[data-theme="night"] .glass, html[data-theme="night"] .hero-card,
+  html[data-theme="night"] .closed-card, html[data-theme="night"] .closed-stats, html[data-theme="night"] [class*="bg-ink"] {
+    background: rgba(22,24,32,.72) !important; color: #F5F6F8 !important;
+    border: 1px solid rgba(255,255,255,.1) !important; border-radius: 20px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35) !important;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  }
+  html[data-theme="night"] .seg { background: rgba(255,255,255,.06) !important; border: 0 !important; }
+  html[data-theme="night"] .seg button.on { background: rgba(255,255,255,.14) !important; color: #F5F6F8 !important; box-shadow: 0 2px 8px rgba(0,0,0,.28) !important; }
+  .closed-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; margin-top: 12px; }
+  .closed-card { padding: 16px; }
+  .closed-card b, .closed-stats { font-variant-numeric: tabular-nums; }
+  .paper-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .paper-row .ui-pnl { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+  .bot-dot { width: 8px; height: 8px; border-radius: 50%; background: #94A3B8; flex: 0 0 auto; }
+  .bot-dot.run { background: #15803D; }
+  .bot-dot.pause { background: #B45309; }
+  .bot-dot.off { background: #94A3B8; }
+  .bot-name { display: block; font-size: 16px; font-weight: 600; line-height: 1.3; color: var(--text); }
+  .bot-sub { display: block; margin-top: 2px; font-size: 13px; line-height: 1.35; color: var(--muted); }
+  html[data-theme="day"] .bot-name { color: #0F172A !important; }
+  html[data-theme="day"] .bot-sub { color: #64748B !important; }
+  html[data-theme="day"] [class*="text-white"],
+  html[data-theme="day"] [class*="text-slate-1"],
+  html[data-theme="day"] [class*="text-slate-2"],
+  html[data-theme="day"] [class*="text-slate-3"],
+  html[data-theme="day"] [class*="text-gray-1"],
+  html[data-theme="day"] [class*="text-gray-2"],
+  html[data-theme="day"] [class*="text-zinc-1"],
+  html[data-theme="day"] [class*="text-neutral-1"] { color: #0F172A !important; }
+  html[data-theme="day"] [class*="text-slate-4"],
+  html[data-theme="day"] [class*="text-slate-5"],
+  html[data-theme="day"] [class*="text-slate-6"] { color: #64748B !important; }
+  html[data-theme="day"] .btn-primary,
+  html[data-theme="day"] .btn-primary *,
+  html[data-theme="day"] .start-all,
+  html[data-theme="day"] .ui-btn,
+  html[data-theme="day"] #mlAdd,
+  html[data-theme="day"] button.bg-violet-600,
+  html[data-theme="day"] button.bg-violet-500,
+  html[data-theme="day"] #tradeModal #tmConfirm.bg-rose-600,
+  html[data-theme="day"] #tradeModal #tmConfirm.bg-rose-600 *,
+  html[data-theme="day"] .kill-head { color: #fff !important; }
+  html[data-theme="day"] .text-emerald-300,
+  html[data-theme="day"] .text-emerald-400,
+  html[data-theme="day"] .pnl-up,
+  html[data-theme="day"] .chg-up { color: #15803D !important; }
+  html[data-theme="day"] .text-rose-300,
+  html[data-theme="day"] .text-rose-400,
+  html[data-theme="day"] .pnl-down,
+  html[data-theme="day"] .chg-down { color: #B91C1C !important; }
+  .stop-all, #pfClear, #btnClear, #bDelete, #degenReset {
+    background: transparent !important; color: var(--muted) !important; border: 0 !important; box-shadow: none !important; font-weight: 600;
+  }
+  .start-check b.on { color: var(--up) !important; background: transparent !important; }
+  .start-check b.off { color: var(--muted) !important; background: transparent !important; }
+  html[data-theme="day"] .token-sheet, html[data-theme="day"] #tradeModal .bg-ink-900 {
+    background: rgba(255,255,255,.96) !important; color: #0F172A !important;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  }
+  html[data-theme="night"] .token-sheet, html[data-theme="night"] #tradeModal .bg-ink-900 {
+    background: rgba(16,18,24,.96) !important; color: #F5F6F8 !important;
+    border-color: rgba(255,255,255,.1) !important;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  }
+  html[data-theme="night"] #tabBar { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  #mlView, #mlClear { color: var(--muted) !important; background: transparent !important; border: 0 !important; font-weight: 600; }
+  .ml-grid .ml-lv b { color: var(--text) !important; white-space: nowrap !important; word-break: normal !important; }
+  #degenStop:not(.is-live) { background: transparent !important; color: var(--muted) !important; border: 0 !important; box-shadow: none !important; }
+  html[data-theme="night"] .ui-btn, html[data-theme="night"] .btn-primary, html[data-theme="night"] .start-all,
+  html[data-theme="night"] button.bg-violet-600, html[data-theme="night"] #mlAdd, html[data-theme="night"] #tabBar button.on {
+    background: #6366F1 !important; color: #fff !important;
+  }
 </style>
 <script>
 (function () {
