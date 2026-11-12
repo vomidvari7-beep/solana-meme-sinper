@@ -1,11 +1,11 @@
 {
-  "updated_utc": "2026-11-12T09:44:50.767Z",
-  "updated_tehran": "2026-11-12T13:14:50.767+0330",
+  "updated_utc": "2026-11-12T10:08:47.202Z",
+  "updated_tehran": "2026-11-12T13:38:47.202+0330",
   "start_usd": 100.0,
-  "cash_usd": 57.0166,
-  "equity_usd": 70.6584,
+  "cash_usd": 45.5596,
+  "equity_usd": 70.3744,
   "realized_pnl_usd": -28.6421,
-  "unrealized_pnl_usd": -0.6995,
+  "unrealized_pnl_usd": -0.9835,
   "trades": 23,
   "win_rate": 0.3043,
   "open": [
@@ -13,10 +13,19 @@
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
       "symbol": "AIB",
       "entry_price": 0.00044574,
-      "price": 0.000437,
-      "pnl_pct": -4.8775,
+      "price": 0.0004458,
+      "pnl_pct": -2.9614,
       "size_usd": 14.27,
       "opened_tehran": "2026-11-12T13:14:50.588+0330"
+    },
+    {
+      "mint": "7yLCJpWQvE2bnX3JZGbmmKrCkCSrSGbqTmgA8tMdpump",
+      "symbol": "FLC",
+      "entry_price": 0.000320484,
+      "price": 0.0003142,
+      "pnl_pct": -4.8774,
+      "size_usd": 11.4,
+      "opened_tehran": "2026-11-12T13:38:46.896+0330"
     }
   ],
   "closed": [
