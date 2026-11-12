@@ -1,14 +1,33 @@
 {
-  "updated_utc": "2026-11-12T08:10:26.126Z",
-  "updated_tehran": "2026-11-12T11:40:26.126+0330",
+  "updated_utc": "2026-11-12T08:38:15.829Z",
+  "updated_tehran": "2026-11-12T12:08:15.829+0330",
   "start_usd": 100.0,
-  "cash_usd": 79.9287,
-  "equity_usd": 79.9287,
+  "cash_usd": 51.035,
+  "equity_usd": 82.1062,
   "realized_pnl_usd": -20.0713,
-  "unrealized_pnl_usd": 0.0,
+  "unrealized_pnl_usd": 2.1775,
   "trades": 19,
   "win_rate": 0.3684,
-  "open": [],
+  "open": [
+    {
+      "mint": "7yLCJpWQvE2bnX3JZGbmmKrCkCSrSGbqTmgA8tMdpump",
+      "symbol": "FLC",
+      "entry_price": 0.000446964,
+      "price": 0.0005369,
+      "pnl_pct": 16.548,
+      "size_usd": 15.98,
+      "opened_tehran": "2026-11-12T12:07:02.862+0330"
+    },
+    {
+      "mint": "7tg8gm8LPw6N6CsRZGDxnykABpBqfqxdbTAvFemHpump",
+      "symbol": "Ricehat",
+      "entry_price": 4.44108e-05,
+      "price": 4.406e-05,
+      "pnl_pct": -3.7409,
+      "size_usd": 12.77,
+      "opened_tehran": "2026-11-12T12:07:09.981+0330"
+    }
+  ],
   "closed": [
     {
       "mint": "AJFnmpiF4VTKeqEWtwBUarib5zKKbXcs594UyrMHpump",
