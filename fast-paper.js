@@ -394,7 +394,8 @@
     "  if (px > p.high) p.high = px;",
     "  var base = p.signalPx > 0 ? p.signalPx : p.entryPx;",
     "  var gain = base > 0 ? px / base - 1 : 0;",
-    "  if (gain <= -num(cfg.hardStopPct) / 100) { closeAll(p, px, 'hard stop'); return; }",
+    "  var entry = p.entryPx > 0 ? p.entryPx : base;",
+    "  if (entry > 0 && px <= entry * (1 - num(cfg.hardStopPct) / 100)) { closeAll(p, px, 'hard_stop'); return; }",
     "  if (gain >= num(cfg.tpPct) / 100) { closeAll(p, px, 'tp +' + cfg.tpPct + '%'); return; }",
     "  if ((now - p.opened) / 60000 >= num(cfg.timeStopMin)) closeAll(p, px, 'time stop');",
     "}",
@@ -441,7 +442,7 @@
     ['minAgeMin', 'Min age minutes', '1', 5],
     ['maxAgeMin', 'Max age minutes', '1', 360],
     ['topHolderPct', 'Top holder max %', '1', 15],
-    ['hardStopPct', 'Hard stop %', '1', 18],
+    ['hardStopPct', 'Hard stop %', '1', 6],
     ['tpPct', 'Take profit %', '1', 30],
     ['timeStopMin', 'Time stop minutes', '1', 60]
   ];
@@ -485,6 +486,7 @@
       if (raw.rej && typeof raw.rej === 'object') base.rej = raw.rej;
       if (raw.block && typeof raw.block === 'object') base.block = raw.block;
       if (raw.on === true) base._resume = true;
+      if (+base.settings.hardStopPct === 18) base.settings.hardStopPct = 6;
       return base;
     } catch (e) { return fresh(); }
   }
@@ -603,7 +605,7 @@
       '<div class="fp-agents" data-fp-agents></div>' +
       '<p class="bot-sub" data-fp-ws></p>' +
       '<button type="button" class="fp-toggle" data-fp-toggle><span>Engine</span><span class="ios-sw" data-fp-sw><i></i></span></button>' +
-      '<p class="bot-sub">Paper bankroll only. This switch cannot sign or spend the burner.</p>' +
+      '<p class="bot-sub">Paper bankroll only. Hard stop −6% of entry. Take profit +30%. Time stop 60 min. This switch cannot sign or spend the burner.</p>' +
       '<h3 class="tone tone-paper" style="margin-top:14px">Open</h3><div data-fp-open></div>' +
       '<h3 class="tone tone-paper" style="margin-top:12px">Recent closes</h3><div data-fp-closes></div>' +
       '<h3 class="tone tone-paper" style="margin-top:12px">Rejects</h3><p class="bot-sub" data-fp-rej>No rejects yet.</p>' +
