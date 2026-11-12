@@ -556,12 +556,12 @@
     var open = state.open || [];
     root.querySelector('[data-fp-open]').innerHTML = open.length ? open.map(function (p) {
       var ch = p.entryPx > 0 && p.lastPx > 0 ? (p.lastPx / p.entryPx - 1) * 100 : 0;
-      return '<div class="paper-row"><div class="min-w-0"><b>' + esc(p.symbol) + '</b><div class="bot-sub">' + money(p.costLeft, false) + ' left</div></div><div class="ui-pnl ' + (ch < 0 ? 'pnl-down' : 'pnl-up') + '">' + (ch >= 0 ? '+' : '−') + Math.abs(ch).toFixed(1) + '%</div></div>';
+      return '<div class="paper-row"><div class="flex items-center gap-2 min-w-0">' + logoMark(p.mint, p.symbol) + '<div class="min-w-0"><b>' + esc(p.symbol) + '</b><div class="bot-sub">' + money(p.costLeft, false) + ' left</div></div></div><div class="ui-pnl ' + (ch < 0 ? 'pnl-down' : 'pnl-up') + '">' + (ch >= 0 ? '+' : '−') + Math.abs(ch).toFixed(1) + '%</div></div>';
     }).join('') : '<p class="empty-note">No open paper trades.</p>';
     var closed = state.closed || [];
     root.querySelector('[data-fp-closes]').innerHTML = closed.length ? closed.slice(0, 8).map(function (c) {
       var why = c.reason || ((c.setup ? c.setup + ' · ' : '') + (c.why || ''));
-      return '<div class="paper-row"><div class="min-w-0"><b>' + esc(c.symbol) + '</b><div class="bot-sub">' + esc(c.tehran || '') + ' · ' + esc(why) + '</div><div class="bot-sub">' + esc(c.mint || '') + '</div></div><div class="ui-pnl ' + (c.pnl < 0 ? 'pnl-down' : 'pnl-up') + '">' + money(c.pnl, true) + '</div></div>';
+      return '<div class="paper-row"><div class="flex items-center gap-2 min-w-0">' + logoMark(c.mint, c.symbol) + '<div class="min-w-0"><b>' + esc(c.symbol) + '</b><div class="bot-sub">' + esc(c.tehran || '') + ' · ' + esc(why) + '</div></div></div><div class="ui-pnl ' + (c.pnl < 0 ? 'pnl-down' : 'pnl-up') + '">' + money(c.pnl, true) + '</div></div>';
     }).join('') : '<p class="empty-note">No paper closes yet.</p>';
     var rej = state.rej || {};
     var bits = Object.keys(rej).sort(function (a, b) { return rej[b] - rej[a]; }).slice(0, 6);
@@ -573,6 +573,15 @@
       root.dataset.bound = '1';
       root.addEventListener('click', onClick);
     }
+    if (typeof wantLogos === 'function') {
+      var ids = (state.open || []).map(function (p) { return p.mint; }).concat((state.closed || []).map(function (c) { return c.mint; }));
+      wantLogos(ids, function () { paint(); });
+    }
+  }
+  function logoMark(mint, symbol) {
+    if (typeof logoHtml === 'function') return logoHtml(mint, symbol, 1, 'row', 'paper');
+    var ch = esc(String(symbol || '?').slice(0, 1).toUpperCase());
+    return '<span class="logo-slot"><span class="mono-logo logo-row logo-tone-paper">' + ch + '</span></span>';
   }
   function equityOf(s) {
     var drag = ((s.settings && +s.settings.slipPct || 2) + (s.settings && +s.settings.feePct || 0.5)) / 100;

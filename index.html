@@ -299,12 +299,20 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
   .setup-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
   .chart-frame { overflow: hidden; }
   .chart-frame canvas { display: block; width: 100%; height: 220px; }
-  .mono-logo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--tab-btn); color: var(--text); font-size: 13px; font-weight: 700; overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
-  .logo-slot { display: inline-grid; flex: 0 0 auto; }
+  .mono-logo, .mono-logo.logo-sq, .mono-logo.logo-sm, .mono-logo.logo-row { width: 26px; height: 26px; min-width: 26px; min-height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--tab-btn); color: var(--text); font-size: 11px; font-weight: 700; overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .logo-slot { display: inline-grid; width: 26px; height: 26px; flex: 0 0 26px; }
   .logo-slot > .mono-logo { grid-area: 1 / 1; }
-  img.mono-logo { display: block; object-fit: cover; }
-  .mono-logo.logo-sq { width: 40px; height: 40px; border-radius: 12px; }
-  .mono-logo.logo-sm { width: 32px; height: 32px; border-radius: 8px; font-size: 10px; }
+  img.mono-logo { display: block; object-fit: cover; background: transparent; }
+  .logo-tone-paper { background: #E2E8F0; color: #475569; }
+  .logo-tone-list { background: #E0E7FF; color: #4338CA; }
+  .logo-tone-bot { background: #DBEAFE; color: #1D4ED8; }
+  .logo-tone-degen { background: #FFEDD5; color: #C2410C; }
+  .logo-tone-vault { background: #CCFBF1; color: #0F766E; }
+  html[data-theme="night"] .logo-tone-paper { background: #334155; color: #E2E8F0; }
+  html[data-theme="night"] .logo-tone-list { background: #312E81; color: #E0E7FF; }
+  html[data-theme="night"] .logo-tone-bot { background: #1E3A8A; color: #DBEAFE; }
+  html[data-theme="night"] .logo-tone-degen { background: #7C2D12; color: #FFEDD5; }
+  html[data-theme="night"] .logo-tone-vault { background: #134E4A; color: #CCFBF1; }
   .tag-down { display: inline-flex; align-items: center; height: 18px; margin-left: 4px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--down); background: var(--down-soft); color: var(--down); font-size: 10px; font-weight: 700; letter-spacing: .03em; vertical-align: middle; }
   .setup-score { color: var(--accent); font-weight: 700; }
   .hunt-head, .hunt-badges, .hunt-legs, .hunt-chips, .hunt-actions { display: flex; align-items: center; gap: 8px; }
@@ -677,7 +685,7 @@ tailwind.config = { darkMode: 'class', theme: { extend: {
 </main>
 
 <footer class="max-w-7xl mx-auto px-4 pb-8 pt-2">
-  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 10:25</p>
+  <p id="panelBuild" class="mb-2 text-[12px] font-mono text-slate-500">Panel build 2026-11-12 11:05</p>
   <button type="button" id="checkUpdate" class="mb-3 rounded-xl border px-3 text-[13px] font-semibold" style="min-height:44px">Check for update</button>
   <div class="glass rounded-2xl p-3 text-[11px] text-slate-400 leading-relaxed">
     ⚠️ <b>Analysis only — not financial advice.</b> Meme coins are extremely high risk; most go to zero. Scores are transparent heuristics computed from public DexScreener / RugCheck data and can be wrong or stale within minutes. Always verify on-chain and never risk more than you can afford to lose.
@@ -2209,6 +2217,7 @@ async function runAnalysis({ boosted = false } = {}) {
 
 /* ============================ LOGOS + TREND ============================ */
 const LOGO_LS = 'sms:logos';
+const LOGO_TTL = 24 * 60 * 60 * 1000;
 const tokenTape = new Map();
 const logoMiss = new Map();
 let logoMem = null;
@@ -2227,7 +2236,20 @@ function saveLogoBook(book) {
 }
 function cachedLogo(mint) {
   const row = logoBook()[String(mint || '').trim()];
-  return row && typeof row.url === 'string' ? row.url : '';
+  if (!row || row.miss || Date.now() - (row.at || 0) > LOGO_TTL) return '';
+  return typeof row.url === 'string' ? row.url : '';
+}
+function logoKnownMiss(mint) {
+  const row = logoBook()[String(mint || '').trim()];
+  return !!(row && row.miss && Date.now() - (row.at || 0) < LOGO_TTL);
+}
+function rememberMiss(mint) {
+  const m = String(mint || '').trim();
+  if (!looksMint(m)) return;
+  const book = logoBook();
+  book[m] = { miss: true, at: Date.now() };
+  saveLogoBook(book);
+  logoMiss.set(m, Date.now());
 }
 function rememberLogo(mint, url, opts) {
   const m = String(mint || '').trim();
@@ -2237,10 +2259,11 @@ function rememberLogo(mint, url, opts) {
   const book = logoBook();
   const prev = book[m];
   const src = (opts && opts.src) || 'img';
-  if (prev && prev.url === u) return false;
+  const now = Date.now();
+  if (prev && prev.url === u && !prev.miss && now - (prev.at || 0) < LOGO_TTL) return false;
   const rank = { pump: 1, img: 1, jup: 2, dex: 3 };
-  if (prev && (rank[prev.src] || 1) > (rank[src] || 1)) return false;
-  book[m] = { url: u.slice(0, 500), at: Date.now(), src };
+  if (prev && prev.url && prev.url !== u && (rank[prev.src] || 1) > (rank[src] || 1) && now - (prev.at || 0) < LOGO_TTL) return false;
+  book[m] = { url: u.slice(0, 500), at: now, src };
   const keys = Object.keys(book);
   if (keys.length > 400) keys.sort((a, b) => (book[a].at || 0) - (book[b].at || 0)).slice(0, keys.length - 320).forEach(k => { delete book[k]; });
   saveLogoBook(book);
@@ -2250,7 +2273,7 @@ const logoBad = new Map();
 function noteLogo(mint, url) { rememberLogo(mint, url, { src: 'pump' }); }
 function logoFail(img) {
   if (!img) return;
-  const showLetter = () => { img.onload = null; img.onerror = null; img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; img.style.display = 'none'; const n = img.nextElementSibling; if (n) n.style.display = 'grid'; };
+  const showLetter = () => { img.onload = null; img.onerror = null; img.removeAttribute('src'); img.style.display = 'none'; const n = img.nextElementSibling; if (n) n.style.display = 'grid'; if (looksMint(img.dataset.mint || '')) rememberMiss(img.dataset.mint); };
   if (img.dataset.fell) { showLetter(); return; }
   const mint = img.dataset.mint || '';
   const src = String(img.currentSrc || img.src || '');
@@ -2265,16 +2288,17 @@ function logoFail(img) {
   }
   showLetter();
 }
-function logoHtml(mint, symbol, letters, kind) {
-  const n = letters || 2;
+function logoHtml(mint, symbol, letters, kind, tone) {
+  const n = letters || 1;
   const mono = esc(String(symbol || '?').slice(0, n).toUpperCase());
   const known = cachedLogo(mint);
-  const pump = !known && looksMint(mint) ? 'https://images.pump.fun/coin-image/' + String(mint).trim() : '';
+  const pump = !known && !logoKnownMiss(mint) && looksMint(mint) ? '' : '';
   const src = known || pump;
-  const extra = kind === 'sq' ? ' logo-sq' : kind === 'sm' ? ' logo-sm' : '';
+  const extra = ' logo-row' + (kind === 'sq' ? ' logo-sq' : kind === 'sm' ? ' logo-sm' : '');
+  const toneCls = tone ? ' logo-tone-' + tone : '';
   const mintAttr = looksMint(mint) ? ` data-mint="${esc(mint)}"` : '';
-  const img = src ? `<img src="${safeUrl(src)}" alt="" class="mono-logo${extra}"${mintAttr}${pump ? ' onload="noteLogo(this.dataset.mint,this.currentSrc||this.src)"' : ''} onerror="logoFail(this)">` : '';
-  return `<span class="logo-slot shrink-0">${img}<span class="mono-logo${extra}" style="${src ? 'display:none' : ''}">${mono}</span></span>`;
+  const img = src ? `<img src="${safeUrl(src)}" alt="" width="26" height="26" loading="lazy" referrerpolicy="no-referrer" class="mono-logo${extra}"${mintAttr} onerror="logoFail(this)">` : '';
+  return `<span class="logo-slot shrink-0">${img}<span class="mono-logo${extra}${toneCls}" style="${src ? 'display:none' : ''}">${mono}</span></span>`;
 }
 function tapeNum(v) { const n = +v; return Number.isFinite(n) ? n : null; }
 function noteTape(mint, p) {
@@ -2326,7 +2350,7 @@ async function ensureTokenMeta(mints) {
   const need = list.filter(m => {
     const tape = tokenTape.get(m);
     const fresh = !!(tape && now - tape.at < 45000);
-    const looked = logoMiss.get(m) && now - logoMiss.get(m) < 30 * 60 * 1000;
+    const looked = logoKnownMiss(m) || (logoMiss.get(m) && now - logoMiss.get(m) < LOGO_TTL);
     if (cachedLogo(m) && fresh) return false;
     if (!cachedLogo(m) && looked && fresh) return false;
     return true;
@@ -2364,27 +2388,48 @@ async function ensureTokenMeta(mints) {
         if (img && rememberLogo(mint, img, { src: 'dex' })) changed = true;
       }
     }
-    const queue = need.filter(m => !cachedLogo(m) && !(logoMiss.get(m) > Date.now() - 30 * 60 * 1000)).slice(0, 24);
+  } finally { tokenMetaBusy = false; }
+  return changed;
+}
+let logoFallbackBusy = false;
+async function fillLogoFallbacks(mints) {
+  const queue = (mints || []).filter(m => looksMint(m) && !cachedLogo(m) && !logoKnownMiss(m)).slice(0, 12);
+  if (!queue.length || logoFallbackBusy) return false;
+  logoFallbackBusy = true;
+  let changed = false;
+  try {
     for (const mint of queue) {
+      if (cachedLogo(mint) || logoKnownMiss(mint)) continue;
       try {
-        const j = await fetchJSONOnce('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(mint), { timeout: 6000 });
+        const j = await fetchJSONOnce('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(mint), { timeout: 5000 });
         const rows = Array.isArray(j) ? j : [];
         const row = rows.find(x => x && (x.id === mint || x.address === mint));
         const icon = row && (row.icon || row.logoURI);
         if (icon && rememberLogo(mint, icon, { src: 'jup' })) changed = true;
-        else logoMiss.set(mint, Date.now());
+        else if (rememberLogo(mint, 'https://images.pump.fun/coin-image/' + mint, { src: 'pump' })) changed = true;
       } catch { logoMiss.set(mint, Date.now()); }
     }
-  } finally { tokenMetaBusy = false; }
+  } finally { logoFallbackBusy = false; }
   return changed;
 }
 function wantLogos(mints, again) {
-  ensureTokenMeta(mints).then(changed => {
-    if (!changed || metaRedraw || typeof again !== 'function') return;
+  const redraw = () => {
+    if (metaRedraw || typeof again !== 'function') return;
     metaRedraw = true;
     try { again(); } catch { /* redraw */ }
     metaRedraw = false;
-  }).catch(() => {});
+  };
+  const run = (left) => {
+    ensureTokenMeta(mints).then(changed => {
+      if (changed) redraw();
+      return fillLogoFallbacks(mints);
+    }).then(more => {
+      if (more) redraw();
+      const pending = (mints || []).filter(m => looksMint(m) && !cachedLogo(m) && !logoKnownMiss(m));
+      if (pending.length && left > 0) setTimeout(() => run(left - 1), 3000);
+    }).catch(() => { if (left > 0) setTimeout(() => run(left - 1), 3000); });
+  };
+  run(2);
 }
 
 /* ============================ RENDER ============================ */
@@ -5372,7 +5417,7 @@ function posCard(p) {
   }
   return `<article class="glass rounded-2xl p-3.5">
     <div class="flex items-start gap-3">
-      ${logoHtml(p.mint, p.symbol, 3, 'sq')}
+      ${logoHtml(p.mint, p.symbol, 1, 'row', src.tone || 'list')}
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-1.5"><b class="text-base break-words">${esc(posLabel(p))}</b><span class="ui-pill tone-${src.tone || 'paper'}">${src.label}</span>${pl.quick ? `<span class="ui-pill">Quick 15% · 1:1</span>` : ''}</div>
         <div class="text-[12px] break-words" style="color:var(--muted)">${p.tokenName && p.tokenName.toLowerCase() !== String(posLabel(p)).toLowerCase() ? esc(p.tokenName) + ' · ' : ''}${esc(p.wallet)} · held <span data-held="${p.firstTs || 0}" data-held-mint="${esc(p.mint)}">${heldFor(p.firstTs)}</span></div>
@@ -5562,7 +5607,7 @@ function closedTradeCard(c) {
   const col = !isNum(c.pnlUsd) && !isNum(c.pnlPct) ? 'text-slate-300' : up ? 'text-emerald-300' : 'text-rose-300';
   return `<article class="ui-card closed-card">
     <div class="flex items-start gap-2">
-      ${logoHtml(c.mint, c.symbol, 3, 'sm')}
+      ${logoHtml(c.mint, c.symbol, 1, 'row', (c.src && c.src.tone) || 'paper')}
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-1.5"><b class="break-words">${esc(c.symbol || short(c.mint))}</b><span class="ui-pill tone-${c.src.tone || 'paper'}">${c.src.label}</span><span class="ui-pill">${esc(c.exit)}</span></div>
         <div class="mt-0.5 text-[10px] text-slate-500 whitespace-normal break-words">Opened ${esc(tehranWhen(c.openTs))} · closed ${esc(tehranWhen(c.closeTs))} · held ${esc(spanText((c.closeTs || 0) - (c.openTs || 0)))} · Tehran</div>
@@ -9032,8 +9077,8 @@ function paperHtml(doc, err) {
   const trades = paperNum(doc.trades);
   const count = trades != null ? String(Math.round(trades)) : String((Array.isArray(doc.closed) ? doc.closed.length : 0) + open.length);
   const cell = (k, v, cls) => `<div class="min-w-0"><div class="text-[10px] uppercase tracking-wide text-slate-500">${k}</div><div class="num text-[13px] ${cls || ''}">${v}</div></div>`;
-  const openRows = open.map(p => `<div class="paper-row"><div class="min-w-0"><b>${esc(p.symbol || '—')}</b><div class="bot-sub">${paperPx(p.entry_price)} → ${paperPx(p.price)} · ${paperMoney(p.size_usd, false)} · ${esc(paperAge(p.opened_tehran))}</div></div><div class="ui-pnl ${up(paperNum(p.pnl_pct))}">${paperPct(p.pnl_pct)}</div></div>`).join('');
-  const closedRows = closed.map(p => `<div class="paper-row"><div class="min-w-0"><b>${esc(p.symbol || '—')}</b><div class="bot-sub">${paperPx(p.entry_price)} → ${paperPx(p.exit_price)} · ${esc(p.reason || '—')}</div><div class="bot-sub">${esc(p.closed_tehran || '')}</div></div><div class="ui-pnl ${up(paperNum(p.pnl_usd))}">${paperMoney(p.pnl_usd, true)}<div>${paperPct(p.pnl_pct)}</div></div></div>`).join('');
+  const openRows = open.map(p => `<div class="paper-row"><div class="flex items-center gap-2 min-w-0">${logoHtml(p.mint, p.symbol, 1, 'row', 'paper')}<div class="min-w-0"><b>${esc(p.symbol || '—')}</b><div class="bot-sub">${paperPx(p.entry_price)} → ${paperPx(p.price)} · ${paperMoney(p.size_usd, false)} · ${esc(paperAge(p.opened_tehran))}</div></div></div><div class="ui-pnl ${up(paperNum(p.pnl_pct))}">${paperPct(p.pnl_pct)}</div></div>`).join('');
+  const closedRows = closed.map(p => `<div class="paper-row"><div class="flex items-center gap-2 min-w-0">${logoHtml(p.mint, p.symbol, 1, 'row', 'paper')}<div class="min-w-0"><b>${esc(p.symbol || '—')}</b><div class="bot-sub">${paperPx(p.entry_price)} → ${paperPx(p.exit_price)} · ${esc(p.reason || '—')}</div><div class="bot-sub">${esc(p.closed_tehran || '')}</div></div></div><div class="ui-pnl ${up(paperNum(p.pnl_usd))}">${paperMoney(p.pnl_usd, true)}<div>${paperPct(p.pnl_pct)}</div></div></div>`).join('');
   return `<section class="hero-card"><div class="flex flex-wrap items-center justify-between gap-2"><b class="tone tone-paper">Degen Hunter paper</b><span class="ui-pill tone-paper">display only</span></div>
     <p class="mt-1 text-[11px] text-slate-500">Updated ${esc(String(when))} Tehran${age ? ' · ' + esc(age) : ''}${stale ? ' · stale' : ''}</p>
     <div class="mt-3 grid grid-cols-2 gap-2">${cell('Equity', paperMoney(equity, false) + (delta == null ? '' : ' <span class="' + up(delta) + '">' + paperMoney(delta, true) + ' · ' + paperPct(deltaPct) + '</span>'))}${cell('Cash', paperMoney(doc.cash_usd, false))}${cell('Realized', '<span class="' + up(paperNum(doc.realized_pnl_usd)) + '">' + paperMoney(doc.realized_pnl_usd, true) + '</span>')}${cell('Unrealized', '<span class="' + up(paperNum(doc.unrealized_pnl_usd)) + '">' + paperMoney(doc.unrealized_pnl_usd, true) + '</span>')}${cell('Trades', esc(count))}${cell('Win rate', esc(paperWin(doc.win_rate)))}</div>
@@ -9057,6 +9102,11 @@ function paperPaint() {
   if (!host) return;
   host.innerHTML = '<div id="fastPaperRoot"></div>' + paperHtml(PAPER.doc, PAPER.err);
   host.querySelector('[data-paper-refresh]')?.addEventListener('click', () => { paperRefresh(); });
+  try {
+    const doc = PAPER.doc || {};
+    const mints = [].concat(doc.open || [], doc.closed || []).map(r => r && r.mint).filter(Boolean);
+    wantLogos(mints, () => { if (tradeSeg === 'paper') paperPaint(); });
+  } catch { /* logos later */ }
   try { if (window.SMSFastPaper) window.SMSFastPaper.paint(); } catch { /* fast paper later */ }
 }
 async function paperRefresh() {
@@ -9772,7 +9822,7 @@ function renderDegen() {
     if (!signal) {
       watchRows.push(`<article class="ui-row">
         <div class="flex items-center gap-2">
-          ${logoHtml(pick.mint, pick.symbol, 2)}
+          ${logoHtml(pick.mint, pick.symbol, 1, 'row', 'degen')}
           <span class="min-w-0 flex-1"><b class="ui-sym">${esc(pick.symbol || short(pick.mint))}</b><span class="ui-meta">mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
           ${ring}
         </div>
@@ -9790,7 +9840,7 @@ function renderDegen() {
       </div></div>` : '';
     signalCards.push(`<article>
       <div class="flex items-center gap-2">
-        ${logoHtml(pick.mint, pick.symbol, 2)}
+        ${logoHtml(pick.mint, pick.symbol, 1, 'row', 'degen')}
         <span class="min-w-0 flex-1"><b class="block truncate text-[17px]">${esc(pick.symbol || short(pick.mint))}</b><span class="block truncate text-[12px] text-slate-500">${esc(degenAgeLabel(pick.age_h))} · mcap ${usd(pick.mcap_usd)} · liq ${usd(pick.liq_usd)}</span></span>
         ${ring}
       </div>
@@ -9818,7 +9868,7 @@ function renderDegen() {
     const timeTxt = p.tp1Done ? 'time stop done' : (leftMin <= 0 ? 'time stop due' : leftMin + 'm left');
     const pnlCls = !isNum(money.pnl) ? 'text-slate-400' : (money.pnl >= 0 ? 'text-emerald-300' : 'text-rose-300');
     return `<article class="border-b border-white/10 py-2.5">
-      <div class="flex items-center justify-between gap-2"><span class="flex items-center gap-2 min-w-0">${logoHtml(p.mint, p.symbol, 2, 'sm')}<b class="text-sm truncate">${esc(p.symbol)}</b></span><span class="deg-chip">DEGEN</span></div>
+      <div class="flex items-center justify-between gap-2"><span class="flex items-center gap-2 min-w-0">${logoHtml(p.mint, p.symbol, 1, 'row', 'degen')}<b class="text-sm truncate">${esc(p.symbol)}</b></span><span class="deg-chip">DEGEN</span></div>
       <div class="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Entry</div><div class="font-mono">${price(p.avgUsd)}</div></div>
         <div><div class="text-[10px] uppercase tracking-wide text-slate-500">Now</div><div class="font-mono" data-live-mint="${esc(p.mint)}">${price(lp)}</div></div>
@@ -11588,7 +11638,7 @@ function renderMyList(opts) {
     if (!window.__pxSeen) window.__pxSeen = {};
     const flash = isNum(v.px) && window.__pxSeen[row.mint] != null && window.__pxSeen[row.mint] !== v.px ? (v.px > window.__pxSeen[row.mint] ? 'flash-up' : 'flash-down') : '';
     if (isNum(v.px)) window.__pxSeen[row.mint] = v.px;
-    const logo = logoHtml(row.mint, row.symbol, 2);
+    const logo = logoHtml(row.mint, row.symbol, 1, 'row', 'list');
     return `<article data-row="${esc(row.id)}" class="ml-card">
       <button type="button" data-ml-open="${esc(row.id)}" class="ml-top">
         ${logo}
@@ -14536,7 +14586,7 @@ function mountApp() {
     const stamp = document.createElement('p');
     stamp.id = 'panelBuildTop';
     stamp.className = 'text-[12px] font-mono text-slate-500';
-    stamp.textContent = 'Panel build 2026-11-12 10:25';
+    stamp.textContent = 'Panel build 2026-11-12 11:05';
     const title = settings.querySelector('.large-title');
     if (title) title.after(stamp); else settings.prepend(stamp);
   }
