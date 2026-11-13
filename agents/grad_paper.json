@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T19:53:45Z",
-  "updated_tehran": "2026-11-13T23:23:45+03:30",
+  "updated_utc": "2026-11-13T20:07:41Z",
+  "updated_tehran": "2026-11-13T23:37:41+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -48,21 +48,21 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 324,
-    "uptime_min": 77.3,
+    "tokens_tracked": 375,
+    "uptime_min": 91.3,
     "counters": {
-      "trades": 52555,
+      "trades": 58254,
       "entered_band": 23,
       "watch_accept": 18,
-      "creates": 595,
-      "pp_new_tokens": 169,
+      "creates": 650,
+      "pp_new_tokens": 196,
       "entry_reject": 26,
       "complete_trade_reserves_zero": 188,
       "complete_CompleteEvent": 7,
       "complete_CompletePumpAmmMigrationEvent": 7,
-      "pump_logs_reconnects": 9,
-      "watchdog_pump_logs": 14,
-      "pp_reconnects": 11,
+      "pump_logs_reconnects": 14,
+      "watchdog_pump_logs": 16,
+      "pp_reconnects": 13,
       "pp_migrations": 11,
       "complete_pumpportal_migrate": 11,
       "entry_accept": 1
@@ -70,16 +70,16 @@
     "feeds": {
       "amm": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T19:53:38Z"
+        "connected_utc": "2026-11-13T20:06:59Z"
       },
       "pump_logs": {
-        "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T19:53:08Z",
-        "last_msg_utc": "2026-11-13T19:53:08Z"
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-13T20:06:42Z",
+        "last_msg_utc": "2026-11-13T20:07:41Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-13T19:53:40Z",
-        "last_msg_utc": "2026-11-13T19:53:40Z"
+        "connected_utc": "2026-11-13T20:06:41Z",
+        "last_msg_utc": "2026-11-13T20:07:39Z"
       }
     },
     "kill_switch": false,
@@ -176,7 +176,7 @@
         ]
       }
     ],
-    "sol_usd": 80.06,
+    "sol_usd": 80.29350138242638,
     "realized_today_usd": -8.6068,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
@@ -184,61 +184,61 @@
   },
   "watchlist": [
     {
-      "mint": "4Z1HZqBwToghsFWHVB4LnF45w4VwbxLLKf71cZMopump",
-      "symbol": "Almost",
-      "progress": 0.799,
-      "sol_in_curve": 67.9,
-      "buyers_seen": 5,
+      "mint": "EGqbBS9JVhQErcbUFZdQpReN6uiCo2YwQvN8a8fdpump",
+      "symbol": null,
+      "progress": 0.651,
+      "sol_in_curve": 55.3,
+      "buyers_seen": 12,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 1
-    },
-    {
-      "mint": "3vKbL9MU2u6x7KAma4o8utbZDm8hBZm1k9QojSxKpump",
-      "symbol": "LONGURO",
-      "progress": 0.743,
-      "sol_in_curve": 63.2,
-      "buyers_seen": 51,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 7
-    },
-    {
-      "mint": "Cnvorma84PSJQKHkoVbjAN4ibziFKdWUJnXB6bzZpump",
-      "symbol": "Bull",
-      "progress": 0.666,
-      "sol_in_curve": 56.7,
-      "buyers_seen": 202,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 9
+      "whale_buys": 0
     },
     {
       "mint": "CoxKzTdc6yFoMmKN2V1hApZJ8DWKfvuujYxZQJh9pump",
       "symbol": null,
-      "progress": 0.649,
-      "sol_in_curve": 55.2,
+      "progress": 0.637,
+      "sol_in_curve": 54.1,
       "buyers_seen": 33,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 3
     },
     {
-      "mint": "3PcAYGBrYUGYi6aL74RbiW2X4GRVjKSwHCZ2Mvb2pump",
+      "mint": "27Jnd8Xw1gmbCrQFVZ4DnAvB29H586XCxoe6nJQipump",
       "symbol": null,
-      "progress": 0.624,
-      "sol_in_curve": 53.0,
-      "buyers_seen": 98,
+      "progress": 0.635,
+      "sol_in_curve": 54.0,
+      "buyers_seen": 0,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 5
+      "whale_buys": 0
     },
     {
-      "mint": "EGqbBS9JVhQErcbUFZdQpReN6uiCo2YwQvN8a8fdpump",
+      "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
+      "symbol": "MIHAORNY",
+      "progress": 0.632,
+      "sol_in_curve": 53.7,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": true,
+      "whale_buys": 0
+    },
+    {
+      "mint": "BGWZHbRT6PekFcevoVGyxrDTwVqBBVFdjkxBi9znpump",
       "symbol": null,
-      "progress": 0.615,
-      "sol_in_curve": 52.3,
-      "buyers_seen": 11,
+      "progress": 0.621,
+      "sol_in_curve": 52.8,
+      "buyers_seen": 16,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "AeYBdFuQs7K6mcS1otfHipERv4S4VmeS4imTj7wNpump",
+      "symbol": null,
+      "progress": 0.608,
+      "sol_in_curve": 51.7,
+      "buyers_seen": 12,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 0
