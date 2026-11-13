@@ -1,13 +1,13 @@
 {
-  "updated_utc": "2026-11-13T21:23:41Z",
-  "updated_tehran": "2026-11-14T00:53:41+03:30",
+  "updated_utc": "2026-11-13T21:34:10Z",
+  "updated_tehran": "2026-11-14T01:04:10+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
   "cash_usd": 73.0982,
-  "equity_usd": 90.5283,
+  "equity_usd": 90.5839,
   "realized_pnl_usd": -8.6068,
-  "unrealized_pnl_usd": -0.8649,
+  "unrealized_pnl_usd": -0.8093,
   "trades": 1,
   "win_rate": 0.0,
   "open": [
@@ -18,14 +18,14 @@
       "logo": "https://gatewaypinata.online/api/meta/af17f4cd7ba6e718154aa170.jpg",
       "phase": "curve",
       "entry_price": 2.4128876145147667e-05,
-      "live_price": 2.3008800585536508e-05,
-      "stop_price": 2.1168096538693585e-05,
+      "live_price": 2.3082217817296467e-05,
+      "stop_price": 2.123564039191275e-05,
       "tp": "take-profit +20% (all), else sell 50% at graduation",
       "size_usd": 18.295,
       "initial_size_usd": 18.295,
       "realized_partial_usd": 0.0,
-      "pnl_usd": -0.8649,
-      "pnl_pct": -4.73,
+      "pnl_usd": -0.8093,
+      "pnl_pct": -4.42,
       "curve_progress": 0.7861,
       "opened_tehran": "2026-11-14T00:23:57+03:30",
       "trigger": {
@@ -73,37 +73,37 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 218,
-    "uptime_min": 24.0,
+    "tokens_tracked": 197,
+    "uptime_min": 34.5,
     "counters": {
       "trades": 8599,
       "entered_band": 7,
       "watch_accept": 6,
       "creates": 115,
-      "pp_new_tokens": 64,
+      "pp_new_tokens": 80,
       "entry_reject": 7,
-      "pp_migrations": 2,
-      "complete_pumpportal_migrate": 2,
+      "pp_migrations": 3,
+      "complete_pumpportal_migrate": 3,
       "complete_trade_reserves_zero": 16,
       "complete_CompleteEvent": 1,
       "complete_CompletePumpAmmMigrationEvent": 1,
-      "watchdog_pump_logs": 2,
-      "pump_logs_reconnects": 9,
-      "pp_reconnects": 2
+      "watchdog_pump_logs": 4,
+      "pump_logs_reconnects": 17,
+      "pp_reconnects": 4
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T21:23:38Z",
-        "last_msg_utc": "2026-11-13T21:23:38Z"
+        "connected_utc": "2026-11-13T21:33:52Z",
+        "last_msg_utc": "2026-11-13T21:33:52Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-13T21:22:18Z",
-        "last_msg_utc": "2026-11-13T21:23:41Z"
+        "connected_utc": "2026-11-13T21:33:11Z",
+        "last_msg_utc": "2026-11-13T21:34:08Z"
       },
       "amm": {
-        "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-13T21:23:32Z"
+        "url": "wss://solana-rpc.publicnode.com",
+        "connected_utc": "2026-11-13T21:33:10Z"
       }
     },
     "kill_switch": false,
@@ -202,64 +202,13 @@
         ]
       }
     ],
-    "sol_usd": 79.00789901753141,
+    "sol_usd": 79.26,
     "realized_today_usd": 0.0,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
     "worst_trade_usd": -8.6068
   },
-  "watchlist": [
-    {
-      "mint": "Q1vecEMQEgDyrw1txmBgFwUrkeQurqkEe1bGMzFpump",
-      "symbol": null,
-      "progress": 0.858,
-      "sol_in_curve": 73.0,
-      "buyers_seen": 3,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
-    },
-    {
-      "mint": "D6hutMWkRCeiRJZDog7SFofqrwwP1tSibxzYhry8pump",
-      "symbol": null,
-      "progress": 0.694,
-      "sol_in_curve": 59.0,
-      "buyers_seen": 5,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
-    },
-    {
-      "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
-      "symbol": null,
-      "progress": 0.676,
-      "sol_in_curve": 57.5,
-      "buyers_seen": 7,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
-    },
-    {
-      "mint": "EECnkwF3Z6vQ597jNaCuVvd1jPQQPaB5dYm2tws3pump",
-      "symbol": null,
-      "progress": 0.657,
-      "sol_in_curve": 55.8,
-      "buyers_seen": 0,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
-    },
-    {
-      "mint": "SWepJ74DD9r7GVX4qV8ZDnh3nViHxyzGgLryBnkpump",
-      "symbol": null,
-      "progress": 0.605,
-      "sol_in_curve": 51.4,
-      "buyers_seen": 1,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 1
-    }
-  ],
+  "watchlist": [],
   "rules": {
     "name": "Grad Hunter (pump.fun near-graduation + whale buy)",
     "mode": "paper",
