@@ -1,42 +1,51 @@
 {
-  "updated_utc": "2026-11-13T21:34:10Z",
-  "updated_tehran": "2026-11-14T01:04:10+03:30",
+  "updated_utc": "2026-11-13T21:57:41Z",
+  "updated_tehran": "2026-11-14T01:27:41+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
-  "cash_usd": 73.0982,
-  "equity_usd": 90.5839,
-  "realized_pnl_usd": -8.6068,
-  "unrealized_pnl_usd": -0.8093,
-  "trades": 1,
+  "cash_usd": 74.3669,
+  "equity_usd": 74.3669,
+  "realized_pnl_usd": -25.6331,
+  "unrealized_pnl_usd": 0.0,
+  "trades": 2,
   "win_rate": 0.0,
-  "open": [
+  "open": [],
+  "closed": [
     {
+      "mint": "7uicYHeMCTHQwdrqhgtP1Mpi7BcUkf5Z22yKJNR1pump",
       "symbol": "BAG",
       "name": "Bagpack",
-      "mint": "7uicYHeMCTHQwdrqhgtP1Mpi7BcUkf5Z22yKJNR1pump",
       "logo": "https://gatewaypinata.online/api/meta/af17f4cd7ba6e718154aa170.jpg",
-      "phase": "curve",
       "entry_price": 2.4128876145147667e-05,
-      "live_price": 2.3082217817296467e-05,
-      "stop_price": 2.123564039191275e-05,
-      "tp": "take-profit +20% (all), else sell 50% at graduation",
+      "exit_price": 1.6961218880754953e-06,
       "size_usd": 18.295,
-      "initial_size_usd": 18.295,
-      "realized_partial_usd": 0.0,
-      "pnl_usd": -0.8093,
-      "pnl_pct": -4.42,
-      "curve_progress": 0.7861,
+      "pnl_usd": -17.0263,
+      "pnl_pct": -93.066,
+      "reason": "no_graduation_45m",
+      "graduated": false,
       "opened_tehran": "2026-11-14T00:23:57+03:30",
-      "trigger": {
-        "wallet": "3XGmfdWcbTaj8et9PowLfEdHkhZa3ztuBvTKzgNKXJkj",
-        "sol": 2.933,
-        "progress": 0.7499,
-        "score": 39.28
-      }
-    }
-  ],
-  "closed": [
+      "closed_tehran": "2026-11-14T01:16:12+03:30",
+      "hold_min": 52.3,
+      "legs": [
+        {
+          "venue": "curve",
+          "side": "buy",
+          "price_usd": 2.4128876145147667e-05,
+          "usd": 18.295,
+          "reason": "entry",
+          "tehran": "2026-11-14T00:23:57+03:30"
+        },
+        {
+          "venue": "amm",
+          "side": "sell",
+          "price_usd": 1.6961218880754953e-06,
+          "usd": 1.2687,
+          "reason": "no_graduation_45m",
+          "tehran": "2026-11-14T01:16:12+03:30"
+        }
+      ]
+    },
     {
       "mint": "APSZ4Q1hp8oimhZBc91tQVtbbNvGTZRkNSbG4ukDpump",
       "symbol": "DESU",
@@ -73,37 +82,37 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 197,
-    "uptime_min": 34.5,
+    "tokens_tracked": 43,
+    "uptime_min": 58.0,
     "counters": {
-      "trades": 8599,
+      "trades": 8659,
       "entered_band": 7,
       "watch_accept": 6,
       "creates": 115,
-      "pp_new_tokens": 80,
+      "pp_new_tokens": 115,
       "entry_reject": 7,
-      "pp_migrations": 3,
-      "complete_pumpportal_migrate": 3,
+      "pp_migrations": 4,
+      "complete_pumpportal_migrate": 4,
       "complete_trade_reserves_zero": 16,
       "complete_CompleteEvent": 1,
       "complete_CompletePumpAmmMigrationEvent": 1,
-      "watchdog_pump_logs": 4,
-      "pump_logs_reconnects": 17,
-      "pp_reconnects": 4
+      "watchdog_pump_logs": 7,
+      "pump_logs_reconnects": 30,
+      "pp_reconnects": 5
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T21:33:52Z",
-        "last_msg_utc": "2026-11-13T21:33:52Z"
+        "connected_utc": "2026-11-13T21:57:08Z",
+        "last_msg_utc": "2026-11-13T21:57:08Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-13T21:33:11Z",
-        "last_msg_utc": "2026-11-13T21:34:08Z"
+        "connected_utc": "2026-11-13T21:46:09Z",
+        "last_msg_utc": "2026-11-13T21:48:57Z"
       },
       "amm": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T21:33:10Z"
+        "connected_utc": "2026-11-13T21:48:24Z"
       }
     },
     "kill_switch": false,
@@ -202,11 +211,11 @@
         ]
       }
     ],
-    "sol_usd": 79.26,
-    "realized_today_usd": 0.0,
+    "sol_usd": 78.61516833745094,
+    "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
-    "worst_trade_usd": -8.6068
+    "worst_trade_usd": -17.0263
   },
   "watchlist": [],
   "rules": {
