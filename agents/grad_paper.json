@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T22:13:03Z",
-  "updated_tehran": "2026-11-14T01:43:03+03:30",
+  "updated_utc": "2026-11-13T22:22:13Z",
+  "updated_tehran": "2026-11-14T01:52:13+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,60 +82,41 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 101,
-    "uptime_min": 73.4,
+    "tokens_tracked": 399,
+    "uptime_min": 82.5,
     "counters": {
-      "trades": 8807,
-      "entered_band": 7,
-      "watch_accept": 6,
-      "creates": 116,
-      "pp_new_tokens": 166,
-      "entry_reject": 7,
-      "pp_migrations": 6,
-      "complete_pumpportal_migrate": 6,
-      "complete_trade_reserves_zero": 16,
-      "complete_CompleteEvent": 1,
-      "complete_CompletePumpAmmMigrationEvent": 1,
-      "watchdog_pump_logs": 10,
-      "pump_logs_reconnects": 49,
-      "pp_reconnects": 8
+      "trades": 13642,
+      "entered_band": 9,
+      "watch_accept": 7,
+      "creates": 184,
+      "pp_new_tokens": 205,
+      "entry_reject": 8,
+      "pp_migrations": 8,
+      "complete_pumpportal_migrate": 8,
+      "complete_trade_reserves_zero": 19,
+      "complete_CompleteEvent": 2,
+      "complete_CompletePumpAmmMigrationEvent": 2,
+      "watchdog_pump_logs": 12,
+      "pump_logs_reconnects": 53,
+      "pp_reconnects": 9
     },
     "feeds": {
       "pump_logs": {
-        "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T22:12:36Z",
-        "last_msg_utc": "2026-11-13T22:12:36Z"
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-13T22:20:40Z",
+        "last_msg_utc": "2026-11-13T22:22:13Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-13T22:11:08Z",
-        "last_msg_utc": "2026-11-13T22:12:32Z"
+        "connected_utc": "2026-11-13T22:19:50Z",
+        "last_msg_utc": "2026-11-13T22:22:04Z"
       },
       "amm": {
         "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-13T22:11:36Z"
+        "connected_utc": "2026-11-13T22:19:59Z"
       }
     },
     "kill_switch": false,
     "recent_decisions": [
-      {
-        "ts_tehran": "2026-11-14T00:29:47+03:30",
-        "symbol": "9ELbLE",
-        "mint": "9ELbLEniMY2B8jgZ1KdwLVPgRcr1HS3wXM9HkiRDpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(65%)",
-          "too_young(6s)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T00:29:48+03:30",
-        "symbol": "E6two3",
-        "mint": "E6two3KfRHDXXgF8ep5w39gtaNYL1KsQCaAv7gprTYdr",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
       {
         "ts_tehran": "2026-11-14T00:29:58+03:30",
         "symbol": "9HrYC4",
@@ -209,15 +190,64 @@
         "reasons": [
           "entered_band"
         ]
+      },
+      {
+        "ts_tehran": "2026-11-14T01:50:41+03:30",
+        "symbol": "EGBjhL",
+        "mint": "EGBjhLVAwVr1axmoAGaMdzphgny6Zcj3sd5XpZfSpump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T01:51:44+03:30",
+        "symbol": "EGBjhL",
+        "mint": "EGBjhLVAwVr1axmoAGaMdzphgny6Zcj3sd5XpZfSpump",
+        "accepted": false,
+        "reasons": [
+          "risk:daily_loss_limit"
+        ]
       }
     ],
-    "sol_usd": 78.17603638915483,
+    "sol_usd": 78.33112419897454,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
     "worst_trade_usd": -17.0263
   },
-  "watchlist": [],
+  "watchlist": [
+    {
+      "mint": "EGBjhLVAwVr1axmoAGaMdzphgny6Zcj3sd5XpZfSpump",
+      "symbol": null,
+      "progress": 0.88,
+      "sol_in_curve": 74.8,
+      "buyers_seen": 12,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 1
+    },
+    {
+      "mint": "ukWSz1Bx9ZPeQCU5UcFmP1nuVuDw1YRXNkxEphRmHj4",
+      "symbol": null,
+      "progress": 0.65,
+      "sol_in_curve": 53.1,
+      "buyers_seen": 0,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "49VVQVn7BgEUzD8yKhSHBHa6CAQnbgaP5QVTMKrQpump",
+      "symbol": null,
+      "progress": 0.61,
+      "sol_in_curve": 51.9,
+      "buyers_seen": 39,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 2
+    }
+  ],
   "rules": {
     "name": "Grad Hunter (pump.fun near-graduation + whale buy)",
     "mode": "paper",
