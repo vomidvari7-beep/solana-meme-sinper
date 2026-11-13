@@ -1,12 +1,12 @@
 {
-  "updated_utc": "2026-11-13T21:57:19.217Z",
-  "updated_tehran": "2026-11-14T01:27:19.217+0330",
+  "updated_utc": "2026-11-13T22:07:33.595Z",
+  "updated_tehran": "2026-11-14T01:37:33.595+0330",
   "start_usd": 100.0,
-  "cash_usd": 80.0,
-  "equity_usd": 99.4326,
-  "realized_pnl_usd": 0.0,
-  "unrealized_pnl_usd": -0.5674,
-  "trades": 0,
+  "cash_usd": 98.8138,
+  "equity_usd": 98.8138,
+  "realized_pnl_usd": -1.1862,
+  "unrealized_pnl_usd": 0.0,
+  "trades": 1,
   "partial_takes": 0,
   "win_rate": 0.0,
   "stop_pct": 8.0,
@@ -33,24 +33,19 @@
   },
   "max_open": 2,
   "ticket_pct": 0.2,
-  "open": [
+  "open": [],
+  "closed": [
     {
       "mint": "4cPQ6skqbj4qLGddcaJDxZSHoyB94sA3kfNKCptepump",
       "symbol": "Speed",
       "entry_price": 0.00029478,
-      "price": 0.0002952,
-      "pnl_pct": -2.837,
+      "exit_price": 0.000280084,
+      "pnl_usd": -1.1862,
+      "pnl_pct": -5.931,
+      "reason": "time_stop_30m",
+      "side": "full",
       "size_usd": 19.9005,
-      "original_size_usd": 19.9005,
-      "opened_tehran": "2026-11-14T01:02:43.178+0330",
-      "scaled_out": false,
-      "partial_pnl_usd": null,
-      "phase": "initial",
-      "active_stop_price": 0.0002711976,
-      "active_stop_kind": "hard_stop",
-      "trail_giveback_pct": null,
-      "high_price": 0.0003317
+      "closed_tehran": "2026-11-14T01:36:47.892+0330"
     }
-  ],
-  "closed": []
+  ]
 }
