@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T23:18:19Z",
-  "updated_tehran": "2026-11-14T02:48:19+03:30",
+  "updated_utc": "2026-11-13T23:23:19Z",
+  "updated_tehran": "2026-11-14T02:53:19+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,37 +82,37 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 37,
-    "uptime_min": 138.6,
+    "tokens_tracked": 216,
+    "uptime_min": 143.6,
     "counters": {
-      "trades": 24190,
-      "entered_band": 13,
+      "trades": 26561,
+      "entered_band": 15,
       "watch_accept": 11,
-      "creates": 274,
-      "pp_new_tokens": 298,
+      "creates": 304,
+      "pp_new_tokens": 322,
       "entry_reject": 13,
-      "pp_migrations": 21,
-      "complete_pumpportal_migrate": 21,
+      "pp_migrations": 24,
+      "complete_pumpportal_migrate": 24,
       "complete_trade_reserves_zero": 55,
       "complete_CompleteEvent": 4,
       "complete_CompletePumpAmmMigrationEvent": 4,
       "watchdog_pump_logs": 21,
-      "pump_logs_reconnects": 77,
+      "pump_logs_reconnects": 90,
       "pp_reconnects": 14
     },
     "feeds": {
       "pump_logs": {
-        "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T23:17:52Z",
-        "last_msg_utc": "2026-11-13T23:17:52Z"
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-13T23:22:36Z",
+        "last_msg_utc": "2026-11-13T23:23:19Z"
       },
       "pumpportal": {
         "connected_utc": "2026-11-13T23:16:56Z",
-        "last_msg_utc": "2026-11-13T23:18:17Z"
+        "last_msg_utc": "2026-11-13T23:23:06Z"
       },
       "amm": {
-        "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T23:18:16Z"
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-13T23:19:20Z"
       }
     },
     "kill_switch": false,
@@ -208,13 +208,34 @@
         ]
       }
     ],
-    "sol_usd": 77.33798669864365,
+    "sol_usd": 77.41111965686565,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
     "worst_trade_usd": -17.0263
   },
-  "watchlist": [],
+  "watchlist": [
+    {
+      "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
+      "symbol": null,
+      "progress": 0.836,
+      "sol_in_curve": 71.1,
+      "buyers_seen": 10,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "6W9q5gCKgdGh1o2vqWyLnP6Nv7XhNoECxpkRba2Ppump",
+      "symbol": null,
+      "progress": 0.637,
+      "sol_in_curve": 54.1,
+      "buyers_seen": 1,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    }
+  ],
   "rules": {
     "name": "Grad Hunter (pump.fun near-graduation + whale buy)",
     "mode": "paper",
