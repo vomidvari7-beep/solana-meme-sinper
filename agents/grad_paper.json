@@ -1,89 +1,79 @@
 {
-  "updated_utc": "2026-11-13T19:07:54Z",
-  "updated_tehran": "2026-11-13T22:37:54+03:30",
+  "updated_utc": "2026-11-13T19:14:16Z",
+  "updated_tehran": "2026-11-13T22:44:16+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
-  "cash_usd": 100.0,
-  "equity_usd": 100.0,
+  "cash_usd": 79.9836,
+  "equity_usd": 99.0912,
   "realized_pnl_usd": 0,
-  "unrealized_pnl_usd": 0.0,
+  "unrealized_pnl_usd": -0.9088,
   "trades": 0,
   "win_rate": null,
-  "open": [],
+  "open": [
+    {
+      "symbol": "DESU",
+      "name": "DESU",
+      "mint": "APSZ4Q1hp8oimhZBc91tQVtbbNvGTZRkNSbG4ukDpump",
+      "logo": null,
+      "phase": "curve",
+      "entry_price": 2.4383861011116425e-05,
+      "live_price": 2.3295852646788616e-05,
+      "stop_price": 2.1653099491977527e-05,
+      "tp": "take-profit +20% (all), else sell 50% at graduation",
+      "size_usd": 20.0164,
+      "initial_size_usd": 20.0164,
+      "realized_partial_usd": 0.0,
+      "pnl_usd": -0.9088,
+      "pnl_pct": -4.54,
+      "curve_progress": 0.7856,
+      "opened_tehran": "2026-11-13T22:38:15+03:30",
+      "trigger": {
+        "wallet": "BZYYvGyZrPkecEmYc1crpfiJDMfJ7rppBoF6Sxf6XgNe",
+        "sol": 1.505,
+        "progress": 0.791,
+        "score": 34.39
+      }
+    }
+  ],
   "closed": [],
   "stats": {
-    "tokens_tracked": 457,
-    "uptime_min": 31.5,
+    "tokens_tracked": 493,
+    "uptime_min": 37.9,
     "counters": {
-      "trades": 25783,
-      "entered_band": 13,
-      "watch_accept": 9,
-      "creates": 338,
-      "pp_new_tokens": 92,
-      "entry_reject": 8,
-      "complete_trade_reserves_zero": 53,
+      "trades": 32140,
+      "entered_band": 14,
+      "watch_accept": 10,
+      "creates": 401,
+      "pp_new_tokens": 125,
+      "entry_reject": 10,
+      "complete_trade_reserves_zero": 69,
       "complete_CompleteEvent": 5,
       "complete_CompletePumpAmmMigrationEvent": 5,
-      "pump_logs_reconnects": 2,
-      "watchdog_pump_logs": 6,
-      "pp_reconnects": 5,
-      "pp_migrations": 4,
-      "complete_pumpportal_migrate": 4
+      "pump_logs_reconnects": 3,
+      "watchdog_pump_logs": 9,
+      "pp_reconnects": 7,
+      "pp_migrations": 8,
+      "complete_pumpportal_migrate": 8,
+      "entry_accept": 1
     },
     "feeds": {
       "amm": {
-        "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T19:07:18Z"
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-13T19:10:46Z"
       },
       "pump_logs": {
-        "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-13T19:06:43Z",
-        "last_msg_utc": "2026-11-13T19:07:54Z"
+        "url": "wss://solana-rpc.publicnode.com",
+        "connected_utc": "2026-11-13T19:11:46Z",
+        "last_msg_utc": "2026-11-13T19:12:10Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-13T19:06:32Z",
-        "last_msg_utc": "2026-11-13T19:07:41Z"
+        "connected_utc": "2026-11-13T19:11:14Z",
+        "last_msg_utc": "2026-11-13T19:14:16Z"
       }
     },
     "kill_switch": false,
     "recent_decisions": [
-      {
-        "ts_tehran": "2026-11-13T22:13:20+03:30",
-        "symbol": "BGQqYL",
-        "mint": "BGQqYLTCRHBK3CSosCNq5G6MsGYL2iZ2amsSsF4Tpump",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T22:13:20+03:30",
-        "symbol": "9oJk7e",
-        "mint": "9oJk7eMccQchx3evoN5C5pKQD5Xodb4C1qkhemjjpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(93%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T22:13:20+03:30",
-        "symbol": "9NSHw2",
-        "mint": "9NSHw26fsSJCmmVRQVhBSfoDCsC6K6nHFmuSTWgepump",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T22:14:02+03:30",
-        "symbol": "9ueEeB",
-        "mint": "9ueEeBuYUc9X1GrNCyWHbKGnHJq1kaD2nvDapDsMpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(70%)"
-        ]
-      },
       {
         "ts_tehran": "2026-11-13T22:19:57+03:30",
         "symbol": "4Z1HZq",
@@ -137,9 +127,45 @@
         "reasons": [
           "progress_out_of_band(68%)"
         ]
+      },
+      {
+        "ts_tehran": "2026-11-13T22:38:15+03:30",
+        "symbol": "DESU",
+        "mint": "APSZ4Q1hp8oimhZBc91tQVtbbNvGTZRkNSbG4ukDpump",
+        "accepted": true,
+        "reasons": [
+          "all_checks_passed"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T22:38:36+03:30",
+        "symbol": "Almost",
+        "mint": "4Z1HZqBwToghsFWHVB4LnF45w4VwbxLLKf71cZMopump",
+        "accepted": false,
+        "reasons": [
+          "top10_concentrated(27.4%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T22:40:49+03:30",
+        "symbol": "Eq2imL",
+        "mint": "Eq2imLVZe7XvYbMXbowgPCbd86PXYMe8hkZj6FA5pump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T22:41:37+03:30",
+        "symbol": "NEKINU",
+        "mint": "Eq2imLVZe7XvYbMXbowgPCbd86PXYMe8hkZj6FA5pump",
+        "accepted": false,
+        "reasons": [
+          "top10_concentrated(25.8%)"
+        ]
       }
     ],
-    "sol_usd": 80.07201395652316,
+    "sol_usd": 80.06581922693886,
     "realized_today_usd": 0.0,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": null,
@@ -147,31 +173,61 @@
   },
   "watchlist": [
     {
+      "mint": "4Z1HZqBwToghsFWHVB4LnF45w4VwbxLLKf71cZMopump",
+      "symbol": "Almost",
+      "progress": 0.891,
+      "sol_in_curve": 75.8,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 1
+    },
+    {
+      "mint": "CsU2Y6TBzGsSEUGhu9cRUqkcfEZ2bzhRTqVhLBfKpump",
+      "symbol": null,
+      "progress": 0.854,
+      "sol_in_curve": 72.6,
+      "buyers_seen": 5,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 1
+    },
+    {
+      "mint": "APSZ4Q1hp8oimhZBc91tQVtbbNvGTZRkNSbG4ukDpump",
+      "symbol": "DESU",
+      "progress": 0.786,
+      "sol_in_curve": 66.8,
+      "buyers_seen": 37,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 3
+    },
+    {
       "mint": "9HrYC4PH4A3d5o7LUvwjDrxkWyZDjVQpvFvWVwbKpump",
       "symbol": null,
-      "progress": 0.788,
-      "sol_in_curve": 67.0,
+      "progress": 0.777,
+      "sol_in_curve": 66.0,
       "buyers_seen": 3,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 0
     },
     {
-      "mint": "APSZ4Q1hp8oimhZBc91tQVtbbNvGTZRkNSbG4ukDpump",
-      "symbol": "DESU",
-      "progress": 0.773,
-      "sol_in_curve": 65.7,
-      "buyers_seen": 28,
+      "mint": "SWepJ74DD9r7GVX4qV8ZDnh3nViHxyzGgLryBnkpump",
+      "symbol": null,
+      "progress": 0.636,
+      "sol_in_curve": 54.0,
+      "buyers_seen": 1,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 2
+      "whale_buys": 0
     },
     {
       "mint": "Dwdt8U2nsBWToXAZewjYGHNqjXjEjezWq72RV7rDpump",
       "symbol": null,
-      "progress": 0.649,
-      "sol_in_curve": 55.2,
-      "buyers_seen": 12,
+      "progress": 0.634,
+      "sol_in_curve": 53.9,
+      "buyers_seen": 18,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 3
