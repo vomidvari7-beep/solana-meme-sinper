@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T23:53:34Z",
-  "updated_tehran": "2026-11-14T03:23:34+03:30",
+  "updated_utc": "2026-11-13T23:58:34Z",
+  "updated_tehran": "2026-11-14T03:28:34+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,20 +82,20 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 1232,
-    "uptime_min": 173.9,
+    "tokens_tracked": 1410,
+    "uptime_min": 178.9,
     "counters": {
-      "trades": 109826,
-      "entered_band": 32,
-      "watch_accept": 24,
-      "creates": 1172,
-      "pp_new_tokens": 613,
-      "entry_reject": 63,
-      "pp_migrations": 43,
-      "complete_pumpportal_migrate": 43,
-      "complete_trade_reserves_zero": 233,
-      "complete_CompleteEvent": 15,
-      "complete_CompletePumpAmmMigrationEvent": 15,
+      "trades": 125698,
+      "entered_band": 35,
+      "watch_accept": 25,
+      "creates": 1359,
+      "pp_new_tokens": 639,
+      "entry_reject": 71,
+      "pp_migrations": 47,
+      "complete_pumpportal_migrate": 47,
+      "complete_trade_reserves_zero": 237,
+      "complete_CompleteEvent": 18,
+      "complete_CompletePumpAmmMigrationEvent": 18,
       "watchdog_pump_logs": 21,
       "pump_logs_reconnects": 110,
       "pp_reconnects": 14
@@ -104,11 +104,11 @@
       "pump_logs": {
         "url": "wss://api.mainnet-beta.solana.com",
         "connected_utc": "2026-11-13T23:51:50Z",
-        "last_msg_utc": "2026-11-13T23:53:34Z"
+        "last_msg_utc": "2026-11-13T23:58:34Z"
       },
       "pumpportal": {
         "connected_utc": "2026-11-13T23:16:56Z",
-        "last_msg_utc": "2026-11-13T23:53:18Z"
+        "last_msg_utc": "2026-11-13T23:58:34Z"
       },
       "amm": {
         "url": "wss://api.mainnet-beta.solana.com",
@@ -118,16 +118,43 @@
     "kill_switch": false,
     "recent_decisions": [
       {
-        "ts_tehran": "2026-11-14T03:17:29+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
+        "ts_tehran": "2026-11-14T03:23:29+03:30",
+        "symbol": "DXVzgt",
+        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
         "accepted": false,
         "reasons": [
-          "early_buys_heavy(62.66%)"
+          "risk:daily_loss_limit"
         ]
       },
       {
-        "ts_tehran": "2026-11-14T03:17:55+03:30",
+        "ts_tehran": "2026-11-14T03:24:30+03:30",
+        "symbol": "DXVzgt",
+        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(91%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:24:30+03:30",
+        "symbol": "DXVzgt",
+        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
+        "accepted": false,
+        "reasons": [
+          "risk:daily_loss_limit"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:24:57+03:30",
+        "symbol": "DXVzgt",
+        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(93%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:25:29+03:30",
         "symbol": "6H6MML",
         "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
         "accepted": false,
@@ -136,81 +163,52 @@
         ]
       },
       {
-        "ts_tehran": "2026-11-14T03:18:34+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:19:00+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:19:36+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(92%)",
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:19:39+03:30",
-        "symbol": "SPACEFART",
-        "mint": "3HjgdDmx7ewWKXnDX7HnTD1TYMFCzzBEai7AcxCrpump",
+        "ts_tehran": "2026-11-14T03:27:31+03:30",
+        "symbol": "IFO",
+        "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-14T03:21:56+03:30",
-        "symbol": "DXVzgt",
-        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:22:29+03:30",
-        "symbol": "DXVzgt",
-        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:22:48+03:30",
+        "ts_tehran": "2026-11-14T03:27:31+03:30",
         "symbol": "IFO",
         "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
         "accepted": false,
         "reasons": [
-          "progress_out_of_band(67%)",
           "early_buys_heavy(53.8%)"
         ]
       },
       {
-        "ts_tehran": "2026-11-14T03:23:29+03:30",
+        "ts_tehran": "2026-11-14T03:27:52+03:30",
+        "symbol": "IFO",
+        "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
+        "accepted": false,
+        "reasons": [
+          "early_buys_heavy(53.8%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:28:17+03:30",
         "symbol": "DXVzgt",
         "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
         "accepted": false,
         "reasons": [
           "risk:daily_loss_limit"
         ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:28:24+03:30",
+        "symbol": "IFO",
+        "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
+        "accepted": false,
+        "reasons": [
+          "early_buys_heavy(53.8%)"
+        ]
       }
     ],
-    "sol_usd": 77.98031216474243,
+    "sol_usd": 78.08799563183334,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
@@ -220,22 +218,32 @@
     {
       "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
       "symbol": null,
-      "progress": 0.887,
-      "sol_in_curve": 75.4,
-      "buyers_seen": 154,
+      "progress": 0.892,
+      "sol_in_curve": 75.8,
+      "buyers_seen": 204,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 9
+      "whale_buys": 13
     },
     {
-      "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
+      "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
+      "symbol": "IFO",
+      "progress": 0.823,
+      "sol_in_curve": 69.9,
+      "buyers_seen": 618,
+      "creator_sold": false,
+      "known_from_creation": true,
+      "whale_buys": 27
+    },
+    {
+      "mint": "9HrYC4PH4A3d5o7LUvwjDrxkWyZDjVQpvFvWVwbKpump",
       "symbol": null,
-      "progress": 0.752,
+      "progress": 0.753,
       "sol_in_curve": 64.0,
-      "buyers_seen": 48,
+      "buyers_seen": 1,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 1
+      "whale_buys": 0
     },
     {
       "mint": "EECnkwF3Z6vQ597jNaCuVvd1jPQQPaB5dYm2tws3pump",
@@ -252,26 +260,6 @@
       "symbol": null,
       "progress": 0.66,
       "sol_in_curve": 56.1,
-      "buyers_seen": 1,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
-    },
-    {
-      "mint": "6W9q5gCKgdGh1o2vqWyLnP6Nv7XhNoECxpkRba2Ppump",
-      "symbol": null,
-      "progress": 0.652,
-      "sol_in_curve": 55.5,
-      "buyers_seen": 22,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 3
-    },
-    {
-      "mint": "64tbhe6oprWwoaSMzNAHtZanzWGyaZhV8JLvuVQ6pump",
-      "symbol": null,
-      "progress": 0.647,
-      "sol_in_curve": 55.0,
       "buyers_seen": 1,
       "creator_sold": false,
       "known_from_creation": false,
