@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T22:07:54Z",
-  "updated_tehran": "2026-11-14T01:37:54+03:30",
+  "updated_utc": "2026-11-13T22:13:03Z",
+  "updated_tehran": "2026-11-14T01:43:03+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,37 +82,37 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 89,
-    "uptime_min": 68.2,
+    "tokens_tracked": 101,
+    "uptime_min": 73.4,
     "counters": {
       "trades": 8807,
       "entered_band": 7,
       "watch_accept": 6,
       "creates": 116,
-      "pp_new_tokens": 136,
+      "pp_new_tokens": 166,
       "entry_reject": 7,
-      "pp_migrations": 4,
-      "complete_pumpportal_migrate": 4,
+      "pp_migrations": 6,
+      "complete_pumpportal_migrate": 6,
       "complete_trade_reserves_zero": 16,
       "complete_CompleteEvent": 1,
       "complete_CompletePumpAmmMigrationEvent": 1,
-      "watchdog_pump_logs": 9,
-      "pump_logs_reconnects": 40,
-      "pp_reconnects": 7
+      "watchdog_pump_logs": 10,
+      "pump_logs_reconnects": 49,
+      "pp_reconnects": 8
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T22:07:30Z",
-        "last_msg_utc": "2026-11-13T22:07:30Z"
+        "connected_utc": "2026-11-13T22:12:36Z",
+        "last_msg_utc": "2026-11-13T22:12:36Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-13T22:06:47Z",
-        "last_msg_utc": "2026-11-13T22:07:42Z"
+        "connected_utc": "2026-11-13T22:11:08Z",
+        "last_msg_utc": "2026-11-13T22:12:32Z"
       },
       "amm": {
-        "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T22:06:46Z"
+        "url": "wss://api.mainnet-beta.solana.com",
+        "connected_utc": "2026-11-13T22:11:36Z"
       }
     },
     "kill_switch": false,
@@ -211,7 +211,7 @@
         ]
       }
     ],
-    "sol_usd": 78.21294519883031,
+    "sol_usd": 78.17603638915483,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
