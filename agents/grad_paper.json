@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T23:48:19Z",
-  "updated_tehran": "2026-11-14T03:18:19+03:30",
+  "updated_utc": "2026-11-13T23:53:34Z",
+  "updated_tehran": "2026-11-14T03:23:34+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,33 +82,33 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 1262,
-    "uptime_min": 168.6,
+    "tokens_tracked": 1232,
+    "uptime_min": 173.9,
     "counters": {
-      "trades": 97413,
-      "entered_band": 30,
-      "watch_accept": 23,
-      "creates": 1051,
-      "pp_new_tokens": 553,
-      "entry_reject": 56,
-      "pp_migrations": 38,
-      "complete_pumpportal_migrate": 38,
-      "complete_trade_reserves_zero": 218,
-      "complete_CompleteEvent": 12,
-      "complete_CompletePumpAmmMigrationEvent": 12,
+      "trades": 109826,
+      "entered_band": 32,
+      "watch_accept": 24,
+      "creates": 1172,
+      "pp_new_tokens": 613,
+      "entry_reject": 63,
+      "pp_migrations": 43,
+      "complete_pumpportal_migrate": 43,
+      "complete_trade_reserves_zero": 233,
+      "complete_CompleteEvent": 15,
+      "complete_CompletePumpAmmMigrationEvent": 15,
       "watchdog_pump_logs": 21,
-      "pump_logs_reconnects": 104,
+      "pump_logs_reconnects": 110,
       "pp_reconnects": 14
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-13T23:47:18Z",
-        "last_msg_utc": "2026-11-13T23:48:19Z"
+        "connected_utc": "2026-11-13T23:51:50Z",
+        "last_msg_utc": "2026-11-13T23:53:34Z"
       },
       "pumpportal": {
         "connected_utc": "2026-11-13T23:16:56Z",
-        "last_msg_utc": "2026-11-13T23:48:02Z"
+        "last_msg_utc": "2026-11-13T23:53:18Z"
       },
       "amm": {
         "url": "wss://api.mainnet-beta.solana.com",
@@ -117,81 +117,6 @@
     },
     "kill_switch": false,
     "recent_decisions": [
-      {
-        "ts_tehran": "2026-11-14T03:14:06+03:30",
-        "symbol": "2WQTT7",
-        "mint": "2WQTT7sSGtA9sGS7zV1qhSfXjSJRYZKccc5LHxq2FcJX",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:14:09+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(67%)",
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:14:39+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(66%)",
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:15:01+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:16:00+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:16:05+03:30",
-        "symbol": "STOCKR",
-        "mint": "3nYe188d7LFkZc7goAHuVmZR1fG3PfhBDwiJKsuCEFKq",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:16:36+03:30",
-        "symbol": "AIRPLANE",
-        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(67%)",
-          "early_buys_heavy(62.66%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:17:19+03:30",
-        "symbol": "6H6MML",
-        "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(94%)"
-        ]
-      },
       {
         "ts_tehran": "2026-11-14T03:17:29+03:30",
         "symbol": "AIRPLANE",
@@ -209,9 +134,83 @@
         "reasons": [
           "progress_out_of_band(94%)"
         ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:18:34+03:30",
+        "symbol": "AIRPLANE",
+        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
+        "accepted": false,
+        "reasons": [
+          "early_buys_heavy(62.66%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:19:00+03:30",
+        "symbol": "AIRPLANE",
+        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
+        "accepted": false,
+        "reasons": [
+          "early_buys_heavy(62.66%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:19:36+03:30",
+        "symbol": "AIRPLANE",
+        "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(92%)",
+          "early_buys_heavy(62.66%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:19:39+03:30",
+        "symbol": "SPACEFART",
+        "mint": "3HjgdDmx7ewWKXnDX7HnTD1TYMFCzzBEai7AcxCrpump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:21:56+03:30",
+        "symbol": "DXVzgt",
+        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
+        "accepted": false,
+        "reasons": [
+          "risk:daily_loss_limit"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:22:29+03:30",
+        "symbol": "DXVzgt",
+        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
+        "accepted": false,
+        "reasons": [
+          "risk:daily_loss_limit"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:22:48+03:30",
+        "symbol": "IFO",
+        "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(67%)",
+          "early_buys_heavy(53.8%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:23:29+03:30",
+        "symbol": "DXVzgt",
+        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
+        "accepted": false,
+        "reasons": [
+          "risk:daily_loss_limit"
+        ]
       }
     ],
-    "sol_usd": 77.79332004918811,
+    "sol_usd": 77.98031216474243,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
@@ -219,51 +218,31 @@
   },
   "watchlist": [
     {
+      "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
+      "symbol": null,
+      "progress": 0.887,
+      "sol_in_curve": 75.4,
+      "buyers_seen": 154,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 9
+    },
+    {
       "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
       "symbol": null,
-      "progress": 0.92,
-      "sol_in_curve": 78.2,
-      "buyers_seen": 45,
+      "progress": 0.752,
+      "sol_in_curve": 64.0,
+      "buyers_seen": 48,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 1
     },
     {
-      "mint": "3j6wuvwdbT7JWfoquZc6sgmJQi3SJTj8usRciDgmpump",
-      "symbol": "AIRPLANE",
-      "progress": 0.859,
-      "sol_in_curve": 73.0,
-      "buyers_seen": 708,
-      "creator_sold": false,
-      "known_from_creation": true,
-      "whale_buys": 40
-    },
-    {
-      "mint": "2WQTT7sSGtA9sGS7zV1qhSfXjSJRYZKccc5LHxq2FcJX",
-      "symbol": null,
-      "progress": 0.812,
-      "sol_in_curve": 69.1,
-      "buyers_seen": 145,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 15
-    },
-    {
-      "mint": "3nYe188d7LFkZc7goAHuVmZR1fG3PfhBDwiJKsuCEFKq",
-      "symbol": "STOCKR",
-      "progress": 0.797,
-      "sol_in_curve": 67.8,
-      "buyers_seen": 2,
-      "creator_sold": false,
-      "known_from_creation": true,
-      "whale_buys": 0
-    },
-    {
       "mint": "EECnkwF3Z6vQ597jNaCuVvd1jPQQPaB5dYm2tws3pump",
       "symbol": null,
-      "progress": 0.706,
-      "sol_in_curve": 60.0,
-      "buyers_seen": 3,
+      "progress": 0.707,
+      "sol_in_curve": 60.1,
+      "buyers_seen": 4,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 1
@@ -271,12 +250,22 @@
     {
       "mint": "27Jnd8Xw1gmbCrQFVZ4DnAvB29H586XCxoe6nJQipump",
       "symbol": null,
-      "progress": 0.649,
-      "sol_in_curve": 55.2,
-      "buyers_seen": 0,
+      "progress": 0.66,
+      "sol_in_curve": 56.1,
+      "buyers_seen": 1,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 0
+    },
+    {
+      "mint": "6W9q5gCKgdGh1o2vqWyLnP6Nv7XhNoECxpkRba2Ppump",
+      "symbol": null,
+      "progress": 0.652,
+      "sol_in_curve": 55.5,
+      "buyers_seen": 22,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 3
     },
     {
       "mint": "64tbhe6oprWwoaSMzNAHtZanzWGyaZhV8JLvuVQ6pump",
@@ -287,16 +276,6 @@
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 0
-    },
-    {
-      "mint": "6W9q5gCKgdGh1o2vqWyLnP6Nv7XhNoECxpkRba2Ppump",
-      "symbol": null,
-      "progress": 0.628,
-      "sol_in_curve": 53.4,
-      "buyers_seen": 22,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 3
     }
   ],
   "rules": {
