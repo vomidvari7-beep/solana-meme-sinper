@@ -1,931 +1,227 @@
 {
-  "updated_utc": "2026-11-13T00:21:55Z",
-  "updated_tehran": "2026-11-13T03:51:55+03:30",
+  "updated_utc": "2026-11-13T18:33:18Z",
+  "updated_tehran": "2026-11-13T22:03:18+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
-  "cash_usd": 67.9907,
-  "equity_usd": 67.9907,
-  "realized_pnl_usd": -32.0093,
+  "cash_usd": 100.0,
+  "equity_usd": 100.0,
+  "realized_pnl_usd": 0,
   "unrealized_pnl_usd": 0.0,
-  "trades": 21,
-  "win_rate": 0.1905,
+  "trades": 0,
+  "win_rate": null,
   "open": [],
-  "closed": [
-    {
-      "mint": "GdPu5KPUeka8RJje6wjZ3o45wNDpHaSivoe6ydYhpump",
-      "symbol": "YHT",
-      "name": "Yetzer Hara Trap",
-      "logo": null,
-      "entry_price": 2.67152805184282e-05,
-      "exit_price": 2.2237147587681114e-05,
-      "size_usd": 10.4835,
-      "pnl_usd": -1.7878,
-      "pnl_pct": -17.054,
-      "reason": "fast_sell_pressure",
-      "graduated": false,
-      "opened_tehran": "2026-11-13T02:29:40+03:30",
-      "closed_tehran": "2026-11-13T02:29:54+03:30",
-      "hold_min": 0.2,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.67152805184282e-05,
-          "usd": 10.4835,
-          "reason": "entry",
-          "tehran": "2026-11-13T02:29:40+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.2237147587681114e-05,
-          "usd": 8.6956,
-          "reason": "fast_sell_pressure",
-          "tehran": "2026-11-13T02:29:54+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "AzsRUxGCZkUXnMA3F2AUZKyETMTwQRuFrkCVVxikpump",
-      "symbol": "Movember",
-      "name": "Movember",
-      "logo": null,
-      "entry_price": 2.2794259737724247e-05,
-      "exit_price": 1.6814093005351303e-05,
-      "size_usd": 10.9175,
-      "pnl_usd": -2.8932,
-      "pnl_pct": -26.501,
-      "reason": "fast_sell_pressure",
-      "graduated": false,
-      "opened_tehran": "2026-11-13T02:04:58+03:30",
-      "closed_tehran": "2026-11-13T02:05:04+03:30",
-      "hold_min": 0.1,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.2794259737724247e-05,
-          "usd": 10.9175,
-          "reason": "entry",
-          "tehran": "2026-11-13T02:04:58+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 1.6814093005351303e-05,
-          "usd": 8.0243,
-          "reason": "fast_sell_pressure",
-          "tehran": "2026-11-13T02:05:04+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "FTu55MyigXns96jz4nTCDDiTCjYJjyrHSceCgG9Upump",
-      "symbol": "FOOD",
-      "name": "Foodcoin",
-      "logo": null,
-      "entry_price": 2.6820737056862782e-05,
-      "exit_price": 2.4049044544362336e-05,
-      "size_usd": 11.0942,
-      "pnl_usd": -1.1781,
-      "pnl_pct": -10.619,
-      "reason": "fast_sell_pressure",
-      "graduated": false,
-      "opened_tehran": "2026-11-13T01:57:01+03:30",
-      "closed_tehran": "2026-11-13T01:58:09+03:30",
-      "hold_min": 1.1,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.6820737056862782e-05,
-          "usd": 11.0942,
-          "reason": "entry",
-          "tehran": "2026-11-13T01:57:01+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.4049044544362336e-05,
-          "usd": 9.9161,
-          "reason": "fast_sell_pressure",
-          "tehran": "2026-11-13T01:58:09+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "87e8w4G33sB6Nsmi8aSUUsYSYBXXAof8h38dKahNpump",
-      "symbol": "NekoNano",
-      "name": "Luckycat",
-      "logo": "https://desperate-moccasin-minnow.myfilebase.com/ipfs/QmXBhmhdPAcUgYxnAykuKfuaZRVUFnKJPWaBvrmx9mnn6J",
-      "entry_price": 2.453609959979665e-05,
-      "exit_price": 7.593811536758765e-06,
-      "size_usd": 12.5898,
-      "pnl_usd": -8.7152,
-      "pnl_pct": -69.224,
-      "reason": "no_graduation_45m",
-      "graduated": false,
-      "opened_tehran": "2026-11-13T01:04:58+03:30",
-      "closed_tehran": "2026-11-13T01:55:08+03:30",
-      "hold_min": 50.2,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.453609959979665e-05,
-          "usd": 12.5898,
-          "reason": "entry",
-          "tehran": "2026-11-13T01:04:58+03:30"
-        },
-        {
-          "venue": "amm",
-          "side": "sell",
-          "price_usd": 7.593811536758765e-06,
-          "usd": 3.8746,
-          "reason": "no_graduation_45m",
-          "tehran": "2026-11-13T01:55:08+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "HUtMfmWsjM2AcjsFvWH22zp7Bv1cvSv8wXiKoFGTpump",
-      "symbol": "cig",
-      "name": "cig",
-      "logo": "https://axiomtrading-v2.axiom-cdn.io/6bnpNxhW5NREeQrwr6RjLiQ36J3XnzcEtzaewaCQpump.webp",
-      "entry_price": 2.5344013048402108e-05,
-      "exit_price": 2.2444171460477503e-05,
-      "size_usd": 10.7014,
-      "pnl_usd": -1.2559,
-      "pnl_pct": -11.736,
-      "reason": "fast_sell_pressure",
-      "graduated": false,
-      "opened_tehran": "2026-11-13T01:41:57+03:30",
-      "closed_tehran": "2026-11-13T01:41:58+03:30",
-      "hold_min": 0.0,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.5344013048402108e-05,
-          "usd": 10.7014,
-          "reason": "entry",
-          "tehran": "2026-11-13T01:41:57+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.2444171460477503e-05,
-          "usd": 9.4455,
-          "reason": "fast_sell_pressure",
-          "tehran": "2026-11-13T01:41:58+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "2rBmdEVy8LRcVJzHZ4eEb7Npxg9JVQc2aRw3i8sNpump",
-      "symbol": "ECL",
-      "name": "enginechecklight",
-      "logo": null,
-      "entry_price": 2.9529684727263182e-05,
-      "exit_price": 2.3292115311276762e-05,
-      "size_usd": 13.009,
-      "pnl_usd": -2.7943,
-      "pnl_pct": -21.48,
-      "reason": "breakeven_stop",
-      "graduated": true,
-      "opened_tehran": "2026-11-12T21:17:38+03:30",
-      "closed_tehran": "2026-11-12T21:17:58+03:30",
-      "hold_min": 0.3,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.9529684727263182e-05,
-          "usd": 13.009,
-          "reason": "entry",
-          "tehran": "2026-11-12T21:17:38+03:30"
-        },
-        {
-          "venue": "amm",
-          "side": "sell",
-          "price_usd": 2.3292115311276762e-05,
-          "usd": 5.1073,
-          "reason": "graduation_sell_50",
-          "tehran": "2026-11-12T21:17:58+03:30"
-        },
-        {
-          "venue": "amm",
-          "side": "sell",
-          "price_usd": 2.3292115311276762e-05,
-          "usd": 5.1073,
-          "reason": "breakeven_stop",
-          "tehran": "2026-11-12T21:17:58+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "FR4YEvKpPFWy3iWSBehPd7dXaMHcdxzoN66ip27gpump",
-      "symbol": "FATBURN",
-      "name": "FatBurn",
-      "logo": null,
-      "entry_price": 2.1190474126823965e-05,
-      "exit_price": 2.3779988368447287e-05,
-      "size_usd": 12.78,
-      "pnl_usd": 1.5264,
-      "pnl_pct": 11.944,
-      "reason": "take_profit_20",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T21:17:19+03:30",
-      "closed_tehran": "2026-11-12T21:17:32+03:30",
-      "hold_min": 0.2,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.1190474126823965e-05,
-          "usd": 12.78,
-          "reason": "entry",
-          "tehran": "2026-11-12T21:17:19+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.3779988368447287e-05,
-          "usd": 14.3063,
-          "reason": "take_profit_20",
-          "tehran": "2026-11-12T21:17:32+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "Fpw2pLjstrsKTCqeGYQuSctJeQTTPFQv577NGcVRpump",
-      "symbol": "Matrix",
-      "name": "The Matrix",
-      "logo": "https://axiomtrading-v2.axiom-cdn.io/D5hT4ZRHHNbCMc2B2nfGj5Nd5ayB4ANn31FQLXxzpump.webp",
-      "entry_price": 2.3861379968719046e-05,
-      "exit_price": 2.0985480977940855e-05,
-      "size_usd": 13.0201,
-      "pnl_usd": -1.6006,
-      "pnl_pct": -12.293,
-      "reason": "fast_sell_pressure",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T21:13:14+03:30",
-      "closed_tehran": "2026-11-12T21:13:23+03:30",
-      "hold_min": 0.2,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.3861379968719046e-05,
-          "usd": 13.0201,
-          "reason": "entry",
-          "tehran": "2026-11-12T21:13:14+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.0985480977940855e-05,
-          "usd": 11.4195,
-          "reason": "fast_sell_pressure",
-          "tehran": "2026-11-12T21:13:23+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "7cPKubouxwsSy4aAKHtDKUETZ6uxVZDntRuy7Cappump",
-      "symbol": "GOAT",
-      "name": "2027 Year of the Goat",
-      "logo": null,
-      "entry_price": 2.5199276317378284e-05,
-      "exit_price": 2.2127363024591646e-05,
-      "size_usd": 13.2674,
-      "pnl_usd": -1.6487,
-      "pnl_pct": -12.427,
-      "reason": "creator_sold",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T21:01:10+03:30",
-      "closed_tehran": "2026-11-12T21:01:25+03:30",
-      "hold_min": 0.2,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.5199276317378284e-05,
-          "usd": 13.2674,
-          "reason": "entry",
-          "tehran": "2026-11-12T21:01:10+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.2127363024591646e-05,
-          "usd": 11.6187,
-          "reason": "creator_sold",
-          "tehran": "2026-11-12T21:01:25+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "9XV228VebVz7fBikQCEjJVCFNddgu1nGeAEEWZSwpump",
-      "symbol": "Osun-i",
-      "name": "오순이를 위한 정의",
-      "logo": null,
-      "entry_price": 2.3032344617671655e-05,
-      "exit_price": 2.5855578572829226e-05,
-      "size_usd": 13.0331,
-      "pnl_usd": 1.5621,
-      "pnl_pct": 11.986,
-      "reason": "take_profit_20",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T21:00:00+03:30",
-      "closed_tehran": "2026-11-12T21:00:49+03:30",
-      "hold_min": 0.8,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.3032344617671655e-05,
-          "usd": 13.0331,
-          "reason": "entry",
-          "tehran": "2026-11-12T21:00:00+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.5855578572829226e-05,
-          "usd": 14.5952,
-          "reason": "take_profit_20",
-          "tehran": "2026-11-12T21:00:49+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "FTsygApbDiJ8QY9heS4bapiXWiTV1YCwYT14LeDqmfRP",
-      "symbol": "BOARD",
-      "name": "PillBoard",
-      "logo": null,
-      "entry_price": 2.7532329562067814e-05,
-      "exit_price": 3.122605374658883e-05,
-      "size_usd": 12.7811,
-      "pnl_usd": 1.6792,
-      "pnl_pct": 13.138,
-      "reason": "take_profit_20",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T20:39:05+03:30",
-      "closed_tehran": "2026-11-12T20:39:56+03:30",
-      "hold_min": 0.8,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.7532329562067814e-05,
-          "usd": 12.7811,
-          "reason": "entry",
-          "tehran": "2026-11-12T20:39:05+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 3.122605374658883e-05,
-          "usd": 14.4603,
-          "reason": "take_profit_20",
-          "tehran": "2026-11-12T20:39:56+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "Hm1QUy8chYkAZe9xvk2ukuKCQsVBcgL6bPneAJbXpump",
-      "symbol": "COFFEE",
-      "name": "Coffeecoin",
-      "logo": "https://axiomtrading-v2.axiom-cdn.io/CTS5nreqjAs263HfZ8cNXjd9QntHWyVWrqBbYdtG34YQ.webp",
-      "entry_price": 2.3618622616236115e-05,
-      "exit_price": 2.0975733470820973e-05,
-      "size_usd": 13.0042,
-      "pnl_usd": -1.4867,
-      "pnl_pct": -11.432,
-      "reason": "fast_sell_pressure",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T20:19:37+03:30",
-      "closed_tehran": "2026-11-12T20:19:39+03:30",
-      "hold_min": 0.0,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.3618622616236115e-05,
-          "usd": 13.0042,
-          "reason": "entry",
-          "tehran": "2026-11-12T20:19:37+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.0975733470820973e-05,
-          "usd": 11.5175,
-          "reason": "fast_sell_pressure",
-          "tehran": "2026-11-12T20:19:39+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "Drk5BtXoNPQ4SZSjfXGFjN9VXVo6XnSy4PX7jUJtpump",
-      "symbol": "yolo",
-      "name": "yolo.family",
-      "logo": null,
-      "entry_price": 2.4836614236228267e-05,
-      "exit_price": 2.208991928185292e-05,
-      "size_usd": 13.2284,
-      "pnl_usd": -1.4946,
-      "pnl_pct": -11.298,
-      "reason": "fast_sell_pressure",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T19:57:35+03:30",
-      "closed_tehran": "2026-11-12T19:58:11+03:30",
-      "hold_min": 0.6,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.4836614236228267e-05,
-          "usd": 13.2284,
-          "reason": "entry",
-          "tehran": "2026-11-12T19:57:35+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.208991928185292e-05,
-          "usd": 11.7339,
-          "reason": "fast_sell_pressure",
-          "tehran": "2026-11-12T19:58:11+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "tinnKfUbWBQsiJw3f9mypgZw4K18JaygxRxNAW1NPxK",
-      "symbol": "TRENCHEDIN",
-      "name": "TrenchedIn",
-      "logo": "https://metadata.j7tracker.io/images/38921ee939f34a64",
-      "entry_price": 2.9370723335033663e-05,
-      "exit_price": 2.5265747228348024e-05,
-      "size_usd": 13.5191,
-      "pnl_usd": -1.9374,
-      "pnl_pct": -14.331,
-      "reason": "breakeven_stop",
-      "graduated": true,
-      "opened_tehran": "2026-11-12T19:47:07+03:30",
-      "closed_tehran": "2026-11-12T19:47:14+03:30",
-      "hold_min": 0.1,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.9370723335033663e-05,
-          "usd": 13.5191,
-          "reason": "entry",
-          "tehran": "2026-11-12T19:47:07+03:30"
-        },
-        {
-          "venue": "amm",
-          "side": "sell",
-          "price_usd": 2.5265747228348024e-05,
-          "usd": 5.7908,
-          "reason": "graduation_sell_50",
-          "tehran": "2026-11-12T19:47:14+03:30"
-        },
-        {
-          "venue": "amm",
-          "side": "sell",
-          "price_usd": 2.5265747228348024e-05,
-          "usd": 5.7908,
-          "reason": "breakeven_stop",
-          "tehran": "2026-11-12T19:47:14+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "EPPBbiS1uqDVGgB4xdZ4SpxuVUWuSapT4T68wFGcpump",
-      "symbol": "JENSEN",
-      "name": "Jensen Huang Coin",
-      "logo": "https://axiom-sol-v2.sfo3.cdn.digitaloceanspaces.com/A1D74fA9RqeQcxdJNC67pzanVaiySyJPwcTUoyPBpump.webp",
-      "entry_price": 2.1789296273458692e-05,
-      "exit_price": 3.549323106610845e-05,
-      "size_usd": 12.7868,
-      "pnl_usd": 4.8809,
-      "pnl_pct": 38.171,
-      "reason": "trail_25",
-      "graduated": true,
-      "opened_tehran": "2026-11-12T18:57:25+03:30",
-      "closed_tehran": "2026-11-12T18:58:41+03:30",
-      "hold_min": 1.3,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.1789296273458692e-05,
-          "usd": 12.7868,
-          "reason": "entry",
-          "tehran": "2026-11-12T18:57:25+03:30"
-        },
-        {
-          "venue": "amm",
-          "side": "sell",
-          "price_usd": 2.4911373029920103e-05,
-          "usd": 7.2834,
-          "reason": "graduation_sell_50",
-          "tehran": "2026-11-12T18:58:08+03:30"
-        },
-        {
-          "venue": "amm",
-          "side": "sell",
-          "price_usd": 3.549323106610845e-05,
-          "usd": 10.3843,
-          "reason": "trail_25",
-          "tehran": "2026-11-12T18:58:41+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "5v5zdVrnB15fCzpHmi5Zmp1a3t2BnMgDfCV6sehppump",
-      "symbol": "HUANG",
-      "name": "Jensen Huang",
-      "logo": null,
-      "entry_price": 2.299982199647531e-05,
-      "exit_price": 1.7648219207462306e-05,
-      "size_usd": 13.2537,
-      "pnl_usd": -3.1131,
-      "pnl_pct": -23.488,
-      "reason": "stop_loss",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T18:45:39+03:30",
-      "closed_tehran": "2026-11-12T18:45:59+03:30",
-      "hold_min": 0.3,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.299982199647531e-05,
-          "usd": 13.2537,
-          "reason": "entry",
-          "tehran": "2026-11-12T18:45:39+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 1.7648219207462306e-05,
-          "usd": 10.1406,
-          "reason": "stop_loss",
-          "tehran": "2026-11-12T18:45:59+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "CAL1iAmqSsxJmLMvWw5GyG5PT3AqUJg5bie71CiYLSYg",
-      "symbol": "mihao",
-      "name": "ni hao cat",
-      "logo": null,
-      "entry_price": 2.0793325199287057e-05,
-      "exit_price": 1.633933634165083e-05,
-      "size_usd": 13.6983,
-      "pnl_usd": -2.9638,
-      "pnl_pct": -21.636,
-      "reason": "stop_loss",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T18:43:06+03:30",
-      "closed_tehran": "2026-11-12T18:43:39+03:30",
-      "hold_min": 0.5,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.0793325199287057e-05,
-          "usd": 13.6983,
-          "reason": "entry",
-          "tehran": "2026-11-12T18:43:06+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 1.633933634165083e-05,
-          "usd": 10.7345,
-          "reason": "stop_loss",
-          "tehran": "2026-11-12T18:43:39+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "ASYGfSjeBjQ26Tb5i7fkZbttQzahfLVouqZWh3utpump",
-      "symbol": "Artcoin",
-      "name": "Artcoin",
-      "logo": null,
-      "entry_price": 2.2632728719161927e-05,
-      "exit_price": 1.7305776460928073e-05,
-      "size_usd": 14.2043,
-      "pnl_usd": -3.3726,
-      "pnl_pct": -23.743,
-      "reason": "stop_loss",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T18:08:00+03:30",
-      "closed_tehran": "2026-11-12T18:16:01+03:30",
-      "hold_min": 8.0,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.2632728719161927e-05,
-          "usd": 14.2043,
-          "reason": "entry",
-          "tehran": "2026-11-12T18:08:00+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 1.7305776460928073e-05,
-          "usd": 10.8317,
-          "reason": "stop_loss",
-          "tehran": "2026-11-12T18:16:01+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "FuMfqGzdLK12ZvsX3Gz1XjLzAYarjvSuE4hZpEwBpump",
-      "symbol": "小虎",
-      "name": "Xiaohu",
-      "logo": "https://metadata.j7tracker.io/images/8e0405516b324003",
-      "entry_price": 3.1859562026802465e-05,
-      "exit_price": 2.4026174530753148e-05,
-      "size_usd": 14.7527,
-      "pnl_usd": -3.6564,
-      "pnl_pct": -24.784,
-      "reason": "stop_loss",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T17:46:00+03:30",
-      "closed_tehran": "2026-11-12T17:47:18+03:30",
-      "hold_min": 1.3,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 3.1859562026802465e-05,
-          "usd": 14.7527,
-          "reason": "entry",
-          "tehran": "2026-11-12T17:46:00+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.4026174530753148e-05,
-          "usd": 11.0963,
-          "reason": "stop_loss",
-          "tehran": "2026-11-12T17:47:18+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "9pvQmvGMXpZYxWgwLVKoQrA3yy22gbDLEmQDZgh9pump",
-      "symbol": "CAMERON",
-      "name": "The Crashout Kid",
-      "logo": "https://axiomtrading.sfo3.cdn.digitaloceanspaces.com/ABek8B7Fm72SLmrFm8g4bygMJV9rujgCSutC91A3pump.webp",
-      "entry_price": 2.3161946131576883e-05,
-      "exit_price": 2.1807217441441077e-05,
-      "size_usd": 14.8882,
-      "pnl_usd": -0.9032,
-      "pnl_pct": -6.067,
-      "reason": "whale_dump_pre_grad",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T17:13:14+03:30",
-      "closed_tehran": "2026-11-12T17:13:18+03:30",
-      "hold_min": 0.1,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.3161946131576883e-05,
-          "usd": 14.8882,
-          "reason": "entry",
-          "tehran": "2026-11-12T17:13:14+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.1807217441441077e-05,
-          "usd": 13.985,
-          "reason": "whale_dump_pre_grad",
-          "tehran": "2026-11-12T17:13:18+03:30"
-        }
-      ]
-    },
-    {
-      "mint": "Afzh4BDLNh8AynwDwM1o4PGnXD6eVZhBd9zN1Q5Lpump",
-      "symbol": "VAGINA",
-      "name": "vagina coin",
-      "logo": "https://edge.uxento.io/image/FJt4dN8ZCwRPwZZ8YzncH3rCgz5E1yw8WzAhaLaGYNmD",
-      "entry_price": 2.14663802710755e-05,
-      "exit_price": 2.028873340164662e-05,
-      "size_usd": 15.0167,
-      "pnl_usd": -0.8563,
-      "pnl_pct": -5.703,
-      "reason": "whale_dump_pre_grad",
-      "graduated": false,
-      "opened_tehran": "2026-11-12T17:02:33+03:30",
-      "closed_tehran": "2026-11-12T17:02:52+03:30",
-      "hold_min": 0.3,
-      "legs": [
-        {
-          "venue": "curve",
-          "side": "buy",
-          "price_usd": 2.14663802710755e-05,
-          "usd": 15.0167,
-          "reason": "entry",
-          "tehran": "2026-11-12T17:02:33+03:30"
-        },
-        {
-          "venue": "curve",
-          "side": "sell",
-          "price_usd": 2.028873340164662e-05,
-          "usd": 14.1604,
-          "reason": "whale_dump_pre_grad",
-          "tehran": "2026-11-12T17:02:52+03:30"
-        }
-      ]
-    }
-  ],
+  "closed": [],
   "stats": {
-    "tokens_tracked": 547,
-    "uptime_min": 146.2,
+    "tokens_tracked": 765,
+    "uptime_min": 19.3,
     "counters": {
-      "trades": 103111,
-      "creates": 1088,
-      "pp_new_tokens": 296,
-      "entered_band": 38,
-      "watch_accept": 29,
-      "pump_logs_reconnects": 17,
-      "pp_migrations": 18,
-      "complete_pumpportal_migrate": 18,
-      "watchdog_pump_logs": 17,
-      "complete_trade_reserves_zero": 64,
-      "complete_CompleteEvent": 14,
-      "complete_CompletePumpAmmMigrationEvent": 15,
-      "entry_reject": 66,
-      "pp_reconnects": 14,
-      "entry_accept": 4
+      "trades": 28833,
+      "creates": 341,
+      "pp_new_tokens": 101,
+      "entered_band": 9,
+      "watch_accept": 7,
+      "entry_reject": 8,
+      "pp_migrations": 4,
+      "complete_pumpportal_migrate": 4,
+      "complete_trade_reserves_zero": 179,
+      "complete_CompleteEvent": 3,
+      "complete_CompletePumpAmmMigrationEvent": 4,
+      "watchdog_pump_logs": 2,
+      "pp_reconnects": 1
     },
     "feeds": {
+      "pumpportal": {
+        "connected_utc": "2026-11-13T18:23:52Z",
+        "last_msg_utc": "2026-11-13T18:23:52Z"
+      },
       "pump_logs": {
         "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-13T00:21:31Z",
-        "last_msg_utc": "2026-11-13T00:21:55Z"
-      },
-      "pumpportal": {
-        "connected_utc": "2026-11-13T00:09:45Z",
-        "last_msg_utc": "2026-11-13T00:11:23Z"
+        "connected_utc": "2026-11-13T18:32:50Z",
+        "last_msg_utc": "2026-11-13T18:33:18Z"
       },
       "amm": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T00:21:53Z"
+        "connected_utc": "2026-11-13T18:33:06Z"
       }
     },
     "kill_switch": false,
     "recent_decisions": [
       {
-        "ts_tehran": "2026-11-13T03:30:32+03:30",
-        "symbol": "AeG9jK",
-        "mint": "AeG9jKBsFEdFaoshqTo5hnhppJC5935okDm9dDXGpump",
+        "ts_tehran": "2026-11-13T21:45:22+03:30",
+        "symbol": "Be47EN",
+        "mint": "Be47ENKnwfg4E2EGWSjWBQo2KxNV4NdJJKTPap2dpump",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-13T03:30:37+03:30",
-        "symbol": "AeG9jK",
-        "mint": "AeG9jKBsFEdFaoshqTo5hnhppJC5935okDm9dDXGpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T03:30:40+03:30",
-        "symbol": "GTAINU",
-        "mint": "3Bc1zWnQ15JxnP9TSSWmxsoX9CvFE95BQFnabeogpump",
+        "ts_tehran": "2026-11-13T21:46:45+03:30",
+        "symbol": "@bot",
+        "mint": "DRpLvcga3qEMUwVLipZ8fwNN4hPewU2KCimumtWGpump",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-13T03:30:40+03:30",
-        "symbol": "GTAINU",
-        "mint": "3Bc1zWnQ15JxnP9TSSWmxsoX9CvFE95BQFnabeogpump",
+        "ts_tehran": "2026-11-13T21:47:01+03:30",
+        "symbol": "Billy-Jo",
+        "mint": "CGNZwBcDLi2MRsDN89kZHUo9f6kRk4JFSzqjNRFkpump",
         "accepted": false,
         "reasons": [
-          "too_young(1s)",
-          "early_buys_heavy(72.32%)"
+          "progress_out_of_band(70%)",
+          "too_young(157s)",
+          "early_buys_heavy(92.43%)"
         ]
       },
       {
-        "ts_tehran": "2026-11-13T03:30:41+03:30",
-        "symbol": "AeG9jK",
-        "mint": "AeG9jKBsFEdFaoshqTo5hnhppJC5935okDm9dDXGpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T03:30:43+03:30",
-        "symbol": "AeG9jK",
-        "mint": "AeG9jKBsFEdFaoshqTo5hnhppJC5935okDm9dDXGpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T03:30:55+03:30",
-        "symbol": "AeG9jK",
-        "mint": "AeG9jKBsFEdFaoshqTo5hnhppJC5935okDm9dDXGpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T03:39:13+03:30",
-        "symbol": "DgGtue",
-        "mint": "DgGtue9kwdwczN4Ri5MH6VfqQAmkXGQSpwee2s9qpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(67%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-13T03:41:18+03:30",
-        "symbol": "4CWicF",
-        "mint": "4CWicFTfu5vs7nZd649J81skDM6yBMi94mMxRuyJpump",
+        "ts_tehran": "2026-11-13T21:47:01+03:30",
+        "symbol": "Billy-Jo",
+        "mint": "CGNZwBcDLi2MRsDN89kZHUo9f6kRk4JFSzqjNRFkpump",
         "accepted": true,
         "reasons": [
           "entered_band"
         ]
       },
       {
-        "ts_tehran": "2026-11-13T03:51:51+03:30",
-        "symbol": "3pM95a",
-        "mint": "3pM95aXnSDZXtSr5TUzk4wgMaviDH6ECHT311FaCpump",
+        "ts_tehran": "2026-11-13T21:47:04+03:30",
+        "symbol": "@bot",
+        "mint": "DRpLvcga3qEMUwVLipZ8fwNN4hPewU2KCimumtWGpump",
+        "accepted": false,
+        "reasons": [
+          "too_young(109s)",
+          "creator_already_sold",
+          "early_buys_heavy(59.63%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T21:47:22+03:30",
+        "symbol": "Billy-Jo",
+        "mint": "CGNZwBcDLi2MRsDN89kZHUo9f6kRk4JFSzqjNRFkpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(67%)",
+          "too_young(178s)",
+          "early_buys_heavy(92.43%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T21:47:30+03:30",
+        "symbol": "@bot",
+        "mint": "DRpLvcga3qEMUwVLipZ8fwNN4hPewU2KCimumtWGpump",
+        "accepted": false,
+        "reasons": [
+          "too_young(135s)",
+          "creator_already_sold",
+          "early_buys_heavy(59.63%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T21:47:32+03:30",
+        "symbol": "CsU2Y6",
+        "mint": "CsU2Y6TBzGsSEUGhu9cRUqkcfEZ2bzhRTqVhLBfKpump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(70%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T21:47:32+03:30",
+        "symbol": "CsU2Y6",
+        "mint": "CsU2Y6TBzGsSEUGhu9cRUqkcfEZ2bzhRTqVhLBfKpump",
         "accepted": true,
         "reasons": [
           "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-13T21:47:42+03:30",
+        "symbol": "fred",
+        "mint": "CsU2Y6TBzGsSEUGhu9cRUqkcfEZ2bzhRTqVhLBfKpump",
+        "accepted": false,
+        "reasons": [
+          "judge_chase(+28%)"
         ]
       }
     ],
-    "sol_usd": 81.52282797850694,
-    "realized_today_usd": -15.8302,
-    "started_utc": "2026-11-12T13:28:48Z",
-    "best_trade_usd": 4.8809,
-    "worst_trade_usd": -8.7152
+    "sol_usd": 79.9306782069847,
+    "realized_today_usd": 0.0,
+    "started_utc": "2026-11-13T18:11:03Z",
+    "best_trade_usd": null,
+    "worst_trade_usd": null
   },
   "watchlist": [
     {
-      "mint": "4CWicFTfu5vs7nZd649J81skDM6yBMi94mMxRuyJpump",
+      "mint": "4Z1HZqBwToghsFWHVB4LnF45w4VwbxLLKf71cZMopump",
       "symbol": null,
-      "progress": 0.707,
-      "sol_in_curve": 60.1,
-      "buyers_seen": 21,
+      "progress": 0.758,
+      "sol_in_curve": 64.5,
+      "buyers_seen": 4,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "CsU2Y6TBzGsSEUGhu9cRUqkcfEZ2bzhRTqVhLBfKpump",
+      "symbol": "fred",
+      "progress": 0.728,
+      "sol_in_curve": 61.9,
+      "buyers_seen": 17,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 3
+    },
+    {
+      "mint": "EGqbBS9JVhQErcbUFZdQpReN6uiCo2YwQvN8a8fdpump",
+      "symbol": null,
+      "progress": 0.685,
+      "sol_in_curve": 58.2,
+      "buyers_seen": 10,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "EECnkwF3Z6vQ597jNaCuVvd1jPQQPaB5dYm2tws3pump",
+      "symbol": null,
+      "progress": 0.683,
+      "sol_in_curve": 58.1,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
+    },
+    {
+      "mint": "6hKXaedCmWeigKBkYxXdG8UPDo5atFR9Scb7DjFipump",
+      "symbol": null,
+      "progress": 0.647,
+      "sol_in_curve": 55.0,
+      "buyers_seen": 2,
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 1
     },
     {
-      "mint": "3pM95aXnSDZXtSr5TUzk4wgMaviDH6ECHT311FaCpump",
-      "symbol": null,
-      "progress": 0.702,
-      "sol_in_curve": 59.7,
-      "buyers_seen": 10,
+      "mint": "CGNZwBcDLi2MRsDN89kZHUo9f6kRk4JFSzqjNRFkpump",
+      "symbol": "Billy-Jo",
+      "progress": 0.629,
+      "sol_in_curve": 53.5,
+      "buyers_seen": 642,
       "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 2
-    },
-    {
-      "mint": "DgGtue9kwdwczN4Ri5MH6VfqQAmkXGQSpwee2s9qpump",
-      "symbol": null,
-      "progress": 0.666,
-      "sol_in_curve": 56.6,
-      "buyers_seen": 131,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 13
-    },
-    {
-      "mint": "2RBEK4TrbkD4tBBsvj3hh5uKd6gSxKTMWDu5GAwvpump",
-      "symbol": "neurals",
-      "progress": 0.661,
-      "sol_in_curve": 56.2,
-      "buyers_seen": 191,
-      "creator_sold": true,
       "known_from_creation": true,
-      "whale_buys": 13
+      "whale_buys": 39
+    },
+    {
+      "mint": "SWepJ74DD9r7GVX4qV8ZDnh3nViHxyzGgLryBnkpump",
+      "symbol": null,
+      "progress": 0.606,
+      "sol_in_curve": 51.5,
+      "buyers_seen": 2,
+      "creator_sold": false,
+      "known_from_creation": false,
+      "whale_buys": 0
     }
   ],
   "rules": {
@@ -933,9 +229,9 @@
     "mode": "paper",
     "universe": "pump.fun SOL-quoted bonding curves, discovered live from on-chain pump program logs + PumpPortal",
     "entry": "curve 70%-90% of SOL needed to graduate, age >= 3m, non-creator buy >= 1.5 SOL, then wait 10s and require no dump (mark dd <= 3.0%, net flow >= 0.0 SOL, trigger wallet sold < 0.3 SOL)",
-    "rejects": "creator sold; unique buyers < 25; top-10 ex-curve > 35.0%; first-10s buys > 20.0% supply; RugCheck danger",
-    "size": "15% of cash (cap $20.0), max 2 open, daily loss limit $15.0",
+    "rejects": "creator sold; unique buyers < 25; top-10 ex-curve > 25.0%; first-10s buys > 20.0% supply; RugCheck danger",
+    "size": "20% of cash (cap $20.0), max 2 open, daily loss limit $15.0",
     "fills": "exact curve/AMM price impact + 1.25% curve fee (0.3% AMM) + 2.0% slippage + 1200ms latency + 0.0002 SOL priority fee",
-    "exits": "pre-grad: take-profit +20% (all), fast-sell-pressure (net >= 2.0 SOL sold in 8s and mark -4%), stop -8%, creator sells -> exit, no graduation in 45m -> exit; at graduation sell 50%, rest: +20% take-profit, breakeven stop, trail 25% from high, exit if no new high 30m or whale/creator dumps"
+    "exits": "pre-grad: take-profit +20% (all), fast-sell-pressure (net >= 2.0 SOL sold in 8s and mark -4%), stop -8%, creator sells -> exit, no graduation in 45m -> exit; at graduation sell 50%, rest: +20% take-profit, breakeven stop, trail 20% from high, exit if no new high 30m or whale/creator dumps"
   }
 }
