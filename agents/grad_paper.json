@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T21:57:41Z",
-  "updated_tehran": "2026-11-14T01:27:41+03:30",
+  "updated_utc": "2026-11-13T22:07:54Z",
+  "updated_tehran": "2026-11-14T01:37:54+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,37 +82,37 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 43,
-    "uptime_min": 58.0,
+    "tokens_tracked": 89,
+    "uptime_min": 68.2,
     "counters": {
-      "trades": 8659,
+      "trades": 8807,
       "entered_band": 7,
       "watch_accept": 6,
-      "creates": 115,
-      "pp_new_tokens": 115,
+      "creates": 116,
+      "pp_new_tokens": 136,
       "entry_reject": 7,
       "pp_migrations": 4,
       "complete_pumpportal_migrate": 4,
       "complete_trade_reserves_zero": 16,
       "complete_CompleteEvent": 1,
       "complete_CompletePumpAmmMigrationEvent": 1,
-      "watchdog_pump_logs": 7,
-      "pump_logs_reconnects": 30,
-      "pp_reconnects": 5
+      "watchdog_pump_logs": 9,
+      "pump_logs_reconnects": 40,
+      "pp_reconnects": 7
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T21:57:08Z",
-        "last_msg_utc": "2026-11-13T21:57:08Z"
+        "connected_utc": "2026-11-13T22:07:30Z",
+        "last_msg_utc": "2026-11-13T22:07:30Z"
       },
       "pumpportal": {
-        "connected_utc": "2026-11-13T21:46:09Z",
-        "last_msg_utc": "2026-11-13T21:48:57Z"
+        "connected_utc": "2026-11-13T22:06:47Z",
+        "last_msg_utc": "2026-11-13T22:07:42Z"
       },
       "amm": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-13T21:48:24Z"
+        "connected_utc": "2026-11-13T22:06:46Z"
       }
     },
     "kill_switch": false,
@@ -211,7 +211,7 @@
         ]
       }
     ],
-    "sol_usd": 78.61516833745094,
+    "sol_usd": 78.21294519883031,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
