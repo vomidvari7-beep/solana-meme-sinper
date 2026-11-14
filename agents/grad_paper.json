@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-14T00:03:34Z",
-  "updated_tehran": "2026-11-14T03:33:34+03:30",
+  "updated_utc": "2026-11-14T00:08:35Z",
+  "updated_tehran": "2026-11-14T03:38:35+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,33 +82,33 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 1257,
-    "uptime_min": 183.9,
+    "tokens_tracked": 1117,
+    "uptime_min": 188.9,
     "counters": {
-      "trades": 133310,
-      "entered_band": 38,
-      "watch_accept": 26,
-      "creates": 1426,
-      "pp_new_tokens": 671,
-      "entry_reject": 74,
-      "pp_migrations": 52,
-      "complete_pumpportal_migrate": 52,
+      "trades": 136636,
+      "entered_band": 40,
+      "watch_accept": 27,
+      "creates": 1471,
+      "pp_new_tokens": 701,
+      "entry_reject": 76,
+      "pp_migrations": 54,
+      "complete_pumpportal_migrate": 54,
       "complete_trade_reserves_zero": 312,
       "complete_CompleteEvent": 21,
       "complete_CompletePumpAmmMigrationEvent": 21,
       "watchdog_pump_logs": 21,
-      "pump_logs_reconnects": 117,
+      "pump_logs_reconnects": 129,
       "pp_reconnects": 14
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-14T00:03:13Z",
-        "last_msg_utc": "2026-11-14T00:03:13Z"
+        "connected_utc": "2026-11-14T00:08:25Z",
+        "last_msg_utc": "2026-11-14T00:08:25Z"
       },
       "pumpportal": {
         "connected_utc": "2026-11-13T23:16:56Z",
-        "last_msg_utc": "2026-11-14T00:03:31Z"
+        "last_msg_utc": "2026-11-14T00:08:31Z"
       },
       "amm": {
         "url": "wss://api.mainnet-beta.solana.com",
@@ -117,33 +117,6 @@
     },
     "kill_switch": false,
     "recent_decisions": [
-      {
-        "ts_tehran": "2026-11-14T03:25:29+03:30",
-        "symbol": "6H6MML",
-        "mint": "6H6MMLF5TwaJRGFuXKZUMZoeq3sQjSaV4qitoM6rpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(94%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:27:31+03:30",
-        "symbol": "IFO",
-        "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
-        "accepted": true,
-        "reasons": [
-          "entered_band"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:27:31+03:30",
-        "symbol": "IFO",
-        "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
-        "accepted": false,
-        "reasons": [
-          "early_buys_heavy(53.8%)"
-        ]
-      },
       {
         "ts_tehran": "2026-11-14T03:27:52+03:30",
         "symbol": "IFO",
@@ -206,9 +179,38 @@
         "reasons": [
           "entered_band"
         ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:36:32+03:30",
+        "symbol": "RR",
+        "mint": "CTTMigp7z6KS5v7VnjGDT57j311snLWLd9adEtR5pump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(69%)",
+          "too_young(56s)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:36:32+03:30",
+        "symbol": "RR",
+        "mint": "CTTMigp7z6KS5v7VnjGDT57j311snLWLd9adEtR5pump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:37:04+03:30",
+        "symbol": "RR",
+        "mint": "CTTMigp7z6KS5v7VnjGDT57j311snLWLd9adEtR5pump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(67%)",
+          "too_young(88s)"
+        ]
       }
     ],
-    "sol_usd": 78.2695544911858,
+    "sol_usd": 78.26439124299854,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
@@ -224,16 +226,6 @@
       "creator_sold": false,
       "known_from_creation": false,
       "whale_buys": 0
-    },
-    {
-      "mint": "4sUMnRxrYgbh5Kv4yX621sh1KqbGL1oXyBDXhwoapump",
-      "symbol": null,
-      "progress": 0.678,
-      "sol_in_curve": 57.6,
-      "buyers_seen": 325,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 31
     }
   ],
   "rules": {
