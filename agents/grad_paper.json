@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-14T00:13:35Z",
-  "updated_tehran": "2026-11-14T03:43:35+03:30",
+  "updated_utc": "2026-11-14T00:17:20Z",
+  "updated_tehran": "2026-11-14T03:47:20+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,33 +82,33 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 1079,
-    "uptime_min": 193.9,
+    "tokens_tracked": 689,
+    "uptime_min": 197.6,
     "counters": {
       "trades": 142044,
       "entered_band": 42,
       "watch_accept": 28,
       "creates": 1525,
-      "pp_new_tokens": 726,
+      "pp_new_tokens": 744,
       "entry_reject": 79,
-      "pp_migrations": 54,
-      "complete_pumpportal_migrate": 54,
+      "pp_migrations": 55,
+      "complete_pumpportal_migrate": 55,
       "complete_trade_reserves_zero": 312,
       "complete_CompleteEvent": 21,
       "complete_CompletePumpAmmMigrationEvent": 21,
       "watchdog_pump_logs": 21,
-      "pump_logs_reconnects": 137,
+      "pump_logs_reconnects": 149,
       "pp_reconnects": 14
     },
     "feeds": {
       "pump_logs": {
         "url": "wss://solana-rpc.publicnode.com",
-        "connected_utc": "2026-11-14T00:13:16Z",
-        "last_msg_utc": "2026-11-14T00:13:22Z"
+        "connected_utc": "2026-11-14T00:17:14Z",
+        "last_msg_utc": "2026-11-14T00:17:14Z"
       },
       "pumpportal": {
         "connected_utc": "2026-11-13T23:16:56Z",
-        "last_msg_utc": "2026-11-14T00:13:32Z"
+        "last_msg_utc": "2026-11-14T00:17:15Z"
       },
       "amm": {
         "url": "wss://api.mainnet-beta.solana.com",
@@ -212,7 +212,7 @@
         ]
       }
     ],
-    "sol_usd": 78.28242931753773,
+    "sol_usd": 78.18724295512847,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
