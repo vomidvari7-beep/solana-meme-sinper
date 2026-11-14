@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-11-13T23:58:34Z",
-  "updated_tehran": "2026-11-14T03:28:34+03:30",
+  "updated_utc": "2026-11-14T00:03:34Z",
+  "updated_tehran": "2026-11-14T03:33:34+03:30",
   "mode": "paper",
   "engine": "grad_hunter",
   "start_usd": 100.0,
@@ -82,33 +82,33 @@
     }
   ],
   "stats": {
-    "tokens_tracked": 1410,
-    "uptime_min": 178.9,
+    "tokens_tracked": 1257,
+    "uptime_min": 183.9,
     "counters": {
-      "trades": 125698,
-      "entered_band": 35,
-      "watch_accept": 25,
-      "creates": 1359,
-      "pp_new_tokens": 639,
-      "entry_reject": 71,
-      "pp_migrations": 47,
-      "complete_pumpportal_migrate": 47,
-      "complete_trade_reserves_zero": 237,
-      "complete_CompleteEvent": 18,
-      "complete_CompletePumpAmmMigrationEvent": 18,
+      "trades": 133310,
+      "entered_band": 38,
+      "watch_accept": 26,
+      "creates": 1426,
+      "pp_new_tokens": 671,
+      "entry_reject": 74,
+      "pp_migrations": 52,
+      "complete_pumpportal_migrate": 52,
+      "complete_trade_reserves_zero": 312,
+      "complete_CompleteEvent": 21,
+      "complete_CompletePumpAmmMigrationEvent": 21,
       "watchdog_pump_logs": 21,
-      "pump_logs_reconnects": 110,
+      "pump_logs_reconnects": 117,
       "pp_reconnects": 14
     },
     "feeds": {
       "pump_logs": {
-        "url": "wss://api.mainnet-beta.solana.com",
-        "connected_utc": "2026-11-13T23:51:50Z",
-        "last_msg_utc": "2026-11-13T23:58:34Z"
+        "url": "wss://solana-rpc.publicnode.com",
+        "connected_utc": "2026-11-14T00:03:13Z",
+        "last_msg_utc": "2026-11-14T00:03:13Z"
       },
       "pumpportal": {
         "connected_utc": "2026-11-13T23:16:56Z",
-        "last_msg_utc": "2026-11-13T23:58:34Z"
+        "last_msg_utc": "2026-11-14T00:03:31Z"
       },
       "amm": {
         "url": "wss://api.mainnet-beta.solana.com",
@@ -117,42 +117,6 @@
     },
     "kill_switch": false,
     "recent_decisions": [
-      {
-        "ts_tehran": "2026-11-14T03:23:29+03:30",
-        "symbol": "DXVzgt",
-        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:24:30+03:30",
-        "symbol": "DXVzgt",
-        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(91%)"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:24:30+03:30",
-        "symbol": "DXVzgt",
-        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
-        "accepted": false,
-        "reasons": [
-          "risk:daily_loss_limit"
-        ]
-      },
-      {
-        "ts_tehran": "2026-11-14T03:24:57+03:30",
-        "symbol": "DXVzgt",
-        "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
-        "accepted": false,
-        "reasons": [
-          "progress_out_of_band(93%)"
-        ]
-      },
       {
         "ts_tehran": "2026-11-14T03:25:29+03:30",
         "symbol": "6H6MML",
@@ -206,35 +170,51 @@
         "reasons": [
           "early_buys_heavy(53.8%)"
         ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:28:44+03:30",
+        "symbol": "IFO",
+        "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
+        "accepted": false,
+        "reasons": [
+          "early_buys_heavy(53.8%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:29:12+03:30",
+        "symbol": "4sUMnR",
+        "mint": "4sUMnRxrYgbh5Kv4yX621sh1KqbGL1oXyBDXhwoapump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(65%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:29:41+03:30",
+        "symbol": "4sUMnR",
+        "mint": "4sUMnRxrYgbh5Kv4yX621sh1KqbGL1oXyBDXhwoapump",
+        "accepted": false,
+        "reasons": [
+          "progress_out_of_band(70%)"
+        ]
+      },
+      {
+        "ts_tehran": "2026-11-14T03:29:46+03:30",
+        "symbol": "4sUMnR",
+        "mint": "4sUMnRxrYgbh5Kv4yX621sh1KqbGL1oXyBDXhwoapump",
+        "accepted": true,
+        "reasons": [
+          "entered_band"
+        ]
       }
     ],
-    "sol_usd": 78.08799563183334,
+    "sol_usd": 78.2695544911858,
     "realized_today_usd": -17.0263,
     "started_utc": "2026-11-13T18:11:03Z",
     "best_trade_usd": -8.6068,
     "worst_trade_usd": -17.0263
   },
   "watchlist": [
-    {
-      "mint": "DXVzgtUb9nvmxsQgkhm6NACKf3rwhsqS5Kspb1Kcpump",
-      "symbol": null,
-      "progress": 0.892,
-      "sol_in_curve": 75.8,
-      "buyers_seen": 204,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 13
-    },
-    {
-      "mint": "HTp4PKiZ6wwusNKDdDqJYhoP58bMDneME2E9z8cJpump",
-      "symbol": "IFO",
-      "progress": 0.823,
-      "sol_in_curve": 69.9,
-      "buyers_seen": 618,
-      "creator_sold": false,
-      "known_from_creation": true,
-      "whale_buys": 27
-    },
     {
       "mint": "9HrYC4PH4A3d5o7LUvwjDrxkWyZDjVQpvFvWVwbKpump",
       "symbol": null,
@@ -246,24 +226,14 @@
       "whale_buys": 0
     },
     {
-      "mint": "EECnkwF3Z6vQ597jNaCuVvd1jPQQPaB5dYm2tws3pump",
+      "mint": "4sUMnRxrYgbh5Kv4yX621sh1KqbGL1oXyBDXhwoapump",
       "symbol": null,
-      "progress": 0.707,
-      "sol_in_curve": 60.1,
-      "buyers_seen": 4,
+      "progress": 0.678,
+      "sol_in_curve": 57.6,
+      "buyers_seen": 325,
       "creator_sold": false,
       "known_from_creation": false,
-      "whale_buys": 1
-    },
-    {
-      "mint": "27Jnd8Xw1gmbCrQFVZ4DnAvB29H586XCxoe6nJQipump",
-      "symbol": null,
-      "progress": 0.66,
-      "sol_in_curve": 56.1,
-      "buyers_seen": 1,
-      "creator_sold": false,
-      "known_from_creation": false,
-      "whale_buys": 0
+      "whale_buys": 31
     }
   ],
   "rules": {
